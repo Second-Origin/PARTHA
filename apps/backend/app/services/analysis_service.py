@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from app.analysis.architecture import ArchitectureAnalyzer
 from app.graph.dependency_graph import DependencyGraphBuilder
+from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.repositories.repository_repository import RepositoryRepository
 from app.review.review_service import EngineeringReviewBuilder
 from app.schemas.analysis import AnalysisStartResponse, AnalysisStatusResponse
@@ -18,11 +19,13 @@ class AnalysisService:
         architecture: ArchitectureAnalyzer,
         dependencies: DependencyGraphBuilder,
         review: EngineeringReviewBuilder,
+        intelligence: RepositoryIntelligenceEngine,
     ) -> None:
         self.repository = repository
         self.architecture = architecture
         self.dependencies = dependencies
         self.review = review
+        self.intelligence = intelligence
 
     def start(self, repository_id: str) -> AnalysisStartResponse:
         record = self._get_record(repository_id)
@@ -36,6 +39,9 @@ class AnalysisService:
         record.analysis_progress = 80
         self.repository.save(record)
         try:
+            repository_intelligence = self.intelligence.from_record(record)
+            self.intelligence.persist(record, repository_intelligence)
+            self.repository.save(record)
             self.architecture.build_architecture(record)
             self.dependencies.build(record)
             self.review.build(record)

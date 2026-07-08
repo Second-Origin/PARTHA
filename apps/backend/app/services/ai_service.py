@@ -4,12 +4,12 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import httpx
 
 from app.core.config import Settings
 from app.core.exceptions import ExternalServiceError, NotFoundError, ValidationServiceError
+from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.repositories.repository_repository import RepositoryRepository
 from app.schemas.ai import (
     AiCitation,
@@ -32,9 +32,15 @@ DEFAULT_MODELS = {
 
 
 class AiService:
-    def __init__(self, repository: RepositoryRepository, settings: Settings) -> None:
+    def __init__(
+        self,
+        repository: RepositoryRepository,
+        settings: Settings,
+        intelligence: RepositoryIntelligenceEngine | None = None,
+    ) -> None:
         self.repository = repository
         self.path = settings.storage_path / "ai-provider.json"
+        self.intelligence = intelligence or RepositoryIntelligenceEngine()
 
     def get_config(self) -> AiProviderPublicConfig:
         config = self._read_config()
@@ -83,7 +89,7 @@ class AiService:
         if not config:
             raise ValidationServiceError("AI provider is not configured. Open Settings and save a provider first.")
 
-        context, citations = self._repository_context(record.file_tree or [], record.repo_metadata or {}, request.context.selected_file if request.context else None)
+        context, citations = self._repository_context(record, request.context.selected_file if request.context else None)
         answer = await self._call_provider(config, self._system_prompt(record.name, context), request.query)
         return AiQueryResponse(
             message=AiMessage(role="assistant", content=answer, timestamp=datetime.now(UTC), citations=citations),
@@ -148,14 +154,21 @@ class AiService:
             f"Repository context:\n{context}"
         )
 
-    def _repository_context(self, file_tree: list[dict[str, Any]], meta: dict[str, Any], selected_file: str | None) -> tuple[str, list[AiCitation]]:
-        files = self._files(file_tree)
+    def _repository_context(self, record, selected_file: str | None) -> tuple[str, list[AiCitation]]:
+        repository_intelligence = self.intelligence.from_record(record)
+        files = [file.path for file in repository_intelligence.files]
         selected = [path for path in files if selected_file and path == selected_file]
         highlighted = selected or files[:40]
+        modules = repository_intelligence.modules[:10]
+        dependencies = repository_intelligence.dependencies[:20]
         context_lines = [
-            f"Language: {meta.get('language', 'Unknown')}",
-            f"Framework: {meta.get('framework', 'Unknown')}",
-            f"Entry point: {meta.get('entryPoint') or meta.get('entry_point') or 'Not found'}",
+            f"Primary language: {repository_intelligence.discovery.primary_language}",
+            f"Frameworks: {', '.join(repository_intelligence.discovery.frameworks) if repository_intelligence.discovery.frameworks else 'Not detected'}",
+            f"Entry points: {', '.join(repository_intelligence.discovery.entry_points) if repository_intelligence.discovery.entry_points else 'Not found'}",
+            "Modules:",
+            *[f"- {module.name} ({module.role}, {len(module.files)} files)" for module in modules],
+            "Dependencies:",
+            *[f"- {dependency.name} {dependency.version}" for dependency in dependencies],
             "Files:",
             *[f"- {path}" for path in highlighted],
         ]
@@ -164,11 +177,3 @@ class AiService:
             for path in highlighted[:5]
         ]
         return "\n".join(context_lines), citations
-
-    def _files(self, nodes: list[dict[str, Any]]) -> list[str]:
-        result: list[str] = []
-        for node in nodes:
-            if node.get("type") == "file":
-                result.append(node.get("path", ""))
-            result.extend(self._files(node.get("children") or []))
-        return result
