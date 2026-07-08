@@ -1,18 +1,38 @@
+import base64
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import NoReturn
 from uuid import uuid4
 
 from fastapi import UploadFile
 
 from app.core.config import Settings
-from app.core.exceptions import ConflictServiceError, NotFoundError, ValidationServiceError
+from app.core.exceptions import ConflictServiceError, NotFoundError, ServiceError, ValidationServiceError
 from app.github.client import GitHubClient
 from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.models.repository import RepositoryRecord
 from app.parsers.repository_parser import RepositoryParser
 from app.repositories.repository_repository import RepositoryRepository
-from app.schemas.repository import GitHubImportRequest, RepositoryListResponse, RepositoryResponse
+from app.schemas.repository import (
+    GitHubImportRequest,
+    RepositoryFileResponse,
+    RepositoryListResponse,
+    RepositoryResponse,
+)
 from app.storage.local import LocalStorage
+
+MAX_FILE_PREVIEW_BYTES = 512 * 1024
+
+IMAGE_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".ico": "image/x-icon",
+    ".svg": "image/svg+xml",
+}
 
 
 class RepositoryService:
@@ -131,6 +151,72 @@ class RepositoryService:
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
         return self.to_response(self.repository.add(record))
+
+    def read_file(self, repository_id: str, path: str) -> RepositoryFileResponse:
+        record = self._get_record(repository_id)
+        try:
+            root = Path(record.local_path).resolve()
+            target = (root / path.lstrip("/\\")).resolve()
+        except (OSError, RuntimeError) as exc:
+            raise ValidationServiceError("Requested file path cannot be resolved.", {"path": path}) from exc
+
+        try:
+            target.relative_to(root)
+        except ValueError as exc:
+            raise ValidationServiceError("Requested file is outside the repository.", {"path": path}) from exc
+
+        try:
+            is_file = target.is_file()
+        except OSError as exc:
+            self._raise_file_read_error(path, exc)
+        if not is_file:
+            raise NotFoundError("File not found in repository.", {"path": path})
+
+        try:
+            size = target.stat().st_size
+        except OSError as exc:
+            self._raise_file_read_error(path, exc)
+
+        media_type = IMAGE_MEDIA_TYPES.get(target.suffix.lower())
+        if media_type is not None:
+            if size > MAX_FILE_PREVIEW_BYTES:
+                return RepositoryFileResponse(
+                    path=path, content="", size=size, truncated=True, is_image=True, media_type=media_type
+                )
+            try:
+                content = base64.b64encode(target.read_bytes()).decode("ascii")
+            except OSError as exc:
+                self._raise_file_read_error(path, exc)
+            return RepositoryFileResponse(
+                path=path,
+                content=content,
+                size=size,
+                is_image=True,
+                media_type=media_type,
+            )
+
+        try:
+            with target.open("rb") as handle:
+                chunk = handle.read(MAX_FILE_PREVIEW_BYTES)
+        except OSError as exc:
+            self._raise_file_read_error(path, exc)
+
+        truncated = size > MAX_FILE_PREVIEW_BYTES
+        if b"\x00" in chunk:
+            return RepositoryFileResponse(path=path, content="", size=size, truncated=truncated, is_binary=True)
+        return RepositoryFileResponse(
+            path=path,
+            content=chunk.decode("utf-8", errors="replace"),
+            size=size,
+            truncated=truncated,
+        )
+
+    def _raise_file_read_error(self, path: str, exc: OSError) -> NoReturn:
+        if isinstance(exc, FileNotFoundError):
+            raise NotFoundError("File not found in repository.", {"path": path}) from exc
+        if isinstance(exc, PermissionError):
+            raise ValidationServiceError("File cannot be read due to filesystem permissions.", {"path": path}) from exc
+        raise ServiceError("Unable to read file preview.", {"path": path}) from exc
 
     def to_response(self, record: RepositoryRecord) -> RepositoryResponse:
         return RepositoryResponse(
