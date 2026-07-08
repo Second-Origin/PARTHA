@@ -13,9 +13,10 @@ import { Breadcrumbs } from './Breadcrumbs';
 
 interface RepositoryExplorerProps {
   fileTree: FileTreeNode[];
+  repositoryId: string;
 }
 
-export function RepositoryExplorer({ fileTree }: RepositoryExplorerProps) {
+export function RepositoryExplorer({ fileTree, repositoryId }: RepositoryExplorerProps) {
   const {
     selectedNode, detailsTab, setDetailsTab, expandedFolders, expandFolder,
   } = useExplorerStore();
@@ -109,7 +110,7 @@ export function RepositoryExplorer({ fileTree }: RepositoryExplorerProps) {
               </p>
             </div>
           ) : detailsTab === 'preview' ? (
-            <CodePreview node={selectedNode} />
+            <CodePreview node={selectedNode} repositoryId={repositoryId} />
           ) : fileDetails ? (
             <FileDetailsPanel details={fileDetails} />
           ) : null}

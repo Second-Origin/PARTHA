@@ -1,3 +1,4 @@
+import base64
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -11,8 +12,26 @@ from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.models.repository import RepositoryRecord
 from app.parsers.repository_parser import RepositoryParser
 from app.repositories.repository_repository import RepositoryRepository
-from app.schemas.repository import GitHubImportRequest, RepositoryListResponse, RepositoryResponse
+from app.schemas.repository import (
+    GitHubImportRequest,
+    RepositoryFileResponse,
+    RepositoryListResponse,
+    RepositoryResponse,
+)
 from app.storage.local import LocalStorage
+
+MAX_FILE_PREVIEW_BYTES = 512 * 1024
+
+IMAGE_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".ico": "image/x-icon",
+    ".svg": "image/svg+xml",
+}
 
 
 class RepositoryService:
@@ -131,6 +150,44 @@ class RepositoryService:
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
         return self.to_response(self.repository.add(record))
+
+    def read_file(self, repository_id: str, path: str) -> RepositoryFileResponse:
+        record = self._get_record(repository_id)
+        root = Path(record.local_path).resolve()
+        target = (root / path.lstrip("/\\")).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError as exc:
+            raise ValidationServiceError("Requested file is outside the repository.", {"path": path}) from exc
+        if not target.is_file():
+            raise NotFoundError("File not found in repository.", {"path": path})
+
+        size = target.stat().st_size
+        media_type = IMAGE_MEDIA_TYPES.get(target.suffix.lower())
+        if media_type is not None:
+            if size > MAX_FILE_PREVIEW_BYTES:
+                return RepositoryFileResponse(
+                    path=path, content="", size=size, truncated=True, is_image=True, media_type=media_type
+                )
+            return RepositoryFileResponse(
+                path=path,
+                content=base64.b64encode(target.read_bytes()).decode("ascii"),
+                size=size,
+                is_image=True,
+                media_type=media_type,
+            )
+
+        with target.open("rb") as handle:
+            chunk = handle.read(MAX_FILE_PREVIEW_BYTES)
+        truncated = size > MAX_FILE_PREVIEW_BYTES
+        if b"\x00" in chunk:
+            return RepositoryFileResponse(path=path, content="", size=size, truncated=truncated, is_binary=True)
+        return RepositoryFileResponse(
+            path=path,
+            content=chunk.decode("utf-8", errors="replace"),
+            size=size,
+            truncated=truncated,
+        )
 
     def to_response(self, record: RepositoryRecord) -> RepositoryResponse:
         return RepositoryResponse(
