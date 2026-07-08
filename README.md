@@ -71,7 +71,7 @@ The core engineering principles are:
 | Reusable intelligence | Parsed structure should be persisted and used by future workflows. |
 | Agent-ready foundation | Future AI agents should operate on repository intelligence, not raw file guessing. |
 
-The current implementation includes repository import, parsing, metadata extraction, architecture modeling, dependency inventory, engineering review, documentation generation, and AI provider integration. Some deeper knowledge graph capabilities are still in progress and are tracked in `docs/audit/`.
+The current implementation includes repository import, parsing, metadata extraction, architecture modeling, dependency inventory, engineering review, documentation generation, and AI provider integration. Some deeper knowledge graph capabilities are still in progress and are tracked on the roadmap below.
 
 ---
 
@@ -190,7 +190,6 @@ partha/
 │   ├── frontend/
 │   └── backend/
 ├── docs/
-│   └── audit/
 ├── packages/
 ├── scripts/
 ├── docker-compose.yml
@@ -221,7 +220,6 @@ partha/
 | `apps/backend/alembic/` | Database migration environment and versions. |
 | `apps/backend/tests/` | Backend tests. |
 | `docs/` | Project documentation. |
-| `docs/audit/` | Engineering, security, frontend, backend, and feature-matrix audit documents. |
 | `packages/` | Reserved for shared packages as the monorepo grows. |
 | `scripts/` | Local helper scripts for backend checks and startup. |
 | `.github/` | CI workflow, issue templates, and pull request template. |
@@ -759,11 +757,9 @@ Project documentation lives in `docs/`.
 | Document | Purpose |
 | --- | --- |
 | `docs/README.md` | Documentation index. |
-| `docs/audit/SYSTEM_AUDIT.md` | End-to-end engineering audit and verification evidence. |
-| `docs/audit/FEATURE_MATRIX.md` | Feature-by-feature backlog matrix. |
-| `docs/audit/FRONTEND_AUDIT.md` | Frontend route, hook, API-client, and UI-control audit. |
-| `docs/audit/BACKEND_AUDIT.md` | Backend endpoint, service, integration, persistence, and test audit. |
-| `docs/audit/SECURITY_AUDIT.md` | Security posture, risks, and prioritized remediation plan. |
+| `docs/DEMO.md` | Local setup and guided demo walkthrough. |
+| `apps/backend/README.md` | FastAPI backend development. |
+| `apps/frontend/README.md` | Frontend development. |
 
 Planned documentation areas:
 
@@ -880,7 +876,7 @@ PARTHA is under active development.
 
 It is suitable for local development and product iteration. It should not be exposed as a production multi-user service until the security backlog is addressed, especially authentication, authorization, secret handling, repository retention, and source-control hygiene.
 
-The most accurate current-state documents are the audit files in `docs/audit/`.
+The feature status tables above reflect the current implementation state.
 
 ---
 

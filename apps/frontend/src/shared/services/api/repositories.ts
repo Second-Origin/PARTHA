@@ -3,6 +3,7 @@ import type { RequestConfig } from './client';
 import type {
   RepositoryResponse,
   RepositoryListResponse,
+  RepositoryFileResponse,
   ImportGithubRequest,
 } from './types';
 
@@ -13,6 +14,10 @@ export const repositoryService = {
 
   getById(id: string, config?: RequestConfig): Promise<RepositoryResponse> {
     return api.get(`/repositories/${id}`, config);
+  },
+
+  getFile(id: string, path: string, config?: RequestConfig): Promise<RepositoryFileResponse> {
+    return api.get(`/repositories/${id}/file?path=${encodeURIComponent(path)}`, config);
   },
 
   delete(id: string, config?: RequestConfig): Promise<void> {

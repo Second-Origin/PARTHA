@@ -14,6 +14,9 @@
     "test:backend": "cd apps/backend && ./.venv/bin/python -m pytest",
     "dev:backend": "cd apps/backend && ./.venv/bin/python -m uvicorn app.main:app --reload",
     "start:backend": "cd apps/backend && ./.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000",
+    "test:backend:win": "cd apps/backend && .venv\\Scripts\\python.exe -m pytest",
+    "dev:backend:win": "cd apps/backend && .venv\\Scripts\\python.exe -m uvicorn app.main:app --reload",
+    "start:backend:win": "cd apps/backend && .venv\\Scripts\\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000",
     "build": "npm run build:frontend && npm run test:backend",
     "docker:config": "docker compose config",
     "docker:up": "docker compose up --build"

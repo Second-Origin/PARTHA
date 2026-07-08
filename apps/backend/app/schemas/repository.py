@@ -74,3 +74,11 @@ class GitHubImportRequest(CamelModel):
 class RepositoryListResponse(CamelModel):
     data: list[RepositoryResponse]
     total: int
+
+
+class RepositoryFileResponse(CamelModel):
+    path: str
+    content: str
+    size: int
+    truncated: bool = False
+    is_binary: bool = False

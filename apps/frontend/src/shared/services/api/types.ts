@@ -59,6 +59,14 @@ export interface RepositoryListResponse {
   total: number;
 }
 
+export interface RepositoryFileResponse {
+  path: string;
+  content: string;
+  size: number;
+  truncated: boolean;
+  isBinary: boolean;
+}
+
 // Analysis
 export interface AnalysisStartResponse {
   repositoryId: string;
