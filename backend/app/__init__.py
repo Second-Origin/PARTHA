@@ -1,0 +1,1 @@
+"""PARTHA backend application package."""
