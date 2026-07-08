@@ -1,41 +1,174 @@
 # PARTHA
 
-PARTHA is a repository intelligence product with a Vite frontend and FastAPI backend organized as a production-ready monorepo.
+> **AI Software Architecture Intelligence Platform**
+>
+> Analyze, understand and explore any codebase through architecture visualization, dependency analysis, engineering reviews and AI-assisted repository intelligence.
 
-## Repository Structure
+---
+
+## Overview
+
+PARTHA is a full-stack developer platform that helps engineers quickly understand unfamiliar repositories.
+
+Instead of manually exploring hundreds of files, PARTHA analyzes a repository and generates:
+
+- Architecture diagrams
+- Dependency graphs
+- Engineering reviews
+- Repository documentation
+- AI-assisted codebase exploration
+- Repository insights and metrics
+
+The platform is designed for onboarding developers, technical due diligence, architecture reviews and large-scale codebase understanding.
+
+---
+
+## Features
+
+### Repository Management
+
+- Import public GitHub repositories
+- Upload local repositories as ZIP archives
+- Repository dashboard
+- Repository explorer
+- Repository persistence
+
+### Architecture Intelligence
+
+- Interactive architecture graph
+- Request flow visualization
+- Module explorer
+- Dependency analysis
+- Architecture metrics
+
+### Engineering Review
+
+- Code quality analysis
+- Technical debt overview
+- Risk assessment
+- Improvement recommendations
+
+### Documentation
+
+Generate:
+
+- Project overview
+- Folder structure
+- API summary
+- Environment configuration
+- Deployment guide
+- Contribution guide
+
+Export as Markdown or HTML.
+
+### AI Workspace
+
+Repository-aware AI assistant supporting configurable providers:
+
+- OpenAI
+- Anthropic
+- Google Gemini
+- OpenRouter
+- Ollama
+
+---
+
+## Architecture
 
 ```text
-apps/
-  frontend/   Vite + React application
-  backend/    FastAPI application, Alembic migrations, tests, Dockerfile
-docs/         Product and engineering documentation
-packages/     Shared packages reserved for future cross-app code
-scripts/      Local development and verification helpers
+partha
+│
+├── apps
+│   ├── frontend
+│   └── backend
+│
+├── docs
+├── packages
+└── scripts
 ```
 
-## Local Development
+### Frontend
 
-Install frontend dependencies from `apps/frontend` or use the existing root `node_modules` during local migration.
+- React
+- TypeScript
+- Vite
+- React Router
+- Tailwind CSS
+
+### Backend
+
+- FastAPI
+- SQLAlchemy
+- Alembic
+- PostgreSQL
+- Redis
+
+---
+
+## Technology Stack
+
+### Frontend
+
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- React Flow
+
+### Backend
+
+- FastAPI
+- SQLAlchemy
+- Alembic
+- GitPython
+- Pydantic v2
+
+### Infrastructure
+
+- Docker
+- PostgreSQL
+- Redis
+
+---
+
+## Getting Started
+
+### Frontend
 
 ```bash
-npm run dev:frontend
-npm run dev:backend
+cd apps/frontend
+npm install
+npm run dev
 ```
 
-The frontend runs on `http://localhost:5173` and the backend on `http://localhost:8000`.
-
-## Verification
+### Backend
 
 ```bash
-npm run build:frontend
-npm run test:backend
-npm run docker:config
+cd apps/backend
+
+python3.13 -m venv .venv
+source .venv/bin/activate
+
+pip install -e .
+
+uvicorn app.main:app --reload
 ```
 
-## Docker
+---
 
-```bash
-npm run docker:up
-```
+## Project Status
 
-Docker Compose builds the API from `apps/backend` and runs PostgreSQL and Redis for backend development.
+PARTHA is under active development.
+
+Current focus:
+
+- Improve repository parsing
+- Expand architecture intelligence
+- Enhance AI-assisted repository understanding
+- Improve engineering review accuracy
+
+---
+
+## License
+
+MIT
