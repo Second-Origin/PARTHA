@@ -14,7 +14,7 @@ export function AnalysisPipelinePage() {
 
   const handleCancel = () => {
     analysis.cancel();
-    navigate('/upload');
+    navigate('/repositories');
   };
 
   if (!repo) {
@@ -146,7 +146,7 @@ export function AnalysisPipelinePage() {
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          Cancel Analysis
+          Back to repositories
         </button>
       </div>
     </div>

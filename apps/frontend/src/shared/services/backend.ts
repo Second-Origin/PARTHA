@@ -16,22 +16,14 @@ export const hasBackend = USE_BACKEND;
 export const backendService = {
   async fetchRepositories(): Promise<Repository[]> {
     if (!USE_BACKEND) return [];
-    try {
-      const response = await repositoryService.list();
-      return response.data.map(mapRepositoryResponse);
-    } catch {
-      return [];
-    }
+    const response = await repositoryService.list();
+    return response.data.map(mapRepositoryResponse);
   },
 
   async fetchRepository(id: string): Promise<Repository | null> {
     if (!USE_BACKEND) return null;
-    try {
-      const response = await repositoryService.getById(id);
-      return mapRepositoryResponse(response);
-    } catch {
-      return null;
-    }
+    const response = await repositoryService.getById(id);
+    return mapRepositoryResponse(response);
   },
 
   async uploadRepository(
@@ -83,12 +75,8 @@ export const backendService = {
 
   async deleteRepository(id: string): Promise<boolean> {
     if (!USE_BACKEND) return true;
-    try {
-      await repositoryService.delete(id);
-      return true;
-    } catch {
-      return false;
-    }
+    await repositoryService.delete(id);
+    return true;
   },
 };
 

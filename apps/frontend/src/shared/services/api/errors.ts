@@ -65,19 +65,29 @@ export function isCancelledError(error: unknown): error is CancelledError {
 
 export function getErrorMessage(error: unknown): string {
   if (isApiError(error)) {
+    const backendMessage = getBackendMessage(error.body);
+    if (backendMessage) return backendMessage;
+
     switch (error.status) {
       case 401: return 'Authentication required. Please sign in.';
       case 403: return 'You do not have permission to perform this action.';
       case 404: return 'The requested resource was not found.';
       case 422: return 'The request data is invalid.';
+      case 409: return 'The request conflicts with an existing resource.';
       case 429: return 'Too many requests. Please try again later.';
       case 503: return 'Service is temporarily unavailable. Please try again.';
       default: return error.status >= 500 ? 'A server error occurred. Please try again.' : error.message;
     }
   }
-  if (isNetworkError(error)) return 'Unable to connect. Check your network connection.';
+  if (isNetworkError(error)) return 'Cannot reach the PARTHA backend. Confirm the API server is running and try again.';
   if (isTimeoutError(error)) return 'The request timed out. Please try again.';
   if (isCancelledError(error)) return 'Request was cancelled.';
   if (error instanceof Error) return error.message;
   return 'An unknown error occurred.';
+}
+
+function getBackendMessage(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const maybeMessage = (body as { message?: unknown }).message;
+  return typeof maybeMessage === 'string' && maybeMessage.trim() ? maybeMessage : null;
 }

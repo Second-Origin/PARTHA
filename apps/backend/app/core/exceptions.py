@@ -31,6 +31,16 @@ class ValidationServiceError(ServiceError):
     code = "validation_error"
 
 
+class ConflictServiceError(ServiceError):
+    status_code = status.HTTP_409_CONFLICT
+    code = "conflict_error"
+
+
+class TimeoutServiceError(ServiceError):
+    status_code = status.HTTP_504_GATEWAY_TIMEOUT
+    code = "timeout_error"
+
+
 class ExternalServiceError(ServiceError):
     status_code = status.HTTP_502_BAD_GATEWAY
     code = "external_service_error"

@@ -32,6 +32,14 @@ class LocalStorage:
         if path.exists() and path.is_dir():
             shutil.rmtree(path)
 
+    def delete_repository_id(self, repository_id: str) -> None:
+        path = self.repository_path(repository_id)
+        if path.exists() and path.is_dir():
+            shutil.rmtree(path)
+
+    def delete_upload(self, archive_path: Path) -> None:
+        archive_path.unlink(missing_ok=True)
+
     async def save_upload(self, repository_id: str, file: UploadFile, max_size_bytes: int) -> Path:
         upload_path = self.uploads_root / f"{repository_id}-{file.filename or 'repository'}"
         total = 0
@@ -46,15 +54,18 @@ class LocalStorage:
 
     def extract_archive(self, archive_path: Path, repository_id: str) -> Path:
         destination = self.reset_repository_path(repository_id)
-        if zipfile.is_zipfile(archive_path):
-            with zipfile.ZipFile(archive_path) as archive:
-                self._safe_extract_zip(archive, destination)
-            return self._normalise_single_root(destination)
+        try:
+            if zipfile.is_zipfile(archive_path):
+                with zipfile.ZipFile(archive_path) as archive:
+                    self._safe_extract_zip(archive, destination)
+                return self._normalise_single_root(destination)
 
-        if tarfile.is_tarfile(archive_path):
-            with tarfile.open(archive_path) as archive:
-                self._safe_extract_tar(archive, destination)
-            return self._normalise_single_root(destination)
+            if tarfile.is_tarfile(archive_path):
+                with tarfile.open(archive_path) as archive:
+                    self._safe_extract_tar(archive, destination)
+                return self._normalise_single_root(destination)
+        except (zipfile.BadZipFile, tarfile.TarError, OSError) as exc:
+            raise ValidationServiceError("Archive is corrupted or cannot be extracted.") from exc
 
         raise ValidationServiceError("Unsupported archive format. Upload a ZIP or TAR archive.")
 
@@ -67,6 +78,8 @@ class LocalStorage:
 
     def _safe_extract_tar(self, archive: tarfile.TarFile, destination: Path) -> None:
         for member in archive.getmembers():
+            if member.issym() or member.islnk() or member.isdev():
+                raise ValidationServiceError("Archive contains unsupported link or device entries.")
             target = destination / member.name
             if not self._is_safe_child(destination, target):
                 raise ValidationServiceError("Archive contains unsafe paths.")
