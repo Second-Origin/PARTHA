@@ -40,12 +40,12 @@ export function UploadPage() {
 
   const handleAnalyseFile = async () => {
     const repository = await upload.analyseFile();
-    if (repository) navigate(`/analysis/${repository.id}`);
+    if (repository) navigate(repository.status === 'completed' ? `/repositories/${repository.id}` : `/analysis/${repository.id}`);
   };
 
   const handleAnalyseGithub = async () => {
     const repository = await githubImport.analyseGithub();
-    if (repository) navigate(`/analysis/${repository.id}`);
+    if (repository) navigate(repository.status === 'completed' ? `/repositories/${repository.id}` : `/analysis/${repository.id}`);
   };
 
   return (

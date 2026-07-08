@@ -8,7 +8,7 @@ from app.schemas.analysis import AnalysisStartResponse, AnalysisStatusResponse
 from app.schemas.architecture import ArchitectureResponse
 from app.schemas.dependencies import DependencyGraphResponse
 from app.schemas.review import EngineeringReviewResponse
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ServiceError
 
 
 class AnalysisService:
@@ -26,9 +26,31 @@ class AnalysisService:
 
     def start(self, repository_id: str) -> AnalysisStartResponse:
         record = self._get_record(repository_id)
+        if record.status == "completed":
+            return AnalysisStartResponse(repository_id=record.id, status="completed")
+        if record.status == "error":
+            return AnalysisStartResponse(repository_id=record.id, status="failed")
+
+        record.status = "analysing"
+        record.analysis_stage = "preparing-architecture"
+        record.analysis_progress = 80
+        self.repository.save(record)
+        try:
+            self.architecture.build_architecture(record)
+            self.dependencies.build(record)
+            self.review.build(record)
+        except Exception as exc:
+            record.status = "error"
+            record.analysis_stage = None
+            record.analysis_progress = 0
+            record.error_message = "Repository analysis failed."
+            self.repository.save(record)
+            raise ServiceError("Repository analysis failed.", {"repositoryId": record.id}) from exc
+
         record.status = "completed"
         record.analysis_stage = "completed"
         record.analysis_progress = 100
+        record.error_message = None
         record.analysed_at = datetime.now(UTC)
         self.repository.save(record)
         return AnalysisStartResponse(repository_id=record.id, status="completed")

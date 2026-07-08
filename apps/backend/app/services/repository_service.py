@@ -5,7 +5,7 @@ from uuid import uuid4
 from fastapi import UploadFile
 
 from app.core.config import Settings
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictServiceError, NotFoundError, ValidationServiceError
 from app.github.client import GitHubClient
 from app.models.repository import RepositoryRecord
 from app.parsers.repository_parser import RepositoryParser
@@ -44,10 +44,23 @@ class RepositoryService:
     def import_github_repository(self, request: GitHubImportRequest) -> RepositoryResponse:
         repository_id = str(uuid4())
         url = self.github.validate_public_url(str(request.url))
+        branch = self.github.validate_branch(request.branch)
+        existing = self.repository.find_by_source(url, branch)
+        if existing:
+            raise ConflictServiceError(
+                "Repository has already been imported.",
+                {"repositoryId": existing.id, "name": existing.name},
+            )
+
         destination = self.storage.reset_repository_path(repository_id)
-        self.github.clone_public_repository(url, destination, request.branch)
-        root = self._resolve_repository_root(destination)
-        tree, meta, total_size = self.parser.parse(root)
+        try:
+            self.github.clone_public_repository(url, destination, branch)
+            root = self._resolve_repository_root(destination)
+            tree, meta, total_size = self.parser.parse(root)
+            self._validate_parsed_repository(meta.total_files)
+        except Exception:
+            self.storage.delete_repository_id(repository_id)
+            raise
 
         now = datetime.now(UTC)
         record = RepositoryRecord(
@@ -56,16 +69,16 @@ class RepositoryService:
             description=None,
             source="github",
             source_url=url,
-            branch=request.branch,
+            branch=branch,
             local_path=str(root),
             size=total_size,
             file_count=meta.total_files,
-            status="completed",
+            status="analysing",
             data_source="real",
-            analysis_stage="completed",
-            analysis_progress=100,
+            analysis_stage="building-file-tree",
+            analysis_progress=70,
             uploaded_at=now,
-            analysed_at=now,
+            analysed_at=None,
             repo_metadata=meta.model_dump(mode="json", by_alias=True),
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
@@ -73,13 +86,29 @@ class RepositoryService:
 
     async def import_uploaded_repository(self, file: UploadFile) -> RepositoryResponse:
         repository_id = str(uuid4())
+        repository_name = self._repository_name_from_archive(file.filename or repository_id)
+        existing = self.repository.find_by_name(repository_name)
+        if existing:
+            raise ConflictServiceError(
+                "Repository has already been imported.",
+                {"repositoryId": existing.id, "name": existing.name},
+            )
+
         archive_path = await self.storage.save_upload(repository_id, file, self.settings.max_upload_size_bytes)
-        root = self.storage.extract_archive(archive_path, repository_id)
-        tree, meta, total_size = self.parser.parse(root)
+        try:
+            root = self.storage.extract_archive(archive_path, repository_id)
+            tree, meta, total_size = self.parser.parse(root)
+            self._validate_parsed_repository(meta.total_files)
+        except Exception:
+            self.storage.delete_upload(archive_path)
+            self.storage.delete_repository_id(repository_id)
+            raise
+        self.storage.delete_upload(archive_path)
+
         now = datetime.now(UTC)
         record = RepositoryRecord(
             id=repository_id,
-            name=Path(file.filename or repository_id).stem,
+            name=repository_name,
             description=None,
             source="upload",
             source_url=None,
@@ -87,12 +116,12 @@ class RepositoryService:
             local_path=str(root),
             size=total_size,
             file_count=meta.total_files,
-            status="completed",
+            status="analysing",
             data_source="real",
-            analysis_stage="completed",
-            analysis_progress=100,
+            analysis_stage="building-file-tree",
+            analysis_progress=70,
             uploaded_at=now,
-            analysed_at=now,
+            analysed_at=None,
             repo_metadata=meta.model_dump(mode="json", by_alias=True),
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
@@ -130,3 +159,13 @@ class RepositoryService:
         if len(children) == 1 and children[0].is_dir() and not (destination / ".git").exists():
             return children[0]
         return destination
+
+    def _validate_parsed_repository(self, total_files: int) -> None:
+        if total_files == 0:
+            raise ValidationServiceError("Repository archive does not contain any readable files.")
+
+    def _repository_name_from_archive(self, filename: str) -> str:
+        for suffix in (".tar.gz", ".tgz", ".zip", ".tar", ".gz"):
+            if filename.lower().endswith(suffix):
+                return filename[: -len(suffix)]
+        return Path(filename).stem

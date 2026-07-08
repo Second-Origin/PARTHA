@@ -18,7 +18,6 @@ function extractRepoName(url: string): string {
 export function useGitHubImport() {
   const { repositories, selectRepository } = useRepository();
   const addRepository = useAppStore((state) => state.addRepository);
-  const startAnalysis = useAppStore((state) => state.startAnalysis);
   const [githubUrl, setGithubUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,19 +63,15 @@ export function useGitHubImport() {
         throw new Error('GitHub import did not return a repository.');
       }
 
-      if (importedRepository) {
-        await backendService.startAnalysis(importedRepository.id);
-      }
+      await backendService.startAnalysis(importedRepository.id);
+      const repository = await backendService.fetchRepository(importedRepository.id);
 
-      const repository: Repository = {
-        ...importedRepository,
-        status: 'analysing',
-        analysisStage: importedRepository.analysisStage || 'uploading',
-      };
+      if (!repository) {
+        throw new Error('Repository was imported but could not be refreshed from the backend.');
+      }
 
       addRepository(repository);
       selectRepository(repository);
-      startAnalysis(repository.id);
       setGithubUrl('');
       return repository;
     } catch (caught) {
@@ -85,7 +80,7 @@ export function useGitHubImport() {
     } finally {
       setLoading(false);
     }
-  }, [addRepository, githubUrl, repositoryNames, selectRepository, startAnalysis]);
+  }, [addRepository, githubUrl, repositoryNames, selectRepository]);
 
   return {
     githubUrl,

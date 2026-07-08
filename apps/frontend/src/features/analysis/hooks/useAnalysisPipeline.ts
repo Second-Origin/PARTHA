@@ -12,8 +12,8 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
   const failAnalysis = useAppStore((state) => state.failAnalysis);
   const cancelAnalysis = useAppStore((state) => state.cancelAnalysis);
   const updateRepository = useAppStore((state) => state.updateRepository);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
+  const startedRef = useRef<string | null>(null);
   const [status, setStatus] = useState<FeatureStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -57,6 +57,11 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
       async function pollStatus() {
         if (!repositoryId || cancelled) return;
         try {
+          if (repositoryStatus === 'analysing' && startedRef.current !== repositoryId) {
+            startedRef.current = repositoryId;
+            await backendService.startAnalysis(repositoryId);
+          }
+
           const response = await backendService.fetchAnalysisStatus(repositoryId);
           if (!response || cancelled) return;
 
@@ -108,12 +113,12 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
     refreshKey,
     repository,
     repositoryId,
+    repositoryStatus,
     updateRepository,
   ]);
 
   const cancel = useCallback(() => {
     cancelledRef.current = true;
-    if (timerRef.current) clearTimeout(timerRef.current);
     cancelAnalysis();
   }, [cancelAnalysis]);
 
