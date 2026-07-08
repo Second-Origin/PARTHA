@@ -20,13 +20,26 @@ export function CodePreview({ node, repositoryId }: CodePreviewProps) {
   const [isImage, setIsImage] = useState(false);
   const [mediaType, setMediaType] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const copyResetTimerRef = useRef<number | null>(null);
 
   const language = getMonacoLanguage(node.extension);
 
+  const clearCopyResetTimer = useCallback(() => {
+    if (copyResetTimerRef.current !== null) {
+      window.clearTimeout(copyResetTimerRef.current);
+      copyResetTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
+    clearCopyResetTimer();
     setLoading(true);
+    setContent('');
+    setCopied(false);
+    setCopyError(null);
     setError(null);
     setIsBinary(false);
     setIsImage(false);
@@ -54,17 +67,30 @@ export function CodePreview({ node, repositoryId }: CodePreviewProps) {
     return () => {
       cancelled = true;
     };
-  }, [repositoryId, node.path]);
+  }, [clearCopyResetTimer, repositoryId, node.path]);
+
+  useEffect(() => clearCopyResetTimer, [clearCopyResetTimer]);
 
   const handleMount: OnMount = (editor) => {
     editorRef.current = editor;
   };
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [content]);
+  const handleCopy = useCallback(async () => {
+    clearCopyResetTimer();
+    setCopyError(null);
+
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      copyResetTimerRef.current = window.setTimeout(() => {
+        setCopied(false);
+        copyResetTimerRef.current = null;
+      }, 2000);
+    } catch {
+      setCopied(false);
+      setCopyError('Copy failed');
+    }
+  }, [clearCopyResetTimer, content]);
 
   const showCopy = !loading && !error && !isBinary && !isImage;
 
@@ -79,13 +105,16 @@ export function CodePreview({ node, repositoryId }: CodePreviewProps) {
           )}
         </div>
         {showCopy && (
-          <button
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
-            {copied ? 'Copied' : 'Copy'}
-          </button>
+          <div className="flex items-center gap-2">
+            {copyError && <span className="text-[10px] text-destructive">{copyError}</span>}
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
         )}
       </div>
       <div className="flex-1 min-h-0">
