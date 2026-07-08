@@ -1,0 +1,50 @@
+name: Engineering Task
+description: Track technical debt, refactors, tests, infrastructure, or audit backlog work.
+title: "chore: "
+labels: [engineering]
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: Task
+      description: What engineering work needs to be done?
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Rationale
+      description: Why is this important now?
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Link audit rows, files, logs, or related issues.
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation Notes
+      description: Constraints, likely files, migration considerations, or non-goals.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      placeholder: |
+        - Relevant tests added or updated
+        - CI passes
+        - Documentation updated if behavior changes
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0 - Critical
+        - P1 - High
+        - P2 - Medium
+        - P3 - Low
+    validations:
+      required: true
