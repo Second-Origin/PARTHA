@@ -1,0 +1,1 @@
+var e={uploading:`info`,analysing:`warning`,completed:`success`,error:`error`};export{e as t};

@@ -1,0 +1,2 @@
+import{n as e,t}from"./client-Cs2aCcNL.js";var n={getConfig(e){return t.get(`/ai/config`,e)},saveConfig(e,n){return t.put(`/ai/config`,e,n)},testConfig(e,n){return t.post(`/ai/test`,e,n)},query(e,n){return t.post(`/ai/query`,e,n)},streamQuery(t,n,r){return e(`/ai/stream`,t,e=>{let t=e.split(`
+`).filter(e=>e.startsWith(`data: `));for(let e of t)try{n(JSON.parse(e.slice(6)))}catch{n({type:`content`,content:e.slice(6)})}},r)}};export{n as t};
