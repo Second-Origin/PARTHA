@@ -2,27 +2,68 @@
 # Python
 # ==========================================
 
+__pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-*.db
-*.sqlite
-*.sqlite3
-
-# Local backend storage
-/apps/backend/local/
 
 # Virtual environments
 .venv/
 venv/
+env/
 
-# Python cache
+# Python cache & tooling
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .pyre/
 .coverage
+.coverage.*
 htmlcov/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Local backend storage
+apps/backend/local/
+apps/backend/.local/
+
+# ==========================================
+# Node.js
+# ==========================================
+
+node_modules/
+
+# Build outputs
+dist/
+**/dist/
+
+# TypeScript
+*.tsbuildinfo
+
+# Package manager logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================================
+# Environment files
+# ==========================================
+
+.env
+.env.local
+.env.*.local
+
+apps/frontend/.env
+apps/backend/.env
+
+# Keep example env files
+!.env.example
+!apps/frontend/.env.example
+!apps/backend/.env.example
 
 # ==========================================
 # IDE
@@ -30,11 +71,41 @@ htmlcov/
 
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # ==========================================
-# OS
+# macOS / Windows
 # ==========================================
 
+.DS_Store
 .AppleDouble
 .LSOverride
-node_modules
+Thumbs.db
+Desktop.ini
+
+# ==========================================
+# Logs
+# ==========================================
+
+*.log
+
+# ==========================================
+# Temporary files
+# ==========================================
+
+tmp/
+temp/
+.cache/
+
+# ==========================================
+# Docker
+# ==========================================
+
+docker-compose.override.yml
+
+# ==========================================
+# Misc
+# ==========================================
+
+*.seed
