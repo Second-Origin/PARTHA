@@ -1,6 +1,8 @@
 import json
 import logging
 
+import pytest
+
 
 def test_health_endpoint(client):
     response = client.get("/health")
@@ -18,6 +20,36 @@ def test_readiness_endpoint(client):
         "status": "ready",
         "environment": "development",
         "checks": {"database": "ok", "storage": "ok"},
+    }
+
+
+def test_readiness_endpoint_reports_database_failure(client, monkeypatch):
+    import app.main as main_module
+
+    monkeypatch.setattr(main_module, "check_database_ready", lambda: False)
+
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "environment": "development",
+        "checks": {"database": "error", "storage": "ok"},
+    }
+
+
+def test_readiness_endpoint_reports_storage_failure(client, monkeypatch):
+    import app.main as main_module
+
+    monkeypatch.setattr(main_module, "check_storage_ready", lambda: False)
+
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "environment": "development",
+        "checks": {"database": "ok", "storage": "error"},
     }
 
 
@@ -83,3 +115,21 @@ def test_json_logging_includes_structured_fields(capsys):
     assert payload["logger"] == "partha.test"
     assert payload["message"] == "Structured log test"
     assert payload["extra"]["component"] == "system"
+
+
+def test_settings_rejects_invalid_log_level():
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(log_level="VERBOSE")
+
+
+def test_settings_rejects_invalid_log_format():
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(log_format="pretty")

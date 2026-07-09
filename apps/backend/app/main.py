@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from os import getpid
 from typing import Literal
 
 from fastapi import FastAPI, status
@@ -14,6 +15,27 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.models import RepositoryRecord  # noqa: F401 - imported so metadata includes model
 from app.models.base import Base
+
+
+def check_database_ready() -> bool:
+    try:
+        with database.engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except Exception:
+        return False
+    return True
+
+
+def check_storage_ready() -> bool:
+    settings = get_settings()
+    probe_path = settings.storage_path / f".partha-readiness-{getpid()}.tmp"
+    try:
+        settings.storage_path.mkdir(parents=True, exist_ok=True)
+        probe_path.write_text("ok", encoding="utf-8")
+        probe_path.unlink(missing_ok=True)
+    except OSError:
+        return False
+    return True
 
 
 @asynccontextmanager
@@ -53,15 +75,8 @@ def create_app() -> FastAPI:
     @app.get("/ready", tags=["system"], response_model=None)
     def readiness() -> dict[str, object] | JSONResponse:
         checks: dict[str, Literal["ok", "error"]] = {}
-
-        try:
-            with database.engine.connect() as connection:
-                connection.execute(text("SELECT 1"))
-            checks["database"] = "ok"
-        except Exception:
-            checks["database"] = "error"
-
-        checks["storage"] = "ok" if settings.storage_path.exists() and settings.storage_path.is_dir() else "error"
+        checks["database"] = "ok" if check_database_ready() else "error"
+        checks["storage"] = "ok" if check_storage_ready() else "error"
 
         ready = all(check == "ok" for check in checks.values())
         payload = {

@@ -370,6 +370,8 @@ cp apps/backend/.env.example apps/backend/.env
 
 Local `.env` files are intentionally ignored and should not be committed. Keep committed configuration examples in `.env.example`, `apps/frontend/.env.example`, and `apps/backend/.env.example`.
 
+`apps/backend/.env.example` is tuned for running the backend directly on your machine with SQLite and local filesystem storage. Docker Compose injects container-specific PostgreSQL, Redis, and storage values from `docker-compose.yml`.
+
 For local frontend-to-backend development, the frontend should point to the backend API:
 
 ```bash
@@ -464,6 +466,8 @@ The Compose API service sets:
 | `STORAGE_PATH` | `/data/partha` |
 | `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` |
 | `AUTO_CREATE_TABLES` | `true` |
+
+These container values are provided by `docker-compose.yml`; do not copy them into `apps/backend/.env` unless you are intentionally connecting a locally run backend process to the Compose services.
 
 ---
 
