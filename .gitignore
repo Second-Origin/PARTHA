@@ -12,7 +12,7 @@ __pycache__/
 venv/
 env/
 
-# Python cache & tooling
+# Python tooling
 .pytest_cache/
 .pytest-tmp*/
 .mypy_cache/
@@ -36,6 +36,11 @@ apps/backend/.local/
 # ==========================================
 
 node_modules/
+**/node_modules/
+
+# Root package lock (apps manage their own)
+#/package-lock.json
+/package-lock.json
 
 # Build outputs
 dist/
@@ -75,6 +80,12 @@ apps/backend/.env
 *.swp
 *.swo
 
+# JetBrains
+*.iml
+
+# VSCode test workspace
+*.code-workspace
+
 # ==========================================
 # macOS / Windows
 # ==========================================
@@ -90,6 +101,7 @@ Desktop.ini
 # ==========================================
 
 *.log
+logs/
 
 # ==========================================
 # Temporary files
@@ -110,3 +122,23 @@ docker-compose.override.yml
 # ==========================================
 
 *.seed
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# ==========================================
+# Local analysis / generated output
+# ==========================================
+
+coverage/
+.nyc_output/
+
+# ==========================================
+# OS generated
+# ==========================================
+
+.fseventsd
+.Trashesg
