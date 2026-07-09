@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Network } from 'lucide-react';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
+import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { ArchWorkspace } from '@/features/architecture/components/ArchWorkspace';
 import { useArchitecture } from '@/features/architecture/hooks/useArchitecture';
 
@@ -61,7 +62,13 @@ export function ArchitecturePage() {
 
   return (
     <div className="h-[calc(100vh-8rem)] -m-6 flex flex-col">
-      <ArchWorkspace model={architecture.model} source={architecture.source} />
+      <div className="flex items-center justify-between border-b border-border px-6 py-3">
+        <h1 className="text-sm font-medium text-foreground">Architecture · {architecture.model.repositoryName}</h1>
+        <ExportMenu repositoryId={architecture.model.repositoryId} target="architecture" />
+      </div>
+      <div className="flex-1 min-h-0">
+        <ArchWorkspace model={architecture.model} source={architecture.source} />
+      </div>
     </div>
   );
 }

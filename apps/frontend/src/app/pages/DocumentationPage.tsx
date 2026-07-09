@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { Download, FileText, RefreshCw } from 'lucide-react';
+import { FileText, RefreshCw } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
+import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { useDocumentation } from '@/features/documentation/hooks/useDocumentation';
 
 export function DocumentationPage() {
@@ -19,18 +20,6 @@ export function DocumentationPage() {
     ['contribution', 'Contribution'],
   ] as const;
 
-  const exportDocument = () => {
-    if (!documentation.document || !activeRepository) return;
-    const extension = documentation.document.format === 'html' ? 'html' : 'md';
-    const type = documentation.document.format === 'html' ? 'text/html' : 'text/markdown';
-    const blob = new Blob([documentation.document.content], { type });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${activeRepository.name}-documentation.${extension}`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
 
   if (documentation.emptyReason === 'no-completed-repositories') {
     return (
@@ -85,9 +74,7 @@ export function DocumentationPage() {
               <button onClick={documentation.refresh} className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs text-foreground hover:bg-accent transition-colors">
                 <RefreshCw className="h-3.5 w-3.5" /> Regenerate
               </button>
-              <button onClick={exportDocument} disabled={!documentation.document} className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                <Download className="h-3.5 w-3.5" /> Export
-              </button>
+              <ExportMenu repositoryId={activeRepository.id} target="documentation" disabled={!documentation.document} />
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
