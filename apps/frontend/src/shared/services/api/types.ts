@@ -197,13 +197,18 @@ export interface GenerateDocResponse {
 }
 
 // Export
+export type ExportFormat = 'json' | 'markdown' | 'html' | 'pdf';
+export type ExportTarget = 'review' | 'documentation' | 'architecture' | 'dependencies';
+
 export interface ExportRequest {
   repositoryId: string;
-  format: 'png' | 'svg' | 'json' | 'markdown' | 'pdf';
-  target: 'architecture' | 'review' | 'dependencies' | 'documentation';
+  target: ExportTarget;
+  format: ExportFormat;
 }
 
 export interface ExportResponse {
-  url: string;
-  expiresAt: string;
+  filename: string;
+  mediaType: string;
+  encoding: 'utf-8' | 'base64';
+  content: string;
 }

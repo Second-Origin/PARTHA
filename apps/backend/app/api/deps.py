@@ -9,6 +9,7 @@ from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.parsers.repository_parser import RepositoryParser
 from app.repositories.repository_repository import RepositoryRepository
+from app.reports.export_service import ExportService
 from app.review.review_service import EngineeringReviewBuilder
 from app.services.ai_service import AiService
 from app.services.analysis_service import AnalysisService
@@ -104,3 +105,10 @@ def get_documentation_service(
     intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
 ) -> DocumentationService:
     return DocumentationService(repository=repository, architecture=architecture, dependencies=dependencies, intelligence=intelligence)
+
+
+def get_export_service(
+    analysis: AnalysisService = Depends(get_analysis_service),
+    documentation: DocumentationService = Depends(get_documentation_service),
+) -> ExportService:
+    return ExportService(analysis=analysis, documentation=documentation)

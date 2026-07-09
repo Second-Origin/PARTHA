@@ -21,6 +21,7 @@ dependencies = [
   "networkx>=3.3",
   "python-multipart>=0.0.9",
   "httpx>=0.27.0",
+  "xhtml2pdf>=0.2.16",
   "pytest>=8.3.0"
 ]
 

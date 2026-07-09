@@ -1,12 +1,12 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from html import escape
 
 from app.analysis.architecture import ArchitectureAnalyzer
-from app.core.exceptions import NotFoundError, ValidationServiceError
+from app.core.exceptions import NotFoundError
 from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.repositories.repository_repository import RepositoryRepository
-from app.schemas.documentation import ExportRequest, ExportResponse, GenerateDocRequest, GenerateDocResponse
+from app.schemas.documentation import GenerateDocRequest, GenerateDocResponse
 
 
 class DocumentationService:
@@ -32,14 +32,6 @@ class DocumentationService:
         else:
             content = markdown
         return GenerateDocResponse(content=content, format=request.format, generated_at=datetime.now(UTC))
-
-    def export(self, request: ExportRequest) -> ExportResponse:
-        if request.format not in {"json", "markdown"}:
-            raise ValidationServiceError(f"{request.format.upper()} export is coming soon for {request.target}.")
-        record = self.repository.get(request.repository_id)
-        if not record:
-            raise NotFoundError("Repository not found.", {"repositoryId": request.repository_id})
-        return ExportResponse(url=f"data:application/octet-stream,{record.id}-{request.target}.{request.format}", expires_at=datetime.now(UTC) + timedelta(minutes=15))
 
     def _markdown(self, record, sections: list[str] | None) -> str:
         selected = set(sections or ["overview", "architecture", "folder-structure", "api", "environment", "deployment", "contribution"])
