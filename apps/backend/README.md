@@ -14,7 +14,17 @@ pip install -e .
 python -m uvicorn app.main:app --reload
 ```
 
-By default, local development uses SQLite at `.local/partha.db` so the app can start without services. Docker Compose uses PostgreSQL and Redis.
+By default, local development uses SQLite at `.local/partha.db` and storage at `.local/storage` so the app can start without services. Docker Compose injects PostgreSQL, Redis, and container storage settings separately.
+
+Useful system endpoints:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Lightweight liveness check with the current environment label. |
+| `GET /ready` | Readiness check for database connectivity and configured storage writability. |
+| `GET /metrics` | Plain-text runtime counters for request volume, status families, routes, and cumulative duration. |
+
+Backend logs default to human-readable text. Set `LOG_FORMAT=json` for structured logs in containers or hosted environments. Every request receives an `X-Request-ID` response header; pass `X-Request-ID` on inbound requests to preserve an upstream trace identifier.
 
 ## Docker
 

@@ -16,6 +16,7 @@ export class ApiError extends Error {
   get isRateLimited() { return this.status === 429; }
   get isServerError() { return this.status >= 500; }
   get isUnavailable() { return this.status === 503; }
+  get requestId() { return getBackendRequestId(this.body); }
 }
 
 export class NetworkError extends Error {
@@ -90,4 +91,10 @@ function getBackendMessage(body: unknown): string | null {
   if (!body || typeof body !== 'object') return null;
   const maybeMessage = (body as { message?: unknown }).message;
   return typeof maybeMessage === 'string' && maybeMessage.trim() ? maybeMessage : null;
+}
+
+function getBackendRequestId(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const maybeRequestId = (body as { request_id?: unknown }).request_id;
+  return typeof maybeRequestId === 'string' && maybeRequestId.trim() ? maybeRequestId : null;
 }

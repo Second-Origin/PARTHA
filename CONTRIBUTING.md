@@ -143,7 +143,9 @@ npm run test:backend
 If you changed Docker, Compose, environment, or infrastructure files, run:
 
 ```bash
+docker build -t partha-backend:local apps/backend
 docker compose config
+npm run docker:validate
 ```
 
 If you cannot run a required check locally, mention that clearly in the PR description and explain why.
