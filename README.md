@@ -31,7 +31,7 @@
 </p>
 
 <p align="center">
-  <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg">
+  <img alt="License" src="https://img.shields.io/github/license/Second-Origin/PARTHA">
   <img alt="Python 3.12+" src="https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white">
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white">
   <img alt="React" src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=111">
@@ -480,4 +480,6 @@ The expansion explains the project origin, but the public brand should remain si
 
 ## License
 
-MIT
+PARTHA is licensed under the Apache License 2.0.
+
+See the [LICENSE](LICENSE) file for the full license text.

@@ -32,7 +32,7 @@ def _sample_repository(root: Path) -> None:
     (root / "tests" / "user-service.test.ts").write_text("export const ok = true;", encoding="utf-8")
     (root / ".github" / "workflows" / "ci.yml").write_text("name: CI", encoding="utf-8")
     (root / "README.md").write_text("# Sample", encoding="utf-8")
-    (root / "LICENSE").write_text("MIT License", encoding="utf-8")
+    (root / "LICENSE").write_text("Apache License\nVersion 2.0", encoding="utf-8")
 
 
 def _build_intelligence(root: Path):

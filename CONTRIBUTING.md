@@ -235,6 +235,23 @@ Use:
 
 ---
 
+## Legal and Licensing
+
+PARTHA is licensed under the Apache License 2.0. By submitting a contribution, you agree that your contribution is provided under the same license unless maintainers explicitly document a different arrangement.
+
+Contributor expectations:
+
+- Only contribute work you have the right to submit.
+- Do not copy third-party code, images, fonts, datasets, or text into the project unless the license is compatible and attribution requirements are documented.
+- Keep dependency additions reviewable so maintainers can evaluate license and security impact.
+- Do not add custom license terms, headers, or notices without maintainer approval.
+
+PARTHA does not currently require a CLA or DCO sign-off. If that changes, maintainers should document the policy in this file before enforcing it.
+
+This section is project policy, not legal advice.
+
+---
+
 ## Commit Conventions
 
 Use concise Conventional Commit-style messages:
