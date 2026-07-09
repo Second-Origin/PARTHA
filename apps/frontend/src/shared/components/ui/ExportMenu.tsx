@@ -16,9 +16,10 @@ interface ExportMenuProps {
   target: ExportTarget;
   formats?: ExportFormat[];
   disabled?: boolean;
+  label?: string;
 }
 
-export function ExportMenu({ repositoryId, target, formats, disabled = false }: ExportMenuProps) {
+export function ExportMenu({ repositoryId, target, formats, disabled = false, label = 'Export' }: ExportMenuProps) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<ExportFormat | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +48,7 @@ export function ExportMenu({ repositoryId, target, formats, disabled = false }: 
         className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border text-xs font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Download className="h-3.5 w-3.5" />
-        Export
+        {label}
       </button>
       {open && (
         <>

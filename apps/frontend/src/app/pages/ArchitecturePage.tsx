@@ -63,8 +63,8 @@ export function ArchitecturePage() {
   return (
     <div className="h-[calc(100vh-8rem)] -m-6 flex flex-col">
       <div className="flex items-center justify-between border-b border-border px-6 py-3">
-        <h1 className="text-sm font-medium text-foreground">Architecture · {architecture.model.repositoryName}</h1>
-        <ExportMenu repositoryId={architecture.model.repositoryId} target="architecture" />
+        <h1 className="text-sm font-medium text-foreground">Architecture - {architecture.model.repositoryName}</h1>
+        <ExportMenu repositoryId={architecture.model.repositoryId} target="architecture" label="Export Report" />
       </div>
       <div className="flex-1 min-h-0">
         <ArchWorkspace model={architecture.model} source={architecture.source} />
