@@ -1,6 +1,13 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.ai.orchestrator import AiOrchestrator, AiProviderConfigStore
+from app.ai.prompt_builder import PromptBuilder
+from app.ai.providers.factory import ProviderFactory
+from app.ai.providers.legacy import LegacyProvider
+from app.ai.providers.registry import ProviderRegistry
+from app.ai.repository_context import RepositoryContextBuilder
+from app.ai.types import DEFAULT_MODELS
 from app.analysis.architecture import ArchitectureAnalyzer
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
@@ -74,6 +81,34 @@ def get_engineering_review_builder(
     return EngineeringReviewBuilder(intelligence)
 
 
+def get_ai_config_store(settings: Settings = Depends(get_settings)) -> AiProviderConfigStore:
+    return AiProviderConfigStore(settings)
+
+
+def get_repository_context_builder(
+    intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
+) -> RepositoryContextBuilder:
+    return RepositoryContextBuilder(intelligence)
+
+
+def get_prompt_builder() -> PromptBuilder:
+    return PromptBuilder()
+
+
+def get_provider_registry() -> ProviderRegistry:
+    registry = ProviderRegistry()
+    legacy_provider = LegacyProvider()
+    for provider in DEFAULT_MODELS:
+        registry.register(provider, legacy_provider)
+    return registry
+
+
+def get_provider_factory(
+    registry: ProviderRegistry = Depends(get_provider_registry),
+) -> ProviderFactory:
+    return ProviderFactory(registry)
+
+
 def get_analysis_service(
     repository: RepositoryRepository = Depends(get_repository_repository),
     architecture: ArchitectureAnalyzer = Depends(get_architecture_analyzer),
@@ -92,10 +127,19 @@ def get_analysis_service(
 
 def get_ai_service(
     repository: RepositoryRepository = Depends(get_repository_repository),
-    settings: Settings = Depends(get_settings),
-    intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
+    config_store: AiProviderConfigStore = Depends(get_ai_config_store),
+    context_builder: RepositoryContextBuilder = Depends(get_repository_context_builder),
+    prompt_builder: PromptBuilder = Depends(get_prompt_builder),
+    provider_factory: ProviderFactory = Depends(get_provider_factory),
 ) -> AiService:
-    return AiService(repository=repository, settings=settings, intelligence=intelligence)
+    orchestrator = AiOrchestrator(
+        repository=repository,
+        config_store=config_store,
+        context_builder=context_builder,
+        prompt_builder=prompt_builder,
+        provider_factory=provider_factory,
+    )
+    return AiService(orchestrator)
 
 
 def get_documentation_service(
