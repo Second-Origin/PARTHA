@@ -3,11 +3,14 @@ from sqlalchemy.orm import Session
 
 from app.ai.orchestrator import AiOrchestrator, AiProviderConfigStore
 from app.ai.prompt_builder import PromptBuilder
+from app.ai.providers.anthropic import AnthropicProvider
 from app.ai.providers.factory import ProviderFactory
-from app.ai.providers.legacy import LegacyProvider
+from app.ai.providers.gemini import GeminiProvider
+from app.ai.providers.ollama import OllamaProvider
+from app.ai.providers.openai import OpenAIProvider
+from app.ai.providers.openrouter import OpenRouterProvider
 from app.ai.providers.registry import ProviderRegistry
 from app.ai.repository_context import RepositoryContextBuilder
-from app.ai.types import DEFAULT_MODELS
 from app.analysis.architecture import ArchitectureAnalyzer
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
@@ -97,9 +100,11 @@ def get_prompt_builder() -> PromptBuilder:
 
 def get_provider_registry() -> ProviderRegistry:
     registry = ProviderRegistry()
-    legacy_provider = LegacyProvider()
-    for provider in DEFAULT_MODELS:
-        registry.register(provider, legacy_provider)
+    registry.register("openai", OpenAIProvider())
+    registry.register("anthropic", AnthropicProvider())
+    registry.register("gemini", GeminiProvider())
+    registry.register("openrouter", OpenRouterProvider())
+    registry.register("ollama", OllamaProvider())
     return registry
 
 

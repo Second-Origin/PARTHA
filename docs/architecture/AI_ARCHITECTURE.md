@@ -18,9 +18,10 @@ Issue #24 establishes the backend architecture for PARTHA's AI subsystem without
 | `AiProviderConfigStore` | Preserve current file-backed provider configuration behaviour. | Redesign secret storage or persistence. |
 | `RepositoryContextBuilder` | Transform `RepositoryIntelligence` into provider-safe `RepositoryContext`. | Parse repositories or read dependency manifests. |
 | `PromptBuilder` | Transform `RepositoryContext` and user question into `PromptBundle`. | Format provider-specific payloads. |
-| `ProviderRegistry` | Register provider implementations by provider id. | Instantiate providers from request data. |
+| `ProviderRegistry` | Register dedicated provider implementations by provider id. | Instantiate providers from request data. |
 | `ProviderFactory` | Resolve a provider implementation from validated configuration. | Know provider HTTP details. |
-| `LegacyProvider` | Preserve the current provider HTTP behaviour behind `AiProvider`. | Improve provider integrations or add new capabilities. |
+| Dedicated providers | Preserve provider-specific HTTP behaviour behind `AiProvider`. | Access Repository Intelligence or change prompt construction. |
+| `LegacyProvider` | Preserve the previous provider implementation as a compatibility reference. | Be registered for runtime provider resolution. |
 
 ## Dependency Graph
 
@@ -34,7 +35,11 @@ AI Routes
       -> PromptBuilder
       -> ProviderFactory
         -> ProviderRegistry
-          -> LegacyProvider
+          -> OpenAIProvider
+          -> AnthropicProvider
+          -> GeminiProvider
+          -> OpenRouterProvider
+          -> OllamaProvider
 ```
 
 ## Request Lifecycle
@@ -60,13 +65,15 @@ Providers must not:
 - call `RepositoryIntelligenceEngine` directly;
 - rebuild architecture, dependency, documentation, or review facts.
 
-## Provider Extension Point
+## Provider Implementations
 
-Future provider issues can replace individual `LegacyProvider` registry entries with provider-specific implementations:
+Dedicated provider implementations own provider-specific request construction,
+authentication headers, response parsing, and legacy-compatible error
+normalization:
 
 ```text
 ProviderRegistry
-  openai -> OpenAiProvider
+  openai -> OpenAIProvider
   anthropic -> AnthropicProvider
   gemini -> GeminiProvider
   openrouter -> OpenRouterProvider
@@ -74,6 +81,9 @@ ProviderRegistry
 ```
 
 No future provider should require changes to `AiOrchestrator`.
+
+`LegacyProvider` is intentionally kept in the package as a compatibility
+reference, but it is not registered by the default dependency graph.
 
 ## Out of Scope
 
