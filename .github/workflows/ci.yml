@@ -59,5 +59,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build backend image
+        run: docker build -t partha-backend:ci apps/backend
+
       - name: Validate Compose configuration
         run: docker compose config

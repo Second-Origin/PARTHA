@@ -1,11 +1,41 @@
+import json
 import logging
 import sys
+from datetime import UTC, datetime
+from typing import Any
+
+LOG_RECORD_ATTRIBUTES = set(logging.makeLogRecord({}).__dict__)
 
 
-def configure_logging(level: str) -> None:
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        payload: dict[str, Any] = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+        extra = {
+            key: value
+            for key, value in record.__dict__.items()
+            if key not in LOG_RECORD_ATTRIBUTES and key not in {"message", "asctime"}
+        }
+        if extra:
+            payload["extra"] = extra
+        return json.dumps(payload, ensure_ascii=False, default=str)
+
+
+def configure_logging(level: str, log_format: str = "text") -> None:
+    handler = logging.StreamHandler(sys.stdout)
+    if log_format == "json":
+        handler.setFormatter(JsonFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
+
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
+        handlers=[handler],
         force=True,
     )

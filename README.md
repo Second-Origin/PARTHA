@@ -303,13 +303,13 @@ partha/
 | --- | --- | --- |
 | Frontend | ESLint and TypeScript build | Build/lint coverage exists; unit and e2e tests are planned. |
 | Backend | pytest and FastAPI TestClient | Health, OpenAPI, repository validation, and parser tests exist. More integration coverage is planned. |
-| Docker | `docker compose config` | Configuration validation is included in CI. Full runtime validation depends on Docker availability. |
+| Docker | `docker build`, `docker compose config` | Backend image build and Compose configuration validation are included in CI. Full runtime validation depends on Docker availability. |
 
 ### CI/CD
 
 | Workflow | Purpose |
 | --- | --- |
-| `.github/workflows/ci.yml` | Runs frontend install/lint/build, backend install/tests, and Docker Compose config validation. |
+| `.github/workflows/ci.yml` | Runs frontend install/lint/build, backend install/tests, backend Docker image build, and Docker Compose config validation. |
 
 ---
 
@@ -367,6 +367,8 @@ cp .env.example .env
 cp apps/frontend/.env.example apps/frontend/.env
 cp apps/backend/.env.example apps/backend/.env
 ```
+
+Local `.env` files are intentionally ignored and should not be committed. Keep committed configuration examples in `.env.example`, `apps/frontend/.env.example`, and `apps/backend/.env.example`.
 
 For local frontend-to-backend development, the frontend should point to the backend API:
 
@@ -439,6 +441,7 @@ PARTHA uses environment variables at both the root/dev level and app level.
 | `APP_NAME` | No | `PARTHA Backend` | Display name for the backend service. |
 | `APP_ENV` | No | `development` | Runtime environment label returned by health checks and used for operational context. |
 | `LOG_LEVEL` | No | `INFO` | Backend logging level. |
+| `LOG_FORMAT` | No | `text` | Backend log formatter. Use `json` for structured container/platform logs or `text` for local readability. |
 | `DATABASE_URL` | Yes | `sqlite:///./.local/partha.db` | SQLAlchemy database URL. Local development can use SQLite. Docker Compose uses PostgreSQL. |
 | `REDIS_URL` | No | `redis://localhost:6379/0` | Redis connection URL reserved for async/job workflows. |
 | `STORAGE_PATH` | Yes | `./.local/storage` | Filesystem path for uploaded archives, cloned repositories, and local backend artifacts. |
@@ -455,6 +458,7 @@ The Compose API service sets:
 | --- | --- |
 | `APP_ENV` | `development` |
 | `LOG_LEVEL` | `INFO` |
+| `LOG_FORMAT` | `text` |
 | `DATABASE_URL` | `postgresql+psycopg://partha:partha@postgres:5432/partha` |
 | `REDIS_URL` | `redis://redis:6379/0` |
 | `STORAGE_PATH` | `/data/partha` |
@@ -515,6 +519,12 @@ This runs the frontend production build and backend tests.
 npm run docker:config
 ```
 
+### Build Backend Docker Image
+
+```bash
+docker build -t partha-backend:local apps/backend
+```
+
 ### Run Docker Compose
 
 ```bash
@@ -559,7 +569,7 @@ This is a high-level overview. Use `/docs` locally for the interactive OpenAPI e
 
 | Area | Endpoints | Purpose |
 | --- | --- | --- |
-| Health | `GET /health` | Check service status and environment. |
+| Health | `GET /health`, `GET /ready` | Check service liveness, environment, storage readiness, and database connectivity. |
 | Repositories | `GET /repositories`, `GET /repositories/{id}`, `DELETE /repositories/{id}` | List, fetch, and delete imported repositories. |
 | Repository Import | `POST /repositories/upload`, `POST /repositories/github` | Upload repository archives or import public GitHub repositories. |
 | Analysis | `POST /analysis/{id}/start`, `GET /analysis/{id}/status` | Start and inspect repository analysis state. Current analysis completes synchronously. |

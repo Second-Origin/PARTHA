@@ -1,8 +1,24 @@
+import json
+import logging
+
+
 def test_health_endpoint(client):
     response = client.get("/health")
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    assert response.json()["environment"] == "development"
+
+
+def test_readiness_endpoint(client):
+    response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ready",
+        "environment": "development",
+        "checks": {"database": "ok", "storage": "ok"},
+    }
 
 
 def test_openapi_schema_is_available(client):
@@ -12,3 +28,58 @@ def test_openapi_schema_is_available(client):
     paths = response.json()["paths"]
     assert "/repositories/github" in paths
     assert "/analysis/{repository_id}/architecture" in paths
+    assert "/ready" in paths
+
+
+def test_http_errors_use_standard_shape(client):
+    response = client.get("/missing-route")
+
+    assert response.status_code == 404
+    assert response.json() == {"code": "http_error", "message": "Not Found", "details": None}
+
+
+def test_request_validation_errors_use_standard_shape(client):
+    response = client.post("/repositories/github", json={})
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "request_validation_error"
+    assert body["message"] == "Request validation failed."
+    assert "errors" in body["details"]
+
+
+def test_unhandled_errors_use_standard_shape():
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    app = create_app()
+
+    @app.get("/boom")
+    def boom() -> None:
+        raise RuntimeError("boom")
+
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        response = test_client.get("/boom")
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "code": "internal_server_error",
+        "message": "An unexpected error occurred.",
+        "details": None,
+    }
+
+
+def test_json_logging_includes_structured_fields(capsys):
+    from app.core.logging import configure_logging
+
+    configure_logging("INFO", "json")
+    logging.getLogger("partha.test").info("Structured log test", extra={"component": "system"})
+
+    output = capsys.readouterr().out.strip()
+    payload = json.loads(output)
+
+    assert payload["level"] == "INFO"
+    assert payload["logger"] == "partha.test"
+    assert payload["message"] == "Structured log test"
+    assert payload["extra"]["component"] == "system"

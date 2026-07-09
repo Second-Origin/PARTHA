@@ -6,13 +6,14 @@ services:
     ports:
       - "8000:8000"
     environment:
-      APP_ENV: development
-      LOG_LEVEL: INFO
-      DATABASE_URL: postgresql+psycopg://partha:partha@postgres:5432/partha
+      APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-partha}:${POSTGRES_PASSWORD:-partha}@postgres:5432/${POSTGRES_DB:-partha}
       REDIS_URL: redis://redis:6379/0
       STORAGE_PATH: /data/partha
-      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
-      AUTO_CREATE_TABLES: "true"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      AUTO_CREATE_TABLES: ${AUTO_CREATE_TABLES:-true}
     volumes:
       - partha_storage:/data/partha
     depends_on:
@@ -20,19 +21,31 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
 
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: partha
-      POSTGRES_PASSWORD: partha
-      POSTGRES_DB: partha
+      POSTGRES_USER: ${POSTGRES_USER:-partha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-partha}
+      POSTGRES_DB: ${POSTGRES_DB:-partha}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U partha -d partha"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10

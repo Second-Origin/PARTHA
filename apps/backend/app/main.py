@@ -1,12 +1,15 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Literal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.api.router import api_router
+from app.core import database
 from app.core.config import get_settings
-from app.core.database import engine
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.models import RepositoryRecord  # noqa: F401 - imported so metadata includes model
@@ -18,13 +21,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     settings.storage_path.mkdir(parents=True, exist_ok=True)
     if settings.auto_create_tables:
-        Base.metadata.create_all(bind=engine)
+        Base.metadata.create_all(bind=database.engine)
     yield
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.log_format)
 
     app = FastAPI(
         title=settings.app_name,
@@ -46,6 +49,29 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["system"])
     def health() -> dict[str, str]:
         return {"status": "ok", "environment": settings.app_env}
+
+    @app.get("/ready", tags=["system"], response_model=None)
+    def readiness() -> dict[str, object] | JSONResponse:
+        checks: dict[str, Literal["ok", "error"]] = {}
+
+        try:
+            with database.engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            checks["database"] = "ok"
+        except Exception:
+            checks["database"] = "error"
+
+        checks["storage"] = "ok" if settings.storage_path.exists() and settings.storage_path.is_dir() else "error"
+
+        ready = all(check == "ok" for check in checks.values())
+        payload = {
+            "status": "ready" if ready else "not_ready",
+            "environment": settings.app_env,
+            "checks": checks,
+        }
+        if ready:
+            return payload
+        return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload)
 
     return app
 

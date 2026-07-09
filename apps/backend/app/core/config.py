@@ -1,15 +1,19 @@
 from functools import lru_cache
+import logging
 from pathlib import Path
 from typing import Annotated
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+SUPPORTED_LOG_FORMATS = {"text", "json"}
+
 
 class Settings(BaseSettings):
     app_name: str = "PARTHA Backend"
     app_env: str = "development"
     log_level: str = "INFO"
+    log_format: str = "text"
     database_url: str = "sqlite:///./.local/partha.db"
     redis_url: str = "redis://localhost:6379/0"
     storage_path: Path = Path("./.local/storage")
@@ -32,6 +36,22 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
+
+    @field_validator("log_level")
+    @classmethod
+    def validate_log_level(cls, value: str) -> str:
+        normalized = value.upper()
+        if normalized not in logging.getLevelNamesMapping():
+            raise ValueError(f"Unsupported log level: {value}")
+        return normalized
+
+    @field_validator("log_format")
+    @classmethod
+    def validate_log_format(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in SUPPORTED_LOG_FORMATS:
+            raise ValueError(f"Unsupported log format: {value}")
+        return normalized
 
 
 @lru_cache

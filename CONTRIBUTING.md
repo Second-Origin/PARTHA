@@ -143,6 +143,7 @@ npm run test:backend
 If you changed Docker, Compose, environment, or infrastructure files, run:
 
 ```bash
+docker build -t partha-backend:local apps/backend
 docker compose config
 ```
 
