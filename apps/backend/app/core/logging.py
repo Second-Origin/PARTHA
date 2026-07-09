@@ -4,6 +4,8 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
+from app.core.observability import get_request_id, redact_mapping
+
 LOG_RECORD_ATTRIBUTES = set(logging.makeLogRecord({}).__dict__)
 
 
@@ -15,6 +17,9 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        request_id = get_request_id()
+        if request_id:
+            payload["request_id"] = request_id
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
         extra = {
@@ -23,7 +28,7 @@ class JsonFormatter(logging.Formatter):
             if key not in LOG_RECORD_ATTRIBUTES and key not in {"message", "asctime"}
         }
         if extra:
-            payload["extra"] = extra
+            payload["extra"] = redact_mapping(extra)
         return json.dumps(payload, ensure_ascii=False, default=str)
 
 

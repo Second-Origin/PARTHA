@@ -23,6 +23,24 @@ def test_readiness_endpoint(client):
     }
 
 
+def test_metrics_endpoint_exposes_request_counters(client):
+    client.get("/health")
+
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "text/plain" in response.headers["content-type"]
+    assert "partha_http_requests_total" in response.text
+    assert 'partha_http_requests_by_route_total{method="GET",route="/health",status_code="200"}' in response.text
+
+
+def test_request_id_header_is_returned(client):
+    response = client.get("/health", headers={"X-Request-ID": "test-request-id"})
+
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] == "test-request-id"
+
+
 def test_readiness_endpoint_reports_database_failure(client, monkeypatch):
     import app.main as main_module
 
@@ -67,7 +85,12 @@ def test_http_errors_use_standard_shape(client):
     response = client.get("/missing-route")
 
     assert response.status_code == 404
-    assert response.json() == {"code": "http_error", "message": "Not Found", "details": None}
+    assert response.json() == {
+        "code": "http_error",
+        "message": "Not Found",
+        "details": None,
+        "request_id": response.headers["X-Request-ID"],
+    }
 
 
 def test_request_validation_errors_use_standard_shape(client):
@@ -78,6 +101,7 @@ def test_request_validation_errors_use_standard_shape(client):
     assert body["code"] == "request_validation_error"
     assert body["message"] == "Request validation failed."
     assert "errors" in body["details"]
+    assert body["request_id"] == response.headers["X-Request-ID"]
 
 
 def test_unhandled_errors_use_standard_shape():
@@ -99,6 +123,7 @@ def test_unhandled_errors_use_standard_shape():
         "code": "internal_server_error",
         "message": "An unexpected error occurred.",
         "details": None,
+        "request_id": response.headers["X-Request-ID"],
     }
 
 
@@ -117,6 +142,18 @@ def test_json_logging_includes_structured_fields(capsys):
     assert payload["extra"]["component"] == "system"
 
 
+def test_json_logging_redacts_sensitive_extra_fields(capsys):
+    from app.core.logging import configure_logging
+
+    configure_logging("INFO", "json")
+    logging.getLogger("partha.test").info("Sensitive log test", extra={"api_key": "secret-value"})
+
+    output = capsys.readouterr().out.strip()
+    payload = json.loads(output)
+
+    assert payload["extra"]["api_key"] == "[REDACTED]"
+
+
 def test_settings_rejects_invalid_log_level():
     from pydantic import ValidationError
 
@@ -133,3 +170,39 @@ def test_settings_rejects_invalid_log_format():
 
     with pytest.raises(ValidationError):
         Settings(log_format="pretty")
+
+
+def test_settings_rejects_invalid_database_url():
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(database_url="mysql://localhost/partha")
+
+
+def test_settings_rejects_invalid_redis_url():
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(redis_url="http://localhost:6379/0")
+
+
+def test_settings_rejects_invalid_cors_origins():
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(cors_origins=["localhost:5173"])
+
+
+def test_settings_rejects_non_positive_limits():
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(clone_timeout_seconds=0)

@@ -303,13 +303,14 @@ partha/
 | --- | --- | --- |
 | Frontend | ESLint and TypeScript build | Build/lint coverage exists; unit and e2e tests are planned. |
 | Backend | pytest and FastAPI TestClient | Health, OpenAPI, repository validation, and parser tests exist. More integration coverage is planned. |
-| Docker | `docker build`, `docker compose config` | Backend image build and Compose configuration validation are included in CI. Full runtime validation depends on Docker availability. |
+| Docker | `docker build`, `docker compose config`, `docker compose up` readiness check | Backend image build, Compose configuration validation, and Compose runtime readiness validation are included in CI. |
 
 ### CI/CD
 
 | Workflow | Purpose |
 | --- | --- |
-| `.github/workflows/ci.yml` | Runs frontend install/lint/build, backend install/tests, backend Docker image build, and Docker Compose config validation. |
+| `.github/workflows/ci.yml` | Runs frontend install/lint/build, backend install/tests, backend Docker image build, Docker Compose config validation, and Docker Compose runtime readiness validation. |
+| `.github/workflows/release.yml` | Validates release candidates and publishes GitHub releases for `v*` tags. |
 
 ---
 
@@ -523,6 +524,12 @@ This runs the frontend production build and backend tests.
 npm run docker:config
 ```
 
+For runtime validation, start the Compose stack and verify `/ready`:
+
+```bash
+npm run docker:validate
+```
+
 ### Build Backend Docker Image
 
 ```bash
@@ -533,6 +540,14 @@ docker build -t partha-backend:local apps/backend
 
 ```bash
 npm run docker:up
+```
+
+### Verify Runtime Observability
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/ready
+curl http://localhost:8000/metrics
 ```
 
 ### Run Migrations
@@ -573,7 +588,7 @@ This is a high-level overview. Use `/docs` locally for the interactive OpenAPI e
 
 | Area | Endpoints | Purpose |
 | --- | --- | --- |
-| Health | `GET /health`, `GET /ready` | Check service liveness, environment, storage readiness, and database connectivity. |
+| Health | `GET /health`, `GET /ready`, `GET /metrics` | Check service liveness, environment, storage/database readiness, and basic runtime metrics. |
 | Repositories | `GET /repositories`, `GET /repositories/{id}`, `DELETE /repositories/{id}` | List, fetch, and delete imported repositories. |
 | Repository Import | `POST /repositories/upload`, `POST /repositories/github` | Upload repository archives or import public GitHub repositories. |
 | Analysis | `POST /analysis/{id}/start`, `GET /analysis/{id}/status` | Start and inspect repository analysis state. Current analysis completes synchronously. |
@@ -778,15 +793,18 @@ Project documentation lives in `docs/`.
 | `docs/audit/FRONTEND_AUDIT.md` | Frontend route, hook, API-client, and UI-control audit. |
 | `docs/audit/BACKEND_AUDIT.md` | Backend endpoint, service, integration, persistence, and test audit. |
 | `docs/audit/SECURITY_AUDIT.md` | Security posture, risks, and prioritized remediation plan. |
+| `docs/operations/production-deployment.md` | Production deployment baseline, environment, health checks, rollback, and operational limits. |
+| `docs/operations/release-management.md` | Versioning, release validation, GitHub releases, and hotfix flow. |
+| `docs/operations/dependency-management.md` | Frontend/backend dependency maintenance and security update process. |
+| `docs/operations/observability.md` | Request IDs, structured logs, redaction policy, metrics, and readiness checks. |
 
-Planned documentation areas:
+Future documentation areas:
 
 | Area | Purpose |
 | --- | --- |
 | Architecture docs | Explain the repository intelligence model, graph schema, and service boundaries. |
 | Contributor docs | Describe local setup, coding standards, and pull request expectations. |
 | RFCs | Track major design proposals before implementation. |
-| Deployment docs | Document production deployment, environment, secrets, workers, and observability. |
 | API docs | Provide stable examples for common API workflows without replacing OpenAPI. |
 
 ---
@@ -892,7 +910,7 @@ For UI changes, manually verify the affected route and include notes in the PR.
 
 PARTHA is under active development.
 
-It is suitable for local development and product iteration. It should not be exposed as a production multi-user service until the security backlog is addressed, especially authentication, authorization, secret handling, repository retention, and source-control hygiene.
+It is suitable for local development, product iteration, and controlled single-operator deployments that follow the production deployment guide. It should not be exposed as a public multi-user service until the security backlog is addressed, especially authentication, authorization, tenant isolation, repository retention, and source-control hygiene.
 
 The most accurate current-state documents are the audit files in `docs/audit/`.
 

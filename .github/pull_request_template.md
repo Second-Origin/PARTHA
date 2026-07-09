@@ -14,7 +14,8 @@
 
 - [ ] Frontend build/lint run where relevant
 - [ ] Backend tests run where relevant
-- [ ] Docker Compose config checked where relevant
+- [ ] Docker Compose config/runtime readiness checked where relevant
+- [ ] Release/deployment docs updated where relevant
 - [ ] Manual verification described below
 
 Commands/results:

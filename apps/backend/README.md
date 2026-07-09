@@ -22,8 +22,9 @@ Useful system endpoints:
 | --- | --- |
 | `GET /health` | Lightweight liveness check with the current environment label. |
 | `GET /ready` | Readiness check for database connectivity and configured storage writability. |
+| `GET /metrics` | Plain-text runtime counters for request volume, status families, routes, and cumulative duration. |
 
-Backend logs default to human-readable text. Set `LOG_FORMAT=json` for structured logs in containers or hosted environments.
+Backend logs default to human-readable text. Set `LOG_FORMAT=json` for structured logs in containers or hosted environments. Every request receives an `X-Request-ID` response header; pass `X-Request-ID` on inbound requests to preserve an upstream trace identifier.
 
 ## Docker
 

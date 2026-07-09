@@ -64,3 +64,22 @@ jobs:
 
       - name: Validate Compose configuration
         run: docker compose config
+
+      - name: Run Compose stack
+        run: docker compose up --build -d
+
+      - name: Verify Compose API readiness
+        run: |
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:8000/ready; then
+              exit 0
+            fi
+            docker compose ps
+            sleep 2
+          done
+          docker compose logs api postgres redis
+          exit 1
+
+      - name: Stop Compose stack
+        if: always()
+        run: docker compose down -v
