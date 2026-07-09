@@ -41,7 +41,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   repositories: [],
   activeRepositoryId: null,
   setActiveRepositoryId: (id) => set({ activeRepositoryId: id }),
-  addRepository: (repo) => set((state) => ({ repositories: [...state.repositories, repo] })),
+  addRepository: (repo) =>
+    set((state) => {
+      const exists = state.repositories.some((item) => item.id === repo.id);
+      return {
+        repositories: exists
+          ? state.repositories.map((item) => (item.id === repo.id ? repo : item))
+          : [repo, ...state.repositories],
+      };
+    }),
   setRepositories: (repos) =>
     set((state) => ({
       repositories: repos,
@@ -114,10 +122,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
   cancelAnalysis: () => {
-    const state = get();
-    if (state.currentAnalysisId) {
-      state.removeRepository(state.currentAnalysisId);
-    }
     set({ analysisRunning: false, currentAnalysisId: null });
   },
 

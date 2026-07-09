@@ -1,7 +1,12 @@
-from fastapi import APIRouter, Depends, Response, UploadFile, status
+from fastapi import APIRouter, Depends, Query, Response, UploadFile, status
 
 from app.api.deps import get_repository_service
-from app.schemas.repository import GitHubImportRequest, RepositoryListResponse, RepositoryResponse
+from app.schemas.repository import (
+    GitHubImportRequest,
+    RepositoryFileResponse,
+    RepositoryListResponse,
+    RepositoryResponse,
+)
 from app.services.repository_service import RepositoryService
 
 router = APIRouter(prefix="/repositories", tags=["repositories"])
@@ -36,6 +41,15 @@ def get_repository(
     service: RepositoryService = Depends(get_repository_service),
 ) -> RepositoryResponse:
     return service.get_repository(repository_id)
+
+
+@router.get("/{repository_id}/file", response_model=RepositoryFileResponse)
+def get_repository_file(
+    repository_id: str,
+    path: str = Query(..., description="Repository-relative file path."),
+    service: RepositoryService = Depends(get_repository_service),
+) -> RepositoryFileResponse:
+    return service.read_file(repository_id, path)
 
 
 @router.delete("/{repository_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -24,7 +24,6 @@ function getRepositoryNameFromArchive(fileName: string): string {
 export function useUpload() {
   const { repositories, selectRepository } = useRepository();
   const addRepository = useAppStore((state) => state.addRepository);
-  const startAnalysis = useAppStore((state) => state.startAnalysis);
   const [uploadFile, setUploadFile] = useState<UploadFile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,19 +85,15 @@ export function useUpload() {
         throw new Error('Upload did not return a repository.');
       }
 
-      if (uploadedRepository) {
-        await backendService.startAnalysis(uploadedRepository.id);
-      }
+      await backendService.startAnalysis(uploadedRepository.id);
+      const repository = await backendService.fetchRepository(uploadedRepository.id);
 
-      const repository: Repository = {
-        ...uploadedRepository,
-        status: 'analysing',
-        analysisStage: uploadedRepository.analysisStage || 'uploading',
-      };
+      if (!repository) {
+        throw new Error('Repository was imported but could not be refreshed from the backend.');
+      }
 
       addRepository(repository);
       selectRepository(repository);
-      startAnalysis(repository.id);
       setUploadFile(null);
       return repository;
     } catch (caught) {
@@ -107,7 +102,7 @@ export function useUpload() {
     } finally {
       setLoading(false);
     }
-  }, [addRepository, selectRepository, startAnalysis, uploadFile]);
+  }, [addRepository, selectRepository, uploadFile]);
 
   const clearError = useCallback(() => setError(null), []);
 

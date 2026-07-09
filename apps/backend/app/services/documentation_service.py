@@ -1,12 +1,15 @@
-from datetime import UTC, datetime, timedelta
-from html import escape
-from typing import Any
+from datetime import UTC, datetime
 
 from app.analysis.architecture import ArchitectureAnalyzer
-from app.core.exceptions import NotFoundError, ValidationServiceError
+from app.core.exceptions import NotFoundError
 from app.graph.dependency_graph import DependencyGraphBuilder
+from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.repositories.repository_repository import RepositoryRepository
-from app.schemas.documentation import ExportRequest, ExportResponse, GenerateDocRequest, GenerateDocResponse
+from app.reports.renderers import render_html, render_markdown
+from app.reports.report_document import ReportDocument, Section
+from app.schemas.documentation import GenerateDocRequest, GenerateDocResponse
+
+DEFAULT_SECTIONS = ["overview", "architecture", "folder-structure", "api", "environment", "deployment", "contribution"]
 
 
 class DocumentationService:
@@ -15,91 +18,102 @@ class DocumentationService:
         repository: RepositoryRepository,
         architecture: ArchitectureAnalyzer,
         dependencies: DependencyGraphBuilder,
+        intelligence: RepositoryIntelligenceEngine | None = None,
     ) -> None:
         self.repository = repository
         self.architecture = architecture
         self.dependencies = dependencies
+        self.intelligence = intelligence or RepositoryIntelligenceEngine()
 
     def generate(self, request: GenerateDocRequest) -> GenerateDocResponse:
-        record = self.repository.get(request.repository_id)
-        if not record:
-            raise NotFoundError("Repository not found.", {"repositoryId": request.repository_id})
-        markdown = self._markdown(record, request.sections)
-        if request.format == "html":
-            content = "<article>\n" + "\n".join(f"<p>{escape(line)}</p>" if line else "<br />" for line in markdown.splitlines()) + "\n</article>"
-        else:
-            content = markdown
+        document = self._document(self._get_record(request.repository_id), request.sections)
+        content = render_html(document) if request.format == "html" else render_markdown(document)
         return GenerateDocResponse(content=content, format=request.format, generated_at=datetime.now(UTC))
 
-    def export(self, request: ExportRequest) -> ExportResponse:
-        if request.format not in {"json", "markdown"}:
-            raise ValidationServiceError(f"{request.format.upper()} export is coming soon for {request.target}.")
-        record = self.repository.get(request.repository_id)
-        if not record:
-            raise NotFoundError("Repository not found.", {"repositoryId": request.repository_id})
-        return ExportResponse(url=f"data:application/octet-stream,{record.id}-{request.target}.{request.format}", expires_at=datetime.now(UTC) + timedelta(minutes=15))
+    def build_document(self, repository_id: str) -> ReportDocument:
+        return self._document(self._get_record(repository_id), None)
 
-    def _markdown(self, record: Any, sections: list[str] | None) -> str:
-        selected = set(sections or ["overview", "architecture", "folder-structure", "api", "environment", "deployment", "contribution"])
-        meta = record.repo_metadata or {}
-        files = self._files(record.file_tree or [])
-        config_files = meta.get("configFiles") or meta.get("config_files") or []
-        lines = [f"# {record.name}", ""]
+    def _get_record(self, repository_id: str):
+        record = self.repository.get(repository_id)
+        if not record:
+            raise NotFoundError("Repository not found.", {"repositoryId": repository_id})
+        return record
+
+    def _document(self, record, sections: list[str] | None) -> ReportDocument:
+        selected = set(sections or DEFAULT_SECTIONS)
+        repository_intelligence = self.intelligence.from_record(record)
+        discovery = repository_intelligence.discovery
+        files = [file.path for file in repository_intelligence.files]
+        report_sections: list[Section] = []
 
         if "overview" in selected:
-            lines += [
-                "## Overview",
-                "",
-                f"- Source: {record.source}",
-                f"- Language: {meta.get('language', 'Unknown')}",
-                f"- Framework: {meta.get('framework', 'Unknown')}",
-                f"- Files: {meta.get('totalFiles') or meta.get('total_files') or record.file_count}",
-                f"- Entry point: {meta.get('entryPoint') or meta.get('entry_point') or 'Not found'}",
-                "",
-            ]
+            report_sections.append(
+                Section(
+                    heading="Overview",
+                    fields=[
+                        ("Source", record.source),
+                        ("Primary language", discovery.primary_language),
+                        ("Frameworks", ", ".join(discovery.frameworks) if discovery.frameworks else "Not detected"),
+                        ("Files", str(discovery.statistics.total_files)),
+                        ("Source files", str(discovery.statistics.source_files)),
+                        ("Entry point", ", ".join(discovery.entry_points) if discovery.entry_points else "Not found"),
+                    ],
+                )
+            )
 
         if "architecture" in selected:
             architecture = self.architecture.build_architecture(record)
-            lines += ["## Architecture", "", f"Pattern: {architecture.architecture_type}", ""]
-            for layer in architecture.detected_layers:
-                lines.append(f"- {layer.name}: {len(layer.nodes)} module(s)")
-            lines.append("")
+            report_sections.append(
+                Section(
+                    heading="Architecture",
+                    fields=[("Pattern", architecture.architecture_type)],
+                    bullets=[f"{layer.name}: {len(layer.nodes)} module(s)" for layer in architecture.detected_layers],
+                )
+            )
 
         if "folder-structure" in selected:
-            lines += ["## Folder Structure", "", "```text"]
-            lines += files[:80] or ["No files detected."]
-            lines += ["```", ""]
+            report_sections.append(Section(heading="Folder Structure", bullets=files[:80] or ["No files detected."]))
 
         if "api" in selected:
-            api_files = [path for path in files if "/api/" in path or "/routes/" in path or "api" in path.lower()]
-            lines += ["## API", ""]
-            lines += [f"- {path}" for path in api_files[:30]] or ["No API files detected."]
-            lines.append("")
+            api_files = [file.path for file in repository_intelligence.files if file.role in {"route", "controller"} or file.api_routes]
+            api_routes = [route for file in repository_intelligence.files for route in file.api_routes]
+            report_sections.append(
+                Section(
+                    heading="API",
+                    bullets=[f"File: {path}" for path in api_files[:30]]
+                    + [f"Route: {route}" for route in api_routes[:30]]
+                    or ["No API files detected."],
+                )
+            )
 
         if "environment" in selected:
-            env_files = [path for path in files if ".env" in path or path.endswith(("config.py", "config.ts", "config.js"))]
-            lines += ["## Environment", ""]
-            lines += [f"- {path}" for path in env_files[:30]] or ["No environment configuration files detected."]
-            lines.append("")
+            report_sections.append(
+                Section(
+                    heading="Environment",
+                    bullets=discovery.environment_files[:30] or ["No environment configuration files detected."],
+                )
+            )
 
         if "deployment" in selected:
-            deployment_files = [path for path in files if any(token in path.lower() for token in ["docker", "deploy", "compose", "vercel", "netlify", "railway", "render"])]
-            lines += ["## Deployment", ""]
-            lines += [f"- {path}" for path in deployment_files[:30]] or ["No deployment files detected."]
-            lines.append("")
+            deployment_files = sorted(set(discovery.docker_files + discovery.ci_files))
+            report_sections.append(
+                Section(heading="Deployment", bullets=deployment_files[:30] or ["No deployment files detected."])
+            )
 
         if "contribution" in selected:
-            lines += ["## Contribution", ""]
-            lines += [f"- Package manager: {meta.get('packageManager') or meta.get('package_manager') or 'Not detected'}"]
-            lines += [f"- Config files: {', '.join(config_files)}" if config_files else "- Config files: Not detected"]
-            lines += ["- Add setup, test, and review instructions that match this repository before onboarding contributors.", ""]
+            report_sections.append(
+                Section(
+                    heading="Contribution",
+                    fields=[
+                        ("Package managers", ", ".join(discovery.package_managers) if discovery.package_managers else "Not detected"),
+                        ("Config files", ", ".join(discovery.configuration_files[:20]) if discovery.configuration_files else "Not detected"),
+                    ],
+                    paragraphs=["Add setup, test, and review instructions that match this repository before onboarding contributors."],
+                )
+            )
 
-        return "\n".join(lines)
-
-    def _files(self, nodes: list[dict[str, Any]]) -> list[str]:
-        result: list[str] = []
-        for node in nodes:
-            if node.get("type") == "file":
-                result.append(node.get("path", ""))
-            result.extend(self._files(node.get("children") or []))
-        return result
+        return ReportDocument(
+            title=record.name,
+            subtitle=f"Generated {datetime.now(UTC):%Y-%m-%d %H:%M UTC}",
+            sections=report_sections,
+        )

@@ -2,27 +2,74 @@
 # Python
 # ==========================================
 
+__pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python tooling
+.pytest_cache/
+.pytest-tmp*/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.coverage
+.coverage.*
+htmlcov/
+
+# Databases
 *.db
 *.sqlite
 *.sqlite3
 
 # Local backend storage
-/apps/backend/local/
+apps/backend/local/
+apps/backend/.local/
 
-# Virtual environments
-.venv/
-venv/
+# ==========================================
+# Node.js
+# ==========================================
 
-# Python cache
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.pyre/
-.coverage
-htmlcov/
+node_modules/
+**/node_modules/
+
+# Root package lock (apps manage their own)
+#/package-lock.json
+/package-lock.json
+
+# Build outputs
+dist/
+**/dist/
+
+# TypeScript
+*.tsbuildinfo
+
+# Package manager logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================================
+# Environment files
+# ==========================================
+
+.env
+.env.local
+.env.*.local
+
+apps/frontend/.env
+apps/backend/.env
+
+# Keep example env files
+!.env.example
+!apps/frontend/.env.example
+!apps/backend/.env.example
 
 # ==========================================
 # IDE
@@ -30,11 +77,68 @@ htmlcov/
 
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# JetBrains
+*.iml
+
+# VSCode test workspace
+*.code-workspace
 
 # ==========================================
-# OS
+# macOS / Windows
 # ==========================================
 
+.DS_Store
 .AppleDouble
 .LSOverride
-node_modules
+Thumbs.db
+Desktop.ini
+
+# ==========================================
+# Logs
+# ==========================================
+
+*.log
+logs/
+
+# ==========================================
+# Temporary files
+# ==========================================
+
+tmp/
+temp/
+.cache/
+
+# ==========================================
+# Docker
+# ==========================================
+
+docker-compose.override.yml
+
+# ==========================================
+# Misc
+# ==========================================
+
+*.seed
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# ==========================================
+# Local analysis / generated output
+# ==========================================
+
+coverage/
+.nyc_output/
+
+# ==========================================
+# OS generated
+# ==========================================
+
+.fseventsd
+.Trashesg

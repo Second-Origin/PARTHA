@@ -1,4 +1,5 @@
 import { ApiError, NetworkError, TimeoutError, CancelledError } from './errors';
+import { frontendEnv } from '../../config/env';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
@@ -21,7 +22,7 @@ export interface ApiClientConfig {
 }
 
 const DEFAULT_CONFIG: ApiClientConfig = {
-  baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  baseUrl: frontendEnv.apiUrl,
   defaultTimeout: 30000,
   defaultRetries: 2,
   defaultRetryDelay: 1000,

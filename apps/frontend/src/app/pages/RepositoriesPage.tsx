@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { FolderGit2, Trash2, ExternalLink, Github, Upload as UploadIcon } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
@@ -10,7 +11,37 @@ import { repositoryStatusVariant } from '@/features/repositories/status';
 
 export function RepositoriesPage() {
   const navigate = useNavigate();
-  const { repositories, removeRepository, selectRepository } = useRepository();
+  const { repositories, removeRepository, selectRepository, loading, error, retry } = useRepository();
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Repositories" description="Manage your uploaded repositories" />
+        <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
+          Loading repositories...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div>
+        <PageHeader title="Repositories" description="Manage your uploaded repositories" />
+        <div className="rounded-xl border border-destructive/50 bg-destructive/5 p-6">
+          <p className="text-sm font-medium text-destructive">Unable to load repositories</p>
+          <p className="mt-1 text-sm text-destructive/80">{error}</p>
+          <button
+            onClick={() => void retry()}
+            className="mt-4 rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (repositories.length === 0) {
     return (
@@ -36,6 +67,12 @@ export function RepositoriesPage() {
           Upload New
         </button>
       </PageHeader>
+
+      {actionError && (
+        <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
 
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <table className="w-full">
@@ -104,7 +141,12 @@ export function RepositoriesPage() {
                       <ExternalLink className="h-3.5 w-3.5" />
                     </button>
                     <button
-                      onClick={() => removeRepository(repo.id)}
+                      onClick={() => {
+                        setActionError(null);
+                        void removeRepository(repo.id).catch((caught: unknown) => {
+                          setActionError(caught instanceof Error ? caught.message : 'Failed to delete repository.');
+                        });
+                      }}
                       className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

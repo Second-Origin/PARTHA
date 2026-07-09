@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { Repository } from '@/shared/types';
 import { backendService } from '@/shared/services/backend';
+import { getErrorMessage } from '@/shared/services/api';
 import { useAppStore } from '@/app/store/useAppStore';
 import { useRepositoryContext } from '../context/repository-context';
 
@@ -18,8 +19,14 @@ export function useRepository() {
 
   const removeRepository = useCallback(
     async (id: string) => {
-      const removed = await backendService.deleteRepository(id);
-      if (removed) removeFromStore(id);
+      try {
+        const removed = await backendService.deleteRepository(id);
+        if (removed) removeFromStore(id);
+      } catch (caught) {
+        const error = new Error(getErrorMessage(caught)) as Error & { cause?: unknown };
+        error.cause = caught;
+        throw error;
+      }
     },
     [removeFromStore],
   );
@@ -30,9 +37,9 @@ export function useRepository() {
     removeRepository,
     empty: context.repositories.length === 0,
     success: context.repositories.length > 0,
-    loading: false,
-    error: null,
-    retry: () => undefined,
-    refresh: () => undefined,
+    loading: context.loading,
+    error: context.error,
+    retry: context.refresh,
+    refresh: context.refresh,
   };
 }

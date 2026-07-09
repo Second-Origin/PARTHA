@@ -1,12 +1,23 @@
 from datetime import UTC, datetime
 
+from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.models.repository import RepositoryRecord
 from app.schemas.review import EngineeringReviewResponse, ImprovementStep, ReviewFinding, ReviewScore, ReviewSummary
 
+LARGE_FILE_BYTES = 40_000
+LARGE_SOURCE_SURFACE = 300
+SEVERITY_PRIORITY = {"critical": 1, "high": 2, "medium": 3, "low": 4}
+SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+EFFORT_BY_SEVERITY = {"critical": "1 sprint", "high": "1 sprint", "medium": "a few days", "low": "a few hours"}
+
 
 class EngineeringReviewBuilder:
+    def __init__(self, intelligence: RepositoryIntelligenceEngine | None = None) -> None:
+        self.intelligence = intelligence or RepositoryIntelligenceEngine()
+
     def build(self, record: RepositoryRecord) -> EngineeringReviewResponse:
-        findings = self._findings(record)
+        repository_intelligence = self.intelligence.from_record(record)
+        findings = self._findings(repository_intelligence)
         scores = self._scores(findings)
         summary = self._summary(findings, scores)
         roadmap = self._roadmap(findings)
@@ -20,41 +31,153 @@ class EngineeringReviewBuilder:
             roadmap=roadmap,
         )
 
-    def _findings(self, record: RepositoryRecord) -> list[ReviewFinding]:
-        meta = record.repo_metadata or {}
-        file_tree = record.file_tree or []
-        files = self._files(file_tree)
+    def _findings(self, intelligence) -> list[ReviewFinding]:
+        discovery = intelligence.discovery
+        statistics = discovery.statistics
+        files = intelligence.files
         findings: list[ReviewFinding] = []
 
-        if not meta.get("hasReadme"):
-            findings.append(self._finding("doc-no-readme", "Missing README", "documentation", "high", "Add a README with setup, architecture, and contribution guidance."))
-        if not meta.get("hasLicense"):
-            findings.append(self._finding("doc-no-license", "Missing License", "documentation", "medium", "Add an explicit license or proprietary notice."))
-        if not any(".test." in path or ".spec." in path or "__tests__" in path for path in files):
-            findings.append(self._finding("test-missing", "No Tests Detected", "testing", "high", "Add automated unit and integration tests for critical paths."))
-        if any(path.endswith(".env") for path in files):
-            findings.append(self._finding("env-file-present", "Environment File Present", "security", "critical", "Remove committed secret-bearing environment files."))
-        if len(files) > 300:
-            findings.append(self._finding("large-codebase", "Large File Surface", "architecture", "medium", "Define module boundaries and public interfaces."))
-
+        if not intelligence.metadata.has_readme:
+            findings.append(
+                self._finding(
+                    "doc-no-readme",
+                    "Missing README",
+                    "documentation",
+                    "high",
+                    problem=f"No README file was detected among {statistics.documentation_files} documentation file(s).",
+                    impact="Contributors and reviewers lack setup, architecture, and usage guidance, which slows onboarding and increases misuse.",
+                    recommendation="Add a README covering setup, architecture, and contribution guidance.",
+                    affected_files=[],
+                    affected_modules=["documentation"],
+                )
+            )
+        if not intelligence.metadata.has_license:
+            findings.append(
+                self._finding(
+                    "doc-no-license",
+                    "Missing License",
+                    "documentation",
+                    "medium",
+                    problem="No license file or explicit license declaration was detected.",
+                    impact="Without a declared license the code's usage and distribution rights are ambiguous, blocking adoption and reuse.",
+                    recommendation="Add an explicit open-source license or a proprietary notice.",
+                    affected_files=[],
+                    affected_modules=["documentation"],
+                )
+            )
+        if statistics.test_files == 0:
+            findings.append(
+                self._finding(
+                    "test-missing",
+                    "No Tests Detected",
+                    "testing",
+                    "high",
+                    problem=f"No test files were detected among {statistics.source_files} source file(s).",
+                    impact="Changes cannot be validated automatically, so regressions can reach production undetected.",
+                    recommendation="Add automated unit and integration tests for critical paths.",
+                    affected_files=[],
+                    affected_modules=["tests"],
+                )
+            )
+        if discovery.environment_files:
+            findings.append(
+                self._finding(
+                    "env-file-present",
+                    "Environment File Present",
+                    "security",
+                    "critical",
+                    problem=f"Committed environment file(s) that may contain secrets: {', '.join(discovery.environment_files[:5])}.",
+                    impact="Secrets committed to version control can be leaked and abused, and remain recoverable from history.",
+                    recommendation="Remove committed secret-bearing environment files, rotate exposed secrets, and ignore them going forward.",
+                    affected_files=discovery.environment_files,
+                    affected_modules=["configuration"],
+                )
+            )
+        if statistics.source_files > LARGE_SOURCE_SURFACE:
+            findings.append(
+                self._finding(
+                    "large-codebase",
+                    "Large Source Surface",
+                    "architecture",
+                    "medium",
+                    problem=f"The repository has {statistics.source_files} source files, a large surface to keep coherent.",
+                    impact="A large undivided surface makes ownership, change impact, and public interfaces hard to reason about.",
+                    recommendation="Define module boundaries and public interfaces to contain change impact.",
+                    affected_files=[file.path for file in files[:25]],
+                )
+            )
+        large_files = sorted(
+            (file for file in files if file.role != "documentation" and file.size > LARGE_FILE_BYTES),
+            key=lambda file: file.size,
+            reverse=True,
+        )
+        if large_files:
+            findings.append(
+                self._finding(
+                    "large-files",
+                    "Oversized Source Files",
+                    "maintainability",
+                    "medium",
+                    problem=f"{len(large_files)} file(s) exceed {LARGE_FILE_BYTES // 1000} KB, a sign of low cohesion or god-files.",
+                    impact="Oversized files are harder to review, test, and refactor safely, concentrating risk in a few places.",
+                    recommendation="Split large files along clear responsibilities and extract cohesive units.",
+                    affected_files=[file.path for file in large_files[:10]],
+                )
+            )
+        if not discovery.ci_files:
+            findings.append(
+                self._finding(
+                    "ci-missing",
+                    "No CI Workflow Detected",
+                    "code-quality",
+                    "medium",
+                    problem="No continuous-integration workflow configuration was detected.",
+                    impact="Build, lint, and test checks are not enforced on changes, letting regressions merge unnoticed.",
+                    recommendation="Add CI to run build, lint, and test checks on pull requests.",
+                    affected_files=[],
+                    affected_modules=["configuration"],
+                )
+            )
         if not findings:
-            findings.append(self._finding("baseline-review", "Baseline Review Complete", "maintainability", "low", "Keep quality gates active as backend analysis deepens."))
+            findings.append(
+                self._finding(
+                    "baseline-review",
+                    "Baseline Review Complete",
+                    "maintainability",
+                    "low",
+                    problem="No blocking issues were detected by the current repository intelligence checks.",
+                    impact="The repository meets the baseline checks; continued discipline keeps quality high.",
+                    recommendation="Keep quality gates active as repository intelligence deepens.",
+                    affected_files=[],
+                )
+            )
         return findings
 
-    def _finding(self, finding_id: str, title: str, category: str, severity: str, recommendation: str) -> ReviewFinding:
+    def _finding(
+        self,
+        finding_id: str,
+        title: str,
+        category: str,
+        severity: str,
+        problem: str,
+        impact: str,
+        recommendation: str,
+        affected_files: list[str],
+        affected_modules: list[str] | None = None,
+    ) -> ReviewFinding:
         return ReviewFinding(
             id=finding_id,
             title=title,
             category=category,  # type: ignore[arg-type]
             severity=severity,  # type: ignore[arg-type]
             status="open",
-            problem=title,
-            impact="This can reduce maintainability, correctness, or operational confidence.",
+            problem=problem,
+            impact=impact,
             recommendation=recommendation,
-            priority={"critical": 1, "high": 2, "medium": 3, "low": 4}[severity],
+            priority=SEVERITY_PRIORITY[severity],
             estimated_effort="small" if severity in {"low", "medium"} else "medium",
-            affected_files=[],
-            affected_modules=["repository"],
+            affected_files=affected_files,
+            affected_modules=affected_modules or ["repository"],
             tags=[category],
         )
 
@@ -90,22 +213,37 @@ class EngineeringReviewBuilder:
         )
 
     def _roadmap(self, findings: list[ReviewFinding]) -> list[ImprovementStep]:
-        return [
-            ImprovementStep(
-                id="quality-gates",
-                title="Establish Quality Gates",
-                description="Add automated linting, type checking, tests, and dependency scanning.",
-                priority="high",
-                estimated_effort="1 sprint",
-                category="code-quality",
-                related_findings=[finding.id for finding in findings],
-            )
-        ]
+        actionable = [finding for finding in findings if finding.id != "baseline-review"]
+        if not actionable:
+            return [
+                ImprovementStep(
+                    id="maintain-quality-gates",
+                    title="Maintain Quality Gates",
+                    description="Keep linting, type checking, tests, and dependency scanning active as the repository grows.",
+                    priority="low",
+                    estimated_effort="ongoing",
+                    category="code-quality",
+                    related_findings=[finding.id for finding in findings],
+                )
+            ]
 
-    def _files(self, nodes: list[dict]) -> list[str]:
-        result: list[str] = []
-        for node in nodes:
-            if node.get("type") == "file":
-                result.append(node.get("path", ""))
-            result.extend(self._files(node.get("children") or []))
-        return result
+        grouped: dict[str, list[ReviewFinding]] = {}
+        for finding in actionable:
+            grouped.setdefault(finding.category, []).append(finding)
+
+        steps: list[ImprovementStep] = []
+        for category, group in grouped.items():
+            top_severity = min((finding.severity for finding in group), key=lambda severity: SEVERITY_RANK[severity])
+            steps.append(
+                ImprovementStep(
+                    id=f"roadmap-{category}",
+                    title=f"Address {category.replace('-', ' ')} findings",
+                    description="; ".join(dict.fromkeys(finding.recommendation for finding in group)),
+                    priority=top_severity,  # type: ignore[arg-type]
+                    estimated_effort=EFFORT_BY_SEVERITY[top_severity],
+                    category=category,  # type: ignore[arg-type]
+                    related_findings=[finding.id for finding in group],
+                )
+            )
+        steps.sort(key=lambda step: SEVERITY_RANK[step.priority])
+        return steps

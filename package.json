@@ -11,11 +11,12 @@
     "build:frontend": "npm --prefix apps/frontend run build",
     "preview:frontend": "npm --prefix apps/frontend run preview",
     "lint:frontend": "npm --prefix apps/frontend run lint",
-    "test:backend": "cd apps/backend && ./.venv/bin/python -m pytest",
-    "dev:backend": "cd apps/backend && ./.venv/bin/python -m uvicorn app.main:app --reload",
-    "start:backend": "cd apps/backend && ./.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000",
+    "test:backend": "node scripts/backend-python.mjs -m pytest",
+    "dev:backend": "node scripts/backend-python.mjs -m uvicorn app.main:app --reload",
+    "start:backend": "node scripts/backend-python.mjs -m uvicorn app.main:app --host 0.0.0.0 --port 8000",
     "build": "npm run build:frontend && npm run test:backend",
     "docker:config": "docker compose config",
+    "docker:validate": "node scripts/validate-compose.mjs",
     "docker:up": "docker compose up --build"
   }
 }

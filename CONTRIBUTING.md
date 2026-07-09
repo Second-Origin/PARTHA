@@ -1,47 +1,84 @@
 # Contributing to PARTHA
 
-Thanks for your interest in contributing to PARTHA.
+Thanks for helping build PARTHA.
 
-PARTHA is an AI-powered Repository Intelligence Platform. The project is built around a central Repository Intelligence Engine: repositories are analyzed once, persisted as reusable intelligence, and consumed by architecture views, dependency analysis, documentation, engineering review, AI workflows, and search.
+PARTHA is an Engineering Intelligence Platform. The central architectural rule is:
 
-This guide explains how to contribute safely and consistently.
+> Repository Intelligence is the source of truth. Product features consume it; they do not independently parse repositories.
+
+This guide explains how to contribute safely, keep reviews focused, and preserve the system architecture as the project grows.
+
+---
+
+## Development Setup
+
+### Prerequisites
+
+| Tool | Version |
+| --- | --- |
+| Node.js | 22 or newer recommended |
+| Python | 3.12 or 3.13 |
+| Docker | Required for Compose validation |
+| Git | Required for repository import workflows |
+
+### Install
+
+```bash
+git clone https://github.com/Second-Origin/PARTHA.git
+cd PARTHA
+
+npm ci --prefix apps/frontend
+
+cd apps/backend
+python3.13 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+cd ../..
+```
+
+### Configure
+
+```bash
+cp .env.example .env
+cp apps/frontend/.env.example apps/frontend/.env
+cp apps/backend/.env.example apps/backend/.env
+```
+
+The local backend env example uses SQLite and local filesystem storage. Docker Compose injects PostgreSQL, Redis, and container storage settings separately.
+
+### Run
+
+```bash
+npm run dev:backend
+npm run dev:frontend
+```
+
+Useful endpoints:
+
+- frontend: `http://localhost:5173`
+- backend OpenAPI: `http://localhost:8000/docs`
+- readiness: `http://localhost:8000/ready`
+- metrics: `http://localhost:8000/metrics`
+
+---
 
 ## Branch Strategy
 
-PARTHA uses three branch types:
-
 | Branch | Purpose |
 | --- | --- |
-| `main` | Stable production-ready branch. |
+| `main` | Stable release snapshots. |
 | `dev` | Active integration branch. |
-| `feature/*` | Individual feature branches. |
+| `feature/*` | New scoped feature work. |
+| `fix/*` | Bug fixes. |
+| `docs/*` | Documentation-only changes. |
+| `chore/*` | Tooling, CI, maintenance, or repository hygiene. |
 
-Contributors must never push directly to `main`.
+Rules:
 
-Contributors must never push directly to `dev`.
-
-All work must happen on a feature branch and be merged through a pull request.
-
-## Before Starting Work
-
-Before writing code:
-
-1. Browse GitHub Issues.
-2. Choose an unassigned issue.
-3. Comment that you would like to work on it.
-4. Wait until the issue is assigned to you.
-5. Sync the latest `dev` branch.
-
-```bash
-git checkout dev
-git pull origin dev
-```
-
-Do not start large implementation work before the issue is assigned. This avoids duplicate work and keeps project direction clear.
-
-## Creating a Feature Branch
-
-Create all feature branches from `dev`.
+- Do not push directly to `main`.
+- Do not push directly to `dev`.
+- Branch from the latest `dev`.
+- Keep one branch focused on one issue or tightly related change.
 
 ```bash
 git checkout dev
@@ -49,87 +86,97 @@ git pull origin dev
 git checkout -b feature/repository-intelligence
 ```
 
-Use short, descriptive branch names.
+---
 
-Examples:
+## Issue Workflow
 
-```text
-feature/repository-ingestion
-feature/ai-workspace
-feature/documentation
-feature/engineering-review
-bug/github-import
-bug/upload-errors
-refactor/parser
-docs/readme
-```
+Before starting non-trivial work:
 
-## Development Guidelines
+1. Check existing GitHub Issues.
+2. Choose or create a focused issue.
+3. Confirm the intended scope.
+4. Wait for assignment or maintainer agreement when the change is large.
+5. Keep implementation aligned with the issue.
 
-Keep contributions focused and easy to review.
+Do not bundle unrelated cleanup into a feature PR. If you find an unrelated bug, open a separate issue.
 
-- Keep changes scoped to one issue.
-- Do not include unrelated fixes or formatting changes.
-- Follow the existing project architecture.
-- Reuse shared utilities and components.
-- Avoid duplicate code.
-- Write clean, maintainable code.
-- Keep functions focused.
-- Prefer composition over duplication.
-- Ensure all relevant tests pass before opening a pull request.
+---
 
-If you discover an unrelated bug while working, do not fix it in the same PR. Open a separate GitHub Issue and reference it if useful.
+## Pull Request Workflow
 
-## Repository Philosophy
+All PRs target `dev`.
 
-PARTHA is built around a Repository Intelligence Engine.
+Use the PR template and include:
 
-Every feature should consume repository intelligence rather than independently parsing repositories. Avoid feature-specific implementations that duplicate repository analysis logic.
+- summary;
+- related issue;
+- changed files or systems;
+- testing performed;
+- risk and rollback notes;
+- screenshots for UI changes;
+- request/response examples for API changes;
+- migration notes for persistence changes.
 
-When adding or changing a feature, ask:
+Use draft PRs for early architecture feedback.
 
-- Does this reuse existing repository intelligence?
-- Should this logic live in the shared parser, analyzer, graph, or service layer?
-- Will architecture, documentation, review, AI, and search stay consistent after this change?
-- Is this implementation creating a second source of truth?
+Maintainers should be able to review the PR without reverse-engineering intent from the diff.
 
-If the answer is unclear, discuss the design in the issue before implementing.
+---
 
-## Code Style
+## Code Standards
 
-### TypeScript
+### Repository Intelligence Boundary
 
-- Use TypeScript strict mode patterns.
-- Avoid `any` unless there is a clear reason.
-- Remove unused imports and dead code.
-- Keep components focused and readable.
-- Reuse shared types, API clients, hooks, and UI components.
-- Keep feature-specific hooks and components colocated where appropriate.
+Do:
 
-### Python
+- add reusable extraction to `apps/backend/app/intelligence/` when a feature needs repository facts;
+- let feature services transform existing repository intelligence into response models;
+- preserve one source of truth for architecture, dependencies, documentation, review, exports, and AI context.
 
-- Use type hints for public functions and service boundaries.
-- Keep route handlers thin; place business logic in services.
-- Reuse schemas, repositories, storage utilities, and analyzer layers.
-- Do not duplicate parsing or repository traversal logic in feature-specific services.
-- Avoid broad exception handling unless it adds useful context.
+Do not:
+
+- re-read dependency manifests inside feature-specific services;
+- traverse repository files in consumers when the intelligence engine should own the fact;
+- let AI providers parse repositories directly;
+- duplicate parser logic in frontend code.
+
+### Backend
+
+- Keep routes thin.
+- Put business logic in services.
+- Use schemas for request/response boundaries.
+- Use typed service interfaces and explicit errors.
+- Preserve standardized error responses.
+- Avoid broad exception handling unless it adds operational context.
+- Keep provider-specific AI logic inside provider implementations.
+- Keep report builders separate from renderers.
+
+### Frontend
+
+- Keep app shell, feature code, and shared utilities separated.
+- Reuse shared API clients and shared types.
+- Avoid `any` unless there is a concrete interoperability reason.
+- Preserve loading, empty, error, and success states.
+- Keep UI changes scoped to the affected feature.
 
 ### General
 
-- Do not commit commented-out code.
-- Do not commit local environment files, generated build output, local databases, or secrets.
-- Keep names clear and domain-specific.
-- Prefer small, reviewable changes over large mixed PRs.
+- Remove dead code.
+- Avoid speculative abstractions.
+- Prefer small, reviewable changes.
+- Do not commit secrets, local env files, local databases, build outputs, or generated caches.
 
-## Before Opening a Pull Request
+---
 
-Run the relevant checks before opening a PR.
+## Testing Expectations
+
+Run the checks relevant to your change.
 
 ### Frontend
 
 ```bash
-npm run build:frontend
 npm run lint:frontend
+npm run build:frontend
 ```
 
 ### Backend
@@ -138,118 +185,145 @@ npm run lint:frontend
 npm run test:backend
 ```
 
-### Docker
-
-If you changed Docker, Compose, environment, or infrastructure files, run:
+### Full Build Gate
 
 ```bash
-docker compose config
+npm run build
 ```
 
-If you cannot run a required check locally, mention that clearly in the PR description and explain why.
+### Docker / Platform Changes
 
-## Pull Request Process
+If you change Docker, Compose, environment, CI, startup, health, readiness, or observability:
 
-All pull requests must target `dev`.
+```bash
+docker build -t partha-backend:local apps/backend
+npm run docker:config
+npm run docker:validate
+```
 
-Never open a feature PR directly against `main`.
+If you cannot run a check locally, say so in the PR and explain why.
 
-Use Conventional Commits style for PR titles.
+---
 
-Examples:
+## Documentation Standards
+
+Update documentation when a change affects:
+
+- public behavior;
+- setup or environment variables;
+- API contracts;
+- architecture boundaries;
+- operational behavior;
+- contributor workflows;
+- product positioning.
+
+Documentation should be:
+
+- accurate to the current implementation;
+- explicit about limitations;
+- free of placeholder docs unless the section is intentionally a screenshot/demo placeholder;
+- linked from `docs/README.md` when durable.
+
+Use:
+
+- `README.md` for public orientation;
+- `docs/architecture/` for system boundaries and lifecycles;
+- `docs/operations/` for deployment, release, dependency, and observability workflows;
+- `docs/audit/` for evidence and audit trails;
+- `docs/brand/` for visual identity guidance;
+- `docs/product/` for product positioning and public-face audits.
+
+---
+
+## Legal and Licensing
+
+PARTHA is licensed under the Apache License 2.0. By submitting a contribution, you agree that your contribution is provided under the same license unless maintainers explicitly document a different arrangement.
+
+Contributor expectations:
+
+- Only contribute work you have the right to submit.
+- Do not copy third-party code, images, fonts, datasets, or text into the project unless the license is compatible and attribution requirements are documented.
+- Keep dependency additions reviewable so maintainers can evaluate license and security impact.
+- Do not add custom license terms, headers, or notices without maintainer approval.
+
+PARTHA does not currently require a CLA or DCO sign-off. If that changes, maintainers should document the policy in this file before enforcing it.
+
+This section is project policy, not legal advice.
+
+---
+
+## Commit Conventions
+
+Use concise Conventional Commit-style messages:
 
 ```text
-feat(core): implement repository ingestion
-fix(upload): improve GitHub import validation
-refactor(parser): simplify repository parser
-docs(readme): improve architecture documentation
-```
-
-### Pull Request Description
-
-Use this structure:
-
-```markdown
-## Summary
-
-Brief description of the change.
-
-## Related Issue
-
-Closes #XX
-
-## Changes
-
-- item
-- item
-
-## Testing
-
-Describe how the change was tested.
-```
-
-Include screenshots or recordings for UI changes. Include request/response examples for API changes.
-
-## Review Process
-
-Every pull request requires review before merging.
-
-- Do not self-merge without approval.
-- Address requested changes before merging.
-- Keep discussions focused and respectful.
-- Use Squash Merge only.
-- Make sure the final PR has a clear title and useful description.
-
-Reviewers should check correctness, scope, architecture, security, tests, and whether the change preserves the Repository Intelligence Engine as the source of truth.
-
-## Commit Messages
-
-Use Conventional Commits.
-
-Examples:
-
-```text
-feat(core): implement repository intelligence engine
-feat(ai): integrate Anthropic provider
-fix(upload): improve archive validation
-refactor(parser): simplify dependency extraction
-docs(readme): improve architecture documentation
-chore(ci): update GitHub Actions workflow
+feat(repository): add safe file preview
+fix(upload): report invalid archive errors
+docs(readme): reposition public project overview
+refactor(ai): isolate provider implementation
+test(export): cover markdown renderer
+chore(ci): validate compose readiness
 ```
 
 Common types:
 
 | Type | Use for |
 | --- | --- |
-| `feat` | New user-facing or system capability. |
+| `feat` | User-facing or platform capability. |
 | `fix` | Bug fix. |
-| `refactor` | Code change that does not alter behavior. |
+| `refactor` | Internal change without intended behavior change. |
 | `docs` | Documentation-only change. |
-| `test` | Test additions or changes. |
-| `chore` | Tooling, CI, maintenance, or housekeeping. |
+| `test` | Test additions or updates. |
+| `chore` | Maintenance, tooling, CI, repository hygiene. |
 | `security` | Security hardening or vulnerability fixes. |
 
-## Reporting Bugs
+---
 
-If you find a bug, open a GitHub Issue with:
+## Review Expectations
 
-- a clear summary;
-- expected behavior;
-- actual behavior;
-- reproduction steps;
-- screenshots, logs, or API responses when helpful;
-- environment details;
-- severity if known.
+Reviewers should check:
 
-If you discover unrelated bugs while working on a PR, create a separate issue instead of expanding the PR scope.
+- issue scope;
+- architecture boundaries;
+- dependency direction;
+- Repository Intelligence reuse;
+- API compatibility;
+- frontend/backend contract compatibility;
+- error handling;
+- security and secret handling;
+- test coverage;
+- documentation accuracy;
+- operational impact.
+
+For stale branches, compare against the latest `origin/dev` and call out duplicate or superseded work.
+
+---
+
+## Security and Secrets
+
+Never commit:
+
+- `.env` files;
+- API keys;
+- provider credentials;
+- database credentials;
+- local databases;
+- uploaded repositories;
+- generated caches or build artifacts.
+
+If a secret is accidentally committed, notify maintainers immediately and rotate it. Removing it from a later commit is not enough.
+
+---
 
 ## Need Help?
 
-If requirements are unclear:
+If the architecture is unclear, ask before implementing. PARTHA benefits more from a small, well-scoped design discussion than a large PR that has to be unwound.
 
-- Ask questions in the issue.
-- Discuss implementation before making major architectural changes.
-- Keep communication public whenever possible.
-- Share tradeoffs early if a change affects API behavior, persistence, security, or repository analysis architecture.
+Good contributor questions include:
 
-Thanks for helping improve PARTHA and making repository intelligence easier to build, trust, and extend.
+- Should this fact belong in Repository Intelligence?
+- Does this feature consume an existing model or need a new reusable extraction?
+- Does this change affect API compatibility?
+- Is this public behavior, internal architecture, or future roadmap?
+
+Thanks for helping make PARTHA a trustworthy Engineering Intelligence Platform.

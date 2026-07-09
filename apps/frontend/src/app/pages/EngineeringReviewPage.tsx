@@ -12,7 +12,7 @@ import { FindingCard } from '@/features/review/components/FindingCard';
 import { FindingDetail } from '@/features/review/components/FindingDetail';
 import { ReviewFilters } from '@/features/review/components/ReviewFilters';
 import { Roadmap } from '@/features/review/components/Roadmap';
-import { ReviewExport } from '@/features/review/components/ReviewExport';
+import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { cn } from '@/shared/utils/cn';
 
 export function EngineeringReviewPage() {
@@ -94,7 +94,7 @@ export function EngineeringReviewPage() {
             >
               <DataSourceBadge source={reviewState.source} />
             </PageHeader>
-            <ReviewExport review={activeReview} />
+            <ExportMenu repositoryId={activeReview.repositoryId} target="review" />
           </div>
 
           {/* Executive Summary */}

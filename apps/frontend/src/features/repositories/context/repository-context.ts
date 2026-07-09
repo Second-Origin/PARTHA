@@ -7,7 +7,10 @@ export interface RepositoryContextValue {
   activeRepositoryId: string | null;
   completedRepositories: Repository[];
   hasRepositories: boolean;
+  loading: boolean;
+  error: string | null;
   setActiveRepositoryId: (id: string | null) => void;
+  refresh: () => Promise<void>;
 }
 
 export const RepositoryContext = createContext<RepositoryContextValue | null>(null);

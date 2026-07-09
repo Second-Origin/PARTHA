@@ -182,7 +182,7 @@ export function RepositoryDetailPage() {
 
           {activeTab === 'Explorer' && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-              <RepositoryExplorer fileTree={repositoryTree.fileTree} />
+              <RepositoryExplorer fileTree={repositoryTree.fileTree} repositoryId={repo.id} />
             </motion.div>
           )}
         </>

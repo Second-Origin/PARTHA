@@ -206,7 +206,7 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
     toPng(el, { backgroundColor: '#0a0e1a' }).then((dataUrl) => {
       const a = document.createElement('a');
       a.href = dataUrl;
-      a.download = `${model.repositoryName}-architecture.png`;
+      a.download = `${model.repositoryName}-architecture-graph.png`;
       a.click();
     });
   }, [model.repositoryName]);
@@ -217,32 +217,10 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
     toSvg(el, { backgroundColor: '#0a0e1a' }).then((dataUrl) => {
       const a = document.createElement('a');
       a.href = dataUrl;
-      a.download = `${model.repositoryName}-architecture.svg`;
+      a.download = `${model.repositoryName}-architecture-graph.svg`;
       a.click();
     });
   }, [model.repositoryName]);
-
-  const handleExportJson = useCallback(() => {
-    const json = JSON.stringify(model, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${model.repositoryName}-architecture.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [model]);
-
-  const handleExportMarkdown = useCallback(() => {
-    const md = generateMarkdown(model);
-    const blob = new Blob([md], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${model.repositoryName}-architecture.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [model]);
 
   const handleToggleFullscreen = useCallback(() => {
     if (!containerRef.current) return;
@@ -307,8 +285,6 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
                   onResetLayout={handleResetLayout}
                   onExportPng={handleExportPng}
                   onExportSvg={handleExportSvg}
-                  onExportJson={handleExportJson}
-                  onExportMarkdown={handleExportMarkdown}
                   onToggleFullscreen={handleToggleFullscreen}
                   isFullscreen={isFullscreen}
                 />
@@ -398,43 +374,4 @@ function TabButton({
       {children}
     </button>
   );
-}
-
-function generateMarkdown(model: ArchitectureModel): string {
-  const lines: string[] = [
-    `# ${model.repositoryName} - Architecture`,
-    '',
-    `**Pattern:** ${model.architectureType}`,
-    `**Language:** ${model.summary.language}`,
-    `**Framework:** ${model.summary.framework}`,
-    `**Entry Point:** ${model.summary.entryPoint}`,
-    '',
-    '## Layers',
-    '',
-  ];
-
-  for (const layer of model.detectedLayers) {
-    lines.push(`### ${layer.name}`);
-    lines.push('');
-    const layerNodes = model.nodes.filter((n) => layer.nodes.includes(n.id));
-    for (const node of layerNodes) {
-      lines.push(`- **${node.name}** (${node.type}) - ${node.description}`);
-      if (node.files.length > 0) {
-        lines.push(`  - Files: ${node.files.join(', ')}`);
-      }
-    }
-    lines.push('');
-  }
-
-  lines.push('## Dependencies');
-  lines.push('');
-  for (const edge of model.edges) {
-    const source = model.nodes.find((n) => n.id === edge.source);
-    const target = model.nodes.find((n) => n.id === edge.target);
-    if (source && target) {
-      lines.push(`- ${source.name} -> ${target.name} (${edge.type})`);
-    }
-  }
-
-  return lines.join('\n');
 }
