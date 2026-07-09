@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, GitBranch, Package, Search } from 'lucide-react';
+import { GitBranch, Package, Search } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
+import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { useDependencies } from '@/features/dependencies/hooks/useDependencies';
 
 export function DependenciesPage() {
@@ -19,22 +20,6 @@ export function DependenciesPage() {
     return nodes.filter((node) => node.name.toLowerCase().includes(q) || node.type.toLowerCase().includes(q));
   }, [dependencies.graph?.nodes, query]);
 
-  const exportJson = () => {
-    if (!dependencies.graph || !activeRepository) return;
-    download(`${activeRepository.name}-dependencies.json`, JSON.stringify(dependencies.graph, null, 2), 'application/json');
-  };
-
-  const exportMarkdown = () => {
-    if (!dependencies.graph || !activeRepository) return;
-    const lines = [
-      `# ${activeRepository.name} Dependencies`,
-      '',
-      `Total dependencies: ${dependencies.graph.totalDependencies}`,
-      '',
-      ...dependencies.graph.nodes.map((node) => `- ${node.name} ${node.version} (${node.type})`),
-    ];
-    download(`${activeRepository.name}-dependencies.md`, lines.join('\n'), 'text/markdown');
-  };
 
   if (dependencies.emptyReason === 'no-completed-repositories') {
     return (
@@ -111,14 +96,7 @@ export function DependenciesPage() {
               className="w-full rounded-md border border-border bg-background pl-8 pr-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={exportJson} className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs text-foreground hover:bg-accent transition-colors">
-              <Download className="h-3.5 w-3.5" /> JSON
-            </button>
-            <button onClick={exportMarkdown} className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs text-foreground hover:bg-accent transition-colors">
-              <Download className="h-3.5 w-3.5" /> Markdown
-            </button>
-          </div>
+          <ExportMenu repositoryId={activeRepository.id} target="dependencies" disabled={!dependencies.graph} />
         </div>
         {filteredNodes.length === 0 ? (
           <div className="p-8 text-center">
@@ -162,14 +140,4 @@ function Stat({ label, value }: { label: string; value: number }) {
       <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
     </div>
   );
-}
-
-function download(fileName: string, content: string, type: string) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }

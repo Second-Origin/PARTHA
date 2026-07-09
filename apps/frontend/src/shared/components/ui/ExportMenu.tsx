@@ -1,36 +1,36 @@
 import { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
-import type { EngineeringReview } from '@/shared/types/review';
-import type { ExportFormat } from '@/shared/services/api/types';
-import { exportService } from '@/shared/services/api/documentation';
-import { getErrorMessage } from '@/shared/services/api';
+import type { ExportFormat, ExportTarget } from '@/shared/services/api/types';
+import { exportService, getErrorMessage } from '@/shared/services/api';
 import { downloadExport } from '@/shared/utils/downloadExport';
 
-interface ReviewExportProps {
-  review: EngineeringReview;
-}
-
-const FORMATS: { label: string; format: ExportFormat }[] = [
+const ALL_FORMATS: { label: string; format: ExportFormat }[] = [
   { label: 'Markdown', format: 'markdown' },
   { label: 'HTML', format: 'html' },
   { label: 'JSON', format: 'json' },
   { label: 'PDF', format: 'pdf' },
 ];
 
-export function ReviewExport({ review }: ReviewExportProps) {
+interface ExportMenuProps {
+  repositoryId: string;
+  target: ExportTarget;
+  formats?: ExportFormat[];
+  disabled?: boolean;
+  label?: string;
+}
+
+export function ExportMenu({ repositoryId, target, formats, disabled = false, label = 'Export' }: ExportMenuProps) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<ExportFormat | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const options = formats ? ALL_FORMATS.filter((option) => formats.includes(option.format)) : ALL_FORMATS;
 
   const handleExport = async (format: ExportFormat) => {
     setBusy(format);
     setError(null);
     try {
-      const result = await exportService.export({
-        repositoryId: review.repositoryId,
-        target: 'review',
-        format,
-      });
+      const result = await exportService.export({ repositoryId, target, format });
       downloadExport(result);
       setOpen(false);
     } catch (caught) {
@@ -44,16 +44,17 @@ export function ReviewExport({ review }: ReviewExportProps) {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border text-xs font-medium text-foreground hover:bg-accent transition-colors"
+        disabled={disabled}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border text-xs font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Download className="h-3.5 w-3.5" />
-        Export
+        {label}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute top-full right-0 mt-1 w-44 rounded-lg border border-border bg-popover shadow-lg z-50 p-1">
-            {FORMATS.map(({ label, format }) => (
+            {options.map(({ label, format }) => (
               <button
                 key={format}
                 onClick={() => handleExport(format)}

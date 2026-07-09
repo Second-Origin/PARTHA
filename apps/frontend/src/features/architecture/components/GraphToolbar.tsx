@@ -22,8 +22,6 @@ interface GraphToolbarProps {
   onResetLayout: () => void;
   onExportPng: () => void;
   onExportSvg: () => void;
-  onExportJson: () => void;
-  onExportMarkdown: () => void;
   onToggleFullscreen: () => void;
   isFullscreen: boolean;
 }
@@ -35,8 +33,6 @@ export function GraphToolbar({
   onResetLayout,
   onExportPng,
   onExportSvg,
-  onExportJson,
-  onExportMarkdown,
   onToggleFullscreen,
   isFullscreen,
 }: GraphToolbarProps) {
@@ -91,8 +87,6 @@ export function GraphToolbar({
         <ExportDropdown
           onPng={onExportPng}
           onSvg={onExportSvg}
-          onJson={onExportJson}
-          onMarkdown={onExportMarkdown}
         />
 
         <ToolbarButton
@@ -133,13 +127,9 @@ function ToolbarButton({
 function ExportDropdown({
   onPng,
   onSvg,
-  onJson,
-  onMarkdown,
 }: {
   onPng: () => void;
   onSvg: () => void;
-  onJson: () => void;
-  onMarkdown: () => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -147,7 +137,7 @@ function ExportDropdown({
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        title="Export"
+        title="Export graph image"
         className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card/90 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
       >
         <Download className="h-3.5 w-3.5" />
@@ -160,31 +150,13 @@ function ExportDropdown({
               onClick={() => { onPng(); setOpen(false); }}
               className="w-full px-3 py-1.5 text-xs text-left rounded-md hover:bg-accent transition-colors"
             >
-              Export PNG
+              Export Graph PNG
             </button>
             <button
               onClick={() => { onSvg(); setOpen(false); }}
               className="w-full px-3 py-1.5 text-xs text-left rounded-md hover:bg-accent transition-colors"
             >
-              Export SVG
-            </button>
-            <button
-              onClick={() => { onJson(); setOpen(false); }}
-              className="w-full px-3 py-1.5 text-xs text-left rounded-md hover:bg-accent transition-colors"
-            >
-              Export JSON
-            </button>
-            <button
-              onClick={() => { onMarkdown(); setOpen(false); }}
-              className="w-full px-3 py-1.5 text-xs text-left rounded-md hover:bg-accent transition-colors"
-            >
-              Export Markdown
-            </button>
-            <button
-              disabled
-              className="w-full px-3 py-1.5 text-xs text-left rounded-md text-muted-foreground cursor-not-allowed"
-            >
-              Export PDF Coming Soon
+              Export Graph SVG
             </button>
           </div>
         </>

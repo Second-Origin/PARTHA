@@ -108,13 +108,26 @@ def test_export_json_supported_for_every_target(client):
         json.loads(body["content"])  # must be valid JSON
 
 
-def test_export_pdf_not_available_for_non_review_target(client):
+def test_export_non_review_targets_support_all_formats(client):
     repository_id = _import_sample(client)
 
-    response = _export(client, repository_id, "dependencies", "pdf")
+    for target in ("documentation", "architecture", "dependencies"):
+        markdown = _export(client, repository_id, target, "markdown")
+        assert markdown.status_code == 200, target
+        assert markdown.json()["mediaType"] == "text/markdown"
+        assert markdown.json()["content"].startswith("# "), target
 
-    assert response.status_code == 422
-    assert response.json()["code"] == "validation_error"
+        html = _export(client, repository_id, target, "html")
+        assert html.status_code == 200, target
+        assert html.json()["mediaType"] == "text/html"
+        assert html.json()["content"].startswith("<!DOCTYPE html>"), target
+        assert "</html>" in html.json()["content"], target
+
+        pdf = _export(client, repository_id, target, "pdf")
+        assert pdf.status_code == 200, target
+        assert pdf.json()["encoding"] == "base64"
+        assert pdf.json()["mediaType"] == "application/pdf"
+        assert base64.b64decode(pdf.json()["content"])[:5] == b"%PDF-", target
 
 
 def test_export_rejects_invalid_format(client):
