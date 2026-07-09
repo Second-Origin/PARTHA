@@ -1,0 +1,65 @@
+# Dependabot configuration for the PARTHA monorepo.
+#
+# Satisfies part of E2.3 ("Dependency, secret, and code scanning in CI") in
+# docs/planning/PRODUCTION_READINESS_PLAN.md, and §2.5, which makes Dependabot a
+# required status check once branch protection is enabled.
+#
+# Two ecosystems, one per app: npm for the React/TS frontend, pip for the
+# FastAPI backend. Minor and patch bumps are grouped into a single PR per
+# ecosystem per week to keep review load low; major bumps stay as individual
+# PRs, because they need to be read one at a time.
+version: 2
+
+updates:
+  # ---------------------------------------------------------------------------
+  # Frontend — npm (apps/frontend)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: npm
+    directory: /apps/frontend
+    # `dev` is the real trunk; `main` is ~158 files behind it (§1 housekeeping).
+    # Without this, Dependabot would open PRs against the stale default branch,
+    # where the lockfile does not match. CONTRIBUTING.md also requires all PRs
+    # to target `dev`.
+    #
+    # Caveat: `target-branch` applies to version updates only. Dependabot
+    # *security* updates always target the default branch, so the durable fix is
+    # still to make `dev` the default branch (§2.2 / E3.1).
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    commit-message:
+      # Produces `chore(deps): ...` — Conventional Commits, per CONTRIBUTING.md.
+      prefix: chore
+      include: scope
+    groups:
+      frontend-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  # ---------------------------------------------------------------------------
+  # Backend — pip (apps/backend)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: pip
+    directory: /apps/backend
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      backend-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch

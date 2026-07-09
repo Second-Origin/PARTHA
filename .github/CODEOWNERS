@@ -1,0 +1,66 @@
+# CODEOWNERS — Second-Origin/PARTHA
+#
+# Automatically requests the right reviewer when a pull request touches an owned
+# path. Derived from docs/planning/PRODUCTION_READINESS_PLAN.md §2.4
+# ("Ownership as you scale").
+#
+# Ownership model: each experienced hire owns exactly ONE area and becomes the
+# default reviewer and decision-maker there — ownership scales, task-assignment
+# doesn't. Until those hires land, the founders own every area as the fallback.
+#
+# Founders / fallback owners:
+#   @SHAURYAKSHARMA24  (Shaurya)
+#   @parthrohit22      (Parth)
+#
+# Syntax notes:
+#   - The LAST matching pattern wins, so the catch-all is first and the most
+#     specific area rules are last.
+#   - Every owner must have write access to the repo, or GitHub silently skips
+#     the rule. Add new hires to the repo (or an org team) before listing them.
+#   - Prefer an org team (e.g. @Second-Origin/frontend) over an individual once
+#     an area has more than one owner.
+
+# -----------------------------------------------------------------------------
+# Fallback — anything not matched by a rule below is reviewed by the founders.
+# -----------------------------------------------------------------------------
+*                           @SHAURYAKSHARMA24 @parthrohit22
+
+# -----------------------------------------------------------------------------
+# Area: ai — AI providers, prompt construction, context retrieval, streaming.
+# Label: area/ai
+#
+# TODO(ownership): when the AI hire starts, replace the founders on this rule
+# with @<ai-owner> and leave the founders only as fallback via the `*` rule.
+# -----------------------------------------------------------------------------
+/apps/backend/app/ai/       @SHAURYAKSHARMA24 @parthrohit22
+
+# -----------------------------------------------------------------------------
+# Area: intelligence — parsers, knowledge graph, and the analysis engine.
+# This is the heart of E4 (Persisted Knowledge Graph); keep it with one owner.
+# Labels: area/backend, area/ai
+#
+# TODO(ownership): when the intelligence hire starts, replace the founders on
+# these three rules with @<intelligence-owner>.
+# -----------------------------------------------------------------------------
+/apps/backend/app/parsers/       @SHAURYAKSHARMA24 @parthrohit22
+/apps/backend/app/graph/         @SHAURYAKSHARMA24 @parthrohit22
+/apps/backend/app/intelligence/  @SHAURYAKSHARMA24 @parthrohit22
+
+# -----------------------------------------------------------------------------
+# Area: frontend — React/TS app, including the test harness stood up in E3.2.
+# Label: area/frontend
+#
+# TODO(ownership): when the frontend hire starts, replace the founders on this
+# rule with @<frontend-owner>.
+# -----------------------------------------------------------------------------
+/apps/frontend/             @SHAURYAKSHARMA24 @parthrohit22
+
+# -----------------------------------------------------------------------------
+# Area: infra — config, secrets handling, CI/CD, and repo governance.
+#
+# These stay with the founders permanently. Per §2.5, changes here (along with
+# auth and migrations) warrant TWO approving reviews. No TODO: this is not
+# delegated to a new hire.
+# -----------------------------------------------------------------------------
+/apps/backend/app/core/     @SHAURYAKSHARMA24 @parthrohit22
+/.github/                   @SHAURYAKSHARMA24 @parthrohit22
