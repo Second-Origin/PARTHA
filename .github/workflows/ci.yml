@@ -9,9 +9,41 @@ on:
       - dev
 
 jobs:
+  repository-hygiene:
+
+    name: Repository Hygiene
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+
+        uses: actions/checkout@v4
+
+      - name: Verify tracked generated files
+
+        run: |
+
+          matches=$(git ls-files | grep -E '(^|/)dist/|(^|/)\.env$|(^|/)\.env\.(local|development|production|test)$' || true)
+
+          if [ -n "$matches" ]; then
+
+            echo "Tracked generated or environment files detected:"
+
+            echo "$matches"
+
+            exit 1
+
+          fi
+
+          echo "Repository hygiene checks passed."
+
   frontend:
     name: Frontend
+    needs: repository-hygiene
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,7 +66,9 @@ jobs:
 
   backend:
     name: Backend
+    needs: repository-hygiene
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,8 +76,11 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: "3.13"
           cache: pip
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
 
       - name: Install dependencies
         run: python -m pip install -e apps/backend
@@ -54,7 +91,9 @@ jobs:
 
   docker-compose:
     name: Docker Compose
+    needs: repository-hygiene
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -77,6 +116,7 @@ jobs:
             docker compose ps
             sleep 2
           done
+
           docker compose logs api postgres redis
           exit 1
 
