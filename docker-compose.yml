@@ -13,7 +13,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       STORAGE_PATH: /data/partha
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
-      AUTO_CREATE_TABLES: ${AUTO_CREATE_TABLES:-true}
+      AUTO_CREATE_TABLES: ${AUTO_CREATE_TABLES:-false}
     volumes:
       - partha_storage:/data/partha
     depends_on:

@@ -29,6 +29,7 @@ PARTHA does not yet include authentication, authorization, tenant isolation, or 
 | `AUTO_CREATE_TABLES` | Set `false`; run migrations explicitly. |
 | `CLONE_TIMEOUT_SECONDS` | Tune for repository size and hosting limits. |
 | `MAX_UPLOAD_SIZE_BYTES` | Keep aligned with reverse proxy and platform upload limits. |
+| `MAX_CLONE_SIZE_BYTES` | Maximum on-disk size of a cloned GitHub repository (default 500 MiB). Over-limit clones are aborted and cleaned up. |
 
 Secrets such as database credentials, Redis credentials, and future provider credentials must be supplied through the hosting platform secret manager. Do not bake secrets into images, Compose files, or committed env files.
 

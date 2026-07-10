@@ -55,6 +55,9 @@ def test_zip_upload_persists_repository_and_analysis_completes(client):
     assert repository["analysisStage"] == "building-file-tree"
     assert repository["analysisProgress"] == 70
     assert repository["meta"]["framework"] == "React"
+    # Uploads have no git history, so a stable content hash stands in as the
+    # commit-addressability identifier (T9 / F2).
+    assert repository["commitSha"].startswith("sha256:")
 
     start_response = client.post(f"/analysis/{repository['id']}/start")
     assert start_response.status_code == 200
@@ -162,3 +165,26 @@ def test_github_clone_timeout_is_reported(monkeypatch: pytest.MonkeyPatch, tmp_p
     client = GitHubClient(Settings(clone_timeout_seconds=1))
     with pytest.raises(TimeoutServiceError):
         client.clone_public_repository("https://github.com/example/demo", tmp_path / "demo")
+
+
+def test_github_clone_over_size_limit_aborts_and_cleans_up(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    import subprocess
+
+    from app.core.config import Settings
+    from app.core.exceptions import ValidationServiceError
+
+    destination = tmp_path / "demo"
+
+    def fake_run(*args, **kwargs):
+        destination.mkdir(parents=True, exist_ok=True)
+        (destination / "big.bin").write_bytes(b"x" * 4096)
+        return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    client = GitHubClient(Settings(max_clone_size_bytes=1024))
+    with pytest.raises(ValidationServiceError):
+        client.clone_public_repository("https://github.com/example/demo", destination)
+
+    # Over-limit clone must be removed from disk.
+    assert not destination.exists()
