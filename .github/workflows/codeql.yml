@@ -1,0 +1,68 @@
+# CodeQL static analysis for PARTHA.
+#
+# Satisfies part of E2.3 ("Dependency, secret, and code scanning in CI") in
+# docs/planning/PRODUCTION_READINESS_PLAN.md. Per §2.5, this should become a
+# required status check on `dev` and `main` once branch protection is enabled.
+name: CodeQL
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+  schedule:
+    # Weekly, Monday 03:17 UTC. Off-the-hour on purpose: GitHub drops scheduled
+    # runs when too many land on the same minute.
+    #
+    # Note: scheduled workflows only ever run on the DEFAULT branch. Until `dev`
+    # becomes the default (§2.2 / E3.1), this weekly scan analyses stale `main`.
+    # The pull_request trigger above is what actually guards day-to-day work.
+    - cron: '17 3 * * 1'
+
+# Least privilege by default; the analyze job widens only what it needs.
+permissions:
+  contents: read
+
+# A newer push to the same PR makes an in-flight scan irrelevant.
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      # Required to upload results to the Security tab.
+      security-events: write
+      # Required by the CodeQL action to look up workflow run status.
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # `build-mode: none` is correct for interpreted languages — CodeQL
+          # analyses the source directly and no compilation step is needed.
+          - language: javascript-typescript
+            build-mode: none
+          - language: python
+            build-mode: none
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
