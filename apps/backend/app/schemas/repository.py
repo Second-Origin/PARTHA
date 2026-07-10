@@ -62,6 +62,7 @@ class RepositoryResponse(CamelModel):
     uploaded_at: datetime
     analysed_at: datetime | None = None
     error_message: str | None = None
+    commit_sha: str | None = None
     meta: RepositoryMeta | None = None
     file_tree: list[FileTreeNode] = Field(default_factory=list)
 
