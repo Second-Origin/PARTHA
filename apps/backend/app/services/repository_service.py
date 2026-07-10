@@ -1,4 +1,5 @@
 import base64
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
@@ -79,6 +80,7 @@ class RepositoryService:
         try:
             self.github.clone_public_repository(url, destination, branch)
             root = self._resolve_repository_root(destination)
+            commit_sha = self.github.read_head_commit(destination)
             tree, meta, total_size = self.parser.parse(root)
             self._validate_parsed_repository(meta.total_files)
             repository_intelligence = self.intelligence.build(repository_id, self.github.repository_name(url), root, tree, meta, total_size)
@@ -103,7 +105,7 @@ class RepositoryService:
             analysis_progress=70,
             uploaded_at=now,
             analysed_at=None,
-            repo_metadata=self._metadata_with_intelligence(meta, repository_intelligence),
+            repo_metadata=self._metadata_with_intelligence(meta, repository_intelligence, commit_sha),
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
         return self.to_response(self.repository.add(record))
@@ -120,6 +122,7 @@ class RepositoryService:
 
         archive_path = await self.storage.save_upload(repository_id, file, self.settings.max_upload_size_bytes)
         try:
+            content_hash = self._content_hash_for_upload(archive_path)
             root = self.storage.extract_archive(archive_path, repository_id)
             tree, meta, total_size = self.parser.parse(root)
             self._validate_parsed_repository(meta.total_files)
@@ -147,7 +150,7 @@ class RepositoryService:
             analysis_progress=70,
             uploaded_at=now,
             analysed_at=None,
-            repo_metadata=self._metadata_with_intelligence(meta, repository_intelligence),
+            repo_metadata=self._metadata_with_intelligence(meta, repository_intelligence, content_hash),
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
         return self.to_response(self.repository.add(record))
@@ -235,6 +238,7 @@ class RepositoryService:
             uploaded_at=record.uploaded_at,
             analysed_at=record.analysed_at,
             error_message=record.error_message,
+            commit_sha=(record.repo_metadata or {}).get("commitSha"),
             meta=record.repo_metadata,
             file_tree=record.file_tree,
         )
@@ -261,7 +265,18 @@ class RepositoryService:
                 return filename[: -len(suffix)]
         return Path(filename).stem
 
-    def _metadata_with_intelligence(self, meta, intelligence) -> dict:
+    def _metadata_with_intelligence(self, meta, intelligence, commit_sha: str | None = None) -> dict:
         metadata = meta.model_dump(mode="json", by_alias=True)
         metadata["intelligence"] = intelligence.model_dump(mode="json", by_alias=True)
+        # Commit-addressability seed: the git HEAD SHA for GitHub imports, or a
+        # stable content hash (sha256:...) for uploads that have no git history.
+        # Stored in metadata for now; promotion to a first-class column is M2 work.
+        metadata["commitSha"] = commit_sha
         return metadata
+
+    def _content_hash_for_upload(self, archive_path: Path) -> str:
+        digest = hashlib.sha256()
+        with archive_path.open("rb") as handle:
+            while chunk := handle.read(1024 * 1024):
+                digest.update(chunk)
+        return f"sha256:{digest.hexdigest()}"
