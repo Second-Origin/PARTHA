@@ -78,7 +78,9 @@ def test_repository_context_builder_uses_repository_intelligence(tmp_path: Path)
     assert any(module.name == "Services" for module in context.architecture.modules)
     assert any(dependency.name == "react" for dependency in context.dependencies)
     assert context.selected_files
-    assert context.citations[0].content == "Repository file path included in analysis context."
+    # Citations are intentionally empty: the context has no source lines to ground
+    # a real file:line citation, and placeholder citations were removed (F4/F5).
+    assert context.citations == ()
 
 
 def test_prompt_builder_preserves_existing_system_prompt_shape(tmp_path: Path):
@@ -111,7 +113,8 @@ def test_ai_orchestrator_preserves_query_response_shape(tmp_path: Path):
 
     assert response.message.role == "assistant"
     assert response.message.content == "answer from openai"
-    assert response.message.citations
+    # No fabricated citations are returned (F4/F5); real ones await the graph (M2).
+    assert response.message.citations is None
     assert response.suggestions == [
         "Explain the main architecture boundaries.",
         "What files should I read first?",

@@ -76,14 +76,8 @@ def test_ai_query_endpoint_preserves_public_response_contract(client):
         assert message["role"] == "assistant"
         assert message["content"] == "Repository summary from test provider."
         assert isinstance(message["timestamp"], str)
-        assert isinstance(message["citations"], list)
-        assert message["citations"]
-
-        citation = message["citations"][0]
-        assert set(citation) == {"file", "startLine", "endLine", "content"}
-        assert citation["file"] == "/src/app.ts"
-        assert citation["startLine"] == 1
-        assert citation["endLine"] == 1
-        assert citation["content"] == "Repository file path included in analysis context."
+        # Fabricated 1:1 placeholder citations were removed (F4/F5). The field is
+        # still present in the contract but is null until graph-grounded citations exist.
+        assert message["citations"] is None
     finally:
         client.app.dependency_overrides.pop(get_provider_registry, None)

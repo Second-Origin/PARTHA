@@ -1,6 +1,5 @@
 from app.ai.types import (
     ArchitectureContext,
-    Citation,
     DependencyContext,
     DocumentationContext,
     EngineeringReviewContext,
@@ -34,15 +33,11 @@ class RepositoryContextBuilder:
             DependencyContext(name=dependency.name, version=dependency.version)
             for dependency in repository_intelligence.dependencies[:20]
         )
-        citations = tuple(
-            Citation(
-                file=path,
-                start_line=1,
-                end_line=1,
-                content="Repository file path included in analysis context.",
-            )
-            for path in highlighted[:5]
-        )
+        # No citations are emitted today: the context is built from repository
+        # structure/metadata only, not from source lines, so there is nothing to
+        # ground a real file:line citation against. Fabricating 1:1 placeholder
+        # citations would misrepresent the answer as evidence-backed. Real
+        # citations will come from the persisted knowledge graph (M2).
         return RepositoryContext(
             repository=RepositoryIdentity(id=record.id, name=record.name),
             architecture=ArchitectureContext(
@@ -55,5 +50,5 @@ class RepositoryContextBuilder:
             documentation=DocumentationContext(files=tuple(highlighted)),
             engineering_review=EngineeringReviewContext(),
             selected_files=tuple(SelectedFileContext(path=path) for path in highlighted),
-            citations=citations,
+            citations=(),
         )
