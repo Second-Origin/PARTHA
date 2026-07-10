@@ -114,7 +114,7 @@ class AiOrchestrator:
                 role="assistant",
                 content=provider_response.content,
                 timestamp=datetime.now(UTC),
-                citations=[citation.to_schema() for citation in repository_context.citations],
+                citations=[citation.to_schema() for citation in repository_context.citations] or None,
             ),
             suggestions=[
                 "Explain the main architecture boundaries.",
