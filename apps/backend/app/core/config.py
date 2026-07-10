@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 SUPPORTED_LOG_FORMATS = {"text", "json"}
@@ -21,9 +21,14 @@ class Settings(BaseSettings):
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
     )
-    auto_create_tables: bool = True
+    # Tri-state: when AUTO_CREATE_TABLES is not set explicitly, it resolves to
+    # True only for development/test and False otherwise (production/staging),
+    # so non-dev deployments rely on Alembic migrations rather than create_all.
+    # An explicit env value always wins.
+    auto_create_tables: bool | None = None
     clone_timeout_seconds: int = 120
     max_upload_size_bytes: int = 100 * 1024 * 1024
+    max_clone_size_bytes: int = 500 * 1024 * 1024
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -91,12 +96,18 @@ class Settings(BaseSettings):
                 raise ValueError(f"Invalid CORS origin: {origin}")
         return value
 
-    @field_validator("clone_timeout_seconds", "max_upload_size_bytes")
+    @field_validator("clone_timeout_seconds", "max_upload_size_bytes", "max_clone_size_bytes")
     @classmethod
     def validate_positive_int(cls, value: int) -> int:
         if value <= 0:
             raise ValueError("Value must be greater than zero.")
         return value
+
+    @model_validator(mode="after")
+    def resolve_auto_create_tables(self) -> "Settings":
+        if self.auto_create_tables is None:
+            self.auto_create_tables = self.app_env in {"development", "test"}
+        return self
 
 
 @lru_cache
