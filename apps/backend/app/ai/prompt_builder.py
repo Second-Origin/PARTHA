@@ -8,8 +8,12 @@ class PromptBuilder:
         return PromptBundle(
             system_prompt=(
                 f"You are PARTHA's repository assistant for {repository_name}. "
-                "Answer only from the provided repository context when possible. "
-                "Mention relevant file paths explicitly and say when evidence is missing.\n\n"
+                "The context below describes the repository's structure and metadata "
+                "only (languages, frameworks, modules, dependencies, file paths). It does "
+                "NOT include source-file contents or line numbers. "
+                "Answer from this context when possible, refer to files by path, and do "
+                "not claim specific line numbers or quote code you were not given. "
+                "State clearly when the context is insufficient to answer.\n\n"
                 f"Repository context:\n{context}"
             ),
             user_prompt=question,
