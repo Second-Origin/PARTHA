@@ -94,7 +94,7 @@ PARTHA is organised around engineering capabilities rather than individual scree
 | Dependency Intelligence | Reads dependency manifests through the Repository Intelligence Engine and returns dependency inventory/graph responses. Vulnerability and outdated checks are not implemented yet. | Partial |
 | Documentation Intelligence | Generates Markdown or HTML documentation from repository facts, architecture, dependency, deployment, environment, and contribution signals. | Implemented / basic |
 | Engineering Reviews | Produces heuristic findings, category scores, evidence-backed affected files/modules, and roadmap suggestions from repository intelligence. | Implemented heuristically |
-| AI Workspace | Lets configured AI providers answer repository-aware questions from structured repository context. Providers do not parse repositories directly. | Implemented |
+| AI Workspace | Lets configured AI providers answer repository-aware questions from structured repository context (languages, frameworks, modules, dependencies, and file paths). Providers do not parse repositories directly. Answers are grounded in repository structure/metadata only — source-line citations are not produced yet and arrive with the persisted knowledge graph. | Partial |
 | Reports and Exports | Exports engineering review, documentation, architecture, and dependencies as JSON, Markdown, HTML, or PDF through a shared report pipeline. | Implemented |
 | Platform Foundation | Provides Docker Compose, CI, release workflow, health/readiness, request IDs, metrics, structured logging, and environment validation. | Implemented baseline |
 
@@ -351,7 +351,7 @@ PARTHA uses pragmatic, inspectable tools rather than opaque infrastructure.
 | FastAPI + Pydantic | Explicit request/response schemas, OpenAPI generation, and straightforward service boundaries. |
 | SQLAlchemy + Alembic | Portable persistence across SQLite local development and PostgreSQL-backed deployments. |
 | Repository Intelligence Engine | Centralizes repository facts so architecture, docs, reviews, exports, and AI do not drift. |
-| Tree-sitter foundation | Provides a path toward deeper language-aware extraction while preserving heuristic fallbacks. |
+| Tree-sitter (planned) | Symbol extraction today is regex-based; tree-sitter is a planned foundation for deeper, line-accurate language-aware extraction and is not yet wired for parsing. |
 | Provider abstraction | Keeps AI orchestration provider-agnostic and prevents providers from parsing repositories. |
 | ReportDocument pipeline | Separates report construction from rendering so new export formats can be added safely. |
 | Docker Compose | Provides reproducible local backend infrastructure without requiring production hosting decisions. |
