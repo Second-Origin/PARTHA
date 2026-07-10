@@ -41,7 +41,9 @@ class LocalStorage:
         archive_path.unlink(missing_ok=True)
 
     async def save_upload(self, repository_id: str, file: UploadFile, max_size_bytes: int) -> Path:
-        upload_path = self.uploads_root / f"{repository_id}-{file.filename or 'repository'}"
+        # Never build the stored path from the client-supplied filename: derive it
+        # solely from the server-generated UUID plus a validated archive suffix.
+        upload_path = self.uploads_root / f"{repository_id}{self._safe_archive_suffix(file.filename)}"
         total = 0
         with upload_path.open("wb") as destination:
             while chunk := await file.read(1024 * 1024):
@@ -51,6 +53,23 @@ class LocalStorage:
                     raise ValidationServiceError("Upload exceeds configured maximum size.")
                 destination.write(chunk)
         return upload_path
+
+    SAFE_ARCHIVE_SUFFIXES = (".tar.gz", ".tgz", ".tar", ".zip", ".gz")
+
+    def _safe_archive_suffix(self, filename: str | None) -> str:
+        """Return an allowlisted archive suffix from a client filename, or "".
+
+        The suffix is used only as a cosmetic hint on the stored file; archive
+        type detection is content-based (see extract_archive), so an empty
+        suffix is safe. No path separators or traversal can survive this.
+        """
+        if not filename:
+            return ""
+        lowered = filename.lower()
+        for suffix in self.SAFE_ARCHIVE_SUFFIXES:
+            if lowered.endswith(suffix):
+                return suffix
+        return ""
 
     def extract_archive(self, archive_path: Path, repository_id: str) -> Path:
         destination = self.reset_repository_path(repository_id)
