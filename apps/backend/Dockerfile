@@ -10,12 +10,16 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml ./
+COPY requirements.txt ./
 COPY app ./app
 COPY alembic.ini ./
 COPY alembic ./alembic
 
+# Install the pinned lockfile first, then the app itself without re-resolving
+# dependencies, so the image matches requirements.txt exactly.
 RUN pip install --no-cache-dir --upgrade pip \
-  && pip install --no-cache-dir -e .
+  && pip install --no-cache-dir -r requirements.txt \
+  && pip install --no-cache-dir -e . --no-deps
 
 EXPOSE 8000
 
