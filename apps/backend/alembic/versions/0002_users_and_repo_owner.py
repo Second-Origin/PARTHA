@@ -1,8 +1,11 @@
 """add users table and repository owner
 
-Revision ID: 0002_add_users_and_repository_owner
+Revision ID: 0002_users_and_repo_owner
 Revises: 0001_initial
 Create Date: 2026-07-11
+
+The revision id is kept under 32 characters because Alembic's default
+alembic_version.version_num column is VARCHAR(32), which PostgreSQL enforces.
 """
 
 from datetime import UTC, datetime
@@ -10,7 +13,7 @@ from datetime import UTC, datetime
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0002_add_users_and_repository_owner"
+revision = "0002_users_and_repo_owner"
 down_revision = "0001_initial"
 branch_labels = None
 depends_on = None
