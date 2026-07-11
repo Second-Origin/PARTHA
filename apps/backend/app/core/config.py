@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     # so non-dev deployments rely on Alembic migrations rather than create_all.
     # An explicit env value always wins.
     auto_create_tables: bool | None = None
+    # Signs access tokens (HS256). Empty is tolerated only in development/test,
+    # where a fixed insecure value is substituted; staging/production refuse to
+    # start without an explicit secret.
+    auth_secret_key: str = ""
+    access_token_ttl_seconds: int = 900
+    refresh_token_ttl_seconds: int = 14 * 24 * 60 * 60
     clone_timeout_seconds: int = 120
     max_upload_size_bytes: int = 100 * 1024 * 1024
     max_clone_size_bytes: int = 500 * 1024 * 1024
@@ -96,7 +102,13 @@ class Settings(BaseSettings):
                 raise ValueError(f"Invalid CORS origin: {origin}")
         return value
 
-    @field_validator("clone_timeout_seconds", "max_upload_size_bytes", "max_clone_size_bytes")
+    @field_validator(
+        "clone_timeout_seconds",
+        "max_upload_size_bytes",
+        "max_clone_size_bytes",
+        "access_token_ttl_seconds",
+        "refresh_token_ttl_seconds",
+    )
     @classmethod
     def validate_positive_int(cls, value: int) -> int:
         if value <= 0:
@@ -107,6 +119,14 @@ class Settings(BaseSettings):
     def resolve_auto_create_tables(self) -> "Settings":
         if self.auto_create_tables is None:
             self.auto_create_tables = self.app_env in {"development", "test"}
+        return self
+
+    @model_validator(mode="after")
+    def resolve_auth_secret_key(self) -> "Settings":
+        if not self.auth_secret_key:
+            if self.app_env not in {"development", "test"}:
+                raise ValueError("AUTH_SECRET_KEY must be set outside development/test environments.")
+            self.auth_secret_key = "insecure-dev-secret-do-not-use-in-production"
         return self
 
 
