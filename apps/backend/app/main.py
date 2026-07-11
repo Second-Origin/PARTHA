@@ -16,6 +16,7 @@ from app.core.config import get_settings
 from app.core.exceptions import ErrorResponse, register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.observability import new_request_id, reset_request_id, runtime_metrics, set_request_id
+from app.core.rate_limit import RateLimitMiddleware, build_rate_limit_store
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.models.base import Base
 
@@ -63,6 +64,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Registered first (innermost) so it sits inside both SecurityHeadersMiddleware
+    # and CORSMiddleware in the wrapped stack: 429 responses still pick up security
+    # headers and CORS headers as they bubble back out, instead of a browser client
+    # seeing an opaque CORS failure or a response missing the baseline headers.
+    app.state.rate_limit_settings = settings
+    app.state.rate_limit_store = build_rate_limit_store(settings)
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
