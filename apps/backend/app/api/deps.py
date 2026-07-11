@@ -1,4 +1,7 @@
-from fastapi import Depends
+from uuid import uuid4
+
+from fastapi import Depends, Header
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.orchestrator import AiOrchestrator, AiProviderConfigStore
@@ -17,6 +20,7 @@ from app.core.database import get_db
 from app.github.client import GitHubClient
 from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
+from app.models.user import SEED_USER_EMAIL, SEED_USER_ID, User
 from app.parsers.repository_parser import RepositoryParser
 from app.repositories.repository_repository import RepositoryRepository
 from app.reports.export_service import ExportService
@@ -30,6 +34,47 @@ from app.storage.local import LocalStorage
 
 def get_repository_repository(db: Session = Depends(get_db)) -> RepositoryRepository:
     return RepositoryRepository(db)
+
+
+def _ensure_seed_user(db: Session) -> User:
+    user = db.get(User, SEED_USER_ID)
+    if user is None:
+        user = User(id=SEED_USER_ID, email=SEED_USER_EMAIL)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user
+
+
+def _resolve_dev_user(db: Session, email: str) -> User:
+    normalized = email.strip().lower()
+    user = db.scalars(select(User).where(User.email == normalized)).first()
+    if user is None:
+        user = User(id=str(uuid4()), email=normalized)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user
+
+
+def get_current_user(
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    x_dev_user: str | None = Header(default=None, alias="X-Dev-User"),
+) -> User:
+    """Resolve the user that owns the data for this request.
+
+    Temporary E1.1 seam: there is no authentication yet, so requests are
+    attributed to a single seed user. In development/test an ``X-Dev-User``
+    header (an email) selects or provisions a distinct user, so multi-tenant
+    behaviour can be exercised before E1.2 lands real sign-in. The header is
+    ignored outside development/test, so it cannot be used to spoof identity in
+    a real deployment. E1.2 replaces the body of this function with token
+    verification; callers depending on it do not change.
+    """
+    if x_dev_user and settings.app_env in {"development", "test"}:
+        return _resolve_dev_user(db, x_dev_user)
+    return _ensure_seed_user(db)
 
 
 def get_local_storage(settings: Settings = Depends(get_settings)) -> LocalStorage:
@@ -55,6 +100,7 @@ def get_repository_service(
     parser: RepositoryParser = Depends(get_repository_parser),
     intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
     settings: Settings = Depends(get_settings),
+    current_user: User = Depends(get_current_user),
 ) -> RepositoryService:
     return RepositoryService(
         repository=repository,
@@ -63,6 +109,7 @@ def get_repository_service(
         parser=parser,
         intelligence=intelligence,
         settings=settings,
+        owner_id=current_user.id,
     )
 
 

@@ -45,6 +45,7 @@ class RepositoryService:
         parser: RepositoryParser,
         intelligence: RepositoryIntelligenceEngine,
         settings: Settings,
+        owner_id: str,
     ) -> None:
         self.repository = repository
         self.storage = storage
@@ -52,9 +53,10 @@ class RepositoryService:
         self.parser = parser
         self.intelligence = intelligence
         self.settings = settings
+        self.owner_id = owner_id
 
     def list_repositories(self) -> RepositoryListResponse:
-        records = self.repository.list()
+        records = self.repository.list_for_owner(self.owner_id)
         return RepositoryListResponse(data=[self.to_response(record) for record in records], total=len(records))
 
     def get_repository(self, repository_id: str) -> RepositoryResponse:
@@ -69,7 +71,7 @@ class RepositoryService:
         repository_id = str(uuid4())
         url = self.github.validate_public_url(str(request.url))
         branch = self.github.validate_branch(request.branch)
-        existing = self.repository.find_by_source(url, branch)
+        existing = self.repository.find_by_source_for_owner(url, branch, self.owner_id)
         if existing:
             raise ConflictServiceError(
                 "Repository has already been imported.",
@@ -91,6 +93,7 @@ class RepositoryService:
         now = datetime.now(UTC)
         record = RepositoryRecord(
             id=repository_id,
+            owner_id=self.owner_id,
             name=self.github.repository_name(url),
             description=None,
             source="github",
@@ -113,7 +116,7 @@ class RepositoryService:
     async def import_uploaded_repository(self, file: UploadFile) -> RepositoryResponse:
         repository_id = str(uuid4())
         repository_name = self._repository_name_from_archive(file.filename or repository_id)
-        existing = self.repository.find_by_name(repository_name)
+        existing = self.repository.find_by_name_for_owner(repository_name, self.owner_id)
         if existing:
             raise ConflictServiceError(
                 "Repository has already been imported.",
@@ -136,6 +139,7 @@ class RepositoryService:
         now = datetime.now(UTC)
         record = RepositoryRecord(
             id=repository_id,
+            owner_id=self.owner_id,
             name=repository_name,
             description=None,
             source="upload",
@@ -244,7 +248,10 @@ class RepositoryService:
         )
 
     def _get_record(self, repository_id: str) -> RepositoryRecord:
-        record = self.repository.get(repository_id)
+        # get_for_owner returns None both when the repository does not exist and
+        # when it belongs to another user, so a cross-user request gets the same
+        # 404 as a missing one and never learns the resource exists.
+        record = self.repository.get_for_owner(repository_id, self.owner_id)
         if not record:
             raise NotFoundError("Repository not found.", {"repositoryId": repository_id})
         return record
