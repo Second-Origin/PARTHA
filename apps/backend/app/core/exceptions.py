@@ -38,6 +38,11 @@ class NotFoundError(ServiceError):
     code = "not_found"
 
 
+class UnauthorizedError(ServiceError):
+    status_code = status.HTTP_401_UNAUTHORIZED
+    code = "unauthorized"
+
+
 class ValidationServiceError(ServiceError):
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     code = "validation_error"

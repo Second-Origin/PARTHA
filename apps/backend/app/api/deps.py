@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from fastapi import Depends, Header
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -15,8 +16,11 @@ from app.ai.providers.openrouter import OpenRouterProvider
 from app.ai.providers.registry import ProviderRegistry
 from app.ai.repository_context import RepositoryContextBuilder
 from app.analysis.architecture import ArchitectureAnalyzer
+from app.auth.security import decode_access_token
+from app.auth.service import AuthService
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
+from app.core.exceptions import UnauthorizedError
 from app.github.client import GitHubClient
 from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
@@ -57,21 +61,52 @@ def _resolve_dev_user(db: Session, email: str) -> User:
     return user
 
 
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def get_auth_service(
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> AuthService:
+    return AuthService(db, settings)
+
+
+def _user_from_bearer(token: str, db: Session, settings: Settings) -> User:
+    user_id = decode_access_token(token, settings)
+    user = db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise UnauthorizedError("Invalid or expired access token.")
+    return user
+
+
 def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> User:
+    """Require a valid Bearer access token and return its user (401 otherwise)."""
+    if credentials is None:
+        raise UnauthorizedError("Not authenticated.")
+    return _user_from_bearer(credentials.credentials, db, settings)
+
+
+def get_current_user_or_default(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
     x_dev_user: str | None = Header(default=None, alias="X-Dev-User"),
 ) -> User:
-    """Resolve the user that owns the data for this request.
+    """Resolve the user for routes that still tolerate anonymous access.
 
-    Temporary E1.1 seam: there is no authentication yet, so requests are
-    attributed to a single seed user. In development/test an ``X-Dev-User``
-    header (an email) selects or provisions a distinct user, so multi-tenant
-    behaviour can be exercised before E1.2 lands real sign-in. The header is
-    ignored outside development/test, so it cannot be used to spoof identity in
-    a real deployment. E1.2 replaces the body of this function with token
-    verification; callers depending on it do not change.
+    A presented Bearer token is always validated strictly — sending a bad
+    token is an authentication attempt and gets a 401, never a silent
+    fallback. Without a token, the temporary pre-auth behaviour applies: the
+    ``X-Dev-User`` header selects a user in development/test, and everything
+    else is attributed to the seed user. E1.3 deletes this fallback (and the
+    header) once the frontend can sign in, leaving only ``get_current_user``.
     """
+    if credentials is not None:
+        return _user_from_bearer(credentials.credentials, db, settings)
     if x_dev_user and settings.app_env in {"development", "test"}:
         return _resolve_dev_user(db, x_dev_user)
     return _ensure_seed_user(db)
@@ -100,7 +135,7 @@ def get_repository_service(
     parser: RepositoryParser = Depends(get_repository_parser),
     intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
     settings: Settings = Depends(get_settings),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_or_default),
 ) -> RepositoryService:
     return RepositoryService(
         repository=repository,

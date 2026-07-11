@@ -19,6 +19,9 @@ class User(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     # 320 is the RFC 5321 maximum length for an email address.
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    # Nullable: the seed user and rows created before authentication have no
+    # credential and must never be able to log in (login rejects a null hash).
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
