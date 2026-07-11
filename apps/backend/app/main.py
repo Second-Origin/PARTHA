@@ -16,6 +16,7 @@ from app.core.config import get_settings
 from app.core.exceptions import ErrorResponse, register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.observability import new_request_id, reset_request_id, runtime_metrics, set_request_id
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.models import RepositoryRecord  # noqa: F401 - imported so metadata includes model
 from app.models.base import Base
 
@@ -63,12 +64,16 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        # Explicit lists instead of "*": a wildcard is invalid alongside
+        # allow_credentials=True and would silently drop credentialed responses.
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+        expose_headers=["X-Request-ID"],
     )
     register_exception_handlers(app)
     app.include_router(api_router)
