@@ -37,6 +37,16 @@ class Settings(BaseSettings):
     auth_secret_key: str = ""
     access_token_ttl_seconds: int = 900
     refresh_token_ttl_seconds: int = 14 * 24 * 60 * 60
+    # Fixed-window request budgets per identity (client IP until per-user
+    # keying lands with auth enforcement). "memory" is per-process and
+    # deterministic — right for tests/dev; Compose overrides to "redis" so
+    # budgets are shared across workers.
+    rate_limit_enabled: bool = True
+    rate_limit_backend: str = "memory"
+    rate_limit_default_per_minute: int = 120
+    rate_limit_auth_per_minute: int = 10
+    rate_limit_ai_per_minute: int = 20
+    rate_limit_heavy_per_minute: int = 30
     clone_timeout_seconds: int = 120
     max_upload_size_bytes: int = 100 * 1024 * 1024
     max_clone_size_bytes: int = 500 * 1024 * 1024
@@ -107,12 +117,25 @@ class Settings(BaseSettings):
                 raise ValueError(f"Invalid CORS origin: {origin}")
         return value
 
+    @field_validator("rate_limit_backend")
+    @classmethod
+    def validate_rate_limit_backend(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in {"memory", "redis"}:
+            raise ValueError(f"Unsupported rate-limit backend: {value}")
+        return normalized
+
+
     @field_validator(
         "clone_timeout_seconds",
         "max_upload_size_bytes",
         "max_clone_size_bytes",
         "access_token_ttl_seconds",
         "refresh_token_ttl_seconds",
+        "rate_limit_default_per_minute",
+        "rate_limit_auth_per_minute",
+        "rate_limit_ai_per_minute",
+        "rate_limit_heavy_per_minute",
     )
     @classmethod
     def validate_positive_int(cls, value: int) -> int:

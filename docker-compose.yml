@@ -14,6 +14,9 @@ services:
       STORAGE_PATH: /data/partha
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       AUTO_CREATE_TABLES: ${AUTO_CREATE_TABLES:-false}
+      # Redis-backed so budgets are shared across API workers; the app default
+      # ("memory") stays per-process for tests and bare-metal development.
+      RATE_LIMIT_BACKEND: ${RATE_LIMIT_BACKEND:-redis}
     volumes:
       - partha_storage:/data/partha
     depends_on:
