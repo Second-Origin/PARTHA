@@ -17,7 +17,6 @@ from app.core.exceptions import ErrorResponse, register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.observability import new_request_id, reset_request_id, runtime_metrics, set_request_id
 from app.core.security_headers import SecurityHeadersMiddleware
-import app.models  # noqa: F401 - imported so metadata includes models
 from app.models.base import Base
 
 logger = logging.getLogger(__name__)
