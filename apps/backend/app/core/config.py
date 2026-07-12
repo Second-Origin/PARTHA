@@ -9,6 +9,11 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 SUPPORTED_LOG_FORMATS = {"text", "json"}
 
+# 32 chars ~= 256 bits from a token_urlsafe/hex secret, the floor for an HS256
+# signing key. Enforced outside development/test only, so local work is not
+# blocked by a short throwaway value.
+AUTH_SECRET_MIN_LENGTH = 32
+
 
 class Settings(BaseSettings):
     app_name: str = "PARTHA Backend"
@@ -123,10 +128,16 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def resolve_auth_secret_key(self) -> "Settings":
+        lenient = self.app_env in {"development", "test"}
         if not self.auth_secret_key:
-            if self.app_env not in {"development", "test"}:
+            if not lenient:
                 raise ValueError("AUTH_SECRET_KEY must be set outside development/test environments.")
             self.auth_secret_key = "insecure-dev-secret-do-not-use-in-production"
+        elif not lenient and len(self.auth_secret_key) < AUTH_SECRET_MIN_LENGTH:
+            raise ValueError(
+                f"AUTH_SECRET_KEY must be at least {AUTH_SECRET_MIN_LENGTH} characters "
+                "outside development/test environments."
+            )
         return self
 
 

@@ -1,5 +1,7 @@
 import uuid
 
+import pytest
+
 REGISTER = {"email": "alice@example.com", "password": "correct-horse-battery"}
 COOKIE = "partha_refresh"
 
@@ -191,6 +193,27 @@ def test_no_plaintext_credentials_or_raw_tokens_in_database(client):
         assert all(len(value) == 64 for value in hashes)  # sha256 hex, never the raw token
     finally:
         db.close()
+
+
+# --- signing-secret strength --------------------------------------------------
+
+
+def test_auth_secret_key_is_required_and_strong_outside_dev():
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    # Non-dev refuses to start without a secret...
+    with pytest.raises(ValidationError):
+        Settings(app_env="production")
+    # ...and with a weak one.
+    with pytest.raises(ValidationError):
+        Settings(app_env="production", auth_secret_key="too-short")
+    # A sufficiently long secret is accepted.
+    strong = "s" * 32
+    assert Settings(app_env="production", auth_secret_key=strong).auth_secret_key == strong
+    # Development stays lenient: an empty secret resolves to the dev default.
+    assert Settings(app_env="development", auth_secret_key="").auth_secret_key
 
 
 # --- interaction with pre-auth routes -----------------------------------------

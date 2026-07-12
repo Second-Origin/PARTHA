@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -32,11 +33,14 @@ def verify_password(password_hash: str, password: str) -> bool:
 
 
 def burn_password_check(password: str) -> None:
-    """Spend one argon2 verification without authenticating anyone."""
-    try:
+    """Spend one argon2 verification without authenticating anyone.
+
+    The result is intentionally discarded: the call exists only to make an
+    unknown-account login path cost the same as a real one (anti-enumeration),
+    so a mismatch is the expected, ignored outcome.
+    """
+    with contextlib.suppress(VerifyMismatchError, VerificationError):
         _hasher.verify(_DUMMY_HASH, password)
-    except (VerifyMismatchError, VerificationError):
-        pass
 
 
 def create_access_token(user_id: str, settings: Settings, ttl_seconds: int | None = None) -> str:
