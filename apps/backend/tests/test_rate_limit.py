@@ -175,7 +175,7 @@ def test_rate_limit_store_closed_on_app_shutdown(monkeypatch, tmp_path: Path) ->
 
     config.get_settings.cache_clear()
 
-    import app.main as main_module
+    from app.main import create_app
 
     closed = {"value": False}
 
@@ -186,9 +186,9 @@ def test_rate_limit_store_closed_on_app_shutdown(monkeypatch, tmp_path: Path) ->
         async def aclose(self) -> None:
             closed["value"] = True
 
-    monkeypatch.setattr(main_module, "build_rate_limit_store", lambda settings: StubStore())
+    monkeypatch.setattr("app.main.build_rate_limit_store", lambda settings: StubStore())
 
-    with TestClient(main_module.create_app()) as test_client:
+    with TestClient(create_app()) as test_client:
         assert closed["value"] is False
         test_client.get("/health")
 
