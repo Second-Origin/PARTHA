@@ -3,7 +3,6 @@ import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { router } from '@/app/routes/router';
 import { useAuthStore } from '@/app/store/useAuthStore';
-import { RepositoryProvider } from '@/features/repositories/context/RepositoryProvider';
 
 export function App() {
   const bootstrap = useAuthStore((state) => state.bootstrap);
@@ -13,7 +12,7 @@ export function App() {
   }, [bootstrap]);
 
   return (
-    <RepositoryProvider>
+    <>
       <RouterProvider router={router} />
       <Toaster
         position="bottom-right"
@@ -25,6 +24,6 @@ export function App() {
           },
         }}
       />
-    </RepositoryProvider>
+    </>
   );
 }
