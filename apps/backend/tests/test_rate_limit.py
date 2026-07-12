@@ -163,10 +163,63 @@ def test_store_failure_fails_open_loudly(limited_client):
     assert runtime_metrics.rate_limit_degraded_total >= degraded_before + 5
 
 
+def test_rate_limit_store_closed_on_app_shutdown(monkeypatch, tmp_path: Path) -> None:
+    """The Redis store holds a connection pool; the app must close it on
+    shutdown rather than leaking it, e.g. across a reload/redeploy."""
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'partha-test.db'}")
+    monkeypatch.setenv("STORAGE_PATH", str(tmp_path / "storage"))
+    monkeypatch.setenv("AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("CORS_ORIGINS", "http://testserver")
+
+    from app.core import config
+
+    config.get_settings.cache_clear()
+
+    import app.main as main_module
+
+    closed = {"value": False}
+
+    class StubStore:
+        async def hit(self, key: str, window_seconds: int) -> tuple[int, int]:
+            return 1, 60
+
+        async def aclose(self) -> None:
+            closed["value"] = True
+
+    monkeypatch.setattr(main_module, "build_rate_limit_store", lambda settings: StubStore())
+
+    with TestClient(main_module.create_app()) as test_client:
+        assert closed["value"] is False
+        test_client.get("/health")
+
+    assert closed["value"] is True
+
+    for key in ("DATABASE_URL", "STORAGE_PATH", "AUTO_CREATE_TABLES", "CORS_ORIGINS"):
+        os.environ.pop(key, None)
+    config.get_settings.cache_clear()
+
+
 def test_metrics_endpoint_exposes_rate_limit_counters(limited_client):
     text = limited_client.get("/metrics").text
     assert "partha_rate_limited_requests_total" in text
     assert "partha_rate_limit_degraded_total" in text
+
+
+def test_429_response_still_carries_cors_and_security_headers(limited_client):
+    # RateLimitMiddleware is registered before SecurityHeadersMiddleware and
+    # CORSMiddleware, so it sits innermost and its 429s must still pick up both
+    # as they bubble back out — otherwise a browser client sees an opaque CORS
+    # failure instead of a readable 429.
+    origin = "http://testserver"
+    for _ in range(3):
+        assert limited_client.get("/repositories", headers={"Origin": origin}).status_code == 200
+
+    blocked = limited_client.get("/repositories", headers={"Origin": origin})
+    assert blocked.status_code == 429
+    assert blocked.headers["access-control-allow-origin"] == origin
+    assert blocked.headers["x-content-type-options"] == "nosniff"
+    assert "retry-after" in blocked.headers
+    assert "x-request-id" in blocked.headers
 
 
 # --- real Redis backend (gated) -----------------------------------------------
@@ -196,6 +249,36 @@ def test_redis_store_is_atomic_and_expires():
             assert (await store.hit(key_b, 60))[0] == 1
         finally:
             await client.delete(f"partha:ratelimit:{key_a}", f"partha:ratelimit:{key_b}")
+            await client.aclose()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.skipif(not REDIS_URL, reason="set PARTHA_TEST_REDIS_URL to run the Redis backend test")
+def test_redis_store_atomic_under_concurrent_hits():
+    """The separate INCR/EXPIRE calls this replaced had a race window; fire real
+    concurrent hits at one key and prove the count is exact (no lost updates) —
+    a sequential test can't distinguish an atomic script from a racy one."""
+    import redis.asyncio as redis_asyncio
+
+    from app.core.rate_limit import RedisRateLimitStore
+
+    concurrency = 50
+
+    async def scenario() -> None:
+        client = redis_asyncio.from_url(REDIS_URL, decode_responses=False)
+        store = RedisRateLimitStore(client)
+        key = f"pytest:{uuid.uuid4()}"
+        try:
+            results = await asyncio.gather(*(store.hit(key, 60) for _ in range(concurrency)))
+            counts = sorted(count for count, _ in results)
+            # Every hit claimed a distinct, contiguous slot — no two racers
+            # observed/wrote the same counter value, and none were lost.
+            assert counts == list(range(1, concurrency + 1))
+            ttls = {ttl for _, ttl in results}
+            assert all(1 <= ttl <= 60 for ttl in ttls)
+        finally:
+            await client.delete(f"partha:ratelimit:{key}")
             await client.aclose()
 
     asyncio.run(scenario())
