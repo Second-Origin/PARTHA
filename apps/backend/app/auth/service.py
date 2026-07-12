@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth.security import (
@@ -45,7 +46,19 @@ class AuthService:
 
         user = User(id=str(uuid4()), email=normalized, password_hash=hash_password(password))
         self.db.add(user)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            # The existence check above can't see a concurrent registration for
+            # the same email that commits between our check and our insert;
+            # the unique constraint is the real guard. Roll back so the session
+            # is usable again, then confirm this was actually that email
+            # collision before reporting it as one - an unrelated integrity
+            # failure must not be mislabeled as a duplicate-email conflict.
+            self.db.rollback()
+            if self.db.scalars(select(User).where(User.email == normalized)).first() is not None:
+                raise ConflictServiceError("An account with this email already exists.") from None
+            raise
         self.db.refresh(user)
         return self._open_session(user)
 

@@ -56,6 +56,73 @@ def test_register_rejects_short_password(client):
     assert response.status_code == 422
 
 
+def test_register_commit_time_collision_is_reported_as_conflict(client, monkeypatch):
+    """Two concurrent registrations for the same email can both pass the
+    existence check before either commits; the unique constraint is the real
+    guard, and its IntegrityError must be turned into the same 409 the normal
+    duplicate path returns - never a 500, and the session must stay usable.
+
+    Deterministic by construction: rather than racing real threads (which
+    would need a production-code hook to land the interleaving reliably), the
+    "losing" session's own `commit()` is intercepted to run a second,
+    completely independent session's successful registration first - the
+    exact database-level interleaving a real race produces - before the
+    original commit proceeds and collides on the unique email constraint.
+    """
+    from sqlalchemy import select
+
+    from app.auth.service import AuthService
+    from app.core.config import get_settings
+    from app.core.database import SessionLocal
+    from app.core.exceptions import ConflictServiceError
+    from app.models.user import User
+
+    winner_email = "Racer@Example.com"
+    loser_email = "  racer@EXAMPLE.com  "  # mixed case + whitespace: same normalized address
+    normalized = "racer@example.com"
+    settings = get_settings()
+
+    loser_session = SessionLocal()
+    try:
+        loser_service = AuthService(loser_session, settings)
+
+        # The loser's own existence check, run here before the winner exists,
+        # is exactly what a real concurrent request would see: nothing yet.
+        assert loser_session.scalars(select(User).where(User.email == normalized)).first() is None
+
+        original_commit = loser_session.commit
+
+        def commit_after_concurrent_winner_lands():
+            winner_session = SessionLocal()
+            try:
+                AuthService(winner_session, settings).register(winner_email, "correct-horse-battery")
+            finally:
+                winner_session.close()
+            return original_commit()
+
+        monkeypatch.setattr(loser_session, "commit", commit_after_concurrent_winner_lands)
+
+        with pytest.raises(ConflictServiceError) as exc_info:
+            loser_service.register(loser_email, "another-password-entirely")
+        assert exc_info.value.message == "An account with this email already exists."
+        assert exc_info.value.status_code == 409
+
+        # The session is usable after the rollback: a fresh query on it works
+        # and sees the winner's row (not the loser's, which never committed).
+        after_rollback = loser_session.scalars(select(User).where(User.email == normalized)).one()
+        assert after_rollback.email == normalized
+    finally:
+        loser_session.close()
+
+    # Exactly one user for the normalized email, confirmed from a clean session.
+    verify_session = SessionLocal()
+    try:
+        matches = verify_session.scalars(select(User).where(User.email == normalized)).all()
+        assert len(matches) == 1
+    finally:
+        verify_session.close()
+
+
 # --- login --------------------------------------------------------------------
 
 
