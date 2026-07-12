@@ -72,6 +72,24 @@ jobs:
     needs: repository-hygiene
     runs-on: ubuntu-latest
 
+    # A Postgres sidecar so the gated refresh-token concurrency test runs against
+    # a real database (SQLite serializes writes and cannot exercise the row-lock
+    # race). Every other test still uses per-test SQLite via the fixture.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: partha
+          POSTGRES_PASSWORD: partha
+          POSTGRES_DB: partha_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U partha -d partha_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,6 +110,8 @@ jobs:
 
       - name: Test
         working-directory: apps/backend
+        env:
+          PARTHA_TEST_PG_URL: postgresql+psycopg://partha:partha@localhost:5432/partha_test
         run: python -m pytest
 
   docker-compose:

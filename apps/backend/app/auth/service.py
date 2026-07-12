@@ -2,7 +2,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.auth.security import (
@@ -85,10 +85,36 @@ class AuthService:
             self._revoke_family(record.family_id, now)
             raise UnauthorizedError(INVALID_REFRESH)
 
-        record.used_at = now
+        # Claim the token atomically. Two requests presenting the same token can
+        # both pass the used_at check above (they read before either writes);
+        # the UPDATE ... WHERE used_at IS NULL and the row lock it takes let only
+        # one win. The loser is a concurrent replay, so it is handled like reuse.
+        if not self._claim_token(record.id, now):
+            self._revoke_family(record.family_id, now)
+            logger.warning(
+                "Concurrent refresh of a single token; family revoked",
+                extra={"family_id": record.family_id, "user_id": record.user_id},
+            )
+            raise UnauthorizedError(INVALID_REFRESH)
+
         raw_successor = self._issue_refresh(user.id, record.family_id)
         self.db.commit()
         return user, create_access_token(user.id, self.settings), raw_successor
+
+    def _claim_token(self, token_id: str, now: datetime) -> bool:
+        """Mark a refresh token used, but only if it is not already used.
+
+        Returns True for the single caller whose UPDATE affects the row and
+        False for any concurrent caller. The atomic ``UPDATE ... WHERE used_at
+        IS NULL`` is what makes rotation safe under real database concurrency,
+        rather than the earlier read-then-write which two racers could both pass.
+        """
+        result = self.db.execute(
+            update(RefreshToken)
+            .where(RefreshToken.id == token_id, RefreshToken.used_at.is_(None))
+            .values(used_at=now)
+        )
+        return result.rowcount == 1
 
     def logout(self, raw_token: str | None) -> None:
         """Revoke the session family for the presented refresh token.
