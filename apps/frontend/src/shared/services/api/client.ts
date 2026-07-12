@@ -49,8 +49,16 @@ export function getApiConfig(): ApiClientConfig {
 // failed /auth/refresh or /auth/logout would recurse into the same endpoint.
 const NO_REFRESH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout'];
 
-function isNoRefreshEndpoint(endpoint: string): boolean {
-  return NO_REFRESH_ENDPOINTS.some((path) => endpoint === path || endpoint.startsWith(`${path}?`));
+// A failed login/register attempt (bad credentials, duplicate email, ...) is
+// a guest-only action — it says nothing about whether some OTHER,
+// already-established session is still valid, and must not clear it. This is
+// a *narrower* set than NO_REFRESH_ENDPOINTS: /auth/refresh failing (session
+// genuinely dead) and /auth/logout failing (session ending anyway) still
+// report through onUnauthorized; only login/register are exempt from that.
+const GUEST_ONLY_ENDPOINTS = ['/auth/login', '/auth/register'];
+
+function matchesEndpoint(paths: string[], endpoint: string): boolean {
+  return paths.some((path) => endpoint === path || endpoint.startsWith(`${path}?`));
 }
 
 // Several requests can each hit a 401 for the same expired session around the
@@ -82,12 +90,17 @@ export function requestSharedRefresh(): Promise<boolean> {
 
 /** Resolves true (and the caller should retry once) if this was an
  * unauthorized response on a refreshable endpoint and the shared refresh
- * succeeded; otherwise fires onUnauthorized and resolves false. */
+ * succeeded; otherwise resolves false, firing onUnauthorized unless this was
+ * a guest-only endpoint (a failed login/register must not invalidate some
+ * other, already-authenticated session). */
 async function tryRecoverFromUnauthorized(endpoint: string, isRetry: boolean): Promise<boolean> {
-  if (!isRetry && !isNoRefreshEndpoint(endpoint) && (await requestSharedRefresh())) {
+  const noRefresh = matchesEndpoint(NO_REFRESH_ENDPOINTS, endpoint);
+  if (!isRetry && !noRefresh && (await requestSharedRefresh())) {
     return true;
   }
-  clientConfig.onUnauthorized?.();
+  if (!matchesEndpoint(GUEST_ONLY_ENDPOINTS, endpoint)) {
+    clientConfig.onUnauthorized?.();
+  }
   return false;
 }
 

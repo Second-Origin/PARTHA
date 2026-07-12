@@ -31,29 +31,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
   user: null,
 
-  async bootstrap() {
-    const refreshed = await requestSharedRefresh();
-    if (!refreshed) {
-      clearAuthenticatedState();
-      return;
-    }
-    try {
-      const user = await authService.me();
-      set({ user, status: 'authenticated' });
-    } catch {
-      clearAuthenticatedState();
-    }
-  },
+  bootstrap,
 
   async login(email, password) {
     const auth = await authService.login({ email, password });
-    clearRepositoryState();
+    clearUserScopedAppState();
     set({ accessToken: auth.accessToken, user: auth.user, status: 'authenticated' });
   },
 
   async register(email, password) {
     const auth = await authService.register({ email, password });
-    clearRepositoryState();
+    clearUserScopedAppState();
     set({ accessToken: auth.accessToken, user: auth.user, status: 'authenticated' });
   },
 
@@ -80,20 +68,56 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 }));
 
-// Repository state lives in the separate, unauthenticated-by-default
+// React 18 StrictMode deliberately double-invokes mount effects in
+// development, so a naive bootstrap() would fire twice on every dev load.
+// requestSharedRefresh() already dedupes the /auth/refresh call itself, but
+// without this, each invocation would still independently race ahead to its
+// own /auth/me call — harmless in itself, but bootstrap() should be safe to
+// call concurrently as a whole, not just safe in its riskiest sub-step. One
+// shared in-flight promise makes every concurrent bootstrap() call (and its
+// caller) await the exact same run and land on the exact same final state.
+let inFlightBootstrap: Promise<void> | null = null;
+
+function bootstrap(): Promise<void> {
+  if (!inFlightBootstrap) {
+    inFlightBootstrap = performBootstrap().finally(() => {
+      inFlightBootstrap = null;
+    });
+  }
+  return inFlightBootstrap;
+}
+
+async function performBootstrap(): Promise<void> {
+  const refreshed = await requestSharedRefresh();
+  if (!refreshed) {
+    clearAuthenticatedState();
+    return;
+  }
+  try {
+    const user = await authService.me();
+    useAuthStore.setState({ user, status: 'authenticated' });
+  } catch {
+    clearAuthenticatedState();
+  }
+}
+
+// User-scoped app state lives in the separate, unauthenticated-by-default
 // useAppStore, so it survives independently of who's signed in unless we
 // clear it ourselves. Cleared here — not in RepositoryProvider — so the
 // clearing always happens in the same tick as the auth transition, before
 // any component can re-render with a newly (or no longer) authenticated
-// status and observe the previous user's repositories, even briefly.
-function clearRepositoryState() {
-  useAppStore.getState().setRepositories([]);
-  useAppStore.getState().setActiveRepositoryId(null);
+// status and observe the previous user's data, even briefly.
+function clearUserScopedAppState() {
+  const appStore = useAppStore.getState();
+  appStore.setRepositories([]);
+  appStore.setActiveRepositoryId(null);
+  appStore.cancelAnalysis();
+  appStore.clearNotifications();
 }
 
 function clearAuthenticatedState() {
   useAuthStore.setState({ accessToken: null, user: null, status: 'unauthenticated' });
-  clearRepositoryState();
+  clearUserScopedAppState();
 }
 
 // Wired here (not in client.ts) so the API client stays a generic HTTP layer

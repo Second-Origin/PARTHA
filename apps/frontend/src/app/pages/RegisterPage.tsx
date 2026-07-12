@@ -3,7 +3,7 @@ import { Hexagon, Loader2 } from 'lucide-react';
 import { PASSWORD_MIN_LENGTH, useRegisterForm } from '@/features/auth/hooks/useRegisterForm';
 
 export function RegisterPage() {
-  const { email, setEmail, password, setPassword, submitting, error, submit } = useRegisterForm();
+  const { email, setEmail, password, setPassword, submitting, error, submit, redirectState } = useRegisterForm();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -65,7 +65,7 @@ export function RegisterPage() {
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
           Already have an account?{' '}
-          <Link to="/login" className="text-primary hover:underline">
+          <Link to="/login" state={redirectState} className="text-primary hover:underline">
             Sign in
           </Link>
         </p>
