@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { RequireAuth } from './RequireAuth';
 import { useAuthStore } from '@/app/store/useAuthStore';
-import { authService } from '@/shared/services/api';
+import { authService, repositoryService } from '@/shared/services/api';
+import { RepositoryProvider } from '@/features/repositories/context/RepositoryProvider';
+import { useRepository } from '@/features/repositories/hooks/useRepository';
 
 function renderGuarded(initialEntry: string) {
   const router = createMemoryRouter(
@@ -19,9 +21,44 @@ function renderGuarded(initialEntry: string) {
   return render(<RouterProvider router={router} />);
 }
 
+// Stands in for MainLayout, which wraps its authenticated Outlet with the
+// real RepositoryProvider — mirrors that structure without pulling in
+// Sidebar/TopBar's unrelated chrome and dependencies.
+function RepoProbe() {
+  const { repositories, loading } = useRepository();
+  return <div>Repos: {repositories.length}{loading ? ' (loading)' : ''}</div>;
+}
+
+function renderGuardedWithRepositoryProvider(initialEntry: string) {
+  const router = createMemoryRouter(
+    [
+      { path: '/login', element: <div>Login Page</div> },
+      {
+        element: <RequireAuth />,
+        children: [
+          {
+            path: '/',
+            element: (
+              <RepositoryProvider>
+                <RepoProbe />
+              </RepositoryProvider>
+            ),
+          },
+        ],
+      },
+    ],
+    { initialEntries: [initialEntry] },
+  );
+  return render(<RouterProvider router={router} />);
+}
+
 describe('RequireAuth', () => {
   beforeEach(() => {
     useAuthStore.setState({ status: 'initialising', accessToken: null, user: null });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('redirects anonymous users to /login', async () => {
@@ -75,5 +112,48 @@ describe('RequireAuth', () => {
       user: null,
     });
     expect(await screen.findByText('Login Page')).toBeInTheDocument();
+  });
+});
+
+describe('RepositoryProvider gating (mirrors MainLayout mounting it inside RequireAuth)', () => {
+  beforeEach(() => {
+    useAuthStore.setState({ status: 'initialising', accessToken: null, user: null });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('does not fetch repositories while the guard is unauthenticated', async () => {
+    const listSpy = vi.spyOn(repositoryService, 'list').mockResolvedValue({ data: [], total: 0 });
+    useAuthStore.setState({ status: 'unauthenticated' });
+
+    renderGuardedWithRepositoryProvider('/');
+
+    expect(await screen.findByText('Login Page')).toBeInTheDocument();
+    expect(listSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch repositories while the guard is still initialising', async () => {
+    const listSpy = vi.spyOn(repositoryService, 'list').mockResolvedValue({ data: [], total: 0 });
+    useAuthStore.setState({ status: 'initialising' });
+
+    renderGuardedWithRepositoryProvider('/');
+
+    await screen.findByRole('status', { name: 'Loading session' });
+    expect(listSpy).not.toHaveBeenCalled();
+  });
+
+  it('fetches repositories once the guard confirms an authenticated session', async () => {
+    const listSpy = vi.spyOn(repositoryService, 'list').mockResolvedValue({ data: [], total: 0 });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { id: 'u1', email: 'dev@example.com', createdAt: new Date().toISOString() },
+    });
+
+    renderGuardedWithRepositoryProvider('/');
+
+    await waitFor(() => expect(listSpy).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Repos: 0')).toBeInTheDocument();
   });
 });

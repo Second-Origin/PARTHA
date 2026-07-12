@@ -58,9 +58,16 @@ function isNoRefreshEndpoint(endpoint: string): boolean {
 // backend's rotating refresh tokens mean only the first would succeed — the
 // rest would revoke the whole session as replay. Sharing one in-flight
 // promise makes every concurrent 401 await the same single refresh attempt.
+//
+// This is exported and is the ONLY sanctioned way to trigger a refresh:
+// callers outside this module (e.g. the auth store's bootstrap, which also
+// needs a refresh before anything else can run) must call this instead of
+// invoking their refresh primitive directly, or bootstrap's own refresh and
+// a concurrent request's 401 recovery could each fire an independent
+// /auth/refresh and race each other into the backend's replay-revocation.
 let inFlightRefresh: Promise<boolean> | null = null;
 
-function refreshSessionOnce(): Promise<boolean> {
+export function requestSharedRefresh(): Promise<boolean> {
   if (!clientConfig.refreshSession) return Promise.resolve(false);
   if (!inFlightRefresh) {
     inFlightRefresh = clientConfig
@@ -77,7 +84,7 @@ function refreshSessionOnce(): Promise<boolean> {
  * unauthorized response on a refreshable endpoint and the shared refresh
  * succeeded; otherwise fires onUnauthorized and resolves false. */
 async function tryRecoverFromUnauthorized(endpoint: string, isRetry: boolean): Promise<boolean> {
-  if (!isRetry && !isNoRefreshEndpoint(endpoint) && (await refreshSessionOnce())) {
+  if (!isRetry && !isNoRefreshEndpoint(endpoint) && (await requestSharedRefresh())) {
     return true;
   }
   clientConfig.onUnauthorized?.();
@@ -305,6 +312,7 @@ export async function streamRequest(
   body: unknown,
   onChunk: (chunk: string) => void,
   config?: RequestConfig,
+  isRetry = false,
 ): Promise<void> {
   const url = `${clientConfig.baseUrl}${endpoint}`;
   const controller = new AbortController();
@@ -338,12 +346,17 @@ export async function streamRequest(
       let responseBody: unknown;
       try { responseBody = await response.json(); } catch { responseBody = null; }
       const error = new ApiError(response.status, response.statusText, responseBody, endpoint);
-      // No refresh-and-retry here: the stream hasn't started, so there's
-      // nothing partially consumed to protect, but replaying a POST with a
-      // streaming response is a different risk profile than a plain retry —
-      // out of scope for this pass. Still surface the terminal signal so a
-      // truly expired session redirects to /login like every other request.
-      if (error.isUnauthorized) clientConfig.onUnauthorized?.();
+      if (error.isUnauthorized) {
+        // A 401 here means the backend rejected the request before any
+        // event ever streamed (the SSE body only starts after auth passes),
+        // so retrying is exactly as safe as retrying any other request —
+        // same recover-once-then-give-up contract as executeRequest.
+        if (await tryRecoverFromUnauthorized(endpoint, isRetry)) {
+          clearTimeout(timeoutId);
+          if (signal && abortListener) signal.removeEventListener('abort', abortListener);
+          return streamRequest(endpoint, body, onChunk, config, true);
+        }
+      }
       throw error;
     }
 

@@ -1,4 +1,4 @@
-export { api, configureApiClient, getApiConfig, uploadFile, streamRequest } from './client';
+export { api, configureApiClient, getApiConfig, uploadFile, streamRequest, requestSharedRefresh } from './client';
 export type { RequestConfig, ApiClientConfig, HttpMethod } from './client';
 
 export { ApiError, NetworkError, TimeoutError, CancelledError, isApiError, isNetworkError, isTimeoutError, isCancelledError, getErrorMessage } from './errors';
