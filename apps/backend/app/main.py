@@ -45,12 +45,15 @@ def check_storage_ready() -> bool:
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     settings.storage_path.mkdir(parents=True, exist_ok=True)
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=database.engine)
     yield
+    aclose = getattr(app.state.rate_limit_store, "aclose", None)
+    if aclose is not None:
+        await aclose()
 
 
 def create_app() -> FastAPI:

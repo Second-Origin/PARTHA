@@ -137,6 +137,9 @@ class RedisRateLimitStore:
             raise StoreUnavailableError(str(exc)) from exc
         return int(count), max(1, int(ttl))
 
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
 
 def build_rate_limit_store(settings: Settings) -> RateLimitStore:
     if settings.rate_limit_backend == "redis":
