@@ -1,10 +1,12 @@
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { useSettings } from '@/features/settings/hooks/useSettings';
+import { useAuthStore } from '@/app/store/useAuthStore';
 import { cn } from '@/shared/utils/cn';
 
 export function SettingsPage() {
   const settings = useSettings();
   const { tabs, activeTab, setActiveTab } = settings;
+  const user = useAuthStore((state) => state.user);
   const providers = [
     ['openai', 'OpenAI'],
     ['anthropic', 'Anthropic'],
@@ -39,28 +41,30 @@ export function SettingsPage() {
         {activeTab === 'General' && (
           <div className="space-y-6">
             <div className="rounded-xl border border-border bg-card p-6">
-              <h3 className="text-sm font-medium text-foreground mb-4">Profile</h3>
+              <h3 className="text-sm font-medium text-foreground mb-4">Account</h3>
               <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Display Name</label>
-                  <input
-                    type="text"
-                    defaultValue="Developer"
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                </div>
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">Email</label>
                   <input
                     type="email"
-                    placeholder="you@example.com"
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    value={user?.email ?? ''}
+                    disabled
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-70"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Member Since</label>
+                  <input
+                    type="text"
+                    value={user ? new Date(user.createdAt).toLocaleDateString() : ''}
+                    disabled
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-70"
                   />
                 </div>
               </div>
               <div className="mt-4 flex justify-end">
                 <button disabled className="rounded-md bg-muted px-4 py-2 text-sm font-medium text-muted-foreground cursor-not-allowed">
-                  Coming Soon
+                  Editing Coming Soon
                 </button>
               </div>
             </div>

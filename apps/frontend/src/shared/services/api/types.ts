@@ -196,6 +196,29 @@ export interface GenerateDocResponse {
   generatedAt: string;
 }
 
+// Auth
+export interface UserResponse {
+  id: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface AuthResponse {
+  accessToken: string;
+  tokenType: 'bearer';
+  user: UserResponse;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+}
+
 // Export
 export type ExportFormat = 'json' | 'markdown' | 'html' | 'pdf';
 export type ExportTarget = 'review' | 'documentation' | 'architecture' | 'dependencies';

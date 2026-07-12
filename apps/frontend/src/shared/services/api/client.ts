@@ -18,6 +18,12 @@ export interface ApiClientConfig {
   defaultRetries: number;
   defaultRetryDelay: number;
   getAuthToken?: () => string | null;
+  /** Attempts a silent session refresh; resolves true if a fresh access token
+   * is now available and the triggering request should be retried once. */
+  refreshSession?: () => Promise<boolean>;
+  /** Called when a 401 could not be resolved by a refresh (or refresh isn't
+   * configured) — the terminal "give up" signal, e.g. to clear state and
+   * redirect to /login. */
   onUnauthorized?: () => void;
 }
 
@@ -36,6 +42,46 @@ export function configureApiClient(config: Partial<ApiClientConfig>) {
 
 export function getApiConfig(): ApiClientConfig {
   return clientConfig;
+}
+
+// The endpoints below must never trigger a silent refresh-and-retry: retrying
+// a failed login/register is nonsensical, and refreshing off the back of a
+// failed /auth/refresh or /auth/logout would recurse into the same endpoint.
+const NO_REFRESH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout'];
+
+function isNoRefreshEndpoint(endpoint: string): boolean {
+  return NO_REFRESH_ENDPOINTS.some((path) => endpoint === path || endpoint.startsWith(`${path}?`));
+}
+
+// Several requests can each hit a 401 for the same expired session around the
+// same time; without this, each would fire its own /auth/refresh, and the
+// backend's rotating refresh tokens mean only the first would succeed — the
+// rest would revoke the whole session as replay. Sharing one in-flight
+// promise makes every concurrent 401 await the same single refresh attempt.
+let inFlightRefresh: Promise<boolean> | null = null;
+
+function refreshSessionOnce(): Promise<boolean> {
+  if (!clientConfig.refreshSession) return Promise.resolve(false);
+  if (!inFlightRefresh) {
+    inFlightRefresh = clientConfig
+      .refreshSession()
+      .catch(() => false)
+      .finally(() => {
+        inFlightRefresh = null;
+      });
+  }
+  return inFlightRefresh;
+}
+
+/** Resolves true (and the caller should retry once) if this was an
+ * unauthorized response on a refreshable endpoint and the shared refresh
+ * succeeded; otherwise fires onUnauthorized and resolves false. */
+async function tryRecoverFromUnauthorized(endpoint: string, isRetry: boolean): Promise<boolean> {
+  if (!isRetry && !isNoRefreshEndpoint(endpoint) && (await refreshSessionOnce())) {
+    return true;
+  }
+  clientConfig.onUnauthorized?.();
+  return false;
 }
 
 async function request<T>(
@@ -75,6 +121,7 @@ async function executeRequest<T>(
   body: unknown,
   config: RequestConfig | undefined,
   timeout: number,
+  isRetry = false,
 ): Promise<T> {
   const url = `${clientConfig.baseUrl}${endpoint}`;
   const controller = new AbortController();
@@ -102,6 +149,7 @@ async function executeRequest<T>(
     const response = await fetch(url, {
       method,
       headers,
+      credentials: 'include',
       body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
@@ -115,7 +163,11 @@ async function executeRequest<T>(
       }
 
       const error = new ApiError(response.status, response.statusText, responseBody, endpoint);
-      if (error.isUnauthorized) clientConfig.onUnauthorized?.();
+      if (error.isUnauthorized) {
+        if (await tryRecoverFromUnauthorized(endpoint, isRetry)) {
+          return executeRequest<T>(method, endpoint, body, config, timeout, true);
+        }
+      }
       throw error;
     }
 
@@ -143,6 +195,7 @@ export async function uploadFile<T>(
   file: File,
   fields?: Record<string, string>,
   config?: RequestConfig,
+  isRetry = false,
 ): Promise<T> {
   const url = `${clientConfig.baseUrl}${endpoint}`;
   const controller = new AbortController();
@@ -174,6 +227,7 @@ export async function uploadFile<T>(
     const response = await fetch(url, {
       method: 'POST',
       headers,
+      credentials: 'include',
       body: formData,
       signal: controller.signal,
     });
@@ -186,7 +240,14 @@ export async function uploadFile<T>(
 
     return await response.json() as T;
   } catch (error) {
-    if (error instanceof ApiError) throw error;
+    if (error instanceof ApiError) {
+      if (error.isUnauthorized && (await tryRecoverFromUnauthorized(endpoint, isRetry))) {
+        clearTimeout(timeoutId);
+        if (signal && abortListener) signal.removeEventListener('abort', abortListener);
+        return uploadFile<T>(endpoint, file, fields, config, true);
+      }
+      throw error;
+    }
     if (controller.signal.aborted) {
       if (signal?.aborted) throw new CancelledError(endpoint);
       throw new TimeoutError(endpoint, timeout);
@@ -208,6 +269,7 @@ async function uploadWithProgress<T>(
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
+    xhr.withCredentials = true;
     Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
 
     xhr.upload.onprogress = (event) => {
@@ -267,6 +329,7 @@ export async function streamRequest(
     const response = await fetch(url, {
       method: 'POST',
       headers,
+      credentials: 'include',
       body: JSON.stringify(body),
       signal: controller.signal,
     });
@@ -274,7 +337,14 @@ export async function streamRequest(
     if (!response.ok) {
       let responseBody: unknown;
       try { responseBody = await response.json(); } catch { responseBody = null; }
-      throw new ApiError(response.status, response.statusText, responseBody, endpoint);
+      const error = new ApiError(response.status, response.statusText, responseBody, endpoint);
+      // No refresh-and-retry here: the stream hasn't started, so there's
+      // nothing partially consumed to protect, but replaying a POST with a
+      // streaming response is a different risk profile than a plain retry —
+      // out of scope for this pass. Still surface the terminal signal so a
+      // truly expired session redirects to /login like every other request.
+      if (error.isUnauthorized) clientConfig.onUnauthorized?.();
+      throw error;
     }
 
     const reader = response.body?.getReader();
