@@ -37,7 +37,7 @@ def classify(method: str, path: str) -> str | None:
     if path == "/ai" or path.startswith("/ai/"):
         return "ai"
     if method == "POST" and (
-        path in {"/repositories/upload", "/repositories/github", "/documentation/generate", "/reports/export"}
+        path in {"/repositories/upload", "/repositories/github", "/documentation/generate", "/export"}
         or (path.startswith("/analysis/") and path.endswith("/start"))
     ):
         return "heavy"

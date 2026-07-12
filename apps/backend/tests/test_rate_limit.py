@@ -1,6 +1,8 @@
 import asyncio
+import io
 import os
 import uuid
+import zipfile
 from collections.abc import Generator
 from pathlib import Path
 
@@ -15,6 +17,29 @@ REDIS_URL = os.environ.get("PARTHA_TEST_REDIS_URL")
 def _hit(store, key: str, window: int) -> tuple[int, int]:
     """Drive the async store.hit from a synchronous test."""
     return asyncio.run(store.hit(key, window))
+
+
+def _zip_bytes(files: dict[str, str]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for path, content in files.items():
+            archive.writestr(path, content)
+    return buffer.getvalue()
+
+
+def _import_sample(client) -> str:
+    response = client.post(
+        "/repositories/upload",
+        files={
+            "file": (
+                "sample.zip",
+                _zip_bytes({"sample/package.json": '{"dependencies":{}}'}),
+                "application/octet-stream",
+            )
+        },
+    )
+    assert response.status_code == 201
+    return response.json()["id"]
 
 RATE_ENV = {
     "RATE_LIMIT_DEFAULT_PER_MINUTE": "3",
@@ -72,7 +97,7 @@ def test_classify_maps_routes_to_budget_classes():
     assert classify("POST", "/analysis/some-id/start") == "heavy"
     assert classify("GET", "/analysis/some-id/status") == "default"
     assert classify("POST", "/documentation/generate") == "heavy"
-    assert classify("POST", "/reports/export") == "heavy"
+    assert classify("POST", "/export") == "heavy"
     assert classify("GET", "/repositories") == "default"
     # Exemptions: probes, docs, and CORS preflight.
     assert classify("GET", "/health") is None
@@ -129,6 +154,24 @@ def test_budget_classes_are_charged_separately(limited_client):
 
     # The default class still has budget left.
     assert limited_client.get("/repositories").status_code == 200
+
+
+def test_export_endpoint_is_charged_against_the_heavy_budget(limited_client):
+    """Regression: classify() must key on the route FastAPI actually registers
+    (POST /export), not a path that was never wired up. Both the import and the
+    export below share the 2/min heavy budget, so if /export silently fell back
+    to the (looser) default class this would never hit 429."""
+    repository_id = _import_sample(limited_client)  # 1st heavy hit
+
+    payload = {"repositoryId": repository_id, "target": "review", "format": "json"}
+    assert limited_client.post("/export", json=payload).status_code == 200  # 2nd heavy hit
+
+    blocked = limited_client.post("/export", json=payload)  # 3rd heavy hit
+    assert blocked.status_code == 429
+    body = blocked.json()
+    assert body["code"] == "rate_limited"
+    assert body["details"]["retryAfterSeconds"] >= 1
+    assert int(blocked.headers["Retry-After"]) >= 1
 
 
 def test_probes_are_never_limited(limited_client):
@@ -191,6 +234,53 @@ def test_rate_limit_store_closed_on_app_shutdown(monkeypatch, tmp_path: Path) ->
     with TestClient(create_app()) as test_client:
         assert closed["value"] is False
         test_client.get("/health")
+
+    assert closed["value"] is True
+
+    for key in ("DATABASE_URL", "STORAGE_PATH", "AUTO_CREATE_TABLES", "CORS_ORIGINS"):
+        os.environ.pop(key, None)
+    config.get_settings.cache_clear()
+
+
+def test_rate_limit_store_closed_when_lifespan_exits_via_exception(monkeypatch, tmp_path: Path) -> None:
+    """Cleanup after `yield` must run even when the lifespan's running state
+    exits through an exception, not only on a clean shutdown — otherwise a crash
+    while the app is running leaks the Redis connection pool instead of closing
+    it, defeating the fix `test_rate_limit_store_closed_on_app_shutdown` proves
+    for the clean-shutdown path."""
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'partha-test.db'}")
+    monkeypatch.setenv("STORAGE_PATH", str(tmp_path / "storage"))
+    monkeypatch.setenv("AUTO_CREATE_TABLES", "true")
+    monkeypatch.setenv("CORS_ORIGINS", "http://testserver")
+
+    from app.core import config
+
+    config.get_settings.cache_clear()
+
+    from app.main import create_app, lifespan
+
+    closed = {"value": False}
+
+    class StubStore:
+        async def hit(self, key: str, window_seconds: int) -> tuple[int, int]:
+            return 1, 60
+
+        async def aclose(self) -> None:
+            closed["value"] = True
+
+    monkeypatch.setattr("app.main.build_rate_limit_store", lambda settings: StubStore())
+
+    app = create_app()
+
+    class Boom(Exception):
+        pass
+
+    async def scenario() -> None:
+        with pytest.raises(Boom):
+            async with lifespan(app):
+                raise Boom("simulated failure while the app is running")
+
+    asyncio.run(scenario())
 
     assert closed["value"] is True
 
