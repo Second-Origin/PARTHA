@@ -10,6 +10,8 @@ annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.14.1
 arabic-reshaper==3.0.1
+argon2-cffi==25.1.0
+argon2-cffi-bindings==25.1.0
 asn1crypto==1.5.1
 certifi==2026.6.17
 cffi==2.1.0
@@ -18,6 +20,8 @@ click==8.4.2
 colorama==0.4.6
 cryptography==49.0.0
 cssselect2==0.9.0
+dnspython==2.8.0
+email-validator==2.3.0
 fastapi==0.139.0
 greenlet==3.5.3
 h11==0.16.0
@@ -43,6 +47,7 @@ pydantic_core==2.46.4
 Pygments==2.20.0
 pyhanko-certvalidator==0.31.1
 pyHanko==0.35.2
+PyJWT==2.13.0
 pypdf==6.14.2
 pytest==9.1.1
 python-bidi==0.6.11
