@@ -45,11 +45,19 @@ def classify(method: str, path: str) -> str | None:
 
 
 def resolve_rate_key(request: Request) -> str:
-    """Identity a budget is charged against: the client IP for now.
+    """Identity a budget is charged against: the socket peer address for now.
 
     E1.3 upgrades this to the authenticated user id when a valid Bearer token
     is present, so signed-in users get per-user budgets instead of sharing a
     NAT'd address.
+
+    Trusted-proxy caveat: this reads ``request.client.host``, the direct TCP
+    peer. Behind a reverse proxy or load balancer that is the proxy's address,
+    so every client would share one budget. Honouring ``X-Forwarded-For`` safely
+    needs a trusted-proxy allowlist (which hop to believe) — deliberately NOT
+    implemented here, because trusting a client-settable header without one
+    turns the limiter into a trivially spoofable no-op. Enable forwarded-header
+    parsing only once the deployment's proxy topology is known.
     """
     client = request.client
     return client.host if client else "unknown"
@@ -60,9 +68,10 @@ class StoreUnavailableError(Exception):
 
 
 class RateLimitStore(Protocol):
-    def hit(self, key: str, window_seconds: int) -> tuple[int, int]:
+    """A fixed-window counter keyed by an arbitrary string."""
+
+    async def hit(self, key: str, window_seconds: int) -> tuple[int, int]:
         """Record one hit; return (count in current window, seconds to reset)."""
-        ...
 
 
 class MemoryRateLimitStore:
@@ -70,7 +79,8 @@ class MemoryRateLimitStore:
 
     Deterministic (the clock is injectable) and per-process — the right
     behaviour for tests and single-instance development, and the fallback when
-    Redis is not configured.
+    Redis is not configured. ``hit`` is async only to satisfy the store
+    interface; it does no I/O and never blocks the event loop.
     """
 
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
@@ -78,7 +88,7 @@ class MemoryRateLimitStore:
         self._lock = Lock()
         self._windows: dict[str, tuple[float, int]] = {}
 
-    def hit(self, key: str, window_seconds: int) -> tuple[int, int]:
+    async def hit(self, key: str, window_seconds: int) -> tuple[int, int]:
         now = self._clock()
         with self._lock:
             window_start, count = self._windows.get(key, (now, 0))
@@ -90,24 +100,39 @@ class MemoryRateLimitStore:
         return count, retry_after
 
 
+# Runs atomically on the server in a single round trip: increment the counter,
+# arm the TTL on the first hit of a window (and re-arm if a key somehow lost its
+# expiry), and return count + remaining TTL together. This closes the race the
+# separate INCR/EXPIRE/TTL calls had, and keeps the hot path to one network hop.
+_WINDOW_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+else
+  local ttl = redis.call('TTL', KEYS[1])
+  if ttl < 0 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+  end
+end
+return {count, redis.call('TTL', KEYS[1])}
+"""
+
+
 class RedisRateLimitStore:
-    """Fixed-window counters shared across processes via Redis INCR+EXPIRE."""
+    """Fixed-window counters shared across processes via an atomic Redis script.
+
+    Uses ``redis.asyncio`` so the network round trip is awaited rather than
+    blocking the event loop.
+    """
 
     def __init__(self, client) -> None:
         self._client = client
+        self._script = client.register_script(_WINDOW_SCRIPT)
 
-    def hit(self, key: str, window_seconds: int) -> tuple[int, int]:
+    async def hit(self, key: str, window_seconds: int) -> tuple[int, int]:
         redis_key = f"partha:ratelimit:{key}"
         try:
-            count = self._client.incr(redis_key)
-            if count == 1:
-                self._client.expire(redis_key, window_seconds)
-            ttl = self._client.ttl(redis_key)
-            if ttl is None or ttl < 0:
-                # The key lost its expiry (e.g. crash between INCR and EXPIRE);
-                # re-arm it rather than rate-limiting forever.
-                self._client.expire(redis_key, window_seconds)
-                ttl = window_seconds
+            count, ttl = await self._script(keys=[redis_key], args=[window_seconds])
         except Exception as exc:
             raise StoreUnavailableError(str(exc)) from exc
         return int(count), max(1, int(ttl))
@@ -115,9 +140,10 @@ class RedisRateLimitStore:
 
 def build_rate_limit_store(settings: Settings) -> RateLimitStore:
     if settings.rate_limit_backend == "redis":
-        from app.core.redis import create_redis_client
+        import redis.asyncio as redis_asyncio
 
-        return RedisRateLimitStore(create_redis_client())
+        client = redis_asyncio.from_url(settings.redis_url, decode_responses=False)
+        return RedisRateLimitStore(client)
     return MemoryRateLimitStore()
 
 
@@ -153,7 +179,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         store: RateLimitStore = request.app.state.rate_limit_store
         try:
-            count, retry_after = store.hit(key, WINDOW_SECONDS)
+            count, retry_after = await store.hit(key, WINDOW_SECONDS)
         except StoreUnavailableError:
             runtime_metrics.record_rate_limit_degraded()
             logger.warning(

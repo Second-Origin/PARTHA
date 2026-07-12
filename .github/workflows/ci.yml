@@ -72,9 +72,12 @@ jobs:
     needs: repository-hygiene
     runs-on: ubuntu-latest
 
-    # A Postgres sidecar so the gated refresh-token concurrency test runs against
-    # a real database (SQLite serializes writes and cannot exercise the row-lock
-    # race). Every other test still uses per-test SQLite via the fixture.
+    # Postgres so the gated refresh-token concurrency test runs against a real
+    # database (SQLite serializes writes and cannot exercise the row-lock race),
+    # and Redis so the gated rate-limit backend test exercises the real atomic
+    # script and TTL behaviour. Every other test uses per-test SQLite and the
+    # in-memory rate-limit store, so neither service is required for the rest
+    # of the suite to run.
     services:
       postgres:
         image: postgres:16-alpine
@@ -86,6 +89,15 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U partha -d partha_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -112,6 +124,7 @@ jobs:
         working-directory: apps/backend
         env:
           PARTHA_TEST_PG_URL: postgresql+psycopg://partha:partha@localhost:5432/partha_test
+          PARTHA_TEST_REDIS_URL: redis://localhost:6379/0
         run: python -m pytest
 
   docker-compose:
