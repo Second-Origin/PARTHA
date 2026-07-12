@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { RequireAuth } from './RequireAuth';
 import { useAuthStore } from '@/app/store/useAuthStore';
+import { useAppStore } from '@/app/store/useAppStore';
 import { authService, repositoryService } from '@/shared/services/api';
 import { RepositoryProvider } from '@/features/repositories/context/RepositoryProvider';
 import { useRepository } from '@/features/repositories/hooks/useRepository';
@@ -118,6 +119,7 @@ describe('RequireAuth', () => {
 describe('RepositoryProvider gating (mirrors MainLayout mounting it inside RequireAuth)', () => {
   beforeEach(() => {
     useAuthStore.setState({ status: 'initialising', accessToken: null, user: null });
+    useAppStore.setState({ repositories: [], activeRepositoryId: null });
   });
 
   afterEach(() => {
@@ -155,5 +157,35 @@ describe('RepositoryProvider gating (mirrors MainLayout mounting it inside Requi
 
     await waitFor(() => expect(listSpy).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Repos: 0')).toBeInTheDocument();
+  });
+
+  it('refetches when the authenticated user identity changes, even without an unmount', async () => {
+    const listSpy = vi.spyOn(repositoryService, 'list').mockResolvedValue({ data: [], total: 0 });
+    useAuthStore.setState({
+      status: 'authenticated',
+      user: { id: 'userA', email: 'a@example.com', createdAt: new Date().toISOString() },
+    });
+
+    render(
+      <RepositoryProvider>
+        <RepoProbe />
+      </RepositoryProvider>,
+    );
+
+    await waitFor(() => expect(listSpy).toHaveBeenCalledTimes(1));
+
+    // A same-id update (e.g. a fresh /auth/me object) must not cause a
+    // redundant fetch.
+    useAuthStore.setState({ user: { id: 'userA', email: 'a@example.com', createdAt: new Date().toISOString() } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(listSpy).toHaveBeenCalledTimes(1);
+
+    // A genuinely different identity must trigger a fresh fetch — the second
+    // user must never be served straight from the first user's cached list,
+    // even in the (unreachable-via-routing-today, but not relied upon) case
+    // where the provider never unmounts between them.
+    useAuthStore.setState({ user: { id: 'userB', email: 'b@example.com', createdAt: new Date().toISOString() } });
+
+    await waitFor(() => expect(listSpy).toHaveBeenCalledTimes(2));
   });
 });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { backendService } from '@/shared/services/backend';
 import { getErrorMessage } from '@/shared/services/api';
 import { useAppStore } from '@/app/store/useAppStore';
+import { useAuthStore } from '@/app/store/useAuthStore';
 import { RepositoryContext, type RepositoryContextValue } from './repository-context';
 
 export function RepositoryProvider({ children }: { children: React.ReactNode }) {
@@ -9,6 +10,12 @@ export function RepositoryProvider({ children }: { children: React.ReactNode }) 
   const activeRepositoryId = useAppStore((state) => state.activeRepositoryId);
   const setActiveRepositoryId = useAppStore((state) => state.setActiveRepositoryId);
   const setRepositories = useAppStore((state) => state.setRepositories);
+  // Mounting only happens once RequireAuth confirms an authenticated session
+  // (this provider lives inside MainLayout), which covers the common case.
+  // This dependency additionally covers the case where the identity changes
+  // *without* an intervening unmount, so a second user can never be served
+  // straight from the first user's already-fetched state.
+  const userId = useAuthStore((state) => state.user?.id);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +50,7 @@ export function RepositoryProvider({ children }: { children: React.ReactNode }) 
     return () => {
       cancelled = true;
     };
-  }, [setRepositories]);
+  }, [setRepositories, userId]);
 
   const value = useMemo<RepositoryContextValue>(() => {
     const activeRepository = repositories.find((repo) => repo.id === activeRepositoryId) || null;

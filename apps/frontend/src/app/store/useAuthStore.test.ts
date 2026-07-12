@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from './useAuthStore';
 import { useAppStore } from './useAppStore';
 import { authService, api, getApiConfig } from '@/shared/services/api';
-import type { Repository } from '@/shared/types';
+import type { Notification, Repository } from '@/shared/types';
+
+function fakeNotification(id: string): Notification {
+  return { id, title: 'Analysis Complete', message: 'repo-a done', type: 'success', read: false, createdAt: new Date().toISOString() };
+}
 
 function fakeRepository(id: string): Repository {
   return {
@@ -94,6 +98,43 @@ describe('useAuthStore', () => {
       expect(useAppStore.getState().repositories).toEqual([]);
       expect(useAuthStore.getState().status).toBe('authenticated');
     });
+
+    it('is idempotent and single-flight when called concurrently (React StrictMode double-invokes mount effects)', async () => {
+      let refreshCount = 0;
+      let meCount = 0;
+
+      vi.spyOn(authService, 'refresh').mockImplementation(async () => {
+        refreshCount += 1;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return { accessToken: 'fresh-token', tokenType: 'bearer' as const, user: fakeUser('u1', 'a@example.com') };
+      });
+      vi.spyOn(authService, 'me').mockImplementation(async () => {
+        meCount += 1;
+        return fakeUser('u1', 'a@example.com');
+      });
+
+      // Two callers invoking bootstrap() "at the same time", exactly as
+      // StrictMode's mount -> cleanup -> remount does to a bare `void
+      // bootstrap()` in a mount effect.
+      await Promise.all([useAuthStore.getState().bootstrap(), useAuthStore.getState().bootstrap()]);
+
+      expect(refreshCount).toBe(1);
+      expect(meCount).toBe(1);
+      expect(useAuthStore.getState()).toMatchObject({ status: 'authenticated', accessToken: 'fresh-token' });
+      expect(useAuthStore.getState().user?.id).toBe('u1');
+
+      // The resulting session must actually be usable afterward, not just
+      // "some state got set" — a protected request should succeed on the
+      // token bootstrap established, without needing yet another refresh.
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(JSON.stringify({ data: [], total: 0 }), { status: 200, headers: { 'content-type': 'application/json' } })),
+      );
+      await expect(api.get('/repositories')).resolves.toEqual({ data: [], total: 0 });
+      expect(refreshCount).toBe(1);
+
+      vi.unstubAllGlobals();
+    });
   });
 
   describe('cross-user repository isolation', () => {
@@ -137,6 +178,52 @@ describe('useAuthStore', () => {
       expect(useAppStore.getState().repositories).toEqual([]);
       expect(useAppStore.getState().activeRepositoryId).toBeNull();
       expect(useAuthStore.getState().status).toBe('unauthenticated');
+    });
+
+    it('clears running-analysis and notification state on logout too, not just repositories', async () => {
+      vi.spyOn(authService, 'logout').mockResolvedValue(undefined);
+      useAppStore.setState({
+        repositories: [fakeRepository('repo-a')],
+        activeRepositoryId: 'repo-a',
+        analysisRunning: true,
+        currentAnalysisId: 'repo-a',
+        notifications: [fakeNotification('n1')],
+      });
+      useAuthStore.setState({ status: 'authenticated', accessToken: 'a-token', user: fakeUser('userA', 'a@example.com') });
+
+      await useAuthStore.getState().logout();
+
+      expect(useAppStore.getState()).toMatchObject({
+        repositories: [],
+        activeRepositoryId: null,
+        analysisRunning: false,
+        currentAnalysisId: null,
+        notifications: [],
+      });
+    });
+  });
+
+  describe('guest-only auth failures must not touch an existing session', () => {
+    it('a failed login attempt does not clear an existing authenticated session', async () => {
+      useAuthStore.setState({ status: 'authenticated', accessToken: 'a-token', user: fakeUser('userA', 'a@example.com') });
+
+      // Exercises the real client interceptor (not a mocked authService),
+      // since the bug lived in that wiring: a 401 from a guest-only endpoint
+      // must not reach the globally-registered onUnauthorized handler.
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(JSON.stringify({ code: 'unauthorized', message: 'bad credentials' }), {
+          status: 401,
+          headers: { 'content-type': 'application/json' },
+        })),
+      );
+
+      await expect(authService.login({ email: 'attacker@example.com', password: 'wrong' })).rejects.toThrow();
+
+      expect(useAuthStore.getState()).toMatchObject({ status: 'authenticated', accessToken: 'a-token' });
+      expect(useAuthStore.getState().user?.id).toBe('userA');
+
+      vi.unstubAllGlobals();
     });
   });
 });

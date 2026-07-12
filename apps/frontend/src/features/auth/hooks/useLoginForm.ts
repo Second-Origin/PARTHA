@@ -2,10 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/store/useAuthStore';
 import { getErrorMessage } from '@/shared/services/api';
-
-interface LocationState {
-  from?: { pathname?: string };
-}
+import { resolveRedirectTarget } from '../authRedirect';
 
 export function useLoginForm() {
   const login = useAuthStore((state) => state.login);
@@ -24,8 +21,7 @@ export function useLoginForm() {
     setError(null);
     try {
       await login(email.trim(), password);
-      const state = location.state as LocationState | null;
-      navigate(state?.from?.pathname || '/', { replace: true });
+      navigate(resolveRedirectTarget(location.state), { replace: true });
     } catch (caught) {
       setError(getErrorMessage(caught));
     } finally {
@@ -33,5 +29,7 @@ export function useLoginForm() {
     }
   };
 
-  return { email, setEmail, password, setPassword, submitting, error, submit };
+  // Forwarded to the "create one"/"sign in" link so bouncing between login
+  // and register never loses the originally-intended destination.
+  return { email, setEmail, password, setPassword, submitting, error, submit, redirectState: location.state };
 }

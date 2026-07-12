@@ -9,6 +9,16 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
+function sseResponse(chunks: string[]): Response {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk));
+      controller.close();
+    },
+  });
+  return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+}
+
 describe('api client 401 handling', () => {
   const baseConfig = getApiConfig();
 
@@ -73,7 +83,86 @@ describe('api client 401 handling', () => {
     await expect(api.post('/auth/login', { email: 'a@b.com', password: 'x' })).rejects.toBeInstanceOf(ApiError);
 
     expect(refreshSession).not.toHaveBeenCalled();
-    expect(onUnauthorized).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not invalidate an existing session on a failed login or register attempt', async () => {
+    // A wrong password or a duplicate email is a guest-only failure — it must
+    // surface as a form error, not clear some OTHER already-authenticated
+    // session (e.g. a user who opens /login in a second tab while still
+    // signed in elsewhere).
+    const onUnauthorized = vi.fn();
+    const fetchMock = vi.fn(async () => jsonResponse(401, { code: 'unauthorized', message: 'bad credentials' }));
+    vi.stubGlobal('fetch', fetchMock);
+    configureApiClient({ onUnauthorized });
+
+    await expect(api.post('/auth/login', { email: 'a@b.com', password: 'wrong' })).rejects.toBeInstanceOf(ApiError);
+    await expect(api.post('/auth/register', { email: 'a@b.com', password: 'x' })).rejects.toBeInstanceOf(ApiError);
+
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it('still reports a failed refresh or logout through onUnauthorized (unlike login/register)', async () => {
+    const onUnauthorized = vi.fn();
+    const fetchMock = vi.fn(async () => jsonResponse(401, { code: 'unauthorized', message: 'invalid refresh token' }));
+    vi.stubGlobal('fetch', fetchMock);
+    configureApiClient({ onUnauthorized });
+
+    await expect(api.post('/auth/refresh')).rejects.toBeInstanceOf(ApiError);
+    await expect(api.post('/auth/logout')).rejects.toBeInstanceOf(ApiError);
+
+    expect(onUnauthorized).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('streamRequest 401 handling', () => {
+  const baseConfig = getApiConfig();
+
+  beforeEach(() => {
+    configureApiClient({ ...baseConfig, getAuthToken: () => 'stale-token', refreshSession: undefined, onUnauthorized: undefined });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    configureApiClient(baseConfig);
+  });
+
+  it('recovers from a pre-stream 401: refreshes once, retries once, and streams the retried response', async () => {
+    let authorized = false;
+    const refreshSession = vi.fn(async () => {
+      authorized = true;
+      return true;
+    });
+    const onUnauthorized = vi.fn();
+
+    const fetchMock = vi.fn(async () =>
+      authorized ? sseResponse(['data: hello\n\n', 'data: world\n\n']) : jsonResponse(401, { code: 'unauthorized', message: 'expired' }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    configureApiClient({ refreshSession, onUnauthorized });
+
+    const chunks: string[] = [];
+    await api.stream('/ai/query', { query: 'hi' }, (chunk) => chunks.push(chunk));
+
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2); // the initial 401, then the one retry
+    expect(chunks.join('')).toBe('data: hello\n\ndata: world\n\n');
+  });
+
+  it('gives up cleanly (no infinite retry) when the refresh fails', async () => {
+    const refreshSession = vi.fn(async () => false);
+    const onUnauthorized = vi.fn();
+    const fetchMock = vi.fn(async () => jsonResponse(401, { code: 'unauthorized', message: 'expired' }));
+    vi.stubGlobal('fetch', fetchMock);
+    configureApiClient({ refreshSession, onUnauthorized });
+
+    const chunks: string[] = [];
+    await expect(api.stream('/ai/query', { query: 'hi' }, (chunk) => chunks.push(chunk))).rejects.toBeInstanceOf(ApiError);
+
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // refresh failed, nothing to retry with
+    expect(chunks).toEqual([]);
   });
 });
