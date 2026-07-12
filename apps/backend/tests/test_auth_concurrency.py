@@ -46,7 +46,7 @@ def test_claim_token_is_single_use(client):
         user = User(id=str(uuid.uuid4()), email="claim@example.com")
         db.add(user)
         db.commit()
-        raw = _make_refresh_token(db, user.id)
+        _make_refresh_token(db, user.id)
         token_id = db.query(RefreshToken).one().id
 
         service = AuthService(db, get_settings())
