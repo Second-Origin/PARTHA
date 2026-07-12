@@ -17,6 +17,11 @@ services:
       # Redis-backed so budgets are shared across API workers; the app default
       # ("memory") stays per-process for tests and bare-metal development.
       RATE_LIMIT_BACKEND: ${RATE_LIMIT_BACKEND:-redis}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_DEFAULT_PER_MINUTE: ${RATE_LIMIT_DEFAULT_PER_MINUTE:-120}
+      RATE_LIMIT_AUTH_PER_MINUTE: ${RATE_LIMIT_AUTH_PER_MINUTE:-10}
+      RATE_LIMIT_AI_PER_MINUTE: ${RATE_LIMIT_AI_PER_MINUTE:-20}
+      RATE_LIMIT_HEAVY_PER_MINUTE: ${RATE_LIMIT_HEAVY_PER_MINUTE:-30}
     volumes:
       - partha_storage:/data/partha
     depends_on:
