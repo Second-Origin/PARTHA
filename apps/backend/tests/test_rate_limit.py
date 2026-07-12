@@ -1,4 +1,6 @@
+import asyncio
 import os
+import uuid
 from collections.abc import Generator
 from pathlib import Path
 
@@ -6,6 +8,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.rate_limit import MemoryRateLimitStore, StoreUnavailableError, classify
+
+REDIS_URL = os.environ.get("PARTHA_TEST_REDIS_URL")
+
+
+def _hit(store, key: str, window: int) -> tuple[int, int]:
+    """Drive the async store.hit from a synchronous test."""
+    return asyncio.run(store.hit(key, window))
 
 RATE_ENV = {
     "RATE_LIMIT_DEFAULT_PER_MINUTE": "3",
@@ -79,21 +88,21 @@ def test_memory_store_counts_and_resets_after_window():
     now = [1000.0]
     store = MemoryRateLimitStore(clock=lambda: now[0])
 
-    counts = [store.hit("k", 60)[0] for _ in range(3)]
+    counts = [_hit(store, "k", 60)[0] for _ in range(3)]
     assert counts == [1, 2, 3]
 
-    _, retry_after = store.hit("k", 60)
+    _, retry_after = _hit(store, "k", 60)
     assert 1 <= retry_after <= 60
 
     now[0] += 61  # past the window: the counter starts over
-    count, _ = store.hit("k", 60)
+    count, _ = _hit(store, "k", 60)
     assert count == 1
 
 
 def test_memory_store_keys_are_independent():
     store = MemoryRateLimitStore(clock=lambda: 0.0)
-    assert store.hit("a", 60)[0] == 1
-    assert store.hit("b", 60)[0] == 1
+    assert _hit(store, "a", 60)[0] == 1
+    assert _hit(store, "b", 60)[0] == 1
 
 
 # --- middleware behaviour -------------------------------------------------------
@@ -140,7 +149,7 @@ def test_cors_preflight_is_never_limited(limited_client):
 
 def test_store_failure_fails_open_loudly(limited_client):
     class FailingStore:
-        def hit(self, key: str, window_seconds: int) -> tuple[int, int]:
+        async def hit(self, key: str, window_seconds: int) -> tuple[int, int]:
             raise StoreUnavailableError("redis is down")
 
     from app.core.observability import runtime_metrics
@@ -158,3 +167,35 @@ def test_metrics_endpoint_exposes_rate_limit_counters(limited_client):
     text = limited_client.get("/metrics").text
     assert "partha_rate_limited_requests_total" in text
     assert "partha_rate_limit_degraded_total" in text
+
+
+# --- real Redis backend (gated) -----------------------------------------------
+
+
+@pytest.mark.skipif(not REDIS_URL, reason="set PARTHA_TEST_REDIS_URL to run the Redis backend test")
+def test_redis_store_is_atomic_and_expires():
+    """Exercise the actual RedisRateLimitStore against a real server: the atomic
+    script counts up within a window, arms a bounded TTL, and isolates keys."""
+    import redis.asyncio as redis_asyncio
+
+    from app.core.rate_limit import RedisRateLimitStore
+
+    async def scenario() -> None:
+        client = redis_asyncio.from_url(REDIS_URL, decode_responses=False)
+        store = RedisRateLimitStore(client)
+        key_a = f"pytest:{uuid.uuid4()}"
+        key_b = f"pytest:{uuid.uuid4()}"
+        try:
+            counts = [(await store.hit(key_a, 60))[0] for _ in range(3)]
+            assert counts == [1, 2, 3]
+
+            _, ttl = await store.hit(key_a, 60)
+            assert 1 <= ttl <= 60  # armed once, bounded by the window
+
+            # A different key is a separate budget.
+            assert (await store.hit(key_b, 60))[0] == 1
+        finally:
+            await client.delete(f"partha:ratelimit:{key_a}", f"partha:ratelimit:{key_b}")
+            await client.aclose()
+
+    asyncio.run(scenario())
