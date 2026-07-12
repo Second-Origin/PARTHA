@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useAppStore } from '@/app/store/useAppStore';
+import { useAuthStore } from '@/app/store/useAuthStore';
 import { useState, useRef, useEffect } from 'react';
 import { useRepository } from '@/features/repositories/hooks/useRepository';
 import type { FileTreeNode } from '@/shared/types';
@@ -28,6 +29,18 @@ export function TopBar() {
     setSearchOpen,
   } = useAppStore();
   const { repositories, activeRepository, selectRepository } = useRepository();
+  const logout = useAuthStore((state) => state.logout);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await logout();
+    } finally {
+      setSigningOut(false);
+      navigate('/login', { replace: true });
+    }
+  };
 
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -231,8 +244,12 @@ export function TopBar() {
                 >
                   <Settings className="h-4 w-4" /> Settings
                 </button>
-                <button disabled className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground cursor-not-allowed">
-                  <LogOut className="h-4 w-4" /> Sign Out Coming Soon
+                <button
+                  onClick={handleSignOut}
+                  disabled={signingOut}
+                  className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-accent disabled:opacity-50 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" /> {signingOut ? 'Signing out...' : 'Sign Out'}
                 </button>
               </div>
             </div>
