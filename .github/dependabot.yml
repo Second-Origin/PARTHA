@@ -1,8 +1,7 @@
 # Dependabot configuration for the PARTHA monorepo.
 #
-# Satisfies part of E2.3 ("Dependency, secret, and code scanning in CI") in
-# docs/planning/PRODUCTION_READINESS_PLAN.md, and §2.5, which makes Dependabot a
-# required status check once branch protection is enabled.
+# Part of the dependency, secret, and code scanning baseline. Intended to become
+# a required status check once branch protection is enabled.
 #
 # Two ecosystems, one per app: npm for the React/TS frontend, pip for the
 # FastAPI backend. Minor and patch bumps are grouped into a single PR per

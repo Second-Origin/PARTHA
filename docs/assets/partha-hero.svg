@@ -1,96 +1,86 @@
-<svg width="1600" height="500" viewBox="0 0 1600 500" role="img" aria-labelledby="title desc" xmlns="http://www.w3.org/2000/svg">
-  <title id="title">PARTHA Engineering Intelligence Platform</title>
-  <desc id="desc">A dark engineering intelligence banner with a small Partha precision mark, repository graph paths, architecture layers, and actionable engineering outputs.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 500" width="1600" height="500" role="img" aria-labelledby="partha-title partha-desc">
+  <title id="partha-title">PARTHA — Repository Intelligence Platform</title>
+  <desc id="partha-desc">PARTHA is a self-hosted Repository Intelligence Platform for private and evolving codebases. Repository sources are ingested into a shared repository-understanding layer, which architecture, dependency, review, and documentation surfaces consume. AI is an optional downstream consumer.</desc>
+
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="500" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#050816"/>
-      <stop offset="0.52" stop-color="#0B1020"/>
-      <stop offset="1" stop-color="#111827"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#070C14"/>
+      <stop offset="0.55" stop-color="#0B1420"/>
+      <stop offset="1" stop-color="#0A1A18"/>
     </linearGradient>
-    <linearGradient id="signal" x1="150" y1="90" x2="1420" y2="410" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F8FAFC"/>
-      <stop offset="0.32" stop-color="#38BDF8"/>
-      <stop offset="0.66" stop-color="#8B5CF6"/>
-      <stop offset="1" stop-color="#22C55E"/>
+
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#34D399" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#34D399" stop-opacity="0"/>
     </linearGradient>
-    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
-      <stop stop-color="#38BDF8" stop-opacity="0.24"/>
-      <stop offset="1" stop-color="#38BDF8" stop-opacity="0"/>
-    </radialGradient>
-    <pattern id="blueprint" width="44" height="44" patternUnits="userSpaceOnUse">
-      <path d="M44 0H0V44" fill="none" stroke="#CBD5E1" stroke-opacity="0.055" stroke-width="1"/>
+
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#1B2A3A" fill-opacity="0.5"/>
     </pattern>
-    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="8" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
+
+    <linearGradient id="corePanel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#102A24"/>
+      <stop offset="1" stop-color="#0C1D1C"/>
+    </linearGradient>
   </defs>
 
   <rect width="1600" height="500" fill="url(#bg)"/>
-  <rect width="1600" height="500" fill="url(#blueprint)"/>
-  <ellipse cx="1128" cy="250" rx="430" ry="248" fill="url(#halo)"/>
+  <rect width="1600" height="500" fill="url(#grid)"/>
+  <rect x="0" y="0" width="1600" height="500" fill="none" stroke="#1B2A3A" stroke-width="2"/>
 
-  <g opacity="0.42" fill="none" stroke="#94A3B8" stroke-width="1.5">
-    <path d="M780 86h590"/>
-    <path d="M780 414h590"/>
-    <path d="M866 86v328"/>
-    <path d="M1236 86v328"/>
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <text x="96" y="196" fill="#F1F5F9" font-size="86" font-weight="700" letter-spacing="6">PARTHA</text>
+    <rect x="100" y="222" width="300" height="3" fill="url(#rule)"/>
+    <text x="96" y="278" fill="#34D399" font-size="32" font-weight="600" letter-spacing="0.5">Repository Intelligence Platform</text>
+    <text x="96" y="326" fill="#94A3B8" font-size="23" font-weight="400">Persistent understanding for private and evolving codebases</text>
   </g>
 
-  <g fill="none" stroke="url(#signal)" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M788 142h132c46 0 70 38 102 68s64 48 114 48h214" stroke-width="3.5"/>
-    <path d="M788 250h186c44 0 68 62 112 62h264" stroke-width="3.5" opacity="0.78"/>
-    <path d="M788 358h114c58 0 76-154 138-154h310" stroke-width="3.5" opacity="0.58"/>
-  </g>
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
 
-  <g filter="url(#soft)">
-    <circle cx="788" cy="142" r="7" fill="#F8FAFC"/>
-    <circle cx="788" cy="250" r="7" fill="#F8FAFC"/>
-    <circle cx="788" cy="358" r="7" fill="#F8FAFC"/>
-    <circle cx="1022" cy="210" r="7" fill="#38BDF8"/>
-    <circle cx="1086" cy="312" r="7" fill="#8B5CF6"/>
-    <circle cx="1136" cy="258" r="7" fill="#8B5CF6"/>
-    <circle cx="1350" cy="258" r="7" fill="#22C55E"/>
-    <circle cx="1350" cy="312" r="7" fill="#22C55E"/>
-    <circle cx="1350" cy="204" r="7" fill="#22C55E"/>
-  </g>
-
-  <g opacity="0.94">
-    <rect x="1168" y="112" width="244" height="62" rx="16" fill="#0B1020" stroke="#38BDF8" stroke-opacity="0.35"/>
-    <rect x="1168" y="219" width="244" height="62" rx="16" fill="#0B1020" stroke="#8B5CF6" stroke-opacity="0.35"/>
-    <rect x="1168" y="326" width="244" height="62" rx="16" fill="#0B1020" stroke="#22C55E" stroke-opacity="0.35"/>
-    <text x="1192" y="150" fill="#E2E8F0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="19" font-weight="700">Repository Intelligence</text>
-    <text x="1192" y="257" fill="#E2E8F0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="19" font-weight="700">Architecture Models</text>
-    <text x="1192" y="364" fill="#E2E8F0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="19" font-weight="700">Engineering Outputs</text>
-  </g>
-
-  <g transform="translate(152 104) scale(0.38)">
-    <rect width="512" height="512" rx="112" fill="#0B1020" stroke="#E2E8F0" stroke-opacity="0.12" stroke-width="5"/>
-    <g fill="none" stroke="url(#signal)" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M182 86C290 154 346 262 326 426" stroke-width="24"/>
-      <path d="M182 86C220 214 232 304 326 426" stroke-width="9" opacity="0.72"/>
-      <path d="M118 256H352" stroke-width="18"/>
-      <path d="M324 218l58 38-58 38" stroke-width="18"/>
-      <path d="M198 198l58 58-58 58" stroke-width="10" opacity="0.86"/>
-      <path d="M256 256l62-58M256 256l62 58" stroke-width="9" opacity="0.72"/>
-      <rect x="126" y="126" width="260" height="260" rx="42" stroke-width="10" opacity="0.32"/>
-      <circle cx="256" cy="256" r="72" stroke-width="8" opacity="0.28"/>
-      <path d="M256 158v34M256 320v34M158 256h34M320 256h34" stroke-width="7" opacity="0.34"/>
+    <g stroke="#2C4A5E" stroke-width="2" fill="none">
+      <path d="M1010 206 C 1040 206, 1040 250, 1074 250"/>
+      <path d="M1010 294 C 1040 294, 1040 250, 1074 250"/>
     </g>
-    <g fill="#F8FAFC">
-      <circle cx="182" cy="86" r="15"/>
-      <circle cx="198" cy="198" r="11"/>
-      <circle cx="256" cy="256" r="17"/>
-      <circle cx="198" cy="314" r="11"/>
-      <circle cx="326" cy="426" r="15"/>
-      <circle cx="382" cy="256" r="12"/>
-    </g>
-  </g>
+    <circle cx="1074" cy="250" r="3.5" fill="#5EA5C4"/>
 
-  <text x="150" y="330" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="82" font-weight="850" letter-spacing="2">PARTHA</text>
-  <text x="154" y="378" fill="#93C5FD" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="29" font-weight="750">Engineering Intelligence Platform</text>
-  <text x="154" y="424" fill="#CBD5E1" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="24" font-weight="500">Transform Repositories into Actionable Engineering Intelligence</text>
+    <g stroke="#2F6B57" stroke-width="2" fill="none">
+      <path d="M1286 250 C 1320 250, 1320 148, 1354 148"/>
+      <path d="M1286 250 C 1320 250, 1320 216, 1354 216"/>
+      <path d="M1286 250 C 1320 250, 1320 284, 1354 284"/>
+      <path d="M1286 250 C 1320 250, 1320 352, 1354 352"/>
+    </g>
+    <path d="M1286 250 C 1320 250, 1320 424, 1354 424" stroke="#2B3B4C" stroke-width="2" stroke-dasharray="5 5" fill="none"/>
+
+    <text x="925" y="152" fill="#64748B" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="1.2">SOURCES</text>
+    <rect x="840" y="178" width="170" height="56" rx="8" fill="#101B27" stroke="#274056" stroke-width="1.5"/>
+    <text x="925" y="212" fill="#CBD5E1" font-size="20" text-anchor="middle">Archives</text>
+    <rect x="840" y="266" width="170" height="56" rx="8" fill="#101B27" stroke="#274056" stroke-width="1.5"/>
+    <text x="925" y="300" fill="#CBD5E1" font-size="20" text-anchor="middle">Git repositories</text>
+
+    <rect x="1074" y="152" width="212" height="196" rx="12" fill="url(#corePanel)" stroke="#34D399" stroke-width="2"/>
+    <text x="1180" y="190" fill="#5FBF9C" font-size="16" font-weight="500" text-anchor="middle" letter-spacing="1.2">SHARED LAYER</text>
+    <text x="1180" y="237" fill="#ECFDF5" font-size="23" font-weight="600" text-anchor="middle">Repository</text>
+    <text x="1180" y="266" fill="#ECFDF5" font-size="23" font-weight="600" text-anchor="middle">Intelligence</text>
+    <g stroke="#34D399" stroke-opacity="0.55" stroke-width="1.5" fill="none">
+      <path d="M1122 300 L1156 318 L1204 300 L1238 318"/>
+    </g>
+    <g fill="#34D399" fill-opacity="0.85">
+      <circle cx="1122" cy="300" r="4"/>
+      <circle cx="1156" cy="318" r="4"/>
+      <circle cx="1204" cy="300" r="4"/>
+      <circle cx="1238" cy="318" r="4"/>
+    </g>
+
+    <text x="1452" y="98" fill="#64748B" font-size="17" font-weight="500" text-anchor="middle" letter-spacing="1.2">CONSUMERS</text>
+    <rect x="1354" y="124" width="196" height="48" rx="8" fill="#121D2A" stroke="#2A4256" stroke-width="1.5"/>
+    <text x="1452" y="154" fill="#CBD5E1" font-size="20" text-anchor="middle">Architecture</text>
+    <rect x="1354" y="192" width="196" height="48" rx="8" fill="#121D2A" stroke="#2A4256" stroke-width="1.5"/>
+    <text x="1452" y="222" fill="#CBD5E1" font-size="20" text-anchor="middle">Dependencies</text>
+    <rect x="1354" y="260" width="196" height="48" rx="8" fill="#121D2A" stroke="#2A4256" stroke-width="1.5"/>
+    <text x="1452" y="290" fill="#CBD5E1" font-size="20" text-anchor="middle">Reviews</text>
+    <rect x="1354" y="328" width="196" height="48" rx="8" fill="#121D2A" stroke="#2A4256" stroke-width="1.5"/>
+    <text x="1452" y="358" fill="#CBD5E1" font-size="20" text-anchor="middle">Documentation</text>
+    <rect x="1354" y="400" width="196" height="48" rx="8" fill="#0E1620" stroke="#2B3B4C" stroke-width="1.5" stroke-dasharray="5 5"/>
+    <text x="1452" y="430" fill="#7C8CA0" font-size="19" text-anchor="middle">AI (optional)</text>
+  </g>
 </svg>

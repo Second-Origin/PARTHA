@@ -1,8 +1,7 @@
 # CodeQL static analysis for PARTHA.
 #
-# Satisfies part of E2.3 ("Dependency, secret, and code scanning in CI") in
-# docs/planning/PRODUCTION_READINESS_PLAN.md. Per §2.5, this should become a
-# required status check on `dev` and `main` once branch protection is enabled.
+# Part of the dependency, secret, and code scanning baseline. Intended to become
+# a required status check on `dev` and `main` once branch protection is enabled.
 name: CodeQL
 
 on:

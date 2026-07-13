@@ -3,6 +3,12 @@ description: Report broken or incorrect behavior in PARTHA.
 title: "bug: "
 labels: [bug]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security vulnerabilities here. Public issues are the wrong
+        channel — disclose them privately as described in
+        [SECURITY.md](https://github.com/Second-Origin/PARTHA/blob/dev/SECURITY.md).
   - type: textarea
     id: summary
     attributes:
@@ -50,7 +56,7 @@ body:
     id: evidence
     attributes:
       label: Evidence
-      description: Logs, screenshots, response payloads, or audit references.
+      description: Logs, screenshots, or response payloads. Do not include secrets, credentials, or private repository contents.
   - type: textarea
     id: environment
     attributes:

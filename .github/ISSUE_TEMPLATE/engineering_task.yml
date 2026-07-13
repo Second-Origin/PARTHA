@@ -1,5 +1,5 @@
 name: Engineering Task
-description: Track technical debt, refactors, tests, infrastructure, or audit backlog work.
+description: Track technical debt, refactors, tests, or infrastructure work.
 title: "chore: "
 labels: [engineering]
 body:
@@ -21,7 +21,7 @@ body:
     id: references
     attributes:
       label: References
-      description: Link audit rows, files, logs, or related issues.
+      description: Link files, logs, or related issues.
   - type: textarea
     id: implementation
     attributes:

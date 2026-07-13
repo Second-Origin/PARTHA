@@ -1,329 +1,428 @@
 # Contributing to PARTHA
 
-Thanks for helping build PARTHA.
+These are the project rules, not a welcome page. If you follow them, your pull request can be reviewed and merged. If you do not, it will be sent back regardless of the quality of the code.
 
-PARTHA is an Engineering Intelligence Platform. The central architectural rule is:
+PARTHA is a self-hosted Repository Intelligence Platform. One architectural rule sits above all others:
 
-> Repository Intelligence is the source of truth. Product features consume it; they do not independently parse repositories.
+> **Repository Intelligence is the shared repository-understanding layer. Architecture, dependencies, reviews, documentation, exports, and optional AI features consume it. AI must remain a downstream consumer, never an independent interpreter of the repository.**
 
-This guide explains how to contribute safely, keep reviews focused, and preserve the system architecture as the project grows.
+Throughout this document, **must** and **must not** are requirements, **should** is a strong expectation, and **may** is permission.
 
 ---
 
-## Development Setup
+## 1. Setup
 
 ### Prerequisites
 
-| Tool | Version |
-| --- | --- |
-| Node.js | 22 or newer recommended |
-| Python | 3.12 or 3.13 |
-| Docker | Required for Compose validation |
-| Git | Required for repository import workflows |
+| Tool | Version | Needed for |
+| --- | --- | --- |
+| Python | 3.12 or 3.13 | Backend |
+| Node.js | 22 | Frontend |
+| Git | any recent | Everything |
+| Docker | any recent | Optional local Compose stack |
 
-### Install
+### Backend
 
 ```bash
-git clone https://github.com/Second-Origin/PARTHA.git
-cd PARTHA
-
-npm ci --prefix apps/frontend
-
 cd apps/backend
 python3.13 -m venv .venv
 source .venv/bin/activate
 pip install -e .
 cd ../..
-```
 
-### Configure
-
-```bash
-cp .env.example .env
-cp apps/frontend/.env.example apps/frontend/.env
-cp apps/backend/.env.example apps/backend/.env
-```
-
-The local backend env example uses SQLite and local filesystem storage. Docker Compose injects PostgreSQL, Redis, and container storage settings separately.
-
-### Run
-
-```bash
 npm run dev:backend
+```
+
+The backend defaults to SQLite and local filesystem storage, so it starts with no PostgreSQL and no Redis. No `.env` file is required for local development — every setting has a working default. Copy `apps/backend/.env.example` only to change one.
+
+### Frontend
+
+```bash
+npm ci --prefix apps/frontend
 npm run dev:frontend
 ```
 
-Useful endpoints:
+Register an account through the UI, then sign in.
 
-- frontend: `http://localhost:5173`
-- backend OpenAPI: `http://localhost:8000/docs`
-- readiness: `http://localhost:8000/ready`
-- metrics: `http://localhost:8000/metrics`
+### Where the code lives
+
+| Path | Contents |
+| --- | --- |
+| `apps/backend/app/intelligence/` | **Repository Intelligence engine and models.** The system's core boundary. |
+| `apps/backend/app/api/` | Routes and dependency wiring |
+| `apps/backend/app/services/` | Application services |
+| `apps/backend/app/analysis/`, `graph/`, `review/`, `ai/`, `reports/` | Consumers of Repository Intelligence |
+| `apps/backend/app/auth/`, `core/`, `models/`, `storage/` | Auth, config, ORM models, local storage |
+| `apps/backend/alembic/`, `apps/backend/tests/` | Migrations, backend tests |
+| `apps/frontend/src/` | `app/` shell and routes, `features/`, `shared/` |
+| `docs/` | Public documentation |
 
 ---
 
-## Branch Strategy
+## 2. Fork-first workflow
 
-| Branch | Purpose |
+PARTHA uses a **fork-first** contribution model. You do not get push access to the official repository.
+
+**Contributors do not push directly to `dev`. They push a dedicated working branch to their own fork and open a pull request targeting `dev`.**
+
+All normal development pull requests target `dev`. The `main` branch is reserved for maintainer-controlled releases or promotion from `dev`.
+
+### Set up your fork once
+
+1. Fork `Second-Origin/PARTHA` on GitHub.
+2. Clone your fork and add the official repository as `upstream`:
+
+```bash
+git clone https://github.com/<your-username>/PARTHA.git
+cd PARTHA
+git remote add upstream https://github.com/Second-Origin/PARTHA.git
+git remote -v
+```
+
+### For every piece of work
+
+```bash
+git fetch upstream
+git checkout -b feature/123-short-description upstream/dev
+# ...commit your work...
+git push -u origin feature/123-short-description
+```
+
+Then open a pull request from your fork's branch to `Second-Origin/PARTHA:dev`.
+
+### You must not
+
+- push directly to `dev`
+- push directly to `main`
+- develop directly on your fork's `dev` branch
+- open ordinary feature or fix pull requests against `main`
+- combine unrelated issues in one branch
+- reuse a merged branch for new work
+- self-merge your pull request
+- rewrite or force-push another contributor's branch
+
+---
+
+## 3. Claim an issue before you start
+
+Substantial work **must** be claimed first. Unclaimed work may be closed unmerged even if it is correct, because it may duplicate or conflict with work already in progress.
+
+Before starting, you must:
+
+1. Read the complete issue.
+2. Read its comments, linked issues, dependencies, and acceptance criteria.
+3. Confirm it is open and not already assigned.
+4. Comment on the issue stating that you want to work on it.
+5. Wait for assignment or an explicit maintainer acknowledgement.
+6. Ask for clarification if the acceptance criteria are not testable, **before** you implement anything.
+
+If you cannot assign yourself because of GitHub permissions, commenting and receiving a maintainer acknowledgement **is** the claim mechanism.
+
+You must not begin substantial work on:
+
+- an issue assigned to someone else
+- an obsolete issue
+- an issue whose scope is disputed
+- an issue blocked by unmerged prerequisite work
+- an issue without testable acceptance criteria
+
+If no suitable issue exists, propose one using an existing issue template before implementing. Do not open a duplicate issue — search first, and comment on the existing one instead.
+
+### Choosing a template
+
+The repository provides three issue templates in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/):
+
+| Template | Use it for |
 | --- | --- |
-| `main` | Stable release snapshots. |
-| `dev` | Active integration branch. |
-| `feature/*` | New scoped feature work. |
-| `fix/*` | Bug fixes. |
-| `docs/*` | Documentation-only changes. |
-| `chore/*` | Tooling, CI, maintenance, or repository hygiene. |
+| **Bug Report** | Broken or incorrect behaviour. Give exact reproduction steps (route, endpoint, input repository, commands), the expected behaviour, the actual behaviour, evidence such as logs or payloads, and your environment. |
+| **Feature Request** | A new capability or user workflow. State the problem first, then the proposed behaviour, the affected pages/endpoints/services, testable acceptance criteria, and any risks or dependencies. |
+| **Engineering Task** | Technical debt, refactors, tests, infrastructure. State the task, why it matters now, the likely files and constraints, and acceptance criteria. |
+
+In every template: write acceptance criteria that someone other than you can verify, name the affected components, and disclose dependencies and blocking work.
+
+For documentation changes, open a Feature Request or Engineering Task describing what is inaccurate and what it should say.
+
+### Security vulnerabilities
+
+**Security vulnerabilities must never be filed as public issues.** Report them privately through [SECURITY.md](SECURITY.md). Do not include a vulnerability, an exploit, or a proof of concept in an issue, a pull request, or a comment.
+
+---
+
+## 4. Branch naming
+
+Every issue gets a dedicated branch created from the latest `upstream/dev`.
+
+```text
+<type>/<issue-number>-<short-description>
+```
+
+```text
+feature/123-python-symbol-extraction
+fix/145-owner-scope-analysis
+docs/152-contribution-workflow
+test/167-archive-regression
+refactor/181-parser-boundary
+security/193-provider-configuration
+chore/204-ci-cache
+```
+
+Allowed types: `feature`, `fix`, `docs`, `test`, `refactor`, `chore`, `security`.
+
+One branch normally addresses one issue. If an issue is too large for a single reviewable pull request, split the issue, or use explicitly linked dependent pull requests (§9).
+
+---
+
+## 5. Rebase onto `dev`
+
+You must rebase onto the latest `upstream/dev` **before opening** a pull request, and **again before final review**.
+
+```bash
+git fetch upstream
+git rebase upstream/dev
+git push --force-with-lease origin <branch-name>
+```
 
 Rules:
 
-- Do not push directly to `main`.
-- Do not push directly to `dev`.
-- Branch from the latest `dev`.
-- Keep one branch focused on one issue or tightly related change.
-
-```bash
-git checkout dev
-git pull origin dev
-git checkout -b feature/repository-intelligence
-```
+- Resolve conflicts locally, and rerun the relevant validation afterwards. A rebase can silently break code that previously passed.
+- Use `--force-with-lease`. Never use unrestricted `--force`.
+- Do not merge `dev` into your working branch merely to avoid rebasing, unless a maintainer explicitly asks you to.
+- Never rebase or force-push a branch owned by someone else.
 
 ---
 
-## Issue Workflow
+## 6. Pull requests
 
-Before starting non-trivial work:
+When the issue is complete:
 
-1. Check existing GitHub Issues.
-2. Choose or create a focused issue.
-3. Confirm the intended scope.
-4. Wait for assignment or maintainer agreement when the change is large.
-5. Keep implementation aligned with the issue.
+1. Push your dedicated branch to your fork.
+2. Open a pull request targeting `Second-Origin/PARTHA:dev`.
+3. Use the existing [pull request template](.github/pull_request_template.md) — do not delete its sections.
+4. Summarise what you implemented.
+5. Link the issue.
+6. Explain how you tested it, with the commands you ran.
+7. Include screenshots or a recording for any visible UI change.
+8. Identify configuration, migration, dependency, security, data, and compatibility implications.
+9. Disclose dependencies and blocked work.
+10. Request one reviewer: **`@parthrohit22`**.
+11. Wait for approval and maintainer merge.
 
-Do not bundle unrelated cleanup into a feature PR. If you find an unrelated bug, open a separate issue.
+If GitHub permissions prevent you from assigning a reviewer, request review in the pull request description or a comment. CODEOWNERS may also request review automatically.
 
----
+**You must not self-merge.**
 
-## Pull Request Workflow
+### Issue-closing syntax
 
-All PRs target `dev`.
-
-Use the PR template and include:
-
-- summary;
-- related issue;
-- changed files or systems;
-- testing performed;
-- risk and rollback notes;
-- screenshots for UI changes;
-- request/response examples for API changes;
-- migration notes for persistence changes.
-
-Use draft PRs for early architecture feedback.
-
-Maintainers should be able to review the PR without reverse-engineering intent from the diff.
-
----
-
-## Code Standards
-
-### Repository Intelligence Boundary
-
-Do:
-
-- add reusable extraction to `apps/backend/app/intelligence/` when a feature needs repository facts;
-- let feature services transform existing repository intelligence into response models;
-- preserve one source of truth for architecture, dependencies, documentation, review, exports, and AI context.
-
-Do not:
-
-- re-read dependency manifests inside feature-specific services;
-- traverse repository files in consumers when the intelligence engine should own the fact;
-- let AI providers parse repositories directly;
-- duplicate parser logic in frontend code.
-
-### Backend
-
-- Keep routes thin.
-- Put business logic in services.
-- Use schemas for request/response boundaries.
-- Use typed service interfaces and explicit errors.
-- Preserve standardized error responses.
-- Avoid broad exception handling unless it adds operational context.
-- Keep provider-specific AI logic inside provider implementations.
-- Keep report builders separate from renderers.
-
-### Frontend
-
-- Keep app shell, feature code, and shared utilities separated.
-- Reuse shared API clients and shared types.
-- Avoid `any` unless there is a concrete interoperability reason.
-- Preserve loading, empty, error, and success states.
-- Keep UI changes scoped to the affected feature.
-
-### General
-
-- Remove dead code.
-- Avoid speculative abstractions.
-- Prefer small, reviewable changes.
-- Do not commit secrets, local env files, local databases, build outputs, or generated caches.
-
----
-
-## Testing Expectations
-
-Run the checks relevant to your change.
-
-### Frontend
-
-```bash
-npm run lint:frontend
-npm run build:frontend
-```
-
-### Backend
-
-```bash
-npm run test:backend
-```
-
-### Full Build Gate
-
-```bash
-npm run build
-```
-
-### Docker / Platform Changes
-
-If you change Docker, Compose, environment, CI, startup, health, readiness, or observability:
-
-```bash
-docker build -t partha-backend:local apps/backend
-npm run docker:config
-npm run docker:validate
-```
-
-If you cannot run a check locally, say so in the PR and explain why.
-
----
-
-## Documentation Standards
-
-Update documentation when a change affects:
-
-- public behavior;
-- setup or environment variables;
-- API contracts;
-- architecture boundaries;
-- operational behavior;
-- contributor workflows;
-- product positioning.
-
-Documentation should be:
-
-- accurate to the current implementation;
-- explicit about limitations;
-- free of placeholder docs unless the section is intentionally a screenshot/demo placeholder;
-- linked from `docs/README.md` when durable.
-
-Use:
-
-- `README.md` for public orientation;
-- `docs/architecture/` for system boundaries and lifecycles;
-- `docs/operations/` for deployment, release, dependency, and observability workflows;
-- `docs/audit/` for evidence and audit trails;
-- `docs/brand/` for visual identity guidance;
-- `docs/product/` for product positioning and public-face audits.
-
----
-
-## Legal and Licensing
-
-PARTHA is licensed under the Apache License 2.0. By submitting a contribution, you agree that your contribution is provided under the same license unless maintainers explicitly document a different arrangement.
-
-Contributor expectations:
-
-- Only contribute work you have the right to submit.
-- Do not copy third-party code, images, fonts, datasets, or text into the project unless the license is compatible and attribution requirements are documented.
-- Keep dependency additions reviewable so maintainers can evaluate license and security impact.
-- Do not add custom license terms, headers, or notices without maintainer approval.
-
-PARTHA does not currently require a CLA or DCO sign-off. If that changes, maintainers should document the policy in this file before enforcing it.
-
-This section is project policy, not legal advice.
-
----
-
-## Commit Conventions
-
-Use concise Conventional Commit-style messages:
+When a pull request **fully** completes an issue, its **description** must contain:
 
 ```text
-feat(repository): add safe file preview
-fix(upload): report invalid archive errors
-docs(readme): reposition public project overview
-refactor(ai): isolate provider implementation
-test(export): cover markdown renderer
-chore(ci): validate compose readiness
+Closes #123
 ```
 
-Common types:
+The closing statement must be in the pull request description — not only in a commit message, and not only in a later comment.
 
-| Type | Use for |
+Use `Closes`, `Fixes`, or `Resolves` **only** when every acceptance criterion is complete.
+
+If the pull request is partial, use one of:
+
+```text
+Related to #123
+Part of #123
+Follow-up to #123
+```
+
+Do **not** use closing syntax when:
+
+- any acceptance criterion remains incomplete
+- tests required by the issue are missing
+- documentation required by the issue is missing
+- another pull request is still required
+- the implementation deliberately changed scope
+- any part of the work was deferred
+- you cannot verify that the issue is actually solved
+
+### Scope changes
+
+If implementation reveals that the issue is inaccurate, unsafe, obsolete, blocked, or no longer achievable as written, you **must not** silently change scope.
+
+You must:
+
+1. Explain the discovery on the issue.
+2. Update the pull request description.
+3. State which acceptance criteria you completed.
+4. State what remains incomplete.
+5. Link any follow-up issues or dependent pull requests.
+6. Ask whether the issue should be rewritten, split, superseded, or closed.
+
+A pull request that does not fully solve its issue must not use closing syntax. Important scope changes belong in the pull request description — do not leave essential information only in review comments.
+
+---
+
+## 7. Review
+
+After opening a pull request you must:
+
+- wait for the automated checks
+- respond to reviewer questions
+- address requested changes
+- keep the pull request focused on its issue
+- update the description if scope changes
+- keep the branch current with `dev`
+- rerun tests after any rebase or conflict resolution
+- wait for maintainer approval and merge
+
+A reviewer approval does **not** override failing required checks.
+
+Resolve a conversation only once the concern has actually been addressed, or a maintainer has made a decision. Do not resolve a reviewer's comment merely to clear the thread.
+
+---
+
+## 8. Merged branches are deleted
+
+Merged branches may be deleted automatically. Assume your working branch disappears after merge.
+
+Therefore you must:
+
+- not leave unfinished work only on a branch that is being merged
+- move unfinished work to a separate branch before merge
+- not reuse a merged or deleted branch for unrelated work
+- create follow-up branches from the latest `dev`
+- preserve unmerged work in a dedicated dependent branch
+
+---
+
+## 9. Dependent and stacked branches
+
+Dependent branches are allowed **only** when the work genuinely cannot be reviewed independently. Do not use stacked pull requests to avoid properly splitting an oversized issue.
+
+1. Create the first branch from `upstream/dev`.
+2. Create the dependent branch from the prerequisite branch.
+3. Open the prerequisite pull request first.
+4. State the dependency in the dependent pull request:
+
+   ```text
+   Depends on #<pr-number>
+   ```
+
+5. While the prerequisite is open, the dependent pull request may target the prerequisite branch, to keep its review diff clean.
+6. Do not merge the dependent pull request before its prerequisite.
+7. After the prerequisite merges:
+   - `git fetch upstream`
+   - rebase the dependent branch onto `upstream/dev`
+   - resolve conflicts
+   - rerun the relevant tests
+   - push with `--force-with-lease`
+   - retarget the dependent pull request to `dev`
+   - verify the final diff contains only the dependent work
+
+Every dependent pull request must link its issue, its prerequisite pull request, any follow-up pull request, and the required merge order.
+
+---
+
+## 10. Testing
+
+Run the checks relevant to your change. These are what CI runs.
+
+| Command | Runs |
 | --- | --- |
-| `feat` | User-facing or platform capability. |
-| `fix` | Bug fix. |
-| `refactor` | Internal change without intended behavior change. |
-| `docs` | Documentation-only change. |
-| `test` | Test additions or updates. |
-| `chore` | Maintenance, tooling, CI, repository hygiene. |
-| `security` | Security hardening or vulnerability fixes. |
+| `npm run test:backend` | Backend tests (pytest) |
+| `npm --prefix apps/frontend run test` | Frontend tests (vitest) |
+| `npm run lint:frontend` | ESLint |
+| `npm run build:frontend` | `tsc -b && vite build` — type errors surface here, not in lint |
+| `npm run docker:config` | `docker compose config` |
+| `npm run docker:validate` | Starts the local Compose stack, waits for `/ready`, tears it down |
+
+`npm run build` runs the frontend build plus the backend tests. It does **not** run frontend lint or frontend tests — run those separately.
+
+| If you changed… | You must run |
+| --- | --- |
+| Backend logic, services, intelligence, parsers | `npm run test:backend` |
+| API request/response shape | `npm run test:backend`, update the frontend client and types, `npm run build:frontend` |
+| Database models | Add an Alembic migration, then `npm run test:backend` (migration up/down is covered) |
+| Frontend code | `npm run lint:frontend`, `npm --prefix apps/frontend run test`, `npm run build:frontend` |
+| Docker, Compose, CI, config, startup, health | `npm run docker:config` and `npm run docker:validate` |
+| Anything user-visible | Update the documentation **in the same pull request** |
+
+Three backend tests are gated on real PostgreSQL and Redis and skip locally; CI provides both services.
+
+If you cannot run a check locally, say so in the pull request and explain why. **Do not claim a check you did not run.**
+
+### Migrations and breaking changes
+
+- Every schema change ships an Alembic migration, and it **must downgrade cleanly** — the migration test enforces this.
+- Never edit a migration that has already merged. Add a new one.
+- Backfills belong in the migration, not in application startup.
+- A breaking API change requires the design to be agreed on the issue first, and the frontend client and documentation updated in the same pull request.
 
 ---
 
-## Review Expectations
+## 11. Architectural rules
 
-Reviewers should check:
+1. **Repository Intelligence is the shared repository-understanding boundary.** If a feature needs a repository fact, add reusable extraction to `app/intelligence/` and consume it from there.
+2. **Consumers must not create separate repository parsers.** No walking the tree, no re-reading dependency manifests, no duplicating language or framework detection inside architecture, dependencies, review, documentation, export, or AI code.
+3. **AI must remain an optional downstream consumer.** It must not read repository files or reinterpret the repository independently.
+4. **Heuristic results must not be presented as guaranteed facts.** Most of what the engine infers — roles, modules, layers, symbols, frameworks — is inferred from paths and filenames. Label it accordingly in the API and the UI. See [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md).
+5. **Evidence must be represented only as precisely as the implementation supports.** PARTHA has file-level evidence and no line spans. Do not emit invented line numbers, placeholder citations, or fabricated success states to make output look grounded.
+6. **Planned capabilities must not be documented as implemented.** An API field, a model, or a class name is not evidence that a capability exists.
+7. **Backend resources must be owner-scoped wherever authentication applies.** Use the owner-scoped accessors, not the unscoped ones.
+8. **Never expose secrets, credentials, or repository contents in logs.**
+9. **Security-sensitive changes require explicit tests and reviewer attention.** Say so plainly in the pull request.
+10. **Avoid unrelated refactors inside a scoped issue.** Drive-by cleanup makes a diff unreviewable. Open a separate issue.
 
-- issue scope;
-- architecture boundaries;
-- dependency direction;
-- Repository Intelligence reuse;
-- API compatibility;
-- frontend/backend contract compatibility;
-- error handling;
-- security and secret handling;
-- test coverage;
-- documentation accuracy;
-- operational impact.
+**Current behaviour belongs in documentation. Future work belongs in GitHub issues.**
 
-For stale branches, compare against the latest `origin/dev` and call out duplicate or superseded work.
+### Code standards
 
----
+**Backend.** Keep routes thin and logic in services. Use schemas at the boundary. Preserve the standard error response shape. Avoid broad `except:` — catch what you can handle.
 
-## Security and Secrets
+**Frontend.** Keep shell, features, and shared code separate. Reuse the shared API client and types. **No new `any`** — use `unknown` and narrow it. Preserve loading, empty, error, and success states.
 
-Never commit:
-
-- `.env` files;
-- API keys;
-- provider credentials;
-- database credentials;
-- local databases;
-- uploaded repositories;
-- generated caches or build artifacts.
-
-If a secret is accidentally committed, notify maintainers immediately and rotate it. Removing it from a later commit is not enough.
+**General.** Remove dead code. Avoid speculative abstractions. Never commit secrets, `.env` files, local databases, build outputs, or caches.
 
 ---
 
-## Need Help?
+## 12. Definition of Ready
 
-If the architecture is unclear, ask before implementing. PARTHA benefits more from a small, well-scoped design discussion than a large PR that has to be unwound.
+An issue is ready to be claimed and started only when:
 
-Good contributor questions include:
+- its objective is clear
+- its acceptance criteria are testable
+- the affected component is identifiable
+- dependencies and blockers are recorded
+- security and data implications are identified
+- it is not already assigned
+- a maintainer has acknowledged the claim
 
-- Should this fact belong in Repository Intelligence?
-- Does this feature consume an existing model or need a new reusable extraction?
-- Does this change affect API compatibility?
-- Is this public behavior, internal architecture, or future roadmap?
+An issue failing any of these is not "almost ready" — it needs design, not an assignee.
 
-Thanks for helping make PARTHA a trustworthy Engineering Intelligence Platform.
+---
+
+## 13. Definition of Done
+
+Work is complete only when:
+
+- every claimed acceptance criterion is complete
+- the implementation matches the agreed scope
+- relevant tests are added or updated
+- relevant tests pass
+- documentation reflects the implemented behaviour
+- security and data implications have been considered
+- no credentials or sensitive information are committed
+- the branch is rebased onto the latest `dev`
+- the pull request contains no unrelated changes
+- dependencies and follow-up work are linked
+- the pull request description reflects the final outcome
+- closing syntax is used only when the issue is fully resolved
+- review feedback is addressed
+- required checks pass
+- the maintainer approves and merges the pull request
+
+> **Code written does not mean issue completed.**
+
+---
+
+## 14. Conduct and licensing
+
+All participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+PARTHA is licensed under the Apache License 2.0. By contributing, you agree your contribution is provided under that same license. Contribute only work you have the right to submit, and do not copy third-party code, images, fonts, datasets, or text into the project unless the license is compatible and the attribution is documented. There is currently no CLA or DCO requirement; if that changes, it will be documented here before being enforced.

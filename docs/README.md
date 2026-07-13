@@ -1,58 +1,35 @@
 # PARTHA Documentation
 
-This directory contains durable product, architecture, operations, audit, and brand documentation for PARTHA.
+Every document listed here is maintained and describes the system as it currently exists.
 
-Start with the root `README.md` for public orientation. Use this index when you need deeper implementation or maintainer context.
+**Current behaviour belongs in documentation. Future work belongs in GitHub issues.** If you find a claim the code does not support, that is a bug — please open an issue.
 
-## Documentation Map
+## Index
 
-| Area | Document | Purpose |
+| Document | Reader | Purpose |
 | --- | --- | --- |
-| Product | `product/PUBLIC_FACE_AUDIT.md` | Public positioning, documentation audit, and roadmap for the public-face redesign. |
-| Brand | `brand/VISUAL_IDENTITY.md` | Logo, colors, typography, diagram style, and visual language. |
-| Architecture | `architecture/REPOSITORY_INTELLIGENCE_ENGINE.md` | Repository Intelligence Engine boundaries, lifecycle, outputs, and consumers. |
-| Architecture | `architecture/AI_ARCHITECTURE.md` | AI workspace architecture, provider abstraction, prompt/context flow, and non-goals. |
-| Operations | `operations/production-deployment.md` | Production deployment baseline, environment, health checks, rollback, and operational limits. |
-| Operations | `operations/release-management.md` | Versioning, release validation workflow, and hotfix flow. |
-| Operations | `operations/dependency-management.md` | Frontend/backend dependency maintenance and security update process. |
-| Operations | `operations/observability.md` | Request IDs, structured logs, redaction, metrics, and readiness checks. |
-| Audit | `audit/CORE_1_INGESTION_PIPELINE_AUDIT.md` | Ingestion stabilization audit evidence. |
-| Audit | `audit/CORE_2_REPOSITORY_INTELLIGENCE_AUDIT.md` | Repository Intelligence audit and refactor summary. |
+| [README](../README.md) | Anyone evaluating or running PARTHA | What PARTHA is, what currently works, how to run it locally, and its limitations. |
+| [CONTRIBUTING](../CONTRIBUTING.md) | Contributors | The contribution rules: fork-first workflow, claiming an issue, branch naming, rebasing, pull requests, Definition of Ready and Done. Read before opening a PR. |
+| [SECURITY](../SECURITY.md) | Anyone reporting a vulnerability | How to disclose privately. Never open a public issue for a vulnerability. |
+| [CODE_OF_CONDUCT](../CODE_OF_CONDUCT.md) | Everyone | Expected conduct and how to report a violation. |
+| [System Overview](architecture/SYSTEM_OVERVIEW.md) | Contributors and maintainers | Current components, ingestion flow, persistence, consumers, trust boundaries, and architectural limitations. |
+| [Repository Intelligence](architecture/REPOSITORY_INTELLIGENCE.md) | Anyone changing analysis behaviour | What is extracted, what is deterministic versus heuristic, how facts are persisted, who consumes them, what consumers must not do, and where evidence and provenance stop. **Read this before touching analysis.** |
+| [Backend README](../apps/backend/README.md) | Backend contributors | Running the backend, endpoints, configuration, tests. |
+| [Frontend README](../apps/frontend/README.md) | Frontend contributors | Running the frontend, structure, commands, tests. |
+| [Scripts README](../scripts/README.md) | All contributors | What each helper script does. |
+| [Packages README](../packages/README.md) | All contributors | The shared-packages directory. |
 
-## Recommended Reading Paths
+## Reading paths
 
-### New Contributor
+**New contributor** — [README](../README.md) → [CONTRIBUTING](../CONTRIBUTING.md) → [System Overview](architecture/SYSTEM_OVERVIEW.md) → the README for your area.
 
-1. `../README.md`
-2. `../CONTRIBUTING.md`
-3. `architecture/REPOSITORY_INTELLIGENCE_ENGINE.md`
-4. `../apps/backend/README.md` or `../apps/frontend/README.md`
+**Changing analysis, parsing, or AI grounding** — [Repository Intelligence](architecture/REPOSITORY_INTELLIGENCE.md), first and in full.
 
-### Backend Contributor
+## Documentation rules
 
-1. `architecture/REPOSITORY_INTELLIGENCE_ENGINE.md`
-2. `architecture/AI_ARCHITECTURE.md`
-3. `operations/observability.md`
-4. `operations/dependency-management.md`
-
-### Maintainer / Release Reviewer
-
-1. `operations/release-management.md`
-2. `operations/production-deployment.md`
-3. `operations/observability.md`
-4. `product/PUBLIC_FACE_AUDIT.md`
-
-### Public Documentation / Brand Work
-
-1. `product/PUBLIC_FACE_AUDIT.md`
-2. `brand/VISUAL_IDENTITY.md`
-3. `../README.md`
-
-## Documentation Rules
-
-- Keep the root README product-oriented and implementation-honest.
-- Keep durable architecture detail under `docs/architecture/`.
-- Keep operational procedures under `docs/operations/`.
-- Keep audit evidence under `docs/audit/`.
-- Do not add empty placeholder docs.
-- If a feature is not implemented, describe it as roadmap or planned work.
+- Describe what the code does today.
+- Never present heuristic or generated output as a guaranteed fact.
+- Represent evidence only as precisely as the implementation supports.
+- State limitations plainly. An honest gap is more useful than an optimistic claim.
+- No placeholder documents.
+- Documentation changes in the same pull request as the behaviour it describes.

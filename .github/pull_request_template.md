@@ -1,38 +1,62 @@
 ## Summary
 
-- 
+<!-- What does this PR do, and why? -->
 
-## Type
+## Linked issue
 
-- [ ] Bug fix
-- [ ] Feature
-- [ ] Engineering task
-- [ ] Documentation
-- [ ] Security
+<!-- Use "Closes #123" ONLY if this PR fully satisfies every acceptance criterion.
+     Otherwise use "Related to #123", "Part of #123", or "Follow-up to #123". -->
 
-## Verification
+Closes #
 
-- [ ] Frontend build/lint run where relevant
-- [ ] Backend tests run where relevant
-- [ ] Docker Compose config/runtime readiness checked where relevant
-- [ ] Release/deployment docs updated where relevant
-- [ ] Manual verification described below
+## What changed
 
-Commands/results:
+<!-- The main changes, by area (backend, frontend, docs, infra). -->
+
+## Acceptance criteria completed
+
+<!-- List each acceptance criterion from the issue and whether it is complete.
+     If one was dropped or changed, say so here — not only in a review comment. -->
+
+## Testing performed
+
+<!-- Exact commands run and their results. Do not claim a check you did not run.
+     If you could not run something locally, say so and explain why. -->
 
 ```text
 
 ```
 
-## Risk and Rollback
+## Screenshots
 
-- Risk level: Low / Medium / High
-- Rollback plan:
+<!-- Required for any visible UI change. Write "Not applicable" if there is none. -->
 
-## Checklist
+## Security and data considerations
 
-- [ ] No unrelated behavior changes
-- [ ] No secrets, local env files, generated build artifacts, or local databases committed
-- [ ] API behavior documented if changed
-- [ ] UI states covered for loading, empty, error, and success where relevant
-- [ ] Security/privacy impact considered
+<!-- Auth, owner scoping, secrets, logging, untrusted input, migrations, data loss.
+     Write "None" if genuinely none. Never include an exploit or proof of concept —
+     report vulnerabilities privately via SECURITY.md. -->
+
+## Dependencies and blocked work
+
+<!-- "Depends on #<pr-number>" for stacked work, plus the required merge order.
+     Link any follow-up issues or PRs. Write "None" if none. -->
+
+## Scope changes or remaining work
+
+<!-- Anything deferred, descoped, or discovered mid-implementation. Write "None" if none. -->
+
+## Contributor checklist
+
+- [ ] This PR targets `dev`
+- [ ] I claimed the issue and had it assigned or acknowledged before starting substantial work
+- [ ] The branch was created from an up-to-date `upstream/dev`
+- [ ] The branch is rebased on the latest `upstream/dev`
+- [ ] This PR addresses one clearly scoped issue
+- [ ] Every acceptance criterion I claim as complete is actually complete
+- [ ] Relevant tests pass
+- [ ] Documentation is updated for any user-visible change
+- [ ] No secrets, credentials, local env files, or generated artifacts are included
+- [ ] No unrelated files were changed
+- [ ] Closing syntax (`Closes`) is used only because the issue is fully resolved
+- [ ] Dependencies and follow-up work are linked
