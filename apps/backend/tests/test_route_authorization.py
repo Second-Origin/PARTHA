@@ -139,6 +139,64 @@ def test_repository_scoped_routes_return_404_for_a_non_owner(client, make_auth_h
     assert not failures, f"routes leaking another user's repository (expected 404): {failures}"
 
 
+def _repository_id_routes(app) -> list[tuple[str, str]]:
+    """Protected routes that carry the repository id in the URL, from the router.
+
+    Every route with a ``{repository_id}`` path segment is discovered here, so a
+    newly added owner-scoped route is swept for the 404 contract by omission —
+    the same drift-proofing the issue comments require for the auth sweep.
+    """
+    found: list[APIRoute] = []
+    _collect_api_routes(app, found)
+    routes: set[tuple[str, str]] = set()
+    for route in found:
+        if "{repository_id}" not in route.path or not route.path.startswith(PROTECTED_PREFIXES):
+            continue
+        for method in sorted(route.methods - {"HEAD", "OPTIONS"}):
+            routes.add((method, route.path))
+    return sorted(routes)
+
+
+def test_repository_id_routes_return_404_for_a_non_owner_derived_from_router(client, make_auth_headers):
+    alice = make_auth_headers("alice@example.com")
+    bob = make_auth_headers("bob@example.com")
+    repository_id = _seed_repository(alice["user"]["id"])
+
+    routes = _repository_id_routes(client.app)
+    assert routes, "expected to discover repository-id routes from the router table"
+
+    failures = []
+    for method, path in routes:
+        url = path.replace("{repository_id}", repository_id)
+        # `path` query satisfies the file route; the owner check runs first for
+        # the rest, so 404 is returned before any body/param handling.
+        response = client.request(method, url, headers=bob["headers"], params={"path": "README.md"})
+        if response.status_code != 404:
+            failures.append((method, path, response.status_code))
+
+    assert not failures, f"repository-id routes leaking another user's data (expected 404): {failures}"
+
+
+def test_body_carrying_repository_routes_are_covered_by_the_cross_owner_sweep(client):
+    # The routes that take the repository id in the body (not the URL) can't be
+    # derived by path substitution, so they are listed explicitly above; guard
+    # that the explicit list still matches the live router so it can't silently
+    # drift as routes are added or renamed.
+    found: list[APIRoute] = []
+    _collect_api_routes(client.app, found)
+    live_body_routes = {
+        (method, route.path)
+        for route in found
+        if route.path in {"/documentation/generate", "/ai/query", "/export"}
+        for method in sorted(route.methods - {"HEAD", "OPTIONS"})
+    }
+    listed = {(m, t) for m, t, key in _CROSS_OWNER_ROUTES if key is not None}
+    assert listed == live_body_routes, (
+        "body-carrying repository routes drifted from the cross-owner sweep list; "
+        f"router={live_body_routes} listed={listed}"
+    )
+
+
 def test_owner_can_read_their_own_repository(client, make_auth_headers):
     alice = make_auth_headers("alice@example.com")
     repository_id = _seed_repository(alice["user"]["id"])
