@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, Response, UploadFile, status
 
-from app.api.deps import get_repository_service
+from app.api.deps import get_current_user, get_repository_service
 from app.schemas.repository import (
     GitHubImportRequest,
     RepositoryFileResponse,
@@ -9,7 +9,10 @@ from app.schemas.repository import (
 )
 from app.services.repository_service import RepositoryService
 
-router = APIRouter(prefix="/repositories", tags=["repositories"])
+# Router-level auth: every repository route requires a valid access token, so a
+# new route added here is protected by default instead of by remembering to add
+# a dependency. Data is additionally owner-scoped inside RepositoryService.
+router = APIRouter(prefix="/repositories", tags=["repositories"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/upload", response_model=RepositoryResponse, status_code=status.HTTP_201_CREATED)

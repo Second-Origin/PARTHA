@@ -1,12 +1,10 @@
-from uuid import uuid4
-
-from fastapi import Depends, Header
+from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.orchestrator import AiOrchestrator, AiProviderConfigStore
+from app.ai.orchestrator import AiOrchestrator
 from app.ai.prompt_builder import PromptBuilder
+from app.ai.providers.config_store import EncryptedProviderConfigStore
 from app.ai.providers.anthropic import AnthropicProvider
 from app.ai.providers.factory import ProviderFactory
 from app.ai.providers.gemini import GeminiProvider
@@ -19,12 +17,13 @@ from app.analysis.architecture import ArchitectureAnalyzer
 from app.auth.security import decode_access_token
 from app.auth.service import AuthService
 from app.core.config import Settings, get_settings
+from app.core.crypto import ProviderKeyCipher, build_provider_cipher
 from app.core.database import get_db
 from app.core.exceptions import UnauthorizedError
 from app.github.client import GitHubClient
 from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
-from app.models.user import SEED_USER_EMAIL, SEED_USER_ID, User
+from app.models.user import User
 from app.parsers.repository_parser import RepositoryParser
 from app.repositories.repository_repository import RepositoryRepository
 from app.reports.export_service import ExportService
@@ -38,27 +37,6 @@ from app.storage.local import LocalStorage
 
 def get_repository_repository(db: Session = Depends(get_db)) -> RepositoryRepository:
     return RepositoryRepository(db)
-
-
-def _ensure_seed_user(db: Session) -> User:
-    user = db.get(User, SEED_USER_ID)
-    if user is None:
-        user = User(id=SEED_USER_ID, email=SEED_USER_EMAIL)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    return user
-
-
-def _resolve_dev_user(db: Session, email: str) -> User:
-    normalized = email.strip().lower()
-    user = db.scalars(select(User).where(User.email == normalized)).first()
-    if user is None:
-        user = User(id=str(uuid4()), email=normalized)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    return user
 
 
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -90,28 +68,6 @@ def get_current_user(
     return _user_from_bearer(credentials.credentials, db, settings)
 
 
-def get_current_user_or_default(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
-    db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-    x_dev_user: str | None = Header(default=None, alias="X-Dev-User"),
-) -> User:
-    """Resolve the user for routes that still tolerate anonymous access.
-
-    A presented Bearer token is always validated strictly — sending a bad
-    token is an authentication attempt and gets a 401, never a silent
-    fallback. Without a token, the temporary pre-auth behaviour applies: the
-    ``X-Dev-User`` header selects a user in development/test, and everything
-    else is attributed to the seed user. E1.3 deletes this fallback (and the
-    header) once the frontend can sign in, leaving only ``get_current_user``.
-    """
-    if credentials is not None:
-        return _user_from_bearer(credentials.credentials, db, settings)
-    if x_dev_user and settings.app_env in {"development", "test"}:
-        return _resolve_dev_user(db, x_dev_user)
-    return _ensure_seed_user(db)
-
-
 def get_local_storage(settings: Settings = Depends(get_settings)) -> LocalStorage:
     return LocalStorage(settings)
 
@@ -135,7 +91,7 @@ def get_repository_service(
     parser: RepositoryParser = Depends(get_repository_parser),
     intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
     settings: Settings = Depends(get_settings),
-    current_user: User = Depends(get_current_user_or_default),
+    current_user: User = Depends(get_current_user),
 ) -> RepositoryService:
     return RepositoryService(
         repository=repository,
@@ -166,8 +122,16 @@ def get_engineering_review_builder(
     return EngineeringReviewBuilder(intelligence)
 
 
-def get_ai_config_store(settings: Settings = Depends(get_settings)) -> AiProviderConfigStore:
-    return AiProviderConfigStore(settings)
+def get_provider_cipher(settings: Settings = Depends(get_settings)) -> ProviderKeyCipher:
+    return build_provider_cipher(settings)
+
+
+def get_ai_config_store(
+    db: Session = Depends(get_db),
+    cipher: ProviderKeyCipher = Depends(get_provider_cipher),
+    current_user: User = Depends(get_current_user),
+) -> EncryptedProviderConfigStore:
+    return EncryptedProviderConfigStore(db, cipher, current_user.id)
 
 
 def get_repository_context_builder(
@@ -202,6 +166,7 @@ def get_analysis_service(
     dependencies: DependencyGraphBuilder = Depends(get_dependency_graph_builder),
     review: EngineeringReviewBuilder = Depends(get_engineering_review_builder),
     intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
+    current_user: User = Depends(get_current_user),
 ) -> AnalysisService:
     return AnalysisService(
         repository=repository,
@@ -209,15 +174,17 @@ def get_analysis_service(
         dependencies=dependencies,
         review=review,
         intelligence=intelligence,
+        owner_id=current_user.id,
     )
 
 
 def get_ai_service(
     repository: RepositoryRepository = Depends(get_repository_repository),
-    config_store: AiProviderConfigStore = Depends(get_ai_config_store),
+    config_store: EncryptedProviderConfigStore = Depends(get_ai_config_store),
     context_builder: RepositoryContextBuilder = Depends(get_repository_context_builder),
     prompt_builder: PromptBuilder = Depends(get_prompt_builder),
     provider_factory: ProviderFactory = Depends(get_provider_factory),
+    current_user: User = Depends(get_current_user),
 ) -> AiService:
     orchestrator = AiOrchestrator(
         repository=repository,
@@ -225,6 +192,7 @@ def get_ai_service(
         context_builder=context_builder,
         prompt_builder=prompt_builder,
         provider_factory=provider_factory,
+        owner_id=current_user.id,
     )
     return AiService(orchestrator)
 
@@ -234,8 +202,15 @@ def get_documentation_service(
     architecture: ArchitectureAnalyzer = Depends(get_architecture_analyzer),
     dependencies: DependencyGraphBuilder = Depends(get_dependency_graph_builder),
     intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
+    current_user: User = Depends(get_current_user),
 ) -> DocumentationService:
-    return DocumentationService(repository=repository, architecture=architecture, dependencies=dependencies, intelligence=intelligence)
+    return DocumentationService(
+        repository=repository,
+        architecture=architecture,
+        dependencies=dependencies,
+        intelligence=intelligence,
+        owner_id=current_user.id,
+    )
 
 
 def get_export_service(

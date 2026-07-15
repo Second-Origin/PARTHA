@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends
 
-from app.api.deps import get_analysis_service
+from app.api.deps import get_analysis_service, get_current_user
 from app.schemas.analysis import AnalysisStartResponse, AnalysisStatusResponse
 from app.schemas.architecture import ArchitectureResponse
 from app.schemas.dependencies import DependencyGraphResponse
 from app.schemas.review import EngineeringReviewResponse
 from app.services.analysis_service import AnalysisService
 
-router = APIRouter(prefix="/analysis", tags=["analysis"])
+# Every analysis route requires auth; records are owner-scoped in AnalysisService.
+router = APIRouter(prefix="/analysis", tags=["analysis"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/{repository_id}/start", response_model=AnalysisStartResponse)

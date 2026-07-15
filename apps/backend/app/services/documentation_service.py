@@ -18,11 +18,13 @@ class DocumentationService:
         repository: RepositoryRepository,
         architecture: ArchitectureAnalyzer,
         dependencies: DependencyGraphBuilder,
+        owner_id: str,
         intelligence: RepositoryIntelligenceEngine | None = None,
     ) -> None:
         self.repository = repository
         self.architecture = architecture
         self.dependencies = dependencies
+        self.owner_id = owner_id
         self.intelligence = intelligence or RepositoryIntelligenceEngine()
 
     def generate(self, request: GenerateDocRequest) -> GenerateDocResponse:
@@ -34,7 +36,9 @@ class DocumentationService:
         return self._document(self._get_record(repository_id), None)
 
     def _get_record(self, repository_id: str):
-        record = self.repository.get(repository_id)
+        # Owner-scoped: another user's repository id resolves to None, yielding
+        # the same 404 as a missing one rather than confirming it exists.
+        record = self.repository.get_for_owner(repository_id, self.owner_id)
         if not record:
             raise NotFoundError("Repository not found.", {"repositoryId": repository_id})
         return record

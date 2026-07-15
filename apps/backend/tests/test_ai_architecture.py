@@ -29,6 +29,7 @@ def _record(root: Path) -> RepositoryRecord:
     metadata["intelligence"] = intelligence.model_dump(mode="json", by_alias=True)
     return RepositoryRecord(
         id="repo-1",
+        owner_id="owner-1",
         name="sample",
         source="upload",
         local_path=str(root),
@@ -49,8 +50,10 @@ class StaticRepository:
     def __init__(self, record: RepositoryRecord) -> None:
         self.record = record
 
-    def get(self, repository_id: str) -> RepositoryRecord | None:
-        return self.record if repository_id == self.record.id else None
+    def get_for_owner(self, repository_id: str, owner_id: str) -> RepositoryRecord | None:
+        if repository_id != self.record.id or owner_id != self.record.owner_id:
+            return None
+        return self.record
 
 
 class StaticConfigStore:
@@ -136,6 +139,7 @@ async def _query_with_fake_provider(tmp_path: Path):
         context_builder=RepositoryContextBuilder(RepositoryIntelligenceEngine()),
         prompt_builder=PromptBuilder(),
         provider_factory=ProviderFactory(registry),
+        owner_id="owner-1",
     )
 
     response = await orchestrator.query(AiQueryRequest(repository_id="repo-1", query="Explain this repo"))

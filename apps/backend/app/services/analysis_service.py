@@ -20,12 +20,14 @@ class AnalysisService:
         dependencies: DependencyGraphBuilder,
         review: EngineeringReviewBuilder,
         intelligence: RepositoryIntelligenceEngine,
+        owner_id: str,
     ) -> None:
         self.repository = repository
         self.architecture = architecture
         self.dependencies = dependencies
         self.review = review
         self.intelligence = intelligence
+        self.owner_id = owner_id
 
     def start(self, repository_id: str) -> AnalysisStartResponse:
         record = self._get_record(repository_id)
@@ -84,7 +86,10 @@ class AnalysisService:
         return self.review.build(self._get_record(repository_id))
 
     def _get_record(self, repository_id: str):
-        record = self.repository.get(repository_id)
+        # Owner-scoped: get_for_owner returns None for both a missing repository
+        # and one owned by another user, so a cross-user request gets the same
+        # 404 as a missing one and never learns the resource exists.
+        record = self.repository.get_for_owner(repository_id, self.owner_id)
         if not record:
             raise NotFoundError("Repository not found.", {"repositoryId": repository_id})
         return record

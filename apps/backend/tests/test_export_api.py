@@ -12,8 +12,8 @@ def _zip_bytes(files: dict[str, str]) -> bytes:
     return buffer.getvalue()
 
 
-def _import_sample(client) -> str:
-    response = client.post(
+def _import_sample(auth_client) -> str:
+    response = auth_client.post(
         "/repositories/upload",
         files={
             "file": (
@@ -33,17 +33,17 @@ def _import_sample(client) -> str:
     return response.json()["id"]
 
 
-def _export(client, repository_id: str, target: str, fmt: str):
-    return client.post(
+def _export(auth_client, repository_id: str, target: str, fmt: str):
+    return auth_client.post(
         "/export",
         json={"repositoryId": repository_id, "target": target, "format": fmt},
     )
 
 
-def test_export_review_json_parses(client):
-    repository_id = _import_sample(client)
+def test_export_review_json_parses(auth_client):
+    repository_id = _import_sample(auth_client)
 
-    response = _export(client, repository_id, "review", "json")
+    response = _export(auth_client, repository_id, "review", "json")
 
     assert response.status_code == 200
     body = response.json()
@@ -55,10 +55,10 @@ def test_export_review_json_parses(client):
     assert isinstance(payload["summary"]["overallScore"], int)
 
 
-def test_export_review_markdown_has_headings(client):
-    repository_id = _import_sample(client)
+def test_export_review_markdown_has_headings(auth_client):
+    repository_id = _import_sample(auth_client)
 
-    response = _export(client, repository_id, "review", "markdown")
+    response = _export(auth_client, repository_id, "review", "markdown")
 
     assert response.status_code == 200
     body = response.json()
@@ -69,10 +69,10 @@ def test_export_review_markdown_has_headings(client):
     assert "| Overall Score |" in body["content"]
 
 
-def test_export_review_html_is_valid_structure(client):
-    repository_id = _import_sample(client)
+def test_export_review_html_is_valid_structure(auth_client):
+    repository_id = _import_sample(auth_client)
 
-    response = _export(client, repository_id, "review", "html")
+    response = _export(auth_client, repository_id, "review", "html")
 
     assert response.status_code == 200
     body = response.json()
@@ -84,10 +84,10 @@ def test_export_review_html_is_valid_structure(client):
     assert "Engineering Review" in content
 
 
-def test_export_review_pdf_starts_with_pdf_header(client):
-    repository_id = _import_sample(client)
+def test_export_review_pdf_starts_with_pdf_header(auth_client):
+    repository_id = _import_sample(auth_client)
 
-    response = _export(client, repository_id, "review", "pdf")
+    response = _export(auth_client, repository_id, "review", "pdf")
 
     assert response.status_code == 200
     body = response.json()
@@ -97,50 +97,50 @@ def test_export_review_pdf_starts_with_pdf_header(client):
     assert base64.b64decode(body["content"])[:5] == b"%PDF-"
 
 
-def test_export_json_supported_for_every_target(client):
-    repository_id = _import_sample(client)
+def test_export_json_supported_for_every_target(auth_client):
+    repository_id = _import_sample(auth_client)
 
     for target in ("documentation", "architecture", "dependencies"):
-        response = _export(client, repository_id, target, "json")
+        response = _export(auth_client, repository_id, target, "json")
         assert response.status_code == 200, target
         body = response.json()
         assert body["encoding"] == "utf-8"
         json.loads(body["content"])  # must be valid JSON
 
 
-def test_export_non_review_targets_support_all_formats(client):
-    repository_id = _import_sample(client)
+def test_export_non_review_targets_support_all_formats(auth_client):
+    repository_id = _import_sample(auth_client)
 
     for target in ("documentation", "architecture", "dependencies"):
-        markdown = _export(client, repository_id, target, "markdown")
+        markdown = _export(auth_client, repository_id, target, "markdown")
         assert markdown.status_code == 200, target
         assert markdown.json()["mediaType"] == "text/markdown"
         assert markdown.json()["content"].startswith("# "), target
 
-        html = _export(client, repository_id, target, "html")
+        html = _export(auth_client, repository_id, target, "html")
         assert html.status_code == 200, target
         assert html.json()["mediaType"] == "text/html"
         assert html.json()["content"].startswith("<!DOCTYPE html>"), target
         assert "</html>" in html.json()["content"], target
 
-        pdf = _export(client, repository_id, target, "pdf")
+        pdf = _export(auth_client, repository_id, target, "pdf")
         assert pdf.status_code == 200, target
         assert pdf.json()["encoding"] == "base64"
         assert pdf.json()["mediaType"] == "application/pdf"
         assert base64.b64decode(pdf.json()["content"])[:5] == b"%PDF-", target
 
 
-def test_export_rejects_invalid_format(client):
-    repository_id = _import_sample(client)
+def test_export_rejects_invalid_format(auth_client):
+    repository_id = _import_sample(auth_client)
 
-    response = _export(client, repository_id, "review", "xml")
+    response = _export(auth_client, repository_id, "review", "xml")
 
     assert response.status_code == 422
     assert response.json()["code"] == "request_validation_error"
 
 
-def test_export_missing_repository_returns_not_found(client):
-    response = _export(client, "00000000-0000-0000-0000-000000000000", "review", "json")
+def test_export_missing_repository_returns_not_found(auth_client):
+    response = _export(auth_client, "00000000-0000-0000-0000-000000000000", "review", "json")
 
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"

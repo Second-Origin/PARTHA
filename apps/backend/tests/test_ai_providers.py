@@ -216,6 +216,7 @@ def test_connection_testing_uses_resolved_dedicated_provider(monkeypatch: pytest
         context_builder=RepositoryContextBuilder(object()),  # type: ignore[arg-type]
         prompt_builder=PromptBuilder(),
         provider_factory=ProviderFactory(registry),
+        owner_id="owner-1",
     )
 
     RecordingAsyncClient.calls = []

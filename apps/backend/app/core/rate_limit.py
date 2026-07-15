@@ -9,8 +9,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from app.auth.security import decode_access_token
 from app.core.config import Settings
-from app.core.exceptions import ErrorResponse
+from app.core.exceptions import ErrorResponse, UnauthorizedError
 from app.core.observability import get_request_id, runtime_metrics
 
 logger = logging.getLogger(__name__)
@@ -44,23 +45,50 @@ def classify(method: str, path: str) -> str | None:
     return "default"
 
 
-def resolve_rate_key(request: Request) -> str:
-    """Identity a budget is charged against: the socket peer address for now.
+def _authenticated_user_id(request: Request, settings: Settings) -> str | None:
+    """The user id from a valid Bearer access token, or None.
 
-    E1.3 upgrades this to the authenticated user id when a valid Bearer token
-    is present, so signed-in users get per-user budgets instead of sharing a
-    NAT'd address.
-
-    Trusted-proxy caveat: this reads ``request.client.host``, the direct TCP
-    peer. Behind a reverse proxy or load balancer that is the proxy's address,
-    so every client would share one budget. Honouring ``X-Forwarded-For`` safely
-    needs a trusted-proxy allowlist (which hop to believe) — deliberately NOT
-    implemented here, because trusting a client-settable header without one
-    turns the limiter into a trivially spoofable no-op. Enable forwarded-header
-    parsing only once the deployment's proxy topology is known.
+    The token's signature is verified with the server's own signing key
+    (``decode_access_token``), so identity is never taken from an unverified
+    JWT: a forged, expired, or malformed token — or one signed by anyone but
+    us — yields None and falls back to the client IP. Only the ``Authorization``
+    header is consulted; a raw bearer string, email, or forwarded header can
+    never select a user-specific budget.
     """
+    header = request.headers.get("authorization")
+    if not header:
+        return None
+    scheme, _, token = header.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return None
+    try:
+        return decode_access_token(token.strip(), settings)
+    except UnauthorizedError:
+        return None
+
+
+def resolve_rate_key(request: Request, settings: Settings) -> str:
+    """Identity a budget is charged against.
+
+    Authenticated requests are keyed on the validated user id, so two signed-in
+    users behind one NAT'd address get independent budgets and one user cannot
+    exhaust another's by sharing an IP. Unauthenticated (and forged-token)
+    requests fall back to the direct socket peer address.
+
+    Trusted-proxy caveat: the IP fallback reads ``request.client.host``, the
+    direct TCP peer. Behind a reverse proxy that is the proxy's address, so
+    every unauthenticated client would share one budget. Honouring
+    ``X-Forwarded-For`` safely needs a trusted-proxy allowlist (which hop to
+    believe) — deliberately NOT implemented here, because trusting a
+    client-settable header without one turns the limiter into a trivially
+    spoofable no-op. Enable forwarded-header parsing only once the deployment's
+    proxy topology is known.
+    """
+    user_id = _authenticated_user_id(request, settings)
+    if user_id is not None:
+        return f"user:{user_id}"
     client = request.client
-    return client.host if client else "unknown"
+    return f"ip:{client.host if client else 'unknown'}"
 
 
 class StoreUnavailableError(Exception):
@@ -178,7 +206,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             "default": settings.rate_limit_default_per_minute,
         }
         limit = budgets[budget_class]
-        key = f"{budget_class}:{resolve_rate_key(request)}"
+        key = f"{budget_class}:{resolve_rate_key(request, settings)}"
 
         store: RateLimitStore = request.app.state.rate_limit_store
         try:
