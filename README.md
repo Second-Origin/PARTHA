@@ -36,7 +36,7 @@ PARTHA parses a repository once into a shared layer of repository facts, and has
 
 The purpose, stated at the level it is actually being pursued: build *persistent* understanding of a repository as it evolves, reuse that understanding across every surface, and make repository claims progressively more checkable. PARTHA is early. What follows describes what exists, not what is intended.
 
-> **Status: early development.** PARTHA runs locally and is useful for exploring a repository. It is **not production-ready**. Multi-user authentication and owner isolation are not consistently enforced across every backend surface — PARTHA should currently be used only in a trusted local environment.
+> **Status: early development.** PARTHA runs locally and is useful for exploring a repository. It is **not production-ready**. Authentication and owner isolation are now enforced across the backend routes, but the system has not been hardened or operated as a multi-tenant deployment, so it should still be run in a trusted environment.
 
 ## The problem
 
@@ -64,8 +64,8 @@ Statuses below were checked against the implementation, not against prior docume
 | Architecture output | **Implemented but limited** | Modules, layers, relationships, and an interactive graph — with heuristic module and layer assignment. |
 | Dependency inventory | **Implemented but limited** | Reads `package.json`, `requirements.txt`, and `pyproject.toml`. Other ecosystems and lockfiles are not parsed. |
 | Engineering review | **Implemented but limited** | A fixed set of heuristic checks with derived category scores. Scores are arithmetic over finding severities, not a measured quality metric. |
-| AI provider integration | **Implemented but limited** | Several providers behind one abstraction. Provider configuration is global rather than per-user. |
-| Authorization and owner isolation | **Partially implemented** | Repository routes are owner-scoped. Analysis, AI, documentation, and export routes are not, and the backend still accepts unauthenticated requests. |
+| AI provider integration | **Implemented but limited** | Several providers behind one abstraction. Provider configuration is per-user, with the API key encrypted at rest and injected per request. |
+| Authorization and owner isolation | **Implemented** | All repository, analysis, AI, documentation, and export routes require authentication and are owner-scoped in the service layer; a non-owner request returns 404. Rate-limit budgets are keyed per authenticated user. |
 | Citations and grounded AI answers | **Not implemented** | No source content or line numbers are sent to providers, and no citations are returned. |
 | Asynchronous / incremental processing | **Not implemented** | Ingestion and analysis run synchronously in the request; there is no background job system and no incremental re-analysis. |
 | Change-impact analysis | **Not implemented** | — |
@@ -232,7 +232,7 @@ Backend coverage is the stronger of the two. Frontend coverage is thin and there
 
 ## Limitations
 
-- **Use only in a trusted local environment.** Multi-user authentication and owner isolation are not consistently enforced across every backend surface. PARTHA is not production-ready and should not be exposed to untrusted users or the public internet.
+- **Not yet hardened for public multi-tenant use.** Authentication and owner isolation are enforced across the backend routes, and provider keys are encrypted at rest, but PARTHA has not been operated as a hardened multi-tenant deployment. It is not production-ready and should not be exposed to the public internet without further review. Outside `development`/`test`, set `AUTH_SECRET_KEY` and `AI_ENCRYPTION_KEY` (a Fernet key); the backend refuses to start without them.
 - **Extraction is heuristic.** File roles, modules, and layers are inferred from paths and filenames; symbols come from regular expressions. Expect wrong answers on projects that do not follow common conventions, and do not treat heuristic output as guaranteed fact.
 - **Evidence and provenance are partial.** File-level only — no line spans, no per-fact extraction method, no revision-addressed facts.
 - **No persistent semantic graph.** Repository facts are serialized as JSON onto the repository row rather than into a queryable graph store.
