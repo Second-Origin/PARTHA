@@ -5,16 +5,16 @@
 | **RFC number** | RFC-0001 |
 | **Title** | Repository Intelligence v1 Schema and Evidence Contract |
 | **Tracking issue** | [Second-Origin/PARTHA#86](https://github.com/Second-Origin/PARTHA/issues/86) |
-| **Schema version ratified** | `ri.v1` |
+| **Proposed schema version** | `ri.v1` (proposed for ratification; not yet ratified) |
 | **Author** | @parthrohit22 |
-| **Decision owners (ratifiers)** | Maintainer(s) of `Second-Origin/PARTHA` — reviewer `@parthrohit22` per [CONTRIBUTING §6](../../CONTRIBUTING.md) |
+| **Decision owners (ratifiers)** | An **independent project maintainer other than the author**. The author (@parthrohit22) cannot ratify their own RFC. Ratification is not yet recorded. |
 | **Created** | 2026-07-15 |
 | **Last updated** | 2026-07-15 |
 | **Status** | **Proposed** |
 | **Supersedes** | — |
 | **Superseded by** | — |
 
-> **This RFC delivers an approved architectural document, not application code.** It does not
+> **This RFC proposes an architectural contract for approval, not application code.** It does not
 > implement snapshots, persistence, extractors, resolvers, queries, jobs, migrations, or consumer
 > migration. Those are issues [#87–#95](https://github.com/Second-Origin/PARTHA/issues/87) and are
 > gated on this RFC's approval (see [§16, Dependency gate](#16-dependency-gate)).
@@ -25,22 +25,28 @@
 
 ### 1.1 Status
 
-This RFC is **Proposed**. It is not approved, ratified, or accepted until a maintainer of
-`Second-Origin/PARTHA` explicitly approves the pull request that introduces it and merges it into
-`dev`.
+This RFC is **Proposed**. It is not approved, ratified, or accepted until an **independent project
+maintainer other than the author** explicitly approves it. No such approval is recorded yet.
 
 ### 1.2 Approval / ratification rule
 
-- The RFC remains **Proposed** until a maintainer explicitly approves it in review.
-- **Merge of this document into `dev` after explicit maintainer approval constitutes acceptance.**
-  On that event the `Status` field changes to `Accepted` and the `Last updated` date is set to the
-  merge date, in the same or an immediately following change.
-- The author **must not** self-declare this RFC approved, and **must not** change `Status` to
-  `Accepted` without a maintainer's recorded approval. Per [CONTRIBUTING §6](../../CONTRIBUTING.md),
-  the author must not self-merge.
+- **Ratification requires an independent project maintainer other than the author.** The author
+  (@parthrohit22) cannot ratify their own RFC, and per [CONTRIBUTING §6](../../CONTRIBUTING.md) must
+  not self-merge. A reviewer's `write` access alone does not make them a maintainer; ratification
+  authority must be an actual project maintainer.
+- The RFC remains **Proposed** until that independent maintainer explicitly records approval.
+- **Approval does not automatically edit this document.** Merging the pull request does not by
+  itself change the `Status` field. After approval is recorded, a **final pre-merge update MUST**:
+  1. set `Status: Accepted`;
+  2. record the ratifier (the approving maintainer) and the approval date;
+  3. change the pull request description from `Related to #86` to `Closes #86`.
+  Merge of that updated document is what ratifies the contract; the status change is made by hand in
+  the same pre-merge update, not inferred from the merge event.
+- The author **MUST NOT** self-declare this RFC approved and **MUST NOT** set `Status: Accepted`
+  without a recorded independent-maintainer approval.
 - Amendments after acceptance follow the schema-versioning rules in [§9](#9-schema-versioning): a
   backward-compatible clarification amends this document in place; a breaking change is a new RFC
-  that ratifies `ri.v2`.
+  that proposes `ri.v2` for ratification.
 
 ### 1.3 What approval unblocks
 
@@ -78,6 +84,7 @@ this RFC governs for `ri.v1` artifacts.
 | **Fact** | A single stored assertion in a snapshot. Every fact is either a **node** or an **edge**, carries a **truth class** ([§7](#7-truth-classes)), and — when its truth class requires it — carries **provenance** ([§6](#6-provenance-contract)). |
 | **Node** | A fact asserting the existence of an entity: a repository, module, file, symbol, or dependency. Identified by a **stable key** ([§4](#4-node-identity-and-stable-keys)). |
 | **Edge** | A fact asserting a directed relationship between two nodes: `subject —predicate→ object` ([§5](#5-edgefact-identity)). |
+| **Observation** | A stored, evidence-bearing extractor record for one exact syntactic occurrence. It is provenance input to resolution/inference, not a graph node or edge ([§6.4](#64-observations-and-the-derived_from-reference-model)). |
 | **Evidence** | A single provenance record ([§6](#6-provenance-contract)) that ties a fact to an exact source location (path + line span) in the snapshot's stored revision, plus the extractor/resolver that produced it. |
 | **Provenance** | The complete set of evidence attached to a fact — *where the fact came from and how it was derived*. A fact may carry one or more evidence records. |
 | **Diagnostic** | A structured record of something the pipeline could not turn into a fact, or could turn into a fact only with a caveat: an unsupported construct, an ambiguous resolution, a parse failure, an invalid span, a collision, a skipped input. Diagnostics are first-class snapshot output ([§8](#8-diagnostics-model)). |
@@ -139,29 +146,43 @@ A snapshot's identity is the composite:
 - `repository_id` — the owning repository (`repo_…`), scoping the snapshot to one owner's repository.
 - `revision.value` — the exact revision ([§3.2](#32-revision-identity)).
 - `schema_version` — e.g. `ri.v1` ([§9](#9-schema-versioning)).
-- `extractor_version_set` — the ordered, deduplicated set of `extractor@version` and
+- `extractor_version_set` — the lexicographically sorted, deduplicated set of `extractor@version` and
   `resolver@version` identifiers that participated (e.g. `["python-ast@1.0.0", "typescript-ast@1.0.0", "import-resolver@1.0.0"]`).
-- `config_hash` — a hash of the analysis configuration that affects output (support-matrix
-  selection, resource limits that change what is extracted). Configuration that cannot change
-  output MUST NOT be included.
+- `config_hash` — the deterministic hash of the output-affecting analysis configuration, computed
+  exactly as defined in [§12.7](#127-config_hash). Configuration that cannot change graph output
+  MUST NOT be included.
+
+These five components are the **semantic identity components** of a snapshot. A new snapshot is
+required if and only if at least one of them changes.
 
 Each snapshot ALSO carries an opaque surrogate `snapshot_id` (`snap_…`) as its primary key. The
 surrogate is for referencing; the composite above is the **semantic** identity and MUST be enforced
-by a uniqueness constraint on sealed snapshots (#88).
+by a uniqueness constraint that permits **at most one sealed snapshot** per composite identity (#88).
 
-### 3.4 Reanalysis and reuse
+### 3.4 Reanalysis, reuse, and idempotency
 
-- **Reanalysis always produces a new snapshot.** A completed snapshot is immutable
-  ([§11](#11-snapshot-lifecycle-and-immutability)); re-running analysis never mutates it. Prior
-  snapshots remain queryable.
-- **Reuse is permitted and RECOMMENDED for identical inputs.** If a **sealed** snapshot already
-  exists for the exact composite identity in [§3.3](#33-snapshot-identity), a new analysis request
-  MAY return that existing snapshot instead of building a duplicate. Because the canonical graph
-  hash ([§12](#12-canonical-graph-hash)) is deterministic for identical inputs, reuse cannot change
-  observable output. Reuse is an optimization, not a requirement; an implementation MAY always
-  rebuild.
-- If *any* component of the composite differs — a new revision, a bumped extractor version, a
-  schema bump, or a config change that affects output — the result is a **distinct** snapshot.
+These rules are normative and are stated identically in [§11.3](#113-immutability),
+[§11.4](#114-failed-extraction-cancellation-retry-93-interaction), and
+[§11.5](#115-concurrency-and-idempotency); they must not be contradicted anywhere in this document:
+
+- **Identical composite identity MUST reuse the existing sealed snapshot.** If a **sealed** snapshot
+  already exists for the exact composite identity in [§3.3](#33-snapshot-identity), an analysis
+  request with that identity **MUST** return the existing sealed snapshot. It **MUST NOT** build a
+  second one. (Because the canonical graph hash — [§12](#12-canonical-graph-hash) — is deterministic
+  for identical inputs, a rebuild could only reproduce the same bytes; reuse is therefore required,
+  not merely permitted.)
+- **A new snapshot is required only when a semantic identity component changes.** If *any* component
+  of the composite differs — a new revision, a bumped extractor/resolver version, a schema bump, or
+  a `config_hash` change — the result is a **distinct** snapshot. Otherwise no new snapshot is
+  produced.
+- **Concurrent identical requests MUST coordinate so that at most one build seals.** When two
+  requests race for the same composite identity, implementations MUST ensure at most one `building`
+  attempt reaches `completed`; after one seals, the others reuse it. The uniqueness constraint on
+  sealed snapshots ([§3.3](#33-snapshot-identity)) is the backstop.
+- **Retries may create separate `building` or `failed` attempts, but only one snapshot may become
+  sealed** for a given composite identity ([§11.4](#114-failed-extraction-cancellation-retry-93-interaction)).
+- **Completed snapshots remain immutable and are never rewritten** ([§11.3](#113-immutability)).
+  Corrections come from a *new* snapshot produced by changed inputs, never from editing a sealed one.
 
 ### 3.5 Migration of the existing `commitSha` (handled by #87)
 
@@ -182,15 +203,40 @@ The existing `repo_metadata["commitSha"]` value is migrated forward, not dropped
 
 ## 4. Node identity and stable keys
 
-### 4.1 Principle
+### 4.1 Principle and cross-revision guarantees
 
 Every node has a **deterministic stable key**: a pure function of the repository-relative source
 location and the node's semantic name, containing no random component, no timestamp, and no
-autoincrement id. Given the same revision and schema version, the same entity MUST always receive
-the same stable key. This is what makes facts comparable across snapshots and revisions and is the
-identity every downstream issue (#88–#92, #94) is keyed on.
+autoincrement id. Stable keys are UTF-8 strings; the general grammar is `<kind-prefix>:<body>`.
 
-Stable keys are UTF-8 strings. The general grammar is `<kind-prefix>:<body>`.
+`ri.v1` makes exactly two levels of guarantee, and they must not be conflated:
+
+- **Within a revision (strong, MUST).** For a **fixed stored revision and schema version**, the same
+  entity MUST always receive the same stable key. Stable keys are fully deterministic per revision —
+  this is what #88's storage, #92's queries, and #94's determinism check rely on.
+- **Across revisions (qualified).** A stable key identifies "the same entity" across two revisions
+  **only to the extent its inputs are unchanged.** Concretely:
+  - **Ordinary, non-colliding named symbols are comparable across revisions.** A symbol whose
+    `<file-path>::<qualified-name>` is unique in its file carries **no** discriminator, so its key
+    depends only on its file path and qualified name. As long as neither changes, the key is identical
+    across revisions and a consumer MAY treat two snapshots' facts with that key as the same entity.
+    A file rename or a rename of any enclosing scope changes the key — that is a *different identity*,
+    correctly, because the source location changed.
+  - **Duplicate-symbol and anonymous-symbol ordinals are revision-local.** The `#<n>` overload
+    discriminator ([§4.3](#43-canonical-stable-key-formats)) and the `(anonymous:<kind>#<ordinal>)`
+    segment are assigned by **source order within the revision**. Inserting or deleting an earlier
+    occurrence renumbers the later ones, so these keys **MUST NOT** be assumed to identify the same
+    entity across revisions. They are stable *within* a revision and are for intra-snapshot reference
+    and hashing only; cross-revision matching of duplicate/anonymous symbols is explicitly **not
+    guaranteed** in `ri.v1`. A consumer that needs to track such a symbol across revisions MUST fall
+    back to evidence (path + span) comparison, not the ordinal key.
+  - **`repository`, `module`, `file`, and `dependency` keys are cross-revision stable** as long as
+    their path/name inputs are unchanged (they carry no ordinal).
+
+This is the honest limit of `ri.v1`: source-order ordinals buy determinism cheaply but cannot promise
+cross-revision identity for the entities that need them. See
+[§15.1](#151-operational-costs-and-limitations-stated-honestly) for the consequence and the deferred
+alternative (a content-based semantic discriminator) considered for a future schema version.
 
 ### 4.2 Path normalization (applies to every path in a stable key or evidence record)
 
@@ -245,12 +291,17 @@ Notes and rules:
   assigned by **ascending source start position** (`#2`, `#3`, …); the first occurrence has **no**
   discriminator. This is deterministic given a fixed revision. The collision itself is also recorded
   as an `RI-KEY-DUP-SYMBOL` diagnostic (informational) so consumers can surface it.
+  **Cross-revision caveat:** the `#<n>` ordinal is **revision-local** — inserting or deleting an
+  earlier occurrence renumbers later ones — so a `#<n>` key MUST NOT be assumed to identify the same
+  entity across revisions ([§4.1](#41-principle-and-cross-revision-guarantees)).
 - **Anonymous / generated symbols.** A symbol with no source name that must be represented (an
   exported default arrow function, an anonymous class expression) gets a **synthetic qualified
   segment** of the form `(anonymous:<kind>#<ordinal>)` where `<ordinal>` is its 1-based position
   among anonymous symbols **within the same enclosing scope**, by source order. Example:
   `routes.ts::(anonymous:arrow#1)`. Synthetic segments are the only place parentheses appear in a
-  qualified name, which keeps them unambiguous against real identifiers.
+  qualified name, which keeps them unambiguous against real identifiers. Like the `#<n>` overload
+  ordinal, the anonymous `#<ordinal>` is **revision-local** and MUST NOT be used for cross-revision
+  identity ([§4.1](#41-principle-and-cross-revision-guarantees)).
 - **Language namespace.** Language is **not** part of the stable key: the file extension already
   disambiguates same-named symbols across languages, and a symbol key is always scoped to exactly
   one file. Language is stored as a **node property**. For **dependencies**, the `ecosystem`
@@ -312,8 +363,12 @@ Notes and rules:
 
 ### 5.1 Canonical predicates
 
-`ri.v1` defines exactly these predicate names (lowercase `snake_case`). This set is closed for
-`ri.v1`; adding a predicate is a **compatible addition** ([§9.1](#91-compatible-additions)).
+These are the **initial registered `ri.v1` predicate set** (lowercase `snake_case`). The set is
+**not permanently closed**: adding a new predicate with new semantics is a **compatible `ri.v1`
+addition** ([§9.1](#91-compatible-additions)), and conforming readers MUST ignore or safely preserve
+predicates they do not recognize ([§9.1](#91-compatible-additions)). **Removing, renaming, or
+changing the meaning of** an existing predicate is a breaking change that requires `ri.v2`
+([§9.2](#92-breaking-changes-require-riv2)).
 
 | Predicate | Meaning | Typical subject → object | Required by |
 | --- | --- | --- | --- |
@@ -328,10 +383,10 @@ Notes and rules:
 > Note: today's `KnowledgeGraphRelationship` type union
 > ([`models.py:25`](../../apps/backend/app/intelligence/models.py#L25)) also lists `extends`,
 > `references`, and `exports`, of which only four are ever emitted
-> ([REPOSITORY_INTELLIGENCE.md](REPOSITORY_INTELLIGENCE.md)). `ri.v1` renames to the closed set
+> ([REPOSITORY_INTELLIGENCE.md](REPOSITORY_INTELLIGENCE.md)). `ri.v1` starts from the registered set
 > above; `extends` folds into `implements`-adjacent modeling for v1 and `exports`/`references` are
-> represented via `defines` + node properties. Reviving them is a compatible addition when a
-> resolver actually produces them.
+> represented via `defines` + node properties. Reviving them later is a compatible `ri.v1` addition
+> when a resolver actually produces them, not an `ri.v2` change.
 
 ### 5.2 Subject and object identity
 
@@ -339,9 +394,11 @@ The `subject` and `object` of every edge are **node stable keys** ([§4](#4-node
 each carried with its `kind`:
 
 ```json
-"subject": { "kind": "symbol", "stable_key": "src/auth/service.ts::AuthService.login" },
-"predicate": "calls",
-"object":  { "kind": "symbol", "stable_key": "src/auth/tokens.ts::issueToken" }
+{
+  "subject": { "kind": "symbol", "stable_key": "src/auth/service.ts::AuthService.login" },
+  "predicate": "calls",
+  "object": { "kind": "symbol", "stable_key": "src/auth/tokens.ts::issueToken" }
+}
 ```
 
 An edge MUST NOT reference a node that does not exist in the same snapshot, **except** an object
@@ -435,29 +492,128 @@ The **minimum required** evidence record — the fields every stored piece of ev
 
 - **A fact MAY carry multiple evidence records** ([§5.4](#54-multiple-occurrences-and-multiple-evidence)).
   At least one is REQUIRED for an `observed` fact.
-- **Resolved and inferred facts reference their supporting observed evidence.** A `resolved` or
-  `inferred` fact carries, in addition to (or instead of) its own resolver evidence, a
-  `derived_from` list naming the `observed` facts/evidence it was computed from:
-
-  ```json
-  "truth_class": "resolved",
-  "evidence": [ { "path": "src/auth/service.ts", "start_line": 3, "end_line": 3,
-                  "extractor": "import-resolver", "extractor_version": "1.0.0" } ],
-  "derived_from": [
-    { "kind": "edge", "stable_key": "file:src/auth/service.ts|imports|<observed import>" }
-  ]
-  ```
-
-  A `resolved` fact's own evidence points at the syntax that triggered resolution (e.g. the import
-  statement line); `derived_from` links the observed inputs so a reader can audit the deterministic
-  step. An `inferred` fact MUST cite the observed facts that support it via `derived_from`; it MUST
-  NOT invent a span it did not read.
+- **Resolved and inferred facts reference their supporting observed inputs via `derived_from`.** A
+  `resolved` or `inferred` fact carries a `derived_from` list of **observation references**
+  ([§6.4](#64-observations-and-the-derived_from-reference-model)) — deterministic pointers to the
+  stored observed inputs it was computed from. An `inferred` fact MUST cite the ultimate observations
+  supporting its observed or resolved inputs; it MUST NOT invent a span it did not read.
 - **Evidence is tied to the exact stored revision.** Every `path`/span in an evidence record is
   resolved against the **snapshot's stored revision** ([§3](#3-revision-and-snapshot-identity)), not
   the current working tree. Because snapshots are immutable and revision-addressed, an evidence
   record remains valid for the life of the snapshot: line 41 of `service.ts` means line 41 of
   `service.ts` **at that commit/content hash**, forever. #94 validates that 100% of emitted evidence
   resolves to a real span in the stored revision.
+
+### 6.4 Observations and the `derived_from` reference model
+
+A `resolved` or `inferred` fact must be able to name the observed inputs it was computed from — but
+an observed **occurrence** of an import, call, or route is not a node, and (before resolution) is
+not an edge, because an unresolved occurrence never becomes an edge
+([§5.5](#55-unresolved-relationships)). To reference such an input deterministically, `ri.v1`
+defines the **observation**: the smallest stored, deterministic unit of observed syntax.
+
+**What an observation is.** An extractor (#89/#90) emits, as part of its stored output, one
+observation per observed syntactic occurrence it finds — each definition, import statement, call
+site, and route declaration. An observation is an evidence-bearing provenance record, not a graph
+node or edge; the corresponding node/edge fact carries its own truth class. A resolver (#91)
+consumes observations, never the working tree. An observation that never resolves still exists (and
+is what a `RI-RES-UNRESOLVED`/`RI-RES-AMBIGUOUS` diagnostic points at); it simply produces no edge.
+
+**Exact JSON shape.**
+
+```json
+{
+  "observation_id": "obs:sha256:d76b7bdbae85fc2016c49cf893a99ac8156cc98c3357582ab092836b94f0b424",
+  "observed_kind": "import",
+  "subject": { "kind": "file", "stable_key": "file:src/auth/service.ts" },
+  "referent_text": "./tokens",
+  "ordinal": 1,
+  "evidence": {
+    "path": "src/auth/service.ts", "start_line": 3, "end_line": 3,
+    "extractor": "typescript-ast", "extractor_version": "1.0.0"
+  }
+}
+```
+
+| Field | Rule |
+| --- | --- |
+| `observation_id` | REQUIRED. Deterministic id (below). |
+| `observed_kind` | REQUIRED. One of `definition`, `import`, `call`, `route`, `implements`, `contains`. Extensible as a compatible addition. |
+| `subject` | REQUIRED. The stable key + kind of the node the occurrence is lexically inside (the enclosing file or symbol). This node MUST exist in the snapshot. |
+| `referent_text` | OPTIONAL. The raw, unresolved reference as written in source (the import specifier `"./tokens"`, the callee text `issueToken`, the route path `"/login"`). Present for occurrences that a resolver will attempt to resolve; absent for pure `definition` observations. |
+| `ordinal` | REQUIRED. One-based source order among observations whose other identity fields are identical. This disambiguates multiple identical occurrences on one line while columns are deferred. |
+| `evidence` | REQUIRED. Exactly one evidence record ([§6.1](#61-the-evidence-record)) with a valid span ([§6.2](#62-line-and-span-rules-decided-not-optional)) against the stored revision. |
+
+**Identity rule.** Build this observation identity document using the snapshot's immutable revision
+and the observation fields:
+
+```json
+{
+  "evidence": {
+    "extractor": "typescript-ast",
+    "extractor_version": "1.0.0",
+    "path": "src/auth/service.ts",
+    "start_line": 3,
+    "end_line": 3
+  },
+  "observed_kind": "import",
+  "ordinal": 1,
+  "referent_text": "./tokens",
+  "revision": { "kind": "git", "value": "0123456789abcdef0123456789abcdef01234567" },
+  "schema_version": "ri.v1",
+  "subject": { "kind": "file", "stable_key": "file:src/auth/service.ts" }
+}
+```
+
+Normalize its strings and path under [§12.4](#124-normalization), serialize it with the JCS rules in
+[§12.1](#121-serialization-format), and compute:
+
+```text
+observation_id = "obs:sha256:" + lowercase_hex(sha256(canonical_identity_document))
+```
+
+For an observation without `referent_text`, the identity document contains `"referent_text": null`;
+omission is not an alternative encoding. `ordinal` handles the columns-deferred case
+([§6.2](#62-line-and-span-rules-decided-not-optional)): two calls to `issueToken` on the same line
+with otherwise identical identity fields get ordinals `1` and `2` in source order. Including the
+immutable revision makes the ID revision-tied; including the extractor identifier and version avoids
+collisions when different extractors report the same span. The subject stable key is safe here
+because it is deterministic within the stored revision ([§4.1](#41-principle-and-cross-revision-guarantees)).
+
+**The `derived_from` reference.** A `resolved`/`inferred` fact's `derived_from` is a list of
+observation references:
+
+```json
+{
+  "derived_from": [
+    {
+      "kind": "observation",
+      "observation_id": "obs:sha256:d76b7bdbae85fc2016c49cf893a99ac8156cc98c3357582ab092836b94f0b424"
+    }
+  ]
+}
+```
+
+Each entry MUST name an `observation_id` that exists in the same snapshot. A `derived_from` entry
+MUST NOT reference a node or edge directly, a placeholder, or free text. When a definition is an
+input, `derived_from` names its `observed_kind: "definition"` observation. When an inference uses a
+resolved fact, it names that fact's ultimate supporting observations. This keeps one exact reference
+shape while preserving the full observed basis of every derived claim.
+
+**How this behaves across resolution outcomes:**
+
+- **Resolves.** The resolver emits a `resolved` edge whose `derived_from` names the import/call/route
+  observation(s); the edge's own `evidence` points at the same occurrence span. The observation
+  remains stored.
+- **Unresolved / ambiguous.** No edge is produced. A `RI-RES-UNRESOLVED` / `RI-RES-AMBIGUOUS`
+  diagnostic ([§8](#8-diagnostics-model)) carries the `observation_id` in its `details`
+  (`{"observation_id": "obs:sha256:…"}`) and names the subject stable key. The observation remains
+  stored so a consumer can still cite the unresolved occurrence — but it is never presented as an
+  edge.
+- **Hashing.** Observations participate in the canonical hash as their own ordered array
+  ([§12.2](#122-what-is-hashed), [§12.3](#123-ordering)); `derived_from` lists are canonicalized by
+  sorting their entries. Because both `observation_id` and `derived_from` are deterministic functions
+  of the stored revision, identical inputs produce identical bytes.
 
 ---
 
@@ -468,8 +624,8 @@ The **minimum required** evidence record — the fields every stored piece of ev
 | Truth class | Definition | Emission rule |
 | --- | --- | --- |
 | **observed** | A direct syntax fact extracted from an **exact source span**. | MAY be emitted **only** by an **extractor** ([§2.2](#22-defined-terms)), and **only** with ≥1 valid evidence record whose span comes from parsing that exact source. No extractor may emit `observed` without a valid span ([§6.2](#62-line-and-span-rules-decided-not-optional)). |
-| **resolved** | A relationship produced by a **documented, deterministic resolution algorithm** over stored observed facts. | MAY be emitted **only** by a **resolver**. The algorithm MUST be documented (per #91) and deterministic: same inputs → same output. Carries `derived_from` linking its observed inputs ([§6.3](#63-multiple-evidence-resolvedinferred-evidence-and-the-revision-tie)). |
-| **inferred** | A **heuristic** conclusion supported by evidence but **not guaranteed by syntax** (e.g. "this module is the authentication layer"). | MAY be emitted **only** by an **inference/classifier** component. MUST cite supporting observed/resolved facts via `derived_from`. MUST be labeled as inferred everywhere it surfaces. |
+| **resolved** | A relationship produced by a **documented, deterministic resolution algorithm** over stored observed facts. | MAY be emitted **only** by a **resolver**. The algorithm MUST be documented (per #91) and deterministic: same inputs → same output. Carries `derived_from` observation references linking its observed inputs ([§6.4](#64-observations-and-the-derived_from-reference-model)). |
+| **inferred** | A **heuristic** conclusion supported by evidence but **not guaranteed by syntax** (e.g. "this module is the authentication layer"). | MAY be emitted **only** by an **inference/classifier** component. MUST cite the ultimate supporting observations via `derived_from`, including the observation basis of any resolved input. MUST be labeled as inferred everywhere it surfaces. |
 | **generated** | Human-facing **narrative** (prose explanation, AI answer, generated docs). | **Never stored as a fact in the snapshot graph** and never displayed as a deterministic repository fact ([§7.4](#74-generated-narrative)). |
 
 ### 7.2 Emission matrix (producer × truth class)
@@ -577,8 +733,9 @@ Codes are stable strings. The `ri.v1` baseline set (extensible as a compatible a
 
 ## 9. Schema versioning
 
-This RFC **ratifies `schema_version: "ri.v1"`** as the value carried on every snapshot and every
-fact-bearing API response.
+This RFC **proposes `schema_version: "ri.v1"` for ratification** as the value carried on every
+snapshot and every fact-bearing API response. Once ratified ([§1.2](#12-approval--ratification-rule)),
+`ri.v1` is the value all `ri.v1` artifacts carry.
 
 ### 9.1 Compatible additions
 
@@ -586,26 +743,29 @@ The following MAY be added within `ri.v1` without a version bump, because they c
 conforming reader that ignores unknown optional fields:
 
 - New **optional** fields on nodes, edges, evidence, or diagnostics.
-- New **node kinds**, **predicates**, or **diagnostic codes**.
+- New **node kinds**, **predicates** (adding a predicate with new semantics — [§5.1](#51-canonical-predicates)),
+  **observation kinds**, or **diagnostic codes**.
 - New extractors/resolvers (they bump their own version, not the schema — [§9.4](#94-schema-version-vs-extractorresolver-version)).
 - Populating a `reserved` field (e.g. columns — [§6.2](#62-line-and-span-rules-decided-not-optional)) with the documented semantics.
 
-Readers MUST ignore unknown fields, unknown node kinds, unknown predicates, and unknown diagnostic
-codes rather than failing.
+Readers MUST **ignore or safely preserve** unknown fields, unknown node kinds, **unknown
+predicates**, unknown observation kinds, and unknown diagnostic codes rather than failing.
 
 ### 9.2 Breaking changes (require `ri.v2`)
 
-- Changing the **stable-key format** of any node kind ([§4](#4-node-identity-and-stable-keys)).
+- Changing the **stable-key format** of any node kind ([§4](#4-node-identity-and-stable-keys)),
+  including introducing a content-based symbol discriminator ([§15.1](#151-operational-costs-and-limitations-stated-honestly)).
 - Changing **provenance semantics** (one-based → zero-based, inclusive → exclusive, path
   normalization rules).
 - Changing **truth-class semantics** or the emission matrix in a way that reclassifies existing
   facts.
-- Removing or renaming a required field; changing a field's type or meaning.
+- **Removing, renaming, or changing the meaning of an existing predicate** ([§5.1](#51-canonical-predicates));
+  removing or renaming a required field; changing a field's type or meaning.
 - Changing **canonical-hash inputs or ordering** ([§12](#12-canonical-graph-hash)) such that an
   unchanged revision hashes differently.
 
-A breaking change is introduced as a **new RFC** that ratifies `ri.v2`; this document is not edited
-to describe `ri.v2` behavior.
+A breaking change is introduced as a **new RFC** that proposes `ri.v2` for ratification; this
+document is not edited to describe `ri.v2` behavior.
 
 ### 9.3 When `ri.v2` is required
 
@@ -730,8 +890,10 @@ as follows — this is a decision the RFC must not leave open:
 - **Mutation attempts are rejected, not ignored.** A write against a `completed` snapshot MUST raise
   an error (#88 tests this). This is the successor to today's silent-overwrite behavior, where
   re-analysis rewrites `repo_metadata["intelligence"]` in place.
-- **Corrections and reanalysis create a NEW snapshot** ([§3.4](#34-reanalysis-and-reuse)). There is
-  no edit-in-place path.
+- **Corrections and reanalysis come from a NEW snapshot produced by changed inputs**
+  ([§3.4](#34-reanalysis-reuse-and-idempotency)). There is no edit-in-place path, and an analysis
+  request whose composite identity matches a sealed snapshot reuses it rather than producing a
+  correction.
 - **Diagnostics become immutable at seal**, together with the facts — they are part of the sealed,
   hashed artifact.
 
@@ -743,17 +905,19 @@ as follows — this is a decision the RFC must not leave open:
   sealed."
 - **Cancellation** (#93) aborts a `building` snapshot; the aborted snapshot is discarded or marked
   `failed`, never `completed`.
-- **Retry** (#93) starts a **new** `building` snapshot; it never resumes and seals a previously
-  abandoned one.
+- **Retry** (#93) starts a **new** `building` attempt. Retries and failed attempts MAY accumulate
+  multiple `building`/`failed` rows for one composite identity, but **only one snapshot may ever
+  become `sealed`/`completed`** for that identity ([§3.4](#34-reanalysis-reuse-and-idempotency)); a
+  retry never resumes and seals a previously abandoned attempt.
 
 ### 11.5 Concurrency and idempotency
 
-- **Idempotent submission** (#93): submitting the same analysis (same composite identity,
-  [§3.3](#33-snapshot-identity)) twice MUST NOT produce two sealed snapshots. Implementations reuse
-  the existing sealed snapshot ([§3.4](#34-reanalysis-and-reuse)) or coordinate so exactly one
-  `building` snapshot seals for a given identity.
-- Concurrent builds for the **same** composite identity resolve to a single sealed snapshot; the
-  uniqueness constraint on sealed snapshots ([§3.3](#33-snapshot-identity)) is the backstop.
+- **Idempotent submission** (#93): a request for a composite identity
+  ([§3.3](#33-snapshot-identity)) that already has a sealed snapshot **MUST reuse** it and **MUST
+  NOT** produce a second sealed snapshot ([§3.4](#34-reanalysis-reuse-and-idempotency)).
+- **Concurrent builds** for the same composite identity **MUST coordinate so at most one attempt
+  seals**; after one seals, the others reuse the sealed result. The uniqueness constraint permitting
+  at most one sealed snapshot per composite identity ([§3.3](#33-snapshot-identity)) is the backstop.
 
 ---
 
@@ -772,17 +936,18 @@ extractor/resolver versions, and configuration MUST produce the same canonical h
 
 ### 12.2 What is hashed
 
-A single canonical document with three ordered arrays plus scalar inputs:
+A single canonical document with four ordered arrays plus scalar inputs:
 
-```
+```jsonc
 {
   "schema_version": "ri.v1",
   "revision": { "kind": "...", "value": "..." },
   "extractor_version_set": ["python-ast@1.0.0", "typescript-ast@1.0.0", "import-resolver@1.0.0"],
   "config_hash": "sha256:...",
-  "nodes":       [ ...sorted... ],
-  "edges":       [ ...sorted, each with sorted evidence... ],
-  "diagnostics": [ ...sorted... ]
+  "nodes":        [ ...sorted... ],
+  "edges":        [ ...sorted, each with sorted evidence and sorted derived_from... ],
+  "observations": [ ...sorted... ],
+  "diagnostics":  [ ...sorted... ]
 }
 ```
 
@@ -792,6 +957,9 @@ A single canonical document with three ordered arrays plus scalar inputs:
 - **Edges** sorted ascending by the tuple `(subject.stable_key, predicate, object.stable_key)`.
 - **Evidence** within each fact sorted ascending by `(path, start_line, end_line, extractor,
   extractor_version)`.
+- **`derived_from`** within each fact sorted ascending by `observation_id`
+  ([§6.4](#64-observations-and-the-derived_from-reference-model)).
+- **Observations** sorted ascending by `observation_id`.
 - **Diagnostics** sorted ascending by `(code, path or "", start_line or 0, subject or "", object or
   "", message)`.
 - **`extractor_version_set`** sorted ascending by identifier.
@@ -818,7 +986,63 @@ change in what the pipeline *could not* handle is a real change in the snapshot'
 `message` field MUST be deterministic (no timestamps, no absolute paths) so it does not destabilize
 the hash. If an implementation needs to compare graphs while ignoring diagnostics, it MAY compute a
 secondary `graph_only_hash` over `nodes`+`edges` alone, but the **primary** `canonical_graph_hash`
-covers all three arrays and is the one stored and compared for determinism.
+covers all four arrays (`nodes`, `edges`, `observations`, `diagnostics`) and is the one stored and
+compared for determinism.
+
+### 12.7 `config_hash`
+
+`config_hash` is the deterministic fingerprint of the **output-affecting analysis configuration**. It
+is a component of snapshot identity ([§3.3](#33-snapshot-identity)) and an input to the canonical
+graph hash ([§12.2](#122-what-is-hashed)), so it MUST be computed by exactly this procedure:
+
+1. **Included (output-affecting) configuration only.** `config_hash` covers configuration that can
+   change graph output, for example: the set/selection of enabled extractors and resolvers and their
+   support-matrix options; resource limits that change *what is extracted* (max file size, file-count
+   caps, per-file node caps — cf. the current 512 KB cap in
+   [`engine.py`](../../apps/backend/app/intelligence/engine.py#L168)); and any language/parse options
+   that alter emitted facts.
+2. **Excluded operational settings.** Configuration that cannot change graph output MUST be excluded:
+   database URL, storage path, worker/queue concurrency, timeouts and retry counts (#93), log level,
+   rate-limit budgets, and credentials. (Note: the extractor/resolver **versions** are identity
+   inputs but are carried separately in `extractor_version_set` ([§3.3](#33-snapshot-identity)); they
+   are not part of `config_hash`.)
+3. **Canonical serialization.** Serialize the included configuration as a canonical JSON document
+   using the **same JCS rules** as [§12.1](#121-serialization-format): UTF-8, lexicographically
+   **sorted object keys**, no insignificant whitespace, no trailing newline.
+4. **String normalization.** Normalize all string keys and values to **Unicode NFC**; normalize any
+   path-valued setting per [§4.2](#42-path-normalization-applies-to-every-path-in-a-stable-key-or-evidence-record).
+5. **Array ordering.** **Sort arrays whose semantics are sets** (e.g. the set of enabled extractors)
+   ascending; **preserve declared order for arrays whose order affects output** (e.g. an ordered
+   resolver pipeline). Each array's setting documents which rule applies; when in doubt a setting is
+   treated as order-significant.
+6. **Hash.** Compute `sha256` over the canonical UTF-8 bytes and store as `sha256:<lowercase-hex>`.
+7. **Empty/default configuration.** The hash input represents the **effective** output-affecting
+   configuration after defaults are applied, not only user-supplied overrides. Every output-affecting
+   default MUST therefore appear explicitly. The empty configuration is used only when no such
+   setting exists; it is the canonical JSON object `{}`, whose
+   `config_hash` is therefore the SHA-256 of the two bytes `{}` —
+   `sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a`.
+   An implementation MUST NOT use this empty hash merely because the caller supplied no overrides.
+
+**Normative example.** Configuration enabling two extractors and one resolver with a 512 KB file cap:
+
+```jsonc
+// input (pre-canonicalization)
+{ "max_file_bytes": 524288,
+  "extractors": ["typescript-ast", "python-ast"],   // set semantics → sorted
+  "resolvers":  ["import-resolver"] }
+```
+
+```text
+canonical bytes:
+{"extractors":["python-ast","typescript-ast"],"max_file_bytes":524288,"resolvers":["import-resolver"]}
+config_hash = "sha256:" + hex(sha256(canonical bytes))
+            = "sha256:fa3223df915a10dd9519b1b5f426416dd756f9ac94d91336efbb53c9f4e036d9"
+```
+
+`config_hash` MUST be referenced by both snapshot identity ([§3.3](#33-snapshot-identity)) and the
+canonical graph hash ([§12.2](#122-what-is-hashed)); the same configuration therefore always yields
+the same identity and hash inputs.
 
 ---
 
@@ -908,9 +1132,23 @@ is not.
       "extractor": "route-resolver", "extractor_version": "1.0.0" }
   ],
   "derived_from": [
-    { "kind": "node", "stable_key": "app/api/routes/auth.py::login" }
+    { "kind": "observation", "observation_id": "obs:sha256:a71c…" }
   ],
   "schema_version": "ri.v1"
+}
+```
+
+The referenced observation is the observed route declaration, e.g.:
+
+```json
+{
+  "observation_id": "obs:sha256:a71c…",
+  "observed_kind": "route",
+  "subject": { "kind": "symbol", "stable_key": "app/api/routes/auth.py::login" },
+  "referent_text": "/login",
+  "ordinal": 1,
+  "evidence": { "path": "app/api/routes/auth.py", "start_line": 21, "end_line": 21,
+                "extractor": "python-ast", "extractor_version": "1.0.0" }
 }
 ```
 
@@ -925,12 +1163,16 @@ is not.
   "truth_class": "inferred",
   "properties": { "classification": "business-logic-layer", "confidence": "heuristic" },
   "derived_from": [
-    { "kind": "node", "stable_key": "mod:app/services" },
-    { "kind": "node", "stable_key": "app/services/auth_service.py::AuthService" }
+    { "kind": "observation", "observation_id": "obs:sha256:c0d4…" },
+    { "kind": "observation", "observation_id": "obs:sha256:d8a1…" }
   ],
   "schema_version": "ri.v1"
 }
 ```
+
+> The inferred classification cites the stored definition observations for the module's supporting
+> symbols, never a node reference or a span it did not read. The `mod:app/services` node is the
+> subject of the classification, so it does not appear in its own `derived_from`.
 
 ### 14.5 Unresolved / ambiguous diagnostic (not a guessed edge)
 
@@ -945,9 +1187,16 @@ is not.
   "producer": "import-resolver@1.0.0",
   "subject": "file:src/app/index.ts",
   "object": null,
-  "details": { "candidates": ["src/shared/utils/index.ts", "src/app/utils.ts"] }
+  "details": {
+    "observation_id": "obs:sha256:5e88…",
+    "candidates": ["src/shared/utils/index.ts", "src/app/utils.ts"]
+  }
 }
 ```
+
+The `observation_id` names the stored observed import occurrence that could not be resolved. No
+edge is created ([§5.5](#55-unresolved-relationships)); the observation remains stored so a consumer
+can still cite the unresolved import.
 
 ### 14.6 Unsupported construct
 
@@ -1003,9 +1252,17 @@ is not.
     { "path": "src/auth/service.ts", "start_line": 90, "end_line": 90,
       "extractor": "reference-resolver", "extractor_version": "1.0.0" }
   ],
+  "derived_from": [
+    { "kind": "observation", "observation_id": "obs:sha256:41ca…" },
+    { "kind": "observation", "observation_id": "obs:sha256:90fb…" }
+  ],
   "schema_version": "ri.v1"
 }
 ```
+
+> The two call-site occurrences are two `observed_kind: "call"` observations (lines 41 and 90) that
+> both resolve to the same callee, so they collapse to **one** `calls` edge with two evidence records
+> and two `derived_from` observation references ([§5.4](#54-multiple-occurrences-and-multiple-evidence)).
 
 ### 14.10 Generated narrative — explicitly excluded from deterministic facts
 
@@ -1040,6 +1297,8 @@ is not.
 | **Schema versioning** | Per-snapshot version, retained forever ([§9.6](#96-historical-snapshots-retain-their-version)) | One global mutable schema version | A global version cannot describe historical snapshots; immutable artifacts must carry the version they were built under. |
 | **Occurrences** | One edge, multiple evidence ([§5.4](#54-multiple-occurrences-and-multiple-evidence)) | One edge per occurrence (parallel edges) | Parallel edges complicate canonicalization and de-dup with no consumer benefit; "does A call B?" is answered once, with citations. |
 | **Columns** | Deferred to v2, reserved ([§6.2](#62-line-and-span-rules-decided-not-optional)) | Require columns in v1 | Line granularity is enough to prove the model end-to-end (#95); columns add extractor cost and hash surface without being needed for v1's acceptance bar. |
+| **Duplicate/anonymous symbol discriminator** | Revision-local source-order ordinal ([§4.1](#41-principle-and-cross-revision-guarantees)) | Content-based semantic discriminator (signature/body hash) for cross-revision identity | The ordinal is cheap and deterministic within a revision; the semantic discriminator raises extractor cost/complexity (#89/#90) for a cross-revision benefit no v1 criterion needs, and would be a breaking `ri.v2` key change. Deferred, with evidence-comparison as the interim path. |
+| **`derived_from` reference** | Deterministic observation reference ([§6.4](#64-observations-and-the-derived_from-reference-model)) | A placeholder/edge reference to a possibly-nonexistent relationship | Unresolved occurrences never become edges ([§5.5](#55-unresolved-relationships)); a stored, deterministic observation is the smallest primitive that lets resolved/inferred facts and diagnostics cite observed inputs and still hash deterministically. |
 
 ### 15.1 Operational costs and limitations (stated honestly)
 
@@ -1055,8 +1314,18 @@ is not.
 - **`ri.v1` is line-granular only.** No columns, no cross-file type inference beyond documented
   resolution, no non-TS/Python deep extraction. These are declared gaps, not hidden ones, consistent
   with [REPOSITORY_INTELLIGENCE.md](REPOSITORY_INTELLIGENCE.md).
+- **Duplicate/anonymous symbol identity is revision-local.** The `#<n>` and `(anonymous:…#<ordinal>)`
+  discriminators are assigned by source order, so they are stable within a revision but do not track
+  the same entity across revisions ([§4.1](#41-principle-and-cross-revision-guarantees)). The
+  considered-but-**deferred** alternative is a **content-based semantic discriminator** — hashing a
+  normalized signature (parameter arity/types for overloads, a normalized body digest for anonymous
+  symbols) instead of a source-order ordinal. It was deferred from `ri.v1` because it materially
+  raises extractor cost and language-specific complexity (#89/#90) for a benefit — cross-revision
+  matching of duplicate/anonymous symbols — that no v1 acceptance criterion requires; consumers that
+  need it use evidence (path + span) comparison in the interim. Introducing it later is a breaking
+  key-format change and therefore an `ri.v2` concern ([§9.2](#92-breaking-changes-require-riv2)).
 - **This RFC changes no runtime behavior.** Until #87–#95 land, the system behaves exactly as
-  documented today; this document describes the *approved future contract*, not current capability.
+  documented today; this document describes the *proposed future contract*, not current capability.
 
 ---
 
@@ -1079,12 +1348,12 @@ parallel (fixtures early, scoring after approval); #95 last (on #92 and #94).
 
 ---
 
-## 17. Current behavior vs. approved contract vs. unimplemented
+## 17. Current behavior vs. proposed contract vs. unimplemented
 
 To keep this document honest about what exists (per [docs/README.md](../README.md) documentation
 rules), the three columns are explicit:
 
-| Concern | Current behavior (today) | Approved `ri.v1` contract (this RFC) | Status |
+| Concern | Current behavior (today) | Proposed `ri.v1` contract (this RFC) | Status |
 | --- | --- | --- | --- |
 | Storage | Mutable JSON blob on `repo_metadata` | Immutable sealed snapshots (§11) | **Unimplemented** (#88) |
 | Symbol spans | None on `SourceSymbol` ([`models.py:55`](../../apps/backend/app/intelligence/models.py#L55)) | Required line spans (§6) | **Unimplemented** (#89/#90) |
@@ -1095,7 +1364,7 @@ rules), the three columns are explicit:
 | Query API | Consumers read the whole blob | Versioned owner-scoped read API (§9.5) | **Unimplemented** (#92) |
 | Evidence-backed output | AI emits empty citation lists | Every claim cites a valid span (§7.4) | **Unimplemented** (#95) |
 
-**This RFC does not claim any of the "Approved contract" column exists today.** It is the target to
+**This RFC does not claim any of the "Proposed contract" column exists today.** It is the target to
 be built by #87–#95 after approval. No existing documentation is rewritten by this RFC to imply
 otherwise.
 
@@ -1107,13 +1376,13 @@ otherwise.
 
 | #86 acceptance criterion | Satisfied by |
 | --- | --- |
-| Node/edge identity (stable key format) specified and approved | [§4](#4-node-identity-and-stable-keys), [§5](#5-edgefact-identity) |
+| Node/edge identity (stable key format) specified (approval pending independent maintainer) | [§4](#4-node-identity-and-stable-keys), [§5](#5-edgefact-identity) |
 | Provenance record specified: path, start line, end line, extractor, extractor version | [§6.1](#61-the-evidence-record), [§6.2](#62-line-and-span-rules-decided-not-optional) |
 | Truth classes defined, with rules for which extraction paths may emit each | [§7](#7-truth-classes), emission matrix [§7.2](#72-emission-matrix-producer--truth-class) |
 | Schema versioning and migration policy specified | [§9](#9-schema-versioning), [§10](#10-migration-policy) |
 | Immutability rules for completed snapshots specified | [§11](#11-snapshot-lifecycle-and-immutability) |
 | Diagnostics model (unsupported construct, ambiguous resolution, extraction failure) specified | [§8](#8-diagnostics-model) |
-| Approved as an ADR/RFC committed to the repository | [§1](#1-status-and-approval) (Proposed → Accepted on maintainer-approved merge) |
+| Approved as an ADR/RFC committed to the repository | [§1](#1-status-and-approval) — currently **Proposed**; becomes **Accepted** only via a final pre-merge update after a recorded independent-maintainer approval ([§1.2](#12-approval--ratification-rule)) |
 
 ### 18.2 Required RFC decisions (issue body §1–§15) and #86-comment dependency requirements
 
@@ -1127,7 +1396,7 @@ otherwise.
 | 6. Provenance contract (min record; one-based; inclusive end; span validation; whole-file; columns deferred; multiple evidence; resolved/inferred → observed; revision tie; no provenance ⇒ not observed) | [§6](#6-provenance-contract) |
 | 7. Truth classes (definitions; producers; no upgrade; retention; API/UI labeling; generated never stored; unresolved ⇒ diagnostic; emission matrix) | [§7](#7-truth-classes) |
 | 8. Diagnostics model (all listed categories; required fields; which fail a snapshot) | [§8](#8-diagnostics-model) |
-| 9. Schema versioning (ratify `ri.v1`; compatible additions; breaking; when v2; schema vs extractor version; API versioning #92; reader rejection/negotiation; historical retention) | [§9](#9-schema-versioning) |
+| 9. Schema versioning (propose `ri.v1` for ratification; compatible additions; breaking; when v2; schema vs extractor version; API versioning #92; reader rejection/negotiation; historical retention) | [§9](#9-schema-versioning) |
 | 10. Migration policy (DB migrations; backfills; rollback; cross-version; re-extraction vs transformation; legacy regex facts; failure/recovery) | [§10](#10-migration-policy) |
 | 11. Snapshot lifecycle & immutability (states; seal transaction; pre-seal validation; immutability; rejection; corrections ⇒ new snapshot; failed; #93 cancel/retry; concurrency/idempotency; diagnostics immutable) | [§11](#11-snapshot-lifecycle-and-immutability) |
 | 12. Canonical graph hash (format; node/edge/evidence ordering; normalized strings/paths; diagnostics; excluded volatile fields; schema/extractor inputs; determinism) | [§12](#12-canonical-graph-hash) |
