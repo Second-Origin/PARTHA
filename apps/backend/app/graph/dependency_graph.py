@@ -1,6 +1,11 @@
 from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.models.repository import RepositoryRecord
-from app.schemas.dependencies import DependencyEdge, DependencyGraphResponse, DependencyNode
+from app.schemas.dependencies import (
+    DependencyAssessment,
+    DependencyEdge,
+    DependencyGraphResponse,
+    DependencyNode,
+)
 
 
 class DependencyGraphBuilder:
@@ -15,8 +20,6 @@ class DependencyGraphBuilder:
                 name=dependency.name,
                 version=dependency.version,
                 type=dependency.type,
-                has_vulnerabilities=False,
-                is_outdated=False,
                 size=None,
             )
             for dependency in repository_intelligence.dependencies
@@ -32,6 +35,6 @@ class DependencyGraphBuilder:
             nodes=nodes,
             edges=edges,
             total_dependencies=len(nodes),
-            vulnerabilities=0,
-            outdated=0,
+            vulnerability_assessment=DependencyAssessment(status="not_computed"),
+            outdated_assessment=DependencyAssessment(status="not_computed"),
         )

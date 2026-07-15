@@ -233,7 +233,7 @@ These are properties of the system as built, not a wish list.
 3. **The knowledge graph is not persisted as a graph.** It is a JSON blob on `repo_metadata`. It cannot be queried, indexed, or joined. Four of the eight declared relationship types are never emitted.
 4. **Processing is synchronous and whole-repository.** No background jobs, no incremental re-analysis, no cancellation.
 5. **The rate limiter trusts only the direct socket peer for unauthenticated requests.** `X-Forwarded-For` is deliberately ignored, so behind a reverse proxy every unauthenticated client shares one IP budget until a trusted-proxy allowlist is designed. Authenticated requests are keyed per user and unaffected.
-6. **Dependency coverage is narrow.** Three manifest formats, no lockfiles, no transitive resolution; the vulnerability and outdated fields in the API are constants, not scan results.
+6. **Dependency coverage is narrow.** Three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The API exposes explicit `not_computed` assessment statuses and does not emit a clean result or count without a scanner.
 7. **Frontend assurance is thin.** Coverage is limited and there is no end-to-end suite.
 
 These are missing guarantees in the system as built. They are not scheduled work, and this document does not commit to when or whether any of them change.

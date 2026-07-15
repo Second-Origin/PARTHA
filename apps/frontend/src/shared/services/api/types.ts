@@ -94,8 +94,6 @@ export interface DependencyNode {
   name: string;
   version: string;
   type: 'production' | 'development' | 'peer' | 'optional';
-  hasVulnerabilities: boolean;
-  isOutdated: boolean;
   size: number | null;
 }
 
@@ -105,13 +103,17 @@ export interface DependencyEdge {
   type: 'depends-on' | 'peer' | 'optional';
 }
 
+export interface DependencyAssessment {
+  status: 'not_computed';
+}
+
 export interface DependencyGraphResponse {
   repositoryId: string;
   nodes: DependencyNode[];
   edges: DependencyEdge[];
   totalDependencies: number;
-  vulnerabilities: number;
-  outdated: number;
+  vulnerabilityAssessment: DependencyAssessment;
+  outdatedAssessment: DependencyAssessment;
 }
 
 // Review

@@ -106,4 +106,6 @@ def test_feature_consumers_read_repository_intelligence(tmp_path: Path):
     assert architecture.summary.language == "TypeScript"
     assert any(node.id == "module:services" for node in architecture.nodes)
     assert any(node.name == "react" for node in dependencies.nodes)
+    assert dependencies.vulnerability_assessment.status == "not_computed"
+    assert dependencies.outdated_assessment.status == "not_computed"
     assert review.summary.total_findings >= 1

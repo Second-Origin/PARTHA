@@ -6,6 +6,7 @@ import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { useDependencies } from '@/features/dependencies/hooks/useDependencies';
+import type { DependencyAssessment } from '@/shared/services/api/types';
 
 export function DependenciesPage() {
   const navigate = useNavigate();
@@ -81,9 +82,18 @@ export function DependenciesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         <Stat label="Dependencies" value={dependencies.graph?.totalDependencies ?? 0} />
         <Stat label="Relations" value={dependencies.graph?.edges.length ?? 0} />
-        <Stat label="Vulnerable" value={dependencies.graph?.vulnerabilities ?? 0} />
-        <Stat label="Outdated" value={dependencies.graph?.outdated ?? 0} />
+        <Stat
+          label="Vulnerability assessment"
+          value={assessmentLabel(dependencies.graph?.vulnerabilityAssessment)}
+        />
+        <Stat
+          label="Outdated-version assessment"
+          value={assessmentLabel(dependencies.graph?.outdatedAssessment)}
+        />
       </div>
+      <p className="mb-6 text-sm text-muted-foreground">
+        Vulnerability and outdated-version assessments have not been run.
+      </p>
 
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border px-4 py-3">
@@ -118,8 +128,6 @@ export function DependenciesPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground capitalize">{node.type}</span>
-                  {node.hasVulnerabilities && <span className="rounded-md bg-destructive/10 px-2 py-0.5 text-xs text-destructive">vulnerable</span>}
-                  {node.isOutdated && <span className="rounded-md bg-warning/10 px-2 py-0.5 text-xs text-warning">outdated</span>}
                 </div>
               </div>
             ))}
@@ -133,7 +141,11 @@ export function DependenciesPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function assessmentLabel(assessment: DependencyAssessment | undefined): string {
+  return assessment?.status === 'not_computed' ? 'Not computed' : 'Unavailable';
+}
+
+function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <p className="text-xs text-muted-foreground">{label}</p>

@@ -69,7 +69,7 @@ Statuses below were checked against the implementation, not against prior docume
 | Citations and grounded AI answers | **Not implemented** | No source content or line numbers are sent to providers, and no citations are returned. |
 | Asynchronous / incremental processing | **Not implemented** | Ingestion and analysis run synchronously in the request; there is no background job system and no incremental re-analysis. |
 | Change-impact analysis | **Not implemented** | — |
-| Vulnerability and outdated-dependency scanning | **Not implemented** | The API exposes these fields, but they are constants. No scanning is performed. |
+| Vulnerability and outdated-dependency scanning | **Not implemented** | The API exposes explicit `not_computed` assessment statuses. It emits no clean result or count because no scanning is performed. |
 | Persistent semantic knowledge graph | **Not implemented** | The graph is serialized as JSON onto the repository row; there is no queryable graph store. |
 
 A capability is listed as implemented only where the behaviour exists in code — not because a model, an API field, a class name, or an issue describes it.

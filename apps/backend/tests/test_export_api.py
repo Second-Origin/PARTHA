@@ -108,6 +108,26 @@ def test_export_json_supported_for_every_target(auth_client):
         json.loads(body["content"])  # must be valid JSON
 
 
+def test_dependency_exports_report_assessments_as_not_computed(auth_client):
+    repository_id = _import_sample(auth_client)
+
+    json_response = _export(auth_client, repository_id, "dependencies", "json")
+    markdown_response = _export(auth_client, repository_id, "dependencies", "markdown")
+
+    assert json_response.status_code == 200
+    payload = json.loads(json_response.json()["content"])
+    assert payload["vulnerabilityAssessment"] == {"status": "not_computed"}
+    assert payload["outdatedAssessment"] == {"status": "not_computed"}
+    assert "vulnerabilities" not in payload
+    assert "outdated" not in payload
+
+    assert markdown_response.status_code == 200
+    report = markdown_response.json()["content"]
+    assert "| Vulnerability assessment | Not computed |" in report
+    assert "| Outdated-version assessment | Not computed |" in report
+    assert "outside the current analysis scope" in report
+
+
 def test_export_non_review_targets_support_all_formats(auth_client):
     repository_id = _import_sample(auth_client)
 
