@@ -8,8 +8,6 @@ class DependencyNode(CamelModel):
     name: str
     version: str
     type: Literal["production", "development", "peer", "optional"]
-    has_vulnerabilities: bool
-    is_outdated: bool
     size: int | None = None
 
 
@@ -19,10 +17,14 @@ class DependencyEdge(CamelModel):
     type: Literal["depends-on", "peer", "optional"]
 
 
+class DependencyAssessment(CamelModel):
+    status: Literal["not_computed"]
+
+
 class DependencyGraphResponse(CamelModel):
     repository_id: str
     nodes: list[DependencyNode]
     edges: list[DependencyEdge]
     total_dependencies: int
-    vulnerabilities: int
-    outdated: int
+    vulnerability_assessment: DependencyAssessment
+    outdated_assessment: DependencyAssessment

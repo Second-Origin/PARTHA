@@ -175,6 +175,14 @@ def build_dependencies_document(dependencies: DependencyGraphResponse, repositor
                     ["Peer", str(counts["peer"])],
                     ["Optional", str(counts["optional"])],
                     ["Relationships", str(len(dependencies.edges))],
+                    [
+                        "Vulnerability assessment",
+                        dependencies.vulnerability_assessment.status.replace("_", " ").capitalize(),
+                    ],
+                    [
+                        "Outdated-version assessment",
+                        dependencies.outdated_assessment.status.replace("_", " ").capitalize(),
+                    ],
                 ],
             ),
         ),

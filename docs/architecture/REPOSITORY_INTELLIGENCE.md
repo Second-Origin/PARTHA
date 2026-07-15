@@ -174,7 +174,7 @@ Do not describe PARTHA as having evidence-backed or grounded output until line s
 - **Graph persistence:** a JSON blob on a metadata column. No graph tables, no queryability, no incremental update.
 - **Relationships:** four of the eight declared types are never emitted. An import edge resolves to a declared dependency when the name matches and otherwise creates an `external:` node — there is no real module resolution.
 - **Revision identity:** recorded per repository, not per fact. No history, no diffing, no re-analysis on change.
-- **Dependencies:** three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated data (those API fields are hardcoded to `false`/`0`).
+- **Dependencies:** three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The dependency API reports both assessments as explicit `not_computed` statuses; it emits no clean result or count without a scanner.
 - **Languages:** meaningful extraction covers Python and TypeScript/JavaScript. Other languages get file-tree and metadata treatment only.
 - **File size cap:** files over 512 KB are read as empty during extraction, so their contents contribute nothing.
 - **Build cost:** the whole repository is re-analysed from scratch, synchronously, inside the HTTP request.

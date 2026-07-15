@@ -78,6 +78,79 @@ def test_zip_upload_persists_repository_and_analysis_completes(auth_client):
     assert repositories[0]["status"] == "completed"
 
 
+def test_dependency_endpoint_reports_uncomputed_assessments_without_clean_claims(auth_client):
+    response = _upload(
+        auth_client,
+        "historical-dependency.zip",
+        _zip_bytes(
+            {
+                "historical-dependency/package.json": '{"dependencies":{"lodash":"4.17.15"}}',
+                "historical-dependency/src/main.js": "const lodash = require('lodash');",
+            }
+        ),
+    )
+    assert response.status_code == 201
+    repository_id = response.json()["id"]
+    assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+
+    dependency_response = auth_client.get(f"/analysis/{repository_id}/dependencies")
+
+    assert dependency_response.status_code == 200
+    payload = dependency_response.json()
+    assert payload["vulnerabilityAssessment"] == {"status": "not_computed"}
+    assert payload["outdatedAssessment"] == {"status": "not_computed"}
+    assert any(node["name"] == "lodash" and node["version"] == "4.17.15" for node in payload["nodes"])
+    assert payload["edges"]
+
+    serialized_keys = {
+        key
+        for value in _walk_json(payload)
+        if isinstance(value, dict)
+        for key in value
+    }
+    assert serialized_keys.isdisjoint(
+        {
+            "has_vulnerabilities",
+            "hasVulnerabilities",
+            "is_outdated",
+            "isOutdated",
+            "vulnerabilities",
+            "outdated",
+        }
+    )
+
+
+def test_empty_dependency_endpoint_still_reports_uncomputed_assessments(auth_client):
+    response = _upload(
+        auth_client,
+        "empty-dependencies.zip",
+        _zip_bytes({"empty-dependencies/package.json": "{}"}),
+    )
+    assert response.status_code == 201
+    repository_id = response.json()["id"]
+    assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+
+    dependency_response = auth_client.get(f"/analysis/{repository_id}/dependencies")
+
+    assert dependency_response.status_code == 200
+    payload = dependency_response.json()
+    assert payload["nodes"] == []
+    assert payload["edges"] == []
+    assert payload["totalDependencies"] == 0
+    assert payload["vulnerabilityAssessment"] == {"status": "not_computed"}
+    assert payload["outdatedAssessment"] == {"status": "not_computed"}
+
+
+def _walk_json(value):
+    yield value
+    if isinstance(value, dict):
+        for item in value.values():
+            yield from _walk_json(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _walk_json(item)
+
+
 def test_tar_gz_upload_is_supported(auth_client):
     response = _upload(
         auth_client,

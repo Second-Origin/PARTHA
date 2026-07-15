@@ -8,7 +8,7 @@ from app.schemas.architecture import (
     ArchNode,
     RequestFlowStep,
 )
-from app.schemas.dependencies import DependencyGraphResponse, DependencyNode
+from app.schemas.dependencies import DependencyAssessment, DependencyGraphResponse, DependencyNode
 
 
 def _architecture() -> ArchitectureResponse:
@@ -53,13 +53,13 @@ def _dependencies() -> DependencyGraphResponse:
     return DependencyGraphResponse(
         repository_id="repo-1",
         nodes=[
-            DependencyNode(id="dependency:npm:react", name="react", version="^18.0.0", type="production", has_vulnerabilities=False, is_outdated=False),
-            DependencyNode(id="dependency:npm:vite", name="vite", version="^5.0.0", type="development", has_vulnerabilities=False, is_outdated=False),
+            DependencyNode(id="dependency:npm:react", name="react", version="^18.0.0", type="production"),
+            DependencyNode(id="dependency:npm:vite", name="vite", version="^5.0.0", type="development"),
         ],
         edges=[],
         total_dependencies=2,
-        vulnerabilities=0,
-        outdated=0,
+        vulnerability_assessment=DependencyAssessment(status="not_computed"),
+        outdated_assessment=DependencyAssessment(status="not_computed"),
     )
 
 
@@ -83,13 +83,24 @@ def test_build_dependencies_document_lists_inventory():
     markdown = render_markdown(document)
     assert "# Dependencies: sample" in markdown
     assert "| react | ^18.0.0 | production |" in markdown
+    assert "| Vulnerability assessment | Not computed |" in markdown
+    assert "| Outdated-version assessment | Not computed |" in markdown
     assert "outside the current analysis scope" in markdown  # no fabricated vuln counts
 
 
 def test_build_dependencies_document_handles_empty_inventory():
-    empty = DependencyGraphResponse(repository_id="repo-1", nodes=[], edges=[], total_dependencies=0, vulnerabilities=0, outdated=0)
+    empty = DependencyGraphResponse(
+        repository_id="repo-1",
+        nodes=[],
+        edges=[],
+        total_dependencies=0,
+        vulnerability_assessment=DependencyAssessment(status="not_computed"),
+        outdated_assessment=DependencyAssessment(status="not_computed"),
+    )
 
     document = build_dependencies_document(empty, "sample")
     markdown = render_markdown(document)
 
     assert "No dependencies were detected." in markdown
+    assert "| Vulnerability assessment | Not computed |" in markdown
+    assert "| Outdated-version assessment | Not computed |" in markdown
