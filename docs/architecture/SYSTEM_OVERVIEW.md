@@ -113,12 +113,13 @@ This runs **synchronously inside the HTTP request**. A large repository blocks a
 
 | Store | Holds | Notes |
 | --- | --- | --- |
-| Relational DB | `users`, `refresh_tokens`, `repositories` | SQLite by default for local development; PostgreSQL under Docker Compose. Three Alembic migrations. |
+| Relational DB | `users`, `refresh_tokens`, `repositories`, `ai_provider_configs` | SQLite by default for local development; PostgreSQL under Docker Compose. Four Alembic migrations. |
 | `repositories.repo_metadata` (JSON column) | Parser metadata, `commitSha`, and the **entire serialized Repository Intelligence** under the `intelligence` key. | There are **no graph tables**. The knowledge graph is a JSON blob on this column. |
 | `repositories.file_tree` (JSON column) | The parsed file tree. | Serves the explorer. |
-| Filesystem (`STORAGE_PATH`) | Extracted archives and cloned repositories; uploaded archives (deleted after extraction); `ai-provider.json`. | Repository source is read from here on demand for file preview. |
+| `ai_provider_configs` | One row per user: provider, model, base URL, and the **Fernet-encrypted** API key plus its last four characters. | Owner-scoped; the plaintext key is never stored and never returned to the client. |
+| Filesystem (`STORAGE_PATH`) | Extracted archives and cloned repositories; uploaded archives (deleted after extraction). | Repository source is read from here on demand for file preview. |
 
-`ai-provider.json` is a **single global file** (mode `0600`), not per-user. Whichever provider config was saved last is the one every user's queries run against.
+AI provider configuration is **per-user and encrypted at rest**. Each user's API key is encrypted with a Fernet key from `AI_ENCRYPTION_KEY` (required outside `development`/`test`), decrypted only in-process at request time, and injected per request — so a query runs against the caller's own key and bill, never a shared one.
 
 ---
 
@@ -143,7 +144,7 @@ sequenceDiagram
 
 The access token is short-lived (15 min default); the refresh token lasts 14 days and rotates on every use. Refresh-token reuse revokes the whole family. `AUTH_SECRET_KEY` is required and length-checked outside `development`/`test`; in dev it falls back to a fixed insecure value.
 
-**The enforcement gap.** The frontend requires a session for every route. The backend does not. `get_current_user_or_default` validates a presented Bearer token strictly (a bad token is a 401, never a silent downgrade), but when **no** token is presented it falls back to a fixed seed user (`00000000-…-0000`). Only `/auth/me` uses the strict `get_current_user`. So the API remains open to unauthenticated callers, and all anonymous traffic shares one owner bucket.
+**Enforcement.** Every non-public route requires a valid access token. The `/repositories`, `/analysis`, `/ai`, `/documentation`, and `/export` routers each apply `get_current_user` at the router level, so a request with no token — or an invalid one — is rejected with 401 before reaching a handler, and a newly added route under those prefixes is protected by default. The pre-auth `get_current_user_or_default` fallback and its `X-Dev-User` header were removed in E1.3; there is no anonymous seed-user bucket. Data is additionally owner-scoped in the service layer (below), so authentication and authorization are enforced independently.
 
 ---
 
@@ -183,7 +184,7 @@ Everything else calls `RepositoryIntelligenceEngine.from_record(record)` and tra
 | --- | --- | --- |
 | `git` (system binary) | Shallow-cloning public GitHub repositories. | Import fails with a normalized external-service error; the partial clone is cleaned up. |
 | GitHub (HTTPS) | Source for public repository import. Only `https://github.com/owner/repo` URLs are accepted; no authentication, so no private repositories. | Timeout and size caps abort and clean up. |
-| AI providers | Answering repository questions. Configured per deployment; none required. | AI workspace is unusable until a provider is configured; the rest of the system is unaffected. |
+| AI providers | Answering repository questions. Configured per user with an encrypted API key; none required. | AI workspace is unusable until the user configures a provider; the rest of the system is unaffected. |
 | PostgreSQL, Redis | Compose and CI only. Redis backs the rate limiter when `RATE_LIMIT_BACKEND=redis`. | Local development uses SQLite and the in-memory rate limiter; neither service is required. |
 
 ---
@@ -219,7 +220,7 @@ flowchart TB
 - **Uploaded archives and cloned repositories are untrusted input.** Extraction rejects path traversal and symlink escape; upload and clone sizes are capped; only allowlisted archive suffixes are accepted. Repository *content* is never executed — it is only read as text.
 - **Repository source never leaves the process.** The AI context builder passes structure and metadata only: languages, frameworks, modules, dependency names, and file paths. No file contents and no line numbers are sent to any provider, and the system prompt explicitly tells the model not to claim line numbers or quote code it was not given.
 - **Logs are redacted.** Keys containing `api_key`, `apikey`, `authorization`, `password`, `secret`, or `token` are redacted from structured log extras. Repository contents and credentials must never be logged.
-- **The authenticated-user boundary is not fully enforced.** See the limitations below — this is the most important trust gap in the system today.
+- **The authenticated-user boundary is enforced.** Every non-public route requires a valid token, and every repository lookup is owner-scoped in the service layer, so a caller sees only their own data. Provider API keys are encrypted at rest and injected per user. Rate-limit budgets are keyed on the validated user id for authenticated requests (falling back to the client IP otherwise), so one user cannot spend another's budget.
 
 ---
 
@@ -227,14 +228,12 @@ flowchart TB
 
 These are properties of the system as built, not a wish list.
 
-1. **Owner isolation is not enforced across every surface.** Only the `/repositories` routes are owner-scoped (`get_for_owner` / `list_for_owner`). `AnalysisService`, `AiOrchestrator`, `DocumentationService`, and `ExportService` resolve a repository through the unscoped `RepositoryRepository.get(id)`, so there is no owner check on those paths and no tenant isolation. Contributors touching these services must use the owner-scoped accessors.
-2. **Authentication is not enforced at the API.** Requests without a token are attributed to a shared seed user rather than rejected. PARTHA should therefore be run only in a trusted local environment.
-3. **Extraction is heuristic, not language-aware.** File roles, modules, and layers are inferred from path segments and filenames. Symbols come from regular expressions. `TreeSitterParser` returns nothing, even though `tree-sitter` is a declared dependency.
-4. **No line-level provenance.** Facts carry a file path and nothing finer. Revision identity (`commitSha`) lives on the repository row, not on the facts.
-5. **The knowledge graph is not persisted as a graph.** It is a JSON blob on `repo_metadata`. It cannot be queried, indexed, or joined. Four of the eight declared relationship types are never emitted.
-6. **Processing is synchronous and whole-repository.** No background jobs, no incremental re-analysis, no cancellation.
-7. **AI provider configuration is global rather than per-user.** A single stored configuration serves every caller.
-8. **Dependency coverage is narrow.** Three manifest formats, no lockfiles, no transitive resolution; the vulnerability and outdated fields in the API are constants, not scan results.
-9. **Frontend assurance is thin.** Coverage is limited and there is no end-to-end suite.
+1. **Extraction is heuristic, not language-aware.** File roles, modules, and layers are inferred from path segments and filenames. Symbols come from regular expressions. `TreeSitterParser` returns nothing, even though `tree-sitter` is a declared dependency.
+2. **No line-level provenance.** Facts carry a file path and nothing finer. Revision identity (`commitSha`) lives on the repository row, not on the facts.
+3. **The knowledge graph is not persisted as a graph.** It is a JSON blob on `repo_metadata`. It cannot be queried, indexed, or joined. Four of the eight declared relationship types are never emitted.
+4. **Processing is synchronous and whole-repository.** No background jobs, no incremental re-analysis, no cancellation.
+5. **The rate limiter trusts only the direct socket peer for unauthenticated requests.** `X-Forwarded-For` is deliberately ignored, so behind a reverse proxy every unauthenticated client shares one IP budget until a trusted-proxy allowlist is designed. Authenticated requests are keyed per user and unaffected.
+6. **Dependency coverage is narrow.** Three manifest formats, no lockfiles, no transitive resolution; the vulnerability and outdated fields in the API are constants, not scan results.
+7. **Frontend assurance is thin.** Coverage is limited and there is no end-to-end suite.
 
 These are missing guarantees in the system as built. They are not scheduled work, and this document does not commit to when or whether any of them change.
