@@ -1,3 +1,6 @@
+import base64
+import binascii
+import hashlib
 import logging
 from functools import lru_cache
 from pathlib import Path
@@ -13,6 +16,15 @@ SUPPORTED_LOG_FORMATS = {"text", "json"}
 # signing key. Enforced outside development/test only, so local work is not
 # blocked by a short throwaway value.
 AUTH_SECRET_MIN_LENGTH = 32
+
+# A Fernet key is the URL-safe base64 encoding of exactly 32 random bytes. The
+# development/test default is derived deterministically so local work needs no
+# configuration, but it is never used outside those environments — staging and
+# production must supply their own key or refuse to start.
+FERNET_KEY_BYTES = 32
+_DEV_AI_ENCRYPTION_KEY = base64.urlsafe_b64encode(
+    hashlib.sha256(b"partha-dev-provider-encryption-key").digest()
+).decode()
 
 
 class Settings(BaseSettings):
@@ -37,6 +49,12 @@ class Settings(BaseSettings):
     auth_secret_key: str = ""
     access_token_ttl_seconds: int = 900
     refresh_token_ttl_seconds: int = 14 * 24 * 60 * 60
+    # Fernet key (URL-safe base64 of 32 bytes) that encrypts each user's AI
+    # provider API keys at rest. Empty is tolerated only in development/test,
+    # where a fixed derived key is substituted; staging/production refuse to
+    # start without an explicit key so secrets are never stored under a shared
+    # well-known key.
+    ai_encryption_key: str = ""
     # Fixed-window request budgets per identity (client IP until per-user
     # keying lands with auth enforcement). "memory" is per-process and
     # deterministic — right for tests/dev; Compose overrides to "redis" so
@@ -147,6 +165,24 @@ class Settings(BaseSettings):
     def resolve_auto_create_tables(self) -> "Settings":
         if self.auto_create_tables is None:
             self.auto_create_tables = self.app_env in {"development", "test"}
+        return self
+
+    @model_validator(mode="after")
+    def resolve_ai_encryption_key(self) -> "Settings":
+        lenient = self.app_env in {"development", "test"}
+        if not self.ai_encryption_key:
+            if not lenient:
+                raise ValueError("AI_ENCRYPTION_KEY must be set outside development/test environments.")
+            self.ai_encryption_key = _DEV_AI_ENCRYPTION_KEY
+            return self
+        try:
+            decoded = base64.urlsafe_b64decode(self.ai_encryption_key.encode("utf-8"))
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("AI_ENCRYPTION_KEY must be a URL-safe base64-encoded 32-byte Fernet key.") from exc
+        if len(decoded) != FERNET_KEY_BYTES:
+            raise ValueError(
+                f"AI_ENCRYPTION_KEY must decode to exactly {FERNET_KEY_BYTES} bytes (a Fernet key)."
+            )
         return self
 
     @model_validator(mode="after")

@@ -8,10 +8,12 @@ class RepositoryRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    # Owner-scoped access. These are the methods user-facing routes must use so a
-    # request can only ever see its own repositories. The unscoped methods below
-    # remain for internal callers (analysis/ai/documentation) until E1.3 moves
-    # them onto the current user, at which point the unscoped variants go away.
+    # Owner-scoped access only. Every repository lookup a request can reach goes
+    # through one of these so a caller can only ever see its own repositories,
+    # and ownership can't be forgotten by a new service: the unscoped variants
+    # were removed in E1.3 (#63) once analysis/ai/documentation/export were
+    # threaded onto the current user. Add owner-scoped accessors here, not
+    # unscoped ones.
     def list_for_owner(self, owner_id: str) -> list[RepositoryRecord]:
         statement = (
             select(RepositoryRecord)
@@ -38,24 +40,6 @@ class RepositoryRepository:
             RepositoryRecord.source_url == source_url,
             RepositoryRecord.branch == branch,
             RepositoryRecord.owner_id == owner_id,
-        )
-        return self.db.scalars(statement).first()
-
-    def list(self) -> list[RepositoryRecord]:
-        statement = select(RepositoryRecord).order_by(RepositoryRecord.uploaded_at.desc())
-        return list(self.db.scalars(statement).all())
-
-    def get(self, repository_id: str) -> RepositoryRecord | None:
-        return self.db.get(RepositoryRecord, repository_id)
-
-    def find_by_name(self, name: str) -> RepositoryRecord | None:
-        statement = select(RepositoryRecord).where(RepositoryRecord.name == name)
-        return self.db.scalars(statement).first()
-
-    def find_by_source(self, source_url: str, branch: str | None) -> RepositoryRecord | None:
-        statement = select(RepositoryRecord).where(
-            RepositoryRecord.source_url == source_url,
-            RepositoryRecord.branch == branch,
         )
         return self.db.scalars(statement).first()
 

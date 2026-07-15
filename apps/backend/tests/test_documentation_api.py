@@ -10,8 +10,8 @@ def _zip_bytes(files: dict[str, str]) -> bytes:
     return buffer.getvalue()
 
 
-def _import_sample(client) -> str:
-    response = client.post(
+def _import_sample(auth_client) -> str:
+    response = auth_client.post(
         "/repositories/upload",
         files={
             "file": (
@@ -31,14 +31,14 @@ def _import_sample(client) -> str:
     return response.json()["id"]
 
 
-def _generate(client, repository_id: str, fmt: str):
-    return client.post("/documentation/generate", json={"repositoryId": repository_id, "format": fmt})
+def _generate(auth_client, repository_id: str, fmt: str):
+    return auth_client.post("/documentation/generate", json={"repositoryId": repository_id, "format": fmt})
 
 
-def test_documentation_markdown_has_structured_headings(client):
-    repository_id = _import_sample(client)
+def test_documentation_markdown_has_structured_headings(auth_client):
+    repository_id = _import_sample(auth_client)
 
-    response = _generate(client, repository_id, "markdown")
+    response = _generate(auth_client, repository_id, "markdown")
 
     assert response.status_code == 200
     content = response.json()["content"]
@@ -46,10 +46,10 @@ def test_documentation_markdown_has_structured_headings(client):
     assert "## Architecture" in content
 
 
-def test_documentation_html_renders_real_elements(client):
-    repository_id = _import_sample(client)
+def test_documentation_html_renders_real_elements(auth_client):
+    repository_id = _import_sample(auth_client)
 
-    response = _generate(client, repository_id, "html")
+    response = _generate(auth_client, repository_id, "html")
 
     assert response.status_code == 200
     content = response.json()["content"]

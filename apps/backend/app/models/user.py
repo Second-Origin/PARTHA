@@ -5,10 +5,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
 
-# The system/seed user that owns all data created before authentication existed.
-# Requests without an authenticated identity fall back to this owner until E1.2
-# introduces real sign-in. The id is fixed so the 0002 migration backfill and the
-# current-user seam agree on it; keep both in sync with these constants.
+# The system/seed user that owns repositories created before authentication
+# existed. The 0002 migration backfills those rows to this owner. It has no
+# credential and cannot log in, and since E1.3 removed the pre-auth fallback no
+# live request is ever attributed to it — it exists only so historical data has
+# a valid owner. The id is fixed so the migration backfill agrees with it.
 SEED_USER_ID = "00000000-0000-0000-0000-000000000000"
 SEED_USER_EMAIL = "system@partha.local"
 

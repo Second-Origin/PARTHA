@@ -3,11 +3,14 @@ import json
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import get_ai_service
+from app.api.deps import get_ai_service, get_current_user
 from app.schemas.ai import AiProviderConfig, AiProviderPublicConfig, AiProviderTestRequest, AiProviderTestResponse, AiQueryRequest, AiQueryResponse
 from app.services.ai_service import AiService
 
-router = APIRouter(prefix="/ai", tags=["ai"])
+# Every AI route requires auth; the repository and the provider config are both
+# owner-scoped in the orchestrator, so a query can never run against another
+# user's repository or spend their provider key.
+router = APIRouter(prefix="/ai", tags=["ai"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/config", response_model=AiProviderPublicConfig)

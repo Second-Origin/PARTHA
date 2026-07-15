@@ -22,14 +22,14 @@ class ContractProvider:
         return AiProviderResponse(content="Repository summary from test provider.")
 
 
-def test_ai_query_endpoint_preserves_public_response_contract(client):
+def test_ai_query_endpoint_preserves_public_response_contract(auth_client):
     provider = ContractProvider()
     registry = ProviderRegistry()
     registry.register("openai", provider)
-    client.app.dependency_overrides[get_provider_registry] = lambda: registry
+    auth_client.app.dependency_overrides[get_provider_registry] = lambda: registry
 
     try:
-        upload_response = client.post(
+        upload_response = auth_client.post(
             "/repositories/upload",
             files={
                 "file": (
@@ -47,13 +47,13 @@ def test_ai_query_endpoint_preserves_public_response_contract(client):
         assert upload_response.status_code == 201
         repository_id = upload_response.json()["id"]
 
-        config_response = client.put(
+        config_response = auth_client.put(
             "/ai/config",
             json={"provider": "openai", "apiKey": "test-key", "model": "test-model"},
         )
         assert config_response.status_code == 200
 
-        response = client.post(
+        response = auth_client.post(
             "/ai/query",
             json={
                 "repositoryId": repository_id,
@@ -80,4 +80,4 @@ def test_ai_query_endpoint_preserves_public_response_contract(client):
         # still present in the contract but is null until graph-grounded citations exist.
         assert message["citations"] is None
     finally:
-        client.app.dependency_overrides.pop(get_provider_registry, None)
+        auth_client.app.dependency_overrides.pop(get_provider_registry, None)

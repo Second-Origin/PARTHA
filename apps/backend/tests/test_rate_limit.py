@@ -10,8 +10,27 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.rate_limit import MemoryRateLimitStore, StoreUnavailableError, classify
+from tests.conftest import register_user
 
 REDIS_URL = os.environ.get("PARTHA_TEST_REDIS_URL")
+
+
+class _FakeClient:
+    def __init__(self, host: str) -> None:
+        self.host = host
+
+
+class _FakeRequest:
+    """Minimal stand-in for a Starlette Request for resolve_rate_key.
+
+    resolve_rate_key only reads ``.headers.get('authorization')`` and
+    ``.client.host``; a dict of lowercased headers matches Starlette's
+    case-insensitive lookup for these tests.
+    """
+
+    def __init__(self, headers: dict[str, str], host: str = "203.0.113.9") -> None:
+        self.headers = headers
+        self.client = _FakeClient(host)
 
 
 def _hit(store, key: str, window: int) -> tuple[int, int]:
@@ -77,6 +96,12 @@ def limited_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator
 
     Base.metadata.create_all(bind=database.engine)
     with TestClient(create_app()) as test_client:
+        # Protected routes now require auth (E1.3 / #63); authenticate as a real
+        # user so the budget tests exercise the routes rather than bouncing off
+        # a 401. Requests are keyed on this user's id — the register call below
+        # is the "auth" class, which the small RATE_ENV budgets do not touch.
+        auth = register_user(test_client, "limited@example.com")
+        test_client.headers.update(auth["headers"])
         yield test_client
 
     for key in ("DATABASE_URL", "STORAGE_PATH", "AUTO_CREATE_TABLES", "CORS_ORIGINS", *RATE_ENV):
@@ -104,6 +129,83 @@ def test_classify_maps_routes_to_budget_classes():
     assert classify("GET", "/metrics") is None
     assert classify("GET", "/docs") is None
     assert classify("OPTIONS", "/repositories") is None
+
+
+# --- identity resolution (per-user vs client IP) --------------------------------
+
+
+def _test_settings():
+    from app.core.config import Settings
+
+    return Settings(app_env="test")
+
+
+def test_resolve_rate_key_uses_validated_user_id_for_authenticated_requests():
+    from app.auth.security import create_access_token
+    from app.core.rate_limit import resolve_rate_key
+
+    settings = _test_settings()
+    token = create_access_token("user-123", settings)
+    request = _FakeRequest({"authorization": f"Bearer {token}"})
+
+    assert resolve_rate_key(request, settings) == "user:user-123"
+
+
+def test_resolve_rate_key_falls_back_to_client_ip_when_unauthenticated():
+    from app.core.rate_limit import resolve_rate_key
+
+    request = _FakeRequest({}, host="198.51.100.7")
+    assert resolve_rate_key(request, _test_settings()) == "ip:198.51.100.7"
+
+
+def test_forged_token_cannot_select_a_user_specific_key():
+    # A token signed with a secret that is not the server's must never yield a
+    # user key — the signature check fails and identity falls back to the IP.
+    from app.auth.security import create_access_token
+    from app.core.config import Settings
+    from app.core.rate_limit import resolve_rate_key
+
+    attacker = create_access_token("victim-id", Settings(app_env="test", auth_secret_key="x" * 40))
+    request = _FakeRequest({"authorization": f"Bearer {attacker}"})
+
+    assert resolve_rate_key(request, _test_settings()) == "ip:203.0.113.9"
+
+
+def test_garbage_bearer_token_does_not_select_a_user_key():
+    from app.core.rate_limit import resolve_rate_key
+
+    request = _FakeRequest({"authorization": "Bearer not-a-real-token"})
+    assert resolve_rate_key(request, _test_settings()) == "ip:203.0.113.9"
+
+
+def test_forwarded_header_is_ignored_for_rate_key():
+    # X-Forwarded-For is client-settable and must not influence the key; only
+    # the direct socket peer address is used for the IP fallback.
+    from app.core.rate_limit import resolve_rate_key
+
+    request = _FakeRequest({"x-forwarded-for": "10.0.0.1"}, host="203.0.113.9")
+    assert resolve_rate_key(request, _test_settings()) == "ip:203.0.113.9"
+
+
+def test_two_authenticated_users_behind_one_ip_get_independent_budgets(limited_client):
+    # limited_client is authenticated as the fixture user and shares one client
+    # IP with a second user we register here.
+    other = register_user(limited_client, "second-user@example.com")
+
+    # The primary user exhausts the default budget (3/min)...
+    for _ in range(3):
+        assert limited_client.get("/repositories").status_code == 200
+    assert limited_client.get("/repositories").status_code == 429
+
+    # ...and the second user, same IP, still has a full budget.
+    assert limited_client.get("/repositories", headers=other["headers"]).status_code == 200
+
+
+def test_repeated_requests_from_one_user_consume_that_users_budget(limited_client):
+    for _ in range(3):
+        assert limited_client.get("/repositories").status_code == 200
+    # The 4th request from the same user exceeds the 3/min default budget.
+    assert limited_client.get("/repositories").status_code == 429
 
 
 # --- memory store --------------------------------------------------------------

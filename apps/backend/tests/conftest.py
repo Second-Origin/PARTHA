@@ -1,9 +1,26 @@
 import os
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+
+DEFAULT_TEST_PASSWORD = "correct-horse-battery-staple"
+
+
+def register_user(client: TestClient, email: str, password: str = DEFAULT_TEST_PASSWORD) -> dict:
+    """Register a user through the real endpoint and return an auth bundle.
+
+    Returns a dict with ``token`` (access token), ``user`` (the user payload)
+    and ``headers`` (a ready-to-use ``Authorization`` header), so tests can
+    exercise the owner-scoped routes as a genuine authenticated caller rather
+    than relying on any pre-auth fallback (removed in E1.3 / #63).
+    """
+    response = client.post("/auth/register", json={"email": email, "password": password})
+    assert response.status_code == 201, response.text
+    body = response.json()
+    token = body["accessToken"]
+    return {"token": token, "user": body["user"], "headers": {"Authorization": f"Bearer {token}"}}
 
 
 @pytest.fixture()
@@ -40,3 +57,32 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestCli
     os.environ.pop("AUTO_CREATE_TABLES", None)
     os.environ.pop("CORS_ORIGINS", None)
     config.get_settings.cache_clear()
+
+
+@pytest.fixture()
+def auth_client(client: TestClient) -> TestClient:
+    """A ``client`` pre-authenticated as a real registered user.
+
+    A registered user's access token is attached as a default header, so every
+    request the test makes is authenticated and owner-scoped to that user — the
+    same posture the frontend has after sign-in. ``client.default_user`` exposes
+    the user payload for tests that need the id or email.
+    """
+    auth = register_user(client, "primary@example.com")
+    client.headers.update(auth["headers"])
+    client.default_user = auth["user"]  # type: ignore[attr-defined]
+    return client
+
+
+@pytest.fixture()
+def make_auth_headers(client: TestClient) -> Callable[[str], dict]:
+    """Factory that registers an additional user and returns their auth bundle.
+
+    Lets a single test act as two distinct owners behind the same client IP,
+    which is exactly what the cross-owner and per-user rate-limit tests need.
+    """
+
+    def _make(email: str) -> dict:
+        return register_user(client, email)
+
+    return _make

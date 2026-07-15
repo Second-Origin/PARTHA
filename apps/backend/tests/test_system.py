@@ -93,8 +93,10 @@ def test_http_errors_use_standard_shape(client):
     }
 
 
-def test_request_validation_errors_use_standard_shape(client):
-    response = client.post("/repositories/github", json={})
+def test_request_validation_errors_use_standard_shape(auth_client):
+    # Authenticated so the request reaches body validation: /repositories is
+    # auth-guarded at the router level, and an anonymous call would 401 first.
+    response = auth_client.post("/repositories/github", json={})
 
     assert response.status_code == 422
     body = response.json()

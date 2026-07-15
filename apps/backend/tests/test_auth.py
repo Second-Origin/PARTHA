@@ -270,20 +270,26 @@ def test_auth_secret_key_is_required_and_strong_outside_dev():
 
     from app.core.config import Settings
 
+    # Production also requires an AI encryption key; supply a valid one so this
+    # test isolates the auth-secret behaviour rather than tripping that check.
+    from cryptography.fernet import Fernet
+
+    ai_key = Fernet.generate_key().decode()
+
     # Non-dev refuses to start without a secret...
     with pytest.raises(ValidationError):
-        Settings(app_env="production")
+        Settings(app_env="production", ai_encryption_key=ai_key)
     # ...and with a weak one.
     with pytest.raises(ValidationError):
-        Settings(app_env="production", auth_secret_key="too-short")
+        Settings(app_env="production", auth_secret_key="too-short", ai_encryption_key=ai_key)
     # A sufficiently long secret is accepted.
     strong = "s" * 32
-    assert Settings(app_env="production", auth_secret_key=strong).auth_secret_key == strong
+    assert Settings(app_env="production", auth_secret_key=strong, ai_encryption_key=ai_key).auth_secret_key == strong
     # Development stays lenient: an empty secret resolves to the dev default.
     assert Settings(app_env="development", auth_secret_key="").auth_secret_key
 
 
-# --- interaction with pre-auth routes -----------------------------------------
+# --- interaction with protected routes ----------------------------------------
 
 
 def test_bearer_token_attributes_repository_routes_to_that_user(client):
@@ -313,19 +319,17 @@ def test_bearer_token_attributes_repository_routes_to_that_user(client):
     assert with_token.status_code == 200
     assert with_token.json()["total"] == 1
 
-    anonymous = client.get("/repositories")
-    assert anonymous.status_code == 200
-    assert anonymous.json()["total"] == 0  # seed user owns nothing of alice's
 
-
-def test_invalid_bearer_on_tolerant_routes_is_rejected_not_ignored(client):
+def test_invalid_bearer_on_protected_routes_is_rejected(client):
     # Presenting a bad token is an authentication attempt; it must never fall
-    # back silently to the seed user.
+    # back to any anonymous or seed identity.
     response = client.get("/repositories", headers={"Authorization": "Bearer garbage"})
     assert response.status_code == 401
 
 
-def test_anonymous_repository_access_still_works(client):
+def test_anonymous_repository_access_is_rejected(client):
+    # E1.3 (#63) removed the pre-auth fallback: protected routes now require a
+    # valid token, so an anonymous request is unauthorized rather than served
+    # an empty seed-user view.
     response = client.get("/repositories")
-    assert response.status_code == 200
-    assert response.json() == {"data": [], "total": 0}
+    assert response.status_code == 401

@@ -19,8 +19,8 @@ def _zip_bytes(files: dict[str, bytes]) -> bytes:
 PNG_BYTES = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
 
 
-def _import_archive(client, files: dict[str, bytes]) -> str:
-    response = client.post(
+def _import_archive(auth_client, files: dict[str, bytes]) -> str:
+    response = auth_client.post(
         "/repositories/upload",
         files={
             "file": (
@@ -34,9 +34,9 @@ def _import_archive(client, files: dict[str, bytes]) -> str:
     return response.json()["id"]
 
 
-def _import_sample(client):
+def _import_sample(auth_client):
     return _import_archive(
-        client,
+        auth_client,
         {
             "sample/package.json": b'{"name":"sample"}',
             "sample/src/app.ts": b"export const answer = 42;\n",
@@ -46,18 +46,18 @@ def _import_sample(client):
     )
 
 
-def _get_file(client, repository_id: str, path: str):
-    return client.get(f"/repositories/{repository_id}/file", params={"path": path})
+def _get_file(auth_client, repository_id: str, path: str):
+    return auth_client.get(f"/repositories/{repository_id}/file", params={"path": path})
 
 
 def _repository_root(repository_id: str):
     return get_settings().storage_path / "repositories" / repository_id / "sample"
 
 
-def test_read_text_file_returns_real_content(client):
-    repository_id = _import_sample(client)
+def test_read_text_file_returns_real_content(auth_client):
+    repository_id = _import_sample(auth_client)
 
-    response = _get_file(client, repository_id, "/src/app.ts")
+    response = _get_file(auth_client, repository_id, "/src/app.ts")
 
     assert response.status_code == 200
     body = response.json()
@@ -68,10 +68,10 @@ def test_read_text_file_returns_real_content(client):
     assert body["size"] == len("export const answer = 42;\n")
 
 
-def test_read_image_file_is_base64_encoded(client):
-    repository_id = _import_sample(client)
+def test_read_image_file_is_base64_encoded(auth_client):
+    repository_id = _import_sample(auth_client)
 
-    response = _get_file(client, repository_id, "/assets/logo.png")
+    response = _get_file(auth_client, repository_id, "/assets/logo.png")
 
     assert response.status_code == 200
     body = response.json()
@@ -81,10 +81,10 @@ def test_read_image_file_is_base64_encoded(client):
     assert base64.b64decode(body["content"]) == PNG_BYTES
 
 
-def test_read_binary_file_is_flagged_without_content(client):
-    repository_id = _import_sample(client)
+def test_read_binary_file_is_flagged_without_content(auth_client):
+    repository_id = _import_sample(auth_client)
 
-    response = _get_file(client, repository_id, "/data/blob.bin")
+    response = _get_file(auth_client, repository_id, "/data/blob.bin")
 
     assert response.status_code == 200
     body = response.json()
@@ -92,11 +92,11 @@ def test_read_binary_file_is_flagged_without_content(client):
     assert body["content"] == ""
 
 
-def test_large_text_file_preview_is_truncated(client):
+def test_large_text_file_preview_is_truncated(auth_client):
     content = b"a" * (MAX_FILE_PREVIEW_BYTES + 17)
-    repository_id = _import_archive(client, {"sample/large.txt": content})
+    repository_id = _import_archive(auth_client, {"sample/large.txt": content})
 
-    response = _get_file(client, repository_id, "/large.txt")
+    response = _get_file(auth_client, repository_id, "/large.txt")
 
     assert response.status_code == 200
     body = response.json()
@@ -107,17 +107,17 @@ def test_large_text_file_preview_is_truncated(client):
     assert body["isImage"] is False
 
 
-def test_path_traversal_is_rejected(client):
-    repository_id = _import_sample(client)
+def test_path_traversal_is_rejected(auth_client):
+    repository_id = _import_sample(auth_client)
 
-    response = _get_file(client, repository_id, "/../../secret.txt")
+    response = _get_file(auth_client, repository_id, "/../../secret.txt")
 
     assert response.status_code == 422
     assert response.json()["code"] == "validation_error"
 
 
-def test_symlink_escape_is_rejected(client):
-    repository_id = _import_sample(client)
+def test_symlink_escape_is_rejected(auth_client):
+    repository_id = _import_sample(auth_client)
     root = _repository_root(repository_id)
     secret = get_settings().storage_path / "outside-secret.txt"
     secret.write_text("do not expose me", encoding="utf-8")
@@ -128,23 +128,23 @@ def test_symlink_escape_is_rejected(client):
     except (NotImplementedError, OSError) as exc:
         pytest.skip(f"symlinks are not supported in this environment: {exc}")
 
-    response = _get_file(client, repository_id, "/src/outside-secret.txt")
+    response = _get_file(auth_client, repository_id, "/src/outside-secret.txt")
 
     assert response.status_code == 422
     assert response.json()["code"] == "validation_error"
 
 
-def test_missing_file_returns_not_found(client):
-    repository_id = _import_sample(client)
+def test_missing_file_returns_not_found(auth_client):
+    repository_id = _import_sample(auth_client)
 
-    response = _get_file(client, repository_id, "/does-not-exist.ts")
+    response = _get_file(auth_client, repository_id, "/does-not-exist.ts")
 
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
 
 
-def test_file_endpoint_requires_existing_repository(client):
-    response = _get_file(client, "00000000-0000-0000-0000-000000000000", "/package.json")
+def test_file_endpoint_requires_existing_repository(auth_client):
+    response = _get_file(auth_client, "00000000-0000-0000-0000-000000000000", "/package.json")
 
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"

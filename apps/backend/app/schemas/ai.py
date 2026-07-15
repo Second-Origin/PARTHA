@@ -49,6 +49,10 @@ class AiProviderPublicConfig(CamelModel):
     model: str | None = None
     base_url: str | None = None
     has_api_key: bool = False
+    # Write-only contract: the stored API key is never returned in full. The
+    # last four characters are surfaced so the UI can confirm which key is
+    # saved without ever exposing the secret.
+    api_key_last4: str | None = None
 
 
 class AiProviderTestRequest(CamelModel):

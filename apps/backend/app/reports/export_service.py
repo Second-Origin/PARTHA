@@ -75,7 +75,9 @@ class ExportService:
             return build_architecture_document(self.analysis.architecture_model(request.repository_id))
         if request.target == "dependencies":
             graph = self.analysis.dependency_graph(request.repository_id)
-            record = self.analysis.repository.get(request.repository_id)
+            # Owner-scoped lookup for the report title; dependency_graph above
+            # already resolved (and thus authorised) the repository for this user.
+            record = self.analysis.repository.get_for_owner(request.repository_id, self.analysis.owner_id)
             return build_dependencies_document(graph, record.name if record else request.repository_id)
         return self.documentation.build_document(request.repository_id)
 
