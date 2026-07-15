@@ -35,8 +35,16 @@ async def query_ai(request: AiQueryRequest, service: AiService = Depends(get_ai_
 
 @router.post("/stream")
 async def stream_ai(request: AiQueryRequest, service: AiService = Depends(get_ai_service)) -> StreamingResponse:
+    # Resolve the answer BEFORE returning StreamingResponse. service.query runs
+    # ownership scoping and provider-config validation, so a cross-owner request
+    # (404) or a missing provider key (422) must surface as a normal error
+    # response here — not inside the generator, where 200 headers would already
+    # have been sent and the failure could only abort a stream that "succeeded".
+    # query already computes the full response before any word is emitted, so
+    # awaiting it here changes nothing on the success path.
+    response = await service.query(request)
+
     async def events():
-        response = await service.query(request)
         for word in response.message.content.split(" "):
             yield f"data: {json.dumps({'type': 'content', 'content': word + ' '})}\n\n"
         for citation in response.message.citations or []:
