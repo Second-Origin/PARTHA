@@ -25,13 +25,17 @@ from app.schemas.ai import AiProviderPublicConfig, AiProviderTestRequest
 class ProviderConfigStore(Protocol):
     """The surface the orchestrator depends on, independent of storage."""
 
-    def get_public_config(self) -> AiProviderPublicConfig: ...
+    def get_public_config(self) -> AiProviderPublicConfig:
+        raise NotImplementedError
 
-    def save_config(self, config: AiProviderConfig) -> AiProviderPublicConfig: ...
+    def save_config(self, config: AiProviderConfig) -> AiProviderPublicConfig:
+        raise NotImplementedError
 
-    def read_config(self) -> AiProviderConfig | None: ...
+    def read_config(self) -> AiProviderConfig | None:
+        raise NotImplementedError
 
-    def config_for_test(self, request: AiProviderTestRequest) -> AiProviderConfig: ...
+    def config_for_test(self, request: AiProviderTestRequest) -> AiProviderConfig:
+        raise NotImplementedError
 
 
 class EncryptedProviderConfigStore:

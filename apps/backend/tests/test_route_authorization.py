@@ -14,8 +14,6 @@ import uuid
 
 from fastapi.routing import APIRoute
 
-from tests.conftest import register_user
-
 # The routers guarded by get_current_user at the router level.
 PROTECTED_PREFIXES = ("/repositories", "/analysis", "/ai", "/documentation", "/export")
 
