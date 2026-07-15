@@ -168,6 +168,9 @@ export interface AiProviderPublicConfig {
   model: string | null;
   baseUrl: string | null;
   hasApiKey: boolean;
+  // Write-only key contract: the backend returns only the last four characters,
+  // never the full key. Null when no key is stored.
+  apiKeyLast4: string | null;
 }
 
 export interface AiProviderTestRequest {

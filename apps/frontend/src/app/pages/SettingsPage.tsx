@@ -126,7 +126,13 @@ export function SettingsPage() {
                     type="password"
                     value={settings.apiKey}
                     onChange={(event) => settings.setApiKey(event.target.value)}
-                    placeholder={settings.aiConfig?.provider === settings.provider && settings.aiConfig.hasApiKey ? 'Saved key configured' : 'Enter provider API key'}
+                    placeholder={
+                      settings.aiConfig?.provider === settings.provider && settings.aiConfig.hasApiKey
+                        ? settings.aiConfig.apiKeyLast4
+                          ? `Saved key •••• ${settings.aiConfig.apiKeyLast4}`
+                          : 'Saved key configured'
+                        : 'Enter provider API key'
+                    }
                     className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
