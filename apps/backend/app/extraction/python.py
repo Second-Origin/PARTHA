@@ -266,8 +266,36 @@ class PythonExtractor:
 
         visit([], tree.body)
 
+    def _imported_bindings(self, tree) -> set[str]:
+        """Names this file binds via an import.
+
+        ``import os`` binds ``os``; ``import os.path`` binds the top package
+        ``os``; ``import numpy as np`` binds ``np``; ``from m import Thing``
+        binds ``Thing``. These are the names whose attributes belong to somebody
+        else, which is what makes rebinding them monkey-patching.
+        """
+
+        bindings: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    bindings.add(alias.asname or alias.name.split(".", 1)[0])
+            elif isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    if alias.name != "*":
+                        bindings.add(alias.asname or alias.name)
+        return bindings
+
+    def _attribute_root(self, node):
+        """Resolve ``a.b.c`` to its root ``Name``, or None if not name-rooted."""
+
+        while isinstance(node, ast.Attribute):
+            node = node.value
+        return node if isinstance(node, ast.Name) else None
+
     def _collect_blind_spots(self, tree, path, line_count, diagnostics) -> None:
         normalized = canonical.normalize_repo_path(path)
+        imported = self._imported_bindings(tree)
 
         def flag(node, message: str) -> None:
             # `message` names the construct; it never quotes source. Diagnostics
@@ -294,6 +322,19 @@ class PythonExtractor:
                 # The class itself is still extracted; what a metaclass does to it
                 # at runtime is not modelled, so say so rather than imply we know.
                 flag(node, "metaclass is unsupported")
+            elif isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+                # Rebinding an attribute on a name this file imported mutates an
+                # object defined elsewhere, so any fact stated about that object's
+                # definition is incomplete. Assignment to a local or to `self` is
+                # ordinary and must not be flagged, or the diagnostic is noise.
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for target in targets:
+                    if not isinstance(target, ast.Attribute):
+                        continue
+                    root = self._attribute_root(target)
+                    if root is not None and root.id in imported:
+                        flag(node, "monkey-patching an imported name is unsupported")
+                        break
             elif isinstance(node, ast.Call):
                 func = node.func
                 # These names come from this module's own closed vocabulary, not

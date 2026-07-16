@@ -37,6 +37,55 @@ def test_reflection_is_flagged():
     assert "RI-EXT-UNSUPPORTED" in codes
 
 
+def test_monkeypatching_an_imported_module_is_flagged():
+    codes, _ = _codes("import os\nos.sep = '\\\\'\n")
+    assert "RI-EXT-UNSUPPORTED" in codes
+
+
+def test_monkeypatching_an_imported_class_is_flagged():
+    codes, _ = _codes("from models import Thing\nThing.save = None\n")
+    assert "RI-EXT-UNSUPPORTED" in codes
+
+
+def test_monkeypatching_an_aliased_import_is_flagged():
+    codes, _ = _codes("import numpy as np\nnp.array = None\n")
+    assert "RI-EXT-UNSUPPORTED" in codes
+
+
+def test_monkeypatching_a_nested_attribute_is_flagged():
+    codes, _ = _codes("import os\nos.path.join = None\n")
+    assert "RI-EXT-UNSUPPORTED" in codes
+
+
+def test_augmented_assignment_to_an_import_is_flagged():
+    codes, _ = _codes("import config\nconfig.retries += 1\n")
+    assert "RI-EXT-UNSUPPORTED" in codes
+
+
+# Negative cases: attribute assignment is routine. Only rebinding an attribute on
+# a name this file imported is monkey-patching; flagging the rest would make the
+# diagnostic noise and train people to ignore it.
+def test_self_attribute_assignment_is_not_monkeypatching():
+    codes, _ = _codes("class A:\n    def __init__(self):\n        self.x = 1\n")
+    assert "RI-EXT-UNSUPPORTED" not in codes
+
+
+def test_local_object_attribute_assignment_is_not_monkeypatching():
+    codes, _ = _codes("class C:\n    pass\nc = C()\nc.x = 1\n")
+    assert "RI-EXT-UNSUPPORTED" not in codes
+
+
+def test_rebinding_an_imported_name_itself_is_not_monkeypatching():
+    # Rebinding the local name does not mutate the imported object.
+    codes, _ = _codes("import os\nos = None\n")
+    assert "RI-EXT-UNSUPPORTED" not in codes
+
+
+def test_reading_an_imported_attribute_is_not_monkeypatching():
+    codes, _ = _codes("import os\np = os.sep\n")
+    assert "RI-EXT-UNSUPPORTED" not in codes
+
+
 def test_syntax_error_is_malformed_and_yields_no_symbols():
     result = EXTRACTOR.extract("bad.py", b"def broken(:\n")
     assert [d.code for d in result.diagnostics] == ["RI-SRC-MALFORMED"]
