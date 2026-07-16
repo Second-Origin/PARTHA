@@ -10,8 +10,10 @@ from app.extraction.base import (
     ExtractedNode,
     ExtractedObservation,
     ExtractionResult,
+    RI_EXT_UNSUPPORTED,
     RI_KEY_DUP_SYMBOL,
     RI_SEC_PATH_ESCAPE,
+    RI_SRC_MALFORMED,
     build_evidence,
     decode_source,
     logical_line_count,
@@ -75,6 +77,15 @@ class TypeScriptExtractor:
         nodes: list[ExtractedNode] = []
         diagnostics: list[ExtractedDiagnostic] = []
 
+        if tree.root_node.has_error:
+            diagnostics.append(
+                ExtractedDiagnostic(
+                    code=RI_SRC_MALFORMED, category="malformed source",
+                    severity="error", message="file has TypeScript syntax errors",
+                    path=normalized_path,
+                )
+            )
+
         file_key = canonical.normalize_stable_key("file", f"file:{normalized_path}")
         file_ev, file_diag = build_evidence(
             path, 1, line_count, line_count, producer=self.producer, granularity="file"
@@ -98,6 +109,7 @@ class TypeScriptExtractor:
         )
         self._collect_imports(tree.root_node, path, line_count, file_key, observations)
         self._collect_routes(tree.root_node, path, line_count, file_key, observations)
+        self._collect_blind_spots(tree.root_node, path, line_count, diagnostics)
         return ExtractionResult(
             nodes=tuple(nodes),
             observations=tuple(observations),
@@ -165,6 +177,35 @@ class TypeScriptExtractor:
                 if children and self._node_text(children[0], source) == "path" and len(children) > 1:
                     literal = self._node_text(children[1], source).strip("'\"{}`")
                     emit(node, literal)
+            for child in node.named_children:
+                walk(child)
+
+        walk(root)
+
+    def _collect_blind_spots(self, root, path, line_count, diagnostics) -> None:
+        source = root.text
+        normalized = canonical.normalize_repo_path(path)
+
+        def flag(node, message):
+            diagnostics.append(
+                ExtractedDiagnostic(
+                    code=RI_EXT_UNSUPPORTED, category="unsupported construct",
+                    severity="info", message=message, path=normalized,
+                    span=(node.start_point[0] + 1, node.end_point[0] + 1),
+                )
+            )
+
+        def walk(node):
+            if node.type in ("internal_module", "module") and node.child_by_field_name("name") is not None:
+                flag(node, "namespace/module declaration is unsupported")
+            elif node.type == "call_expression":
+                fn = node.child_by_field_name("function")
+                if fn is not None:
+                    text = self._node_text(fn, source)
+                    if fn.type == "import":
+                        flag(node, "dynamic import() is unsupported")
+                    elif text == "require":
+                        flag(node, "CommonJS require() is unsupported")
             for child in node.named_children:
                 walk(child)
 
