@@ -58,6 +58,7 @@ def _base_manifest() -> dict:
                 {
                     "nodeKind": "repository",
                     "stableKey": "repo:root",
+                    "name": "repository",
                     "evidence": [
                         {"path": "README.md", "startLine": 1, "endLine": 1, "extractor": "repository-inventory", "extractorVersion": "1.0.0"}
                     ],
@@ -65,6 +66,8 @@ def _base_manifest() -> dict:
                 {
                     "nodeKind": "symbol",
                     "stableKey": "src/a.py::f",
+                    "name": "f",
+                    "language": "python",
                     "constructs": ["py.function.def"],
                     "evidence": [
                         {"path": "src/a.py", "startLine": 1, "endLine": 1, "extractor": "python-ast", "extractorVersion": "1.0.0"}
@@ -99,6 +102,9 @@ def test_sanity_base_manifest_loads(tmp_path: Path):
     directory = _write_fixture(tmp_path, _base_manifest())
     fixture = load_fixture(directory, SUPPORT_MATRIX)
     assert fixture.fixture_id == "tmp-fixture"
+    symbol = next(record.fact for record in fixture.expected if record.fact.subject == "src/a.py::f")
+    assert symbol.name == "f"
+    assert symbol.language == "python"
 
 
 @pytest.mark.parametrize(

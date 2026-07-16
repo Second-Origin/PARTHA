@@ -18,11 +18,21 @@ def _span(path: str, start: int, end: int, granularity: str = "span") -> Evidenc
     return EvidenceSpan(path, start, end, "python-ast", "1.0.0", granularity)
 
 
-def _node(stable_key: str, start: int, end: int, *, kind: str = "symbol") -> Fact:
+def _node(
+    stable_key: str,
+    start: int,
+    end: int,
+    *,
+    kind: str = "symbol",
+    name: str | None = None,
+    language: str = "python",
+) -> Fact:
     return Fact(
         fact_type="node",
         kind=kind,
         subject=stable_key,
+        name=name if name is not None else stable_key.rsplit("::", 1)[-1],
+        language=language,
         truth_class="observed",
         evidence=(_span(stable_key.split("::")[0].removeprefix("file:"), start, end),),
     )
@@ -88,6 +98,38 @@ def test_wrong_fact_kind_does_not_match():
     assert report.overall.false_negatives == 1
 
 
+def test_wrong_node_name_is_both_a_miss_and_an_invention():
+    expected = [_labeled(_node("file:a.py::f", 1, 3, name="expected_name"))]
+    actual = [_labeled(_node("file:a.py::f", 1, 3, name="wrong_name"))]
+
+    report = score(expected, actual)
+
+    assert report.overall.true_positives == 0
+    assert report.overall.false_negatives == 1
+    assert report.overall.false_positives == 1
+
+
+def test_wrong_node_language_is_both_a_miss_and_an_invention():
+    expected = [_labeled(_node("file:a.py::f", 1, 3, language="python"))]
+    actual = [_labeled(_node("file:a.py::f", 1, 3, language="typescript"))]
+
+    report = score(expected, actual)
+
+    assert report.overall.true_positives == 0
+    assert report.overall.false_negatives == 1
+    assert report.overall.false_positives == 1
+
+
+def test_correct_node_name_and_language_are_a_true_positive():
+    fact = _node("file:a.py::f", 1, 3, name="f", language="python")
+
+    report = score([_labeled(fact)], [_labeled(fact)])
+
+    assert report.overall.true_positives == 1
+    assert report.overall.false_negatives == 0
+    assert report.overall.false_positives == 0
+
+
 def test_duplicate_actual_fact_counts_one_tp_and_one_fp():
     expected = [_labeled(_node("file:a.py::f", 1, 3))]
     actual = [_labeled(_node("file:a.py::f", 1, 3)), _labeled(_node("file:a.py::f", 1, 3))]
@@ -96,6 +138,28 @@ def test_duplicate_actual_fact_counts_one_tp_and_one_fp():
     assert report.overall.false_positives == 1
     assert report.overall.false_negatives == 0
     assert report.overall.precision == Fraction(1, 2)
+
+
+def test_identical_fact_keys_do_not_cross_match_between_fixtures():
+    fact = _node("file:src/util.py::helper", 1, 3)
+    expected = [
+        _labeled(fact, fixture_id="fixture-a"),
+        _labeled(fact, fixture_id="fixture-b"),
+    ]
+    actual = [
+        _labeled(fact, fixture_id="fixture-b"),
+        _labeled(fact, fixture_id="fixture-b"),
+    ]
+
+    report = score(expected, actual)
+
+    assert report.overall.true_positives == 1
+    assert report.overall.false_positives == 1
+    assert report.overall.false_negatives == 1
+    assert report.overall.precision == Fraction(1, 2)
+    assert report.overall.recall == Fraction(1, 2)
+    assert [item.fixture_id for item in report.true_positives] == ["fixture-b"]
+    assert [item.fixture_id for item in report.false_negatives] == ["fixture-a"]
 
 
 def test_empty_expected_with_invented_facts_is_zero_precision_not_perfect():

@@ -229,6 +229,8 @@ def _build_fact(group: str, raw: dict[str, Any], *, where: str, producers: set[s
             fact_type="node",
             kind=node_kind,
             subject=stable_key,
+            name=str(raw.get("name", "")),
+            language=str(raw.get("language", "")),
             truth_class="observed",
             evidence=evidence,
         )

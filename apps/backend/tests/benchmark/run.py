@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
         with summary_target.open("a", encoding="utf-8") as handle:
             handle.write(report_module.to_step_summary(result))
 
-    print(report_module.to_step_summary(result))
+    print(report_module.to_console_summary(result))
     for reason in result.failures():
         print(f"  - {reason}")
     return result.exit_code

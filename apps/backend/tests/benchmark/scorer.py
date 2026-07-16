@@ -12,6 +12,8 @@ Design decisions that matter for correctness:
 - **Multiset matching.** Counting is multiset-aware, so a fact emitted twice
   when it was expected once scores one true positive and one false positive
   (a duplicate is a real defect, not a free pass).
+- **Fixture-scoped matching.** Identity maps use ``(fixture_id, Fact.key())`` so
+  identical repository-relative paths in separate fixtures cannot cross-match.
 - **Wrong span ⇒ miss.** Because the evidence span set is part of the identity,
   a right-named fact with a wrong line span is one false negative (the expected
   span is unmet) and one false positive (the wrong span was invented).
@@ -100,9 +102,9 @@ def score(expected: list[LabeledFact], actual: list[LabeledFact]) -> ScoreReport
     expected_by_key: dict[tuple, list[LabeledFact]] = defaultdict(list)
     actual_by_key: dict[tuple, list[LabeledFact]] = defaultdict(list)
     for labeled in expected:
-        expected_by_key[labeled.fact.key()].append(labeled)
+        expected_by_key[(labeled.fixture_id, labeled.fact.key())].append(labeled)
     for labeled in actual:
-        actual_by_key[labeled.fact.key()].append(labeled)
+        actual_by_key[(labeled.fixture_id, labeled.fact.key())].append(labeled)
 
     true_positives: list[LabeledFact] = []
     false_negatives: list[LabeledFact] = []

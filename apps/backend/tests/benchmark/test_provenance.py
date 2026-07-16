@@ -34,6 +34,8 @@ def _node(path: str, start: int, end: int, *, extractor: str = "python-ast", ver
         fact_type="node",
         kind="symbol",
         subject=f"{path}::sym",
+        name="sym",
+        language="python",
         truth_class="observed",
         evidence=(EvidenceSpan(path, start, end, extractor, version, granularity),),
     )

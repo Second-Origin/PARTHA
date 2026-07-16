@@ -227,6 +227,22 @@ def to_step_summary(report: BenchmarkReport) -> str:
     )
 
 
+def to_console_summary(report: BenchmarkReport) -> str:
+    """Render the step summary with ASCII-only status markers for local consoles."""
+
+    status = "PASS" if report.passed else "FAIL"
+    scoring = "deferred (#89/#90)" if report.scoring.deferred else "scored"
+    return (
+        f"RI Golden Benchmark: {status}\n"
+        f"- Fixtures: {report.corpus.total}\n"
+        f"- Provenance validity: {_ratio(report.provenance.validity)} "
+        f"({report.provenance.valid_count}/{report.provenance.total})\n"
+        f"- Determinism: {sum(1 for r in report.determinism if r.deterministic)}/{len(report.determinism)} stable\n"
+        f"- Support-matrix parity: {'pass' if report.parity.passed else 'fail'}\n"
+        f"- Precision/recall: {scoring}\n"
+    )
+
+
 def write_reports(report: BenchmarkReport, directory: Path) -> tuple[Path, Path]:
     directory.mkdir(parents=True, exist_ok=True)
     json_path = directory / "benchmark.json"

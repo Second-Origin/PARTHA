@@ -143,7 +143,7 @@ jobs:
           echo "status=$?" >> "$GITHUB_OUTPUT"
 
       - name: Upload benchmark reports
-        if: always()
+        if: always() && steps.ri_benchmark.outcome != 'skipped'
         uses: actions/upload-artifact@v4
         with:
           name: ri-golden-benchmark
@@ -151,7 +151,7 @@ jobs:
           if-no-files-found: error
 
       - name: Enforce benchmark gate
-        if: always()
+        if: always() && steps.ri_benchmark.outcome != 'skipped'
         run: |
           if [ "${{ steps.ri_benchmark.outputs.status }}" != "0" ]; then
             echo "Repository Intelligence golden benchmark failed (exit ${{ steps.ri_benchmark.outputs.status }})."

@@ -69,8 +69,11 @@ mandatory evidence, and machine-blessed output.
 ## Metrics and thresholds
 
 Comparison is by each fact's exact semantic identity (fact type, kind,
-subject/object/predicate, and the full normalized evidence span set) — a
-right-named fact with the wrong line span does **not** match.
+subject/object/predicate, node name/language, and the full normalized evidence
+span set) — a node with the correct stable key but the wrong name or language
+does **not** match, nor does a fact with the wrong line span. Matching is also
+scoped by fixture id, so fixture-relative paths can safely repeat across the
+corpus.
 
 ```
 precision = TP / (TP + FP)          (= 1 when TP + FP = 0, i.e. nothing emitted)
