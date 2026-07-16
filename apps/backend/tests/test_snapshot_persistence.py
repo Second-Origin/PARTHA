@@ -104,8 +104,17 @@ def _evidence(
     )
 
 
-def _populate(store: SnapshotStore, snapshot: RiSnapshot, *, reverse_evidence: bool = False):
-    root_evidence = [_evidence("README.md", 1, 2), _evidence("README.md", 4, 4)]
+def _populate(
+    store: SnapshotStore,
+    snapshot: RiSnapshot,
+    *,
+    reverse_evidence: bool = False,
+    logical_lines: int = 100,
+):
+    root_evidence = [
+        _evidence("README.md", 1, 2, logical_lines=logical_lines),
+        _evidence("README.md", 4, 4, logical_lines=logical_lines),
+    ]
     if reverse_evidence:
         root_evidence.reverse()
     store.add_node(
@@ -121,7 +130,7 @@ def _populate(store: SnapshotStore, snapshot: RiSnapshot, *, reverse_evidence: b
         stable_key="file:src/main.py",
         name="main.py",
         language="python",
-        evidence=[_evidence("src/main.py", 1, 20)],
+        evidence=[_evidence("src/main.py", 1, 20, logical_lines=logical_lines)],
     )
     observation = store.add_observation(
         snapshot,
@@ -129,7 +138,7 @@ def _populate(store: SnapshotStore, snapshot: RiSnapshot, *, reverse_evidence: b
         subject_kind="repository",
         subject_key="repo:root",
         referent_text="src/main.py",
-        evidence=_evidence("src/main.py", 1, 20),
+        evidence=_evidence("src/main.py", 1, 20, logical_lines=logical_lines),
     )
     edge = store.add_edge(
         snapshot,
@@ -140,7 +149,7 @@ def _populate(store: SnapshotStore, snapshot: RiSnapshot, *, reverse_evidence: b
         object_key="file:src/main.py",
         producer="resolver",
         producer_version="1.0.0",
-        evidence=[_evidence("src/main.py", 1, 20, producer="resolver")],
+        evidence=[_evidence("src/main.py", 1, 20, producer="resolver", logical_lines=logical_lines)],
         derived_from=[observation_ref(observation.observation_id)],
     )
     store.add_assertion(
@@ -674,3 +683,184 @@ def test_store_rejects_writes_after_failed_snapshot(db):
     session.rollback()
     with pytest.raises(SnapshotStateError):
         store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[_evidence("README.md")])
+
+
+def _single_evidence(session: Session, snapshot: RiSnapshot) -> RiEvidence:
+    return session.scalars(
+        select(RiEvidence).where(RiEvidence.snapshot_id == snapshot.snapshot_id)
+    ).one()
+
+
+def test_post_insert_span_mutation_beyond_logical_lines_cannot_seal_and_fails(db):
+    session, _ = db
+    repository = _repository(session, _owner(session))
+    store = SnapshotStore(session)
+    snapshot = _begin(store, repository)
+    store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[_evidence("README.md", 1, 1, logical_lines=1)],
+    )
+    # Stretch a persisted span past the single logical line it was allowed.
+    _single_evidence(session, snapshot).end_line = 999
+
+    with pytest.raises(SnapshotSealError, match="not bounded by"):
+        store.seal(snapshot)
+
+    assert snapshot.state == "failed"
+    assert session.scalar(
+        select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")
+    ) == 0
+    # The rejected mutation never reached the persisted row.
+    assert _single_evidence(session, snapshot).end_line == 1
+
+
+def test_post_insert_traversing_evidence_path_cannot_seal_and_fails(db):
+    session, _ = db
+    repository = _repository(session, _owner(session))
+    store = SnapshotStore(session)
+    snapshot = _begin(store, repository)
+    store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[_evidence("README.md", 1, 1)],
+    )
+    # A traversal survives the DB's leading-slash check but must never seal.
+    _single_evidence(session, snapshot).path = "../../etc/passwd"
+
+    with pytest.raises(SnapshotSealError, match="escapes the repository root"):
+        store.seal(snapshot)
+
+    assert snapshot.state == "failed"
+    assert _single_evidence(session, snapshot).path == "README.md"
+
+
+def test_post_insert_unnormalized_evidence_path_cannot_seal(db):
+    session, _ = db
+    repository = _repository(session, _owner(session))
+    store = SnapshotStore(session)
+    snapshot = _begin(store, repository)
+    store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[_evidence("README.md", 1, 1)],
+    )
+    # Legal to store (no leading slash) but not in normalized form.
+    _single_evidence(session, snapshot).path = "./README.md"
+
+    with pytest.raises(SnapshotSealError, match="not in normalized form"):
+        store.seal(snapshot)
+    assert snapshot.state == "failed"
+
+
+def test_database_rejects_evidence_span_beyond_logical_line_count(db):
+    session, _ = db
+    repository = _repository(session, _owner(session))
+    store = SnapshotStore(session)
+    snapshot = _begin(store, repository)
+    node = store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[_evidence("README.md", 1, 1, logical_lines=1)],
+    )
+    session.commit()
+
+    session.add(
+        RiEvidence(
+            snapshot_id=snapshot.snapshot_id,
+            node_ref=node.id,
+            path="README.md",
+            start_line=1,
+            end_line=999,
+            logical_line_count=1,
+            granularity="span",
+            extractor="inventory",
+            extractor_version="1.0.0",
+        )
+    )
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+
+def test_conflicting_logical_line_count_on_duplicate_evidence_is_rejected(db):
+    session, _ = db
+    repository = _repository(session, _owner(session))
+    store = SnapshotStore(session)
+    snapshot = _begin(store, repository)
+    with pytest.raises(SnapshotSealError, match="conflicting logical_line_count"):
+        store.add_node(
+            snapshot,
+            node_kind="repository",
+            stable_key="repo:root",
+            evidence=[
+                _evidence("README.md", 1, 1, logical_lines=10),
+                _evidence("README.md", 1, 1, logical_lines=20),
+            ],
+        )
+    session.rollback()
+
+
+def test_get_or_reuse_validates_revision_and_repository_before_reuse(db):
+    session, _ = db
+    owner = _owner(session)
+    repository = _repository(session, owner)
+    store = SnapshotStore(session)
+    sealed = _seal(store, repository)
+
+    # Malformed: a 'git' request carrying the sealed snapshot's upload value.
+    # The old code matched find_completed on value alone and would have reused
+    # the upload snapshot; the revision must be validated first.
+    with pytest.raises(SnapshotSealError, match="git revisions require"):
+        store.get_or_reuse(
+            repository_id=repository.id,
+            revision=Revision("git", UPLOAD_REVISION),
+            producer_version_set=PRODUCERS,
+        )
+
+    # A valid but mismatched revision is rejected before the reuse lookup.
+    with pytest.raises(SnapshotSealError, match="does not match"):
+        store.get_or_reuse(
+            repository_id=repository.id,
+            revision=Revision("upload", "sha256:" + "b" * 64),
+            producer_version_set=PRODUCERS,
+        )
+
+    # A valid identical semantic identity still reuses the completed snapshot.
+    reused, was_reused = store.get_or_reuse(
+        repository_id=repository.id,
+        revision=Revision("upload", UPLOAD_REVISION),
+        producer_version_set=PRODUCERS,
+    )
+    assert was_reused is True and reused.snapshot_id == sealed.snapshot_id
+
+    # A different valid semantic identity still starts a new building attempt.
+    fresh, reused_fresh = store.get_or_reuse(
+        repository_id=repository.id,
+        revision=Revision("upload", UPLOAD_REVISION),
+        producer_version_set=PRODUCERS,
+        config={"pipeline": ["extract"]},
+    )
+    assert reused_fresh is False and fresh.state == "building"
+
+
+def test_logical_line_count_is_internal_and_does_not_alter_the_canonical_hash(db):
+    session, _ = db
+    owner = _owner(session)
+    first_repo = _repository(session, owner)
+    second_repo = _repository(session, owner)
+    first = _begin(SnapshotStore(session), first_repo)
+    _populate(SnapshotStore(session), first, logical_lines=100)
+    first = SnapshotStore(session).seal(first)
+    second = _begin(SnapshotStore(session), second_repo)
+    _populate(SnapshotStore(session), second, logical_lines=500)
+    second = SnapshotStore(session).seal(second)
+
+    assert first.state == "completed" and second.state == "completed"
+    # Producers reported different logical-line counts for identical graphs; the
+    # canonical hash excludes that internal metadata, so the hashes still match.
+    assert first.canonical_graph_hash == second.canonical_graph_hash
