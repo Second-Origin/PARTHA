@@ -25,13 +25,108 @@ from app.extraction.naming import (
 from app.intelligence import canonical
 
 _ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
-_DYNAMIC_IMPORT_CALLS = {"import_module", "__import__"}
 _REFLECTION_CALLS = {"getattr", "setattr", "delattr"}
 
 # Collectors emit this; assign_ordinals sets the RFC §6.4 value on the way out.
 # It is deliberately invalid (ordinals are one-based) so a result that skipped
 # assignment fails loudly rather than persisting a wrong identity.
 _UNASSIGNED_ORDINAL = 0
+
+_BINDING_LOCAL = "local"
+_BINDING_IMPORTED = "imported"
+_BINDING_IMPORTLIB_MODULE = "importlib-module"
+_BINDING_IMPORTLIB_FUNCTION = "importlib-import-module"
+
+
+class _ScopeDeclarations(ast.NodeVisitor):
+    """Find bindings that Python makes local for an entire function scope."""
+
+    def __init__(self) -> None:
+        self.names: set[str] = set()
+        self.global_names: set[str] = set()
+        self.nonlocal_names: set[str] = set()
+
+    def visit_Name(self, node) -> None:
+        if isinstance(node.ctx, (ast.Store, ast.Del)):
+            self.names.add(node.id)
+
+    def visit_Import(self, node) -> None:
+        for alias in node.names:
+            self.names.add(alias.asname or alias.name.split(".", 1)[0])
+
+    def visit_ImportFrom(self, node) -> None:
+        for alias in node.names:
+            if alias.name != "*":
+                self.names.add(alias.asname or alias.name)
+
+    def visit_FunctionDef(self, node) -> None:
+        self.names.add(node.name)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_ClassDef(self, node) -> None:
+        self.names.add(node.name)
+
+    def visit_Lambda(self, node) -> None:
+        # A lambda has its own lexical scope.
+        return
+
+    def visit_Global(self, node) -> None:
+        self.global_names.update(node.names)
+
+    def visit_Nonlocal(self, node) -> None:
+        self.nonlocal_names.update(node.names)
+
+
+class _BindingScope:
+    """The subset of Python name resolution needed by blind-spot diagnostics."""
+
+    def __init__(
+        self,
+        parent: _BindingScope | None = None,
+        *,
+        kind: str = "module",
+        bindings: dict[str, str] | None = None,
+        global_names: set[str] | None = None,
+        nonlocal_names: set[str] | None = None,
+    ) -> None:
+        self.parent = parent
+        self.kind = kind
+        self.bindings = bindings or {}
+        self.global_names = global_names or set()
+        self.nonlocal_names = nonlocal_names or set()
+
+    def _module_scope(self) -> _BindingScope:
+        scope = self
+        while scope.parent is not None:
+            scope = scope.parent
+        return scope
+
+    def _nonlocal_parent(self) -> _BindingScope | None:
+        scope = self.parent
+        while scope is not None and scope.kind == "class":
+            scope = scope.parent
+        return scope
+
+    def resolve(self, name: str) -> str | None:
+        if name in self.global_names:
+            return self._module_scope().bindings.get(name)
+        if name in self.nonlocal_names:
+            parent = self._nonlocal_parent()
+            return parent.resolve(name) if parent is not None else None
+        if name in self.bindings:
+            return self.bindings[name]
+        return self.parent.resolve(name) if self.parent is not None else None
+
+    def bind(self, name: str, binding: str) -> None:
+        if name in self.global_names:
+            self._module_scope().bindings[name] = binding
+        elif name in self.nonlocal_names:
+            parent = self._nonlocal_parent()
+            if parent is not None:
+                parent.bind(name, binding)
+        else:
+            self.bindings[name] = binding
 
 
 class PythonExtractor:
@@ -265,26 +360,6 @@ class PythonExtractor:
 
         visit([], tree.body)
 
-    def _imported_bindings(self, tree) -> set[str]:
-        """Names this file binds via an import.
-
-        ``import os`` binds ``os``; ``import os.path`` binds the top package
-        ``os``; ``import numpy as np`` binds ``np``; ``from m import Thing``
-        binds ``Thing``. These are the names whose attributes belong to somebody
-        else, which is what makes rebinding them monkey-patching.
-        """
-
-        bindings: set[str] = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    bindings.add(alias.asname or alias.name.split(".", 1)[0])
-            elif isinstance(node, ast.ImportFrom):
-                for alias in node.names:
-                    if alias.name != "*":
-                        bindings.add(alias.asname or alias.name)
-        return bindings
-
     def _attribute_root(self, node):
         """Resolve ``a.b.c`` to its root ``Name``, or None if not name-rooted."""
 
@@ -292,9 +367,63 @@ class PythonExtractor:
             node = node.value
         return node if isinstance(node, ast.Name) else None
 
+    def _function_scope(self, node, parent: _BindingScope) -> _BindingScope:
+        declarations = _ScopeDeclarations()
+        body = node.body if isinstance(node.body, list) else []
+        for statement in body:
+            declarations.visit(statement)
+
+        arguments = node.args
+        parameters = [
+            *(argument.arg for argument in arguments.posonlyargs),
+            *(argument.arg for argument in arguments.args),
+            *(argument.arg for argument in arguments.kwonlyargs),
+        ]
+        if arguments.vararg is not None:
+            parameters.append(arguments.vararg.arg)
+        if arguments.kwarg is not None:
+            parameters.append(arguments.kwarg.arg)
+
+        local_names = (declarations.names | set(parameters)) - declarations.global_names - declarations.nonlocal_names
+        return _BindingScope(
+            parent,
+            kind="function",
+            bindings={name: _BINDING_LOCAL for name in local_names},
+            global_names=declarations.global_names,
+            nonlocal_names=declarations.nonlocal_names,
+        )
+
+    @staticmethod
+    def _function_parent(scope: _BindingScope) -> _BindingScope:
+        # A method's unqualified names do not resolve through its class body.
+        while scope.kind == "class" and scope.parent is not None:
+            scope = scope.parent
+        return scope
+
+    @staticmethod
+    def _assignment_attributes(target):
+        """Yield attributes from assignment targets, including unpacking."""
+
+        if isinstance(target, ast.Attribute):
+            yield target
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for element in target.elts:
+                yield from PythonExtractor._assignment_attributes(element)
+        elif isinstance(target, ast.Starred):
+            yield from PythonExtractor._assignment_attributes(target.value)
+
+    @staticmethod
+    def _target_names(target):
+        if isinstance(target, ast.Name):
+            yield target.id
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for element in target.elts:
+                yield from PythonExtractor._target_names(element)
+        elif isinstance(target, ast.Starred):
+            yield from PythonExtractor._target_names(target.value)
+
     def _collect_blind_spots(self, tree, path, line_count, diagnostics) -> None:
         normalized = canonical.normalize_repo_path(path)
-        imported = self._imported_bindings(tree)
 
         def flag(node, message: str) -> None:
             # `message` names the construct; it never quotes source. Diagnostics
@@ -312,38 +441,180 @@ class PythonExtractor:
                 )
             )
 
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and any(a.name == "*" for a in node.names):
-                flag(node, "star-import is unsupported")
-            elif isinstance(node, ast.ClassDef) and any(
-                keyword.arg == "metaclass" for keyword in node.keywords
-            ):
-                # The class itself is still extracted; what a metaclass does to it
-                # at runtime is not modelled, so say so rather than imply we know.
-                flag(node, "metaclass is unsupported")
-            elif isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
-                # Rebinding an attribute on a name this file imported mutates an
-                # object defined elsewhere, so any fact stated about that object's
-                # definition is incomplete. Assignment to a local or to `self` is
-                # ordinary and must not be flagged, or the diagnostic is noise.
-                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-                for target in targets:
-                    if not isinstance(target, ast.Attribute):
+        def bind_import(node, scope: _BindingScope) -> None:
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    name = alias.asname or alias.name.split(".", 1)[0]
+                    is_importlib_module = alias.name == "importlib" or (
+                        alias.asname is None and alias.name.startswith("importlib.")
+                    )
+                    scope.bind(
+                        name,
+                        _BINDING_IMPORTLIB_MODULE if is_importlib_module else _BINDING_IMPORTED,
+                    )
+            else:
+                for alias in node.names:
+                    if alias.name == "*":
                         continue
-                    root = self._attribute_root(target)
-                    if root is not None and root.id in imported:
+                    name = alias.asname or alias.name
+                    is_import_module = node.module == "importlib" and alias.name == "import_module"
+                    scope.bind(
+                        name,
+                        _BINDING_IMPORTLIB_FUNCTION if is_import_module else _BINDING_IMPORTED,
+                    )
+
+        def bind_target_names(target, scope: _BindingScope) -> None:
+            for name in self._target_names(target):
+                scope.bind(name, _BINDING_LOCAL)
+
+        def is_imported_name(name: str, scope: _BindingScope) -> bool:
+            return scope.resolve(name) in {
+                _BINDING_IMPORTED,
+                _BINDING_IMPORTLIB_MODULE,
+                _BINDING_IMPORTLIB_FUNCTION,
+            }
+
+        def flag_monkeypatch(node, targets, scope: _BindingScope) -> None:
+            for target in targets:
+                for attribute in self._assignment_attributes(target):
+                    root = self._attribute_root(attribute)
+                    if root is not None and is_imported_name(root.id, scope):
                         flag(node, "monkey-patching an imported name is unsupported")
-                        break
+                        return
+
+        def is_dynamic_import_call(func, scope: _BindingScope) -> str | None:
+            if isinstance(func, ast.Name):
+                if func.id == "__import__":
+                    # It is built in only while this scope has not rebound it.
+                    return func.id if scope.resolve(func.id) is None else None
+                if scope.resolve(func.id) == _BINDING_IMPORTLIB_FUNCTION:
+                    return "import_module"
+            elif (
+                isinstance(func, ast.Attribute)
+                and func.attr == "import_module"
+                and isinstance(func.value, ast.Name)
+                and scope.resolve(func.value.id) == _BINDING_IMPORTLIB_MODULE
+            ):
+                return "import_module"
+            return None
+
+        def scan_function_signature(node, scope: _BindingScope) -> None:
+            for decorator in node.decorator_list:
+                scan(decorator, scope)
+            for default in (*node.args.defaults, *node.args.kw_defaults):
+                if default is not None:
+                    scan(default, scope)
+            for argument in (
+                *node.args.posonlyargs,
+                *node.args.args,
+                *node.args.kwonlyargs,
+            ):
+                if argument.annotation is not None:
+                    scan(argument.annotation, scope)
+            if node.args.vararg is not None and node.args.vararg.annotation is not None:
+                scan(node.args.vararg.annotation, scope)
+            if node.args.kwarg is not None and node.args.kwarg.annotation is not None:
+                scan(node.args.kwarg.annotation, scope)
+            if node.returns is not None:
+                scan(node.returns, scope)
+
+        def scan(node, scope: _BindingScope) -> None:
+            if isinstance(node, ast.ImportFrom):
+                if any(alias.name == "*" for alias in node.names):
+                    flag(node, "star-import is unsupported")
+                bind_import(node, scope)
+            elif isinstance(node, ast.Import):
+                bind_import(node, scope)
+            elif isinstance(node, ast.ClassDef):
+                if any(
+                    keyword.arg == "metaclass" for keyword in node.keywords
+                ):
+                    # The class itself is still extracted; what a metaclass does to it
+                    # at runtime is not modelled, so say so rather than imply we know.
+                    flag(node, "metaclass is unsupported")
+                for decorator in node.decorator_list:
+                    scan(decorator, scope)
+                for base in node.bases:
+                    scan(base, scope)
+                for keyword in node.keywords:
+                    scan(keyword.value, scope)
+                scope.bind(node.name, _BINDING_LOCAL)
+                class_scope = _BindingScope(scope, kind="class")
+                for statement in node.body:
+                    scan(statement, class_scope)
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                scan_function_signature(node, scope)
+                scope.bind(node.name, _BINDING_LOCAL)
+                function_scope = self._function_scope(node, self._function_parent(scope))
+                for statement in node.body:
+                    scan(statement, function_scope)
+            elif isinstance(node, ast.Lambda):
+                for default in (*node.args.defaults, *node.args.kw_defaults):
+                    if default is not None:
+                        scan(default, scope)
+                lambda_scope = self._function_scope(node, self._function_parent(scope))
+                scan(node.body, lambda_scope)
+            elif isinstance(node, ast.Assign):
+                scan(node.value, scope)
+                flag_monkeypatch(node, node.targets, scope)
+                for target in node.targets:
+                    bind_target_names(target, scope)
+            elif isinstance(node, ast.AugAssign):
+                scan(node.value, scope)
+                flag_monkeypatch(node, [node.target], scope)
+                bind_target_names(node.target, scope)
+            elif isinstance(node, ast.AnnAssign):
+                if node.annotation is not None:
+                    scan(node.annotation, scope)
+                if node.value is not None:
+                    scan(node.value, scope)
+                flag_monkeypatch(node, [node.target], scope)
+                bind_target_names(node.target, scope)
+            elif isinstance(node, (ast.For, ast.AsyncFor)):
+                scan(node.iter, scope)
+                flag_monkeypatch(node, [node.target], scope)
+                bind_target_names(node.target, scope)
+                for statement in node.body:
+                    scan(statement, scope)
+                for statement in node.orelse:
+                    scan(statement, scope)
+            elif isinstance(node, (ast.With, ast.AsyncWith)):
+                for item in node.items:
+                    scan(item.context_expr, scope)
+                    if item.optional_vars is not None:
+                        flag_monkeypatch(node, [item.optional_vars], scope)
+                        bind_target_names(item.optional_vars, scope)
+                for statement in node.body:
+                    scan(statement, scope)
+            elif isinstance(node, ast.ExceptHandler):
+                if node.type is not None:
+                    scan(node.type, scope)
+                if node.name is not None:
+                    scope.bind(node.name, _BINDING_LOCAL)
+                for statement in node.body:
+                    scan(statement, scope)
+            elif isinstance(node, ast.NamedExpr):
+                scan(node.value, scope)
+                bind_target_names(node.target, scope)
             elif isinstance(node, ast.Call):
                 func = node.func
                 # These names come from this module's own closed vocabulary, not
                 # from arbitrary source text, so naming them leaks nothing.
                 if isinstance(func, ast.Name) and func.id in _REFLECTION_CALLS:
                     flag(node, f"reflection via {func.id}() is unsupported")
-                elif isinstance(func, ast.Name) and func.id in _DYNAMIC_IMPORT_CALLS:
-                    flag(node, f"dynamic import via {func.id}() is unsupported")
-                elif isinstance(func, ast.Attribute) and func.attr in _DYNAMIC_IMPORT_CALLS:
-                    flag(node, f"dynamic import via {func.attr}() is unsupported")
+                else:
+                    dynamic_import = is_dynamic_import_call(func, scope)
+                    if dynamic_import is not None:
+                        flag(node, f"dynamic import via {dynamic_import}() is unsupported")
+                for child in ast.iter_child_nodes(node):
+                    scan(child, scope)
+            else:
+                for child in ast.iter_child_nodes(node):
+                    scan(child, scope)
+
+        module_scope = _BindingScope()
+        for statement in tree.body:
+            scan(statement, module_scope)
 
     def _decorator_name(self, decorator) -> str | None:
         target = decorator.func if isinstance(decorator, ast.Call) else decorator

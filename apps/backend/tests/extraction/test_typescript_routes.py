@@ -47,6 +47,21 @@ def test_nested_router_children_are_routes():
     assert sorted(_routes("src/app/routes/router.ts", source)) == ["/", "/nested"]
 
 
+def test_router_ignores_paths_in_non_route_entry_properties():
+    source = (
+        "export const router = createBrowserRouter([\n"
+        "  {\n"
+        "    path: '/',\n"
+        "    handle: { path: '/metadata' },\n"
+        "    element: { path: '/element-prop' },\n"
+        "    metadata: { nested: { path: '/arbitrary' } },\n"
+        "    children: [{ path: '/nested', handle: { path: '/nested-metadata' } }],\n"
+        "  },\n"
+        "]);\n"
+    )
+    assert sorted(_routes("src/app/routes/router.ts", source)) == ["/", "/nested"]
+
+
 def test_router_options_argument_is_not_a_route_table():
     # createBrowserRouter(routes, opts) — only the first argument is the route
     # table; `path` in the options object is not a route.
