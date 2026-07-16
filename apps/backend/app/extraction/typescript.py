@@ -14,6 +14,7 @@ from app.extraction.base import (
     RI_KEY_DUP_SYMBOL,
     RI_SEC_PATH_ESCAPE,
     RI_SRC_MALFORMED,
+    assign_ordinals,
     build_evidence,
     decode_source,
     logical_line_count,
@@ -27,6 +28,11 @@ _TSX_LANGUAGE = Language(tsts.language_tsx())
 # react-router data-router factories: same call shape, same route-table argument.
 _ROUTER_FACTORIES = {"createBrowserRouter", "createHashRouter", "createMemoryRouter"}
 _ROUTE_ELEMENTS = {"Route"}
+
+# Collectors emit this; assign_ordinals sets the RFC §6.4 value on the way out.
+# It is deliberately invalid (ordinals are one-based) so a result that skipped
+# assignment fails loudly rather than persisting a wrong identity.
+_UNASSIGNED_ORDINAL = 0
 
 _NAMED_DECLARATIONS = {
     "function_declaration": "name",
@@ -116,16 +122,14 @@ class TypeScriptExtractor:
         self._collect_blind_spots(tree.root_node, path, line_count, diagnostics)
         return ExtractionResult(
             nodes=tuple(nodes),
-            observations=tuple(observations),
+            observations=assign_ordinals(observations),
             diagnostics=tuple(diagnostics),
         )
 
     def _collect_imports(self, root, path, line_count, file_key, observations) -> None:
         source = root.text
-        ordinal = len(observations)
 
         def walk(node):
-            nonlocal ordinal
             if node.type in ("import_statement", "export_statement"):
                 source_node = node.child_by_field_name("source")
                 if source_node is not None:
@@ -135,12 +139,11 @@ class TypeScriptExtractor:
                         line_count, producer=self.producer,
                     )
                     if ev is not None:
-                        ordinal += 1
                         observations.append(
                             ExtractedObservation(
                                 observed_kind="import", subject_kind="file",
                                 subject_key=file_key, referent_text=literal,
-                                ordinal=ordinal, evidence=ev,
+                                ordinal=_UNASSIGNED_ORDINAL, evidence=ev,
                             )
                         )
             for child in node.named_children:
@@ -160,10 +163,8 @@ class TypeScriptExtractor:
 
         source = root.text
         seen: set[int] = set()
-        ordinal = len(observations)
 
         def emit(node, literal):
-            nonlocal ordinal
             if node.id in seen:
                 return
             seen.add(node.id)
@@ -172,12 +173,11 @@ class TypeScriptExtractor:
                 line_count, producer=self.producer,
             )
             if ev is not None:
-                ordinal += 1
                 observations.append(
                     ExtractedObservation(
                         observed_kind="route", subject_kind="file",
                         subject_key=file_key, referent_text=literal,
-                        ordinal=ordinal, evidence=ev,
+                        ordinal=_UNASSIGNED_ORDINAL, evidence=ev,
                     )
                 )
 
@@ -269,7 +269,6 @@ class TypeScriptExtractor:
     ) -> None:
         assigner = DiscriminatorAssigner()
         source = root.text  # bytes of the whole tree
-        counter = {"n": 0}  # mutable box so the one running ordinal is shared
 
         def emit(name_node, decl_node, scope, exported):
             """Emit one symbol node + its definition observation; return the name."""
@@ -286,7 +285,6 @@ class TypeScriptExtractor:
                 if diag is not None:
                     diagnostics.append(diag)
                 return None
-            counter["n"] += 1
             nodes.append(
                 ExtractedNode(
                     node_kind="symbol", stable_key=key, name=name,
@@ -297,7 +295,8 @@ class TypeScriptExtractor:
             observations.append(
                 ExtractedObservation(
                     observed_kind="definition", subject_kind="symbol",
-                    subject_key=key, referent_text=None, ordinal=counter["n"], evidence=ev,
+                    subject_key=key, referent_text=None,
+                    ordinal=_UNASSIGNED_ORDINAL, evidence=ev,
                 )
             )
             if duplicate:

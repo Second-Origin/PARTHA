@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections import defaultdict
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from typing import Protocol, runtime_checkable
 
 from app.intelligence import canonical
@@ -82,6 +83,39 @@ _CATEGORY = {
     RI_SEC_PATH_ESCAPE: "path escape",
     RI_KEY_DUP_SYMBOL: "duplicate symbol",
 }
+
+
+def assign_ordinals(
+    observations: Sequence[ExtractedObservation],
+) -> tuple[ExtractedObservation, ...]:
+    """Set RFC §6.4 ordinals: source order among otherwise-identical observations.
+
+    ``ordinal`` exists to separate observations whose *other* identity fields are
+    all equal — two identical occurrences on one line, while columns are deferred.
+    It is deliberately not a file-wide counter: observations that already differ
+    in kind, subject, referent text, or span are distinct without it and each
+    start at 1.
+
+    Collectors emit a placeholder ordinal; this is the single authority that sets
+    the real value, so the grouping key here stays in lockstep with the identity
+    document that ``canonical.compute_observation_id`` hashes.
+    """
+
+    counts: dict[tuple[object, ...], int] = defaultdict(int)
+    assigned: list[ExtractedObservation] = []
+    for observation in observations:
+        identity = (
+            observation.observed_kind,
+            observation.subject_kind,
+            observation.subject_key,
+            observation.referent_text,
+            observation.evidence.path,
+            observation.evidence.start_line,
+            observation.evidence.end_line,
+        )
+        counts[identity] += 1
+        assigned.append(replace(observation, ordinal=counts[identity]))
+    return tuple(assigned)
 
 
 def logical_line_count(text: str) -> int:
