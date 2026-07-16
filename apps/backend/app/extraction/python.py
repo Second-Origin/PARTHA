@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-import posixpath
 
 from app.extraction.base import (
     ExtractedDiagnostic,

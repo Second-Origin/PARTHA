@@ -196,11 +196,12 @@ assert against it so they cannot drift.
 | Supported → node/observation | Not supported → diagnostic |
 | --- | --- |
 | file node (whole-file evidence) | dynamic `import()` → `RI-EXT-UNSUPPORTED` |
-| `import`/`export … from` → `import` observation | decorators → `RI-EXT-UNSUPPORTED` |
-| function decls (incl. nested, arrow assigned to const) → symbol node + `definition` obs | `namespace` / ambient `module` → `RI-EXT-UNSUPPORTED` |
-| class decls + methods (incl. nested) → symbol nodes | `export =` / `require(...)` (CommonJS) → `RI-EXT-UNSUPPORTED` |
+| module node (`mod:<dir>`, directory-scoped, language-neutral) | decorators → `RI-EXT-UNSUPPORTED` |
+| `import`/`export … from` → `import` observation | `namespace` / ambient `module` → `RI-EXT-UNSUPPORTED` |
+| function decls (incl. nested, arrow assigned to const) → symbol node + `definition` obs | `export =` / `require(...)` (CommonJS) → `RI-EXT-UNSUPPORTED` |
+| class decls + methods (incl. nested) → symbol nodes | |
 | `interface` / `type` / `enum` / exported `const` → symbol nodes | |
-| react-router routes (`<Route path=…>`, `createBrowserRouter` entries) → `route` obs | |
+| react-router routes (`<Route path=…>`, router-factory route tables) → `route` obs | |
 
 > **Exports** (an explicit #89 deliverable) are represented as an `exported: true`
 > **node property** on the symbol they qualify — not a separate node kind. A
@@ -222,12 +223,12 @@ assert against it so they cannot drift.
 
 | Supported → node/observation | Not supported → diagnostic |
 | --- | --- |
-| module node (whole-file evidence) | `import *` (star-import) → `RI-EXT-UNSUPPORTED` |
-| `import` / `from … import` → `import` observation | dynamic import (`importlib`, `__import__`) → `RI-EXT-UNSUPPORTED` |
-| function defs (incl. nested, async) → symbol node + `definition` obs | monkey-patching / reflection (`setattr`/`getattr`) → `RI-EXT-UNSUPPORTED` |
-| class defs + methods (incl. nested) → symbol nodes | metaclasses → `RI-EXT-UNSUPPORTED` |
-| decorators → node property on the decorated symbol | syntax error → `RI-SRC-MALFORMED` (whole file, no facts) |
-| FastAPI route decorators → `route` obs (literal path only) | |
+| module node (`mod:<dir>`, directory-scoped, language-neutral) | `import *` (star-import) → `RI-EXT-UNSUPPORTED` |
+| `import` / `from … import` → `import` observation | dynamic import (`import_module`, bare or via `importlib`; `__import__`) → `RI-EXT-UNSUPPORTED` |
+| function defs (incl. nested, async) → symbol node + `definition` obs | reflection (`getattr`/`setattr`/`delattr`) → `RI-EXT-UNSUPPORTED` |
+| class defs + methods (incl. nested) → symbol nodes | monkey-patching (rebinding an attribute on an imported name) → `RI-EXT-UNSUPPORTED` |
+| decorators → `decorator` observation (own span) + node property | metaclasses → `RI-EXT-UNSUPPORTED` |
+| FastAPI route decorators → `route` obs (literal path only) | syntax error → `RI-SRC-MALFORMED` (whole file, no facts) |
 
 ## 7. Stable keys, qualified names, spans (shared, `base.py`)
 
