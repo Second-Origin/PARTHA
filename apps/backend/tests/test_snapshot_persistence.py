@@ -8,8 +8,7 @@ from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-# Import registers SQLite foreign-key enforcement on every Engine connection.
-import app.core.database  # noqa: F401
+from app.core.database import register_sqlite_foreign_key_enforcement
 from app.intelligence import canonical
 from app.intelligence.snapshot_store import (
     Evidence,
@@ -41,6 +40,9 @@ PRODUCERS = ["inventory@1.0.0", "resolver@1.0.0", "classifier@1.0.0"]
 
 @pytest.fixture()
 def db(tmp_path):
+    # These snapshot tables rely on foreign-key enforcement; SQLite only honors
+    # it when this listener is registered on the Engine class (idempotent).
+    register_sqlite_foreign_key_enforcement()
     engine = create_engine(f"sqlite:///{tmp_path / 'snapshots.db'}")
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
