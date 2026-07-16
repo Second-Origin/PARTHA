@@ -18,6 +18,8 @@ from app.extraction.base import (
 from app.extraction.naming import DiscriminatorAssigner, symbol_stable_key
 from app.intelligence import canonical
 
+_ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
+
 
 class PythonExtractor:
     name = "python-ast"
@@ -166,6 +168,9 @@ class PythonExtractor:
                     if diag is not None:
                         diagnostics.append(diag)
                 else:
+                    decorators = [self._decorator_name(d) for d in getattr(child, "decorator_list", [])]
+                    decorators = [d for d in decorators if d]
+                    properties = {"decorators": decorators} if decorators else None
                     nodes.append(
                         ExtractedNode(
                             node_kind="symbol",
@@ -173,6 +178,7 @@ class PythonExtractor:
                             name=child.name,
                             language="python",
                             evidence=(ev,),
+                            properties=properties,
                         )
                     )
                     ordinal += 1
@@ -186,6 +192,26 @@ class PythonExtractor:
                             evidence=ev,
                         )
                     )
+                    for route_path, route_node in self._route_paths(child):
+                        route_ev, route_diag = build_evidence(
+                            path, route_node.lineno, route_node.end_lineno or route_node.lineno,
+                            line_count, producer=self.producer,
+                        )
+                        if route_ev is None:
+                            if route_diag is not None:
+                                diagnostics.append(route_diag)
+                            continue
+                        ordinal += 1
+                        observations.append(
+                            ExtractedObservation(
+                                observed_kind="route",
+                                subject_kind="symbol",
+                                subject_key=canonical.normalize_stable_key("symbol", final_key),
+                                referent_text=route_path,
+                                ordinal=ordinal,
+                                evidence=route_ev,
+                            )
+                        )
                 if duplicate:
                     diagnostics.append(
                         ExtractedDiagnostic(
@@ -200,3 +226,22 @@ class PythonExtractor:
                 visit([*scope, child.name], child.body)
 
         visit([], tree.body)
+
+    def _decorator_name(self, decorator) -> str | None:
+        target = decorator.func if isinstance(decorator, ast.Call) else decorator
+        parts: list[str] = []
+        while isinstance(target, ast.Attribute):
+            parts.append(target.attr)
+            target = target.value
+        if isinstance(target, ast.Name):
+            parts.append(target.id)
+        return ".".join(reversed(parts)) if parts else None
+
+    def _route_paths(self, symbol):
+        for decorator in getattr(symbol, "decorator_list", []):
+            if not isinstance(decorator, ast.Call) or not isinstance(decorator.func, ast.Attribute):
+                continue
+            if decorator.func.attr not in _ROUTE_METHODS:
+                continue
+            if decorator.args and isinstance(decorator.args[0], ast.Constant) and isinstance(decorator.args[0].value, str):
+                yield decorator.args[0].value, decorator
