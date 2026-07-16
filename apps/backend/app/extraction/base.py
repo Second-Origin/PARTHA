@@ -131,8 +131,10 @@ def build_evidence(
 ) -> tuple[ExtractedEvidence | None, ExtractedDiagnostic | None]:
     """Validate a span and path (RFC §4.2, §6.2), returning evidence or a diagnostic.
 
-    ``producer`` is the ``name@version`` identifier, carried into the diagnostic
-    so callers do not have to duplicate it.
+    ``producer`` is the emitting extractor's ``name@version`` identifier. It is
+    accepted for call-site uniformity across extractors; the diagnostic's producer
+    is recorded when the extraction result is persisted to the snapshot store, not
+    embedded in the returned ``ExtractedDiagnostic`` here.
     """
 
     try:
