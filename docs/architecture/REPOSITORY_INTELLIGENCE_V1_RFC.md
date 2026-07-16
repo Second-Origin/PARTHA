@@ -5,19 +5,22 @@
 | **RFC number** | RFC-0001 |
 | **Title** | Repository Intelligence v1 Schema and Evidence Contract |
 | **Tracking issue** | [Second-Origin/PARTHA#86](https://github.com/Second-Origin/PARTHA/issues/86) |
-| **Proposed schema version** | `ri.v1` (proposed for ratification; not yet ratified) |
+| **Accepted schema version** | `ri.v1` |
 | **Author** | @parthrohit22 |
-| **Decision owners (ratifiers)** | An **independent project maintainer other than the author**. The author (@parthrohit22) cannot ratify their own RFC. Ratification is not yet recorded. |
+| **Ratifier** | [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24), an independent project maintainer other than the author |
+| **Approval evidence** | [Issue #86 approval comment](https://github.com/Second-Origin/PARTHA/issues/86#issuecomment-4990687780) and [PR #101 approval review](https://github.com/Second-Origin/PARTHA/pull/101#pullrequestreview-4712687647) |
+| **Approval / ratification date** | 2026-07-16 |
 | **Created** | 2026-07-15 |
 | **Last updated** | 2026-07-16 |
-| **Status** | **Proposed** |
+| **Status** | **Accepted** |
 | **Supersedes** | — |
 | **Superseded by** | — |
 
-> **This RFC proposes an architectural contract for approval, not application code.** It does not
-> implement snapshots, persistence, extractors, resolvers, queries, jobs, migrations, or consumer
-> migration. Those are issues [#87–#95](https://github.com/Second-Origin/PARTHA/issues/87) and are
-> gated on this RFC's approval (see [§16, Dependency gate](#16-dependency-gate)).
+> **This RFC records the accepted architectural contract; it is not application code.** Acceptance
+> does not by itself implement snapshots, persistence, extractors, resolvers, queries, jobs,
+> migrations, or consumer migration. Downstream implementation is tracked in issues
+> [#87–#95](https://github.com/Second-Origin/PARTHA/issues/87); see
+> [§16, Dependency gate](#16-dependency-gate) and [§17, implementation status](#17-current-behavior-vs-accepted-contract-vs-unimplemented).
 
 ---
 
@@ -25,8 +28,12 @@
 
 ### 1.1 Status
 
-This RFC is **Proposed**. It is not approved, ratified, or accepted until an **independent project
-maintainer other than the author** explicitly approves it. No such approval is recorded yet.
+This RFC is **Accepted**. Independent project maintainer
+[@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) recorded approval in the
+[Issue #86 approval comment](https://github.com/Second-Origin/PARTHA/issues/86#issuecomment-4990687780)
+and the [PR #101 approval review](https://github.com/Second-Origin/PARTHA/pull/101#pullrequestreview-4712687647)
+on 2026-07-16. This final pre-merge update records that decision in the RFC; merging PR #101 makes
+the accepted record authoritative on `dev` and closes #86.
 
 ### 1.2 Approval / ratification rule
 
@@ -34,14 +41,16 @@ maintainer other than the author** explicitly approves it. No such approval is r
   (@parthrohit22) cannot ratify their own RFC, and per [CONTRIBUTING §6](../../CONTRIBUTING.md) must
   not self-merge. A reviewer's `write` access alone does not make them a maintainer; ratification
   authority must be an actual project maintainer.
-- The RFC remains **Proposed** until that independent maintainer explicitly records approval.
-- **Approval does not automatically edit this document.** Merging the pull request does not by
-  itself change the `Status` field. After approval is recorded, a **final pre-merge update MUST**:
+- **Approval does not automatically edit this document.** After approval is recorded, a **final
+  pre-merge update MUST**:
   1. set `Status: Accepted`;
   2. record the ratifier (the approving maintainer) and the approval date;
   3. change the pull request description from `Related to #86` to `Closes #86`.
-  Merge of that updated document is what ratifies the contract; the status change is made by hand in
-  the same pre-merge update, not inferred from the merge event.
+  This update fulfills all three requirements using the recorded
+  [Issue #86 approval](https://github.com/Second-Origin/PARTHA/issues/86#issuecomment-4990687780)
+  and [PR #101 approval](https://github.com/Second-Origin/PARTHA/pull/101#pullrequestreview-4712687647).
+  Merge of this updated document makes the accepted contract authoritative; the status change is
+  made by hand in this pre-merge update, not inferred from the merge event.
 - The author **MUST NOT** self-declare this RFC approved and **MUST NOT** set `Status: Accepted`
   without a recorded independent-maintainer approval.
 - Amendments after acceptance follow the schema-versioning rules in [§9](#9-schema-versioning): a
@@ -50,9 +59,10 @@ maintainer other than the author** explicitly approves it. No such approval is r
 
 ### 1.3 What approval unblocks
 
-Approval releases the dependency gate in [§16](#16-dependency-gate). Until then, no downstream
-issue in the intelligence track (except #94 fixture construction) may begin, and none may be
-assigned against an unapproved draft.
+The recorded approval satisfies the governance dependency gate in [§16](#16-dependency-gate).
+After PR #101 merges, downstream issues may proceed against the authoritative accepted contract,
+subject to their own dependencies and review requirements. Acceptance does not mark any downstream
+capability as implemented or as current product behavior.
 
 ### 1.4 Ratification follow-up
 
@@ -62,11 +72,13 @@ issue [#86](https://github.com/Second-Origin/PARTHA/issues/86) was reopened on 2
 the missing ratification step can be completed explicitly rather than inferred from the earlier
 merge.
 
-This follow-up intentionally leaves the RFC **Proposed**. An independent project maintainer must
-first record approval. Only after that approval exists may a final pre-merge update set the status
-to **Accepted**, record the ratifier and ratification date, and close #86. Until that update is
-merged, the dependency gate in §16 remains in force for contributors who do not have an explicit
-repository-administrator exception.
+Independent project maintainer @SHAURYAKSHARMA24 subsequently recorded approval in both
+[Issue #86](https://github.com/Second-Origin/PARTHA/issues/86#issuecomment-4990687780) and
+[PR #101](https://github.com/Second-Origin/PARTHA/pull/101#pullrequestreview-4712687647). This final
+pre-merge update sets the status to **Accepted**, records the ratifier and date, and uses the
+`Closes #86` form in PR #101. It resolves the governance gap left by PR #99. A maintainer other
+than the author must merge PR #101 for this accepted record to become authoritative and for #86
+to close.
 
 ---
 
@@ -886,9 +898,8 @@ Codes are stable strings. The `ri.v1` baseline set (extensible as a compatible a
 
 ## 9. Schema versioning
 
-This RFC **proposes `schema_version: "ri.v1"` for ratification** as the value carried on every
-snapshot and every fact-bearing API response. Once ratified ([§1.2](#12-approval--ratification-rule)),
-`ri.v1` is the value all `ri.v1` artifacts carry.
+This RFC records the accepted `schema_version: "ri.v1"` as the value carried on every snapshot and
+every fact-bearing API response. `ri.v1` is the value all conforming `ri.v1` artifacts carry.
 
 ### 9.1 Compatible additions
 
@@ -1672,36 +1683,40 @@ Both IDs are computed against the immutable Git revision in [§14.8](#148-git-re
   matching of duplicate/anonymous symbols — that no v1 acceptance criterion requires; consumers that
   need it use evidence (path + span) comparison in the interim. Introducing it later is a breaking
   key-format change and therefore an `ri.v2` concern ([§9.2](#92-breaking-changes-require-riv2)).
-- **This RFC changes no runtime behavior.** Until #87–#95 land, the system behaves exactly as
-  documented today; this document describes the *proposed future contract*, not current capability.
+- **This RFC changes no runtime behavior.** The system behaves as documented today until each
+  downstream implementation lands; this document records the *accepted contract*, not a claim that
+  every capability is current behavior.
 
 ---
 
 ## 16. Dependency gate
 
 This RFC records the exact sequencing rule for the intelligence track (the comment on #86 is
-binding):
+binding). The governance gate now has the required independent approval, and this final pre-merge
+update records that approval in the contract:
 
-- **#87, #88, #89, #90, #91, #92, #93, and #95 MUST NOT begin until this RFC is approved.**
-- **#94 fixture construction MAY begin before approval** — writing expected facts down first is a
-  genuine test of whether the support matrix is coherent.
-- **#94 scoring and provenance validation still depend on the approved contract** (they need the
+- **#87, #88, #89, #90, #91, #92, #93, and #95 may proceed against the accepted contract**, while
+  continuing to honor the dependency order below and their own acceptance criteria.
+- **#94 fixture construction was permitted before approval** — writing expected facts down first is
+  a genuine test of whether the support matrix is coherent.
+- **#94 scoring and provenance validation depend on the accepted contract** (they need the
   evidence-record definition in [§6](#6-provenance-contract) and the canonical hash in
   [§12](#12-canonical-graph-hash)).
-- **No downstream issue may be assigned against an unapproved draft.** #86 is the Phase 0 gate for
-  the intelligence track.
+- **Contract acceptance and implementation status are distinct.** Approval permits downstream work;
+  it does not make that work current product behavior. At the time of this update, PR #102 remains
+  open, so its #87/#88 implementation is not described here as merged or current behavior.
 
 Dependency order (from the #86 comment): #87 → #88 → {#89, #90} → #91 → #92 → #93 (on #88); #94 in
 parallel (fixtures early, scoring after approval); #95 last (on #92 and #94).
 
 ---
 
-## 17. Current behavior vs. proposed contract vs. unimplemented
+## 17. Current behavior vs. accepted contract vs. unimplemented
 
 To keep this document honest about what exists (per [docs/README.md](../README.md) documentation
 rules), the three columns are explicit:
 
-| Concern | Current behavior (today) | Proposed `ri.v1` contract (this RFC) | Status |
+| Concern | Current behavior (today) | Accepted `ri.v1` contract (this RFC) | Status |
 | --- | --- | --- | --- |
 | Storage | Mutable JSON blob on `repo_metadata` | Immutable sealed snapshots with nodes, edges, assertions, observations, evidence, and diagnostics (§11) | **Unimplemented** (#88) |
 | Pipeline identity | No pre-enqueue producer plan | Precomputed `producer_version_set` covers every enabled extractor/resolver/classifier (§3.3) | **Unimplemented** (#88/#93) |
@@ -1715,9 +1730,10 @@ rules), the three columns are explicit:
 | Query API | Consumers read the whole blob | Versioned owner-scoped read API (§9.5) | **Unimplemented** (#92) |
 | Evidence-backed output | AI emits empty citation lists | Every claim cites a valid span (§7.4) | **Unimplemented** (#95) |
 
-**This RFC does not claim any of the "Proposed contract" column exists today.** It is the target to
-be built by #87–#95 after approval. No existing documentation is rewritten by this RFC to imply
-otherwise.
+**This RFC does not claim every capability in the "Accepted contract" column exists today.** Each
+capability becomes current behavior only when its implementation is merged. As of this update,
+PR #102 remains open, so the #87/#88 rows remain unimplemented in `dev`; #89–#95 also remain
+downstream work. No existing documentation is rewritten by this RFC to imply otherwise.
 
 ---
 
@@ -1727,13 +1743,13 @@ otherwise.
 
 | #86 acceptance criterion | Satisfied by |
 | --- | --- |
-| Node/edge identity (stable-key format) specified; assertion identity also specified (approval pending independent maintainer) | [§4](#4-node-identity-and-stable-keys), [§5](#5-edgefact-identity) |
+| Node/edge identity (stable-key format) specified; assertion identity also specified | [§4](#4-node-identity-and-stable-keys), [§5](#5-edgefact-identity) |
 | Provenance record specified: path, start line, end line, extractor, extractor version | [§6.1](#61-the-evidence-record), [§6.2](#62-line-and-span-rules-decided-not-optional) |
 | Truth classes defined, with rules for which extraction paths may emit each | [§7](#7-truth-classes), emission matrix [§7.2](#72-emission-matrix-producer--truth-class) |
 | Schema versioning and migration policy specified | [§9](#9-schema-versioning), [§10](#10-migration-policy) |
 | Immutability rules for completed snapshots specified | [§11](#11-snapshot-lifecycle-and-immutability) |
 | Diagnostics model (unsupported construct, ambiguous resolution, extraction failure) specified | [§8](#8-diagnostics-model) |
-| Approved as an ADR/RFC committed to the repository | [§1](#1-status-and-approval) — currently **Proposed**; becomes **Accepted** only via a final pre-merge update after a recorded independent-maintainer approval ([§1.2](#12-approval--ratification-rule)) |
+| Accepted as an ADR/RFC with recorded independent-maintainer approval | [§1](#1-status-and-approval) — approved by [@SHAURYAKSHARMA24 in Issue #86](https://github.com/Second-Origin/PARTHA/issues/86#issuecomment-4990687780) and in the [PR #101 review](https://github.com/Second-Origin/PARTHA/pull/101#pullrequestreview-4712687647) on 2026-07-16 |
 
 ### 18.2 Required RFC decisions (issue body §1–§15) and #86-comment dependency requirements
 
@@ -1747,14 +1763,14 @@ otherwise.
 | 6. Provenance contract (min record; logical line count and empty files; one-based inclusive spans; binary/undecodable behavior; whole-file; columns deferred; multiple evidence; tagged acyclic derivation; revision tie; no provenance ⇒ not observed) | [§6](#6-provenance-contract) |
 | 7. Truth classes (definitions; producers; no upgrade; retention; API/UI labeling; generated never stored; unresolved ⇒ diagnostic; emission matrix) | [§7](#7-truth-classes) |
 | 8. Diagnostics model (all listed categories; required fields; which fail a snapshot) | [§8](#8-diagnostics-model) |
-| 9. Schema versioning (propose `ri.v1` for ratification; compatible additions; breaking; when v2; schema vs producer version; API versioning #92; reader rejection/negotiation; historical retention) | [§9](#9-schema-versioning) |
+| 9. Schema versioning (accepted `ri.v1`; compatible additions; breaking; when v2; schema vs producer version; API versioning #92; reader rejection/negotiation; historical retention) | [§9](#9-schema-versioning) |
 | 10. Migration policy (DB migrations; backfills; rollback; cross-version; re-extraction vs transformation; legacy regex facts; failure/recovery) | [§10](#10-migration-policy) |
 | 11. Snapshot lifecycle & immutability (states; seal transaction; producer coverage; entity uniqueness; derivation resolution/cycle rejection; total-order normalization; immutability; rejection; corrections ⇒ new snapshot; failed; #93 cancel/retry; concurrency/idempotency) | [§11](#11-snapshot-lifecycle-and-immutability) |
 | 12. Canonical graph hash (five arrays; planned producer inputs; total ordering with JCS tie-breakers; evidence/derivation/property ordering; diagnostics/details; excluded volatile ids; determinism) | [§12](#12-canonical-graph-hash) |
 | 13. Security & ownership (owner-scoped queries; no traversal; repo-relative paths; no secret/content logging; no working-tree reads; no independent parsers) | [§13](#13-security-and-ownership) |
 | 14. Examples (all ten required) | [§14](#14-normative-examples) |
 | 15. Alternatives & consequences (all six listed; operational costs) | [§15](#15-alternatives-and-consequences) |
-| Dependency gate (#87–#93,#95 blocked; #94 fixtures early; #94 scoring gated; no assignment on draft) | [§16](#16-dependency-gate) |
+| Dependency gate (accepted contract governs #87–#93 and #95; #94 fixtures were permitted early; #94 scoring uses the accepted contract) | [§16](#16-dependency-gate) |
 | #87 — revision identity & migration of `commitSha` | [§3.2](#32-revision-identity), [§3.5](#35-migration-of-the-existing-commitsha-handled-by-87) |
 | #88 — immutable snapshot persistence, node/edge/assertion uniqueness & canonical hash | [§4.1](#41-principle-and-cross-revision-guarantees), [§5.6](#56-inferred-property-assertions), [§11](#11-snapshot-lifecycle-and-immutability), [§12](#12-canonical-graph-hash) |
 | #89 — TypeScript extraction (spans, stable keys, support matrix, diagnostics) | [§4](#4-node-identity-and-stable-keys), [§6](#6-provenance-contract), [§7.1](#71-definitions-and-emission-rules), [§8](#8-diagnostics-model) |
