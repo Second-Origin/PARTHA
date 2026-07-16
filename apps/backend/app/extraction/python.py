@@ -8,6 +8,7 @@ from app.extraction.base import (
     ExtractedNode,
     ExtractedObservation,
     ExtractionResult,
+    RI_SEC_PATH_ESCAPE,
     RI_SRC_MALFORMED,
     build_evidence,
     decode_source,
@@ -31,6 +32,21 @@ class PythonExtractor:
         text, source_diag = decode_source(path, source, producer=self.producer)
         if text is None:
             return ExtractionResult(diagnostics=(source_diag,))
+
+        try:
+            canonical.normalize_repo_path(path)
+        except canonical.PathEscapeError:
+            return ExtractionResult(
+                diagnostics=(
+                    ExtractedDiagnostic(
+                        code=RI_SEC_PATH_ESCAPE,
+                        category="path escape",
+                        severity="error",
+                        message="source path is absolute or escapes the repository root",
+                        path=None,
+                    ),
+                )
+            )
 
         line_count = logical_line_count(text)
         try:
@@ -92,9 +108,10 @@ class PythonExtractor:
             if isinstance(node, ast.Import):
                 names = [alias.name for alias in node.names]
             elif isinstance(node, ast.ImportFrom):
+                level_prefix = "." * node.level
                 base = node.module or ""
                 names = [
-                    f"{base}.{alias.name}" if base else alias.name
+                    f"{level_prefix}{base}.{alias.name}" if base else f"{level_prefix}{alias.name}"
                     for alias in node.names
                     if alias.name != "*"
                 ]

@@ -33,3 +33,19 @@ def test_imports_become_observations_with_referent_text():
         if obs.observed_kind == "import":
             assert obs.subject_key == "mod:app/api"
             assert obs.evidence.start_line >= 1
+
+
+def test_escaping_source_path_yields_diagnostic_not_crash():
+    result = EXTRACTOR.extract("../evil.py", b"import os\n")
+    assert result.nodes == ()
+    assert [d.code for d in result.diagnostics] == ["RI-SEC-PATH-ESCAPE"]
+
+
+def test_relative_imports_preserve_level_in_referent_text():
+    result = _extract("from . import foo\nfrom .config import X\nimport os\n")
+    imports = [
+        o.referent_text for o in result.observations if o.observed_kind == "import"
+    ]
+    assert ".foo" in imports
+    assert ".config.X" in imports
+    assert "os" in imports
