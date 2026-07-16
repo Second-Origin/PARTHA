@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "ri-benchmark.v1",
+  "fixtureId": "adv-py-blindspots",
+  "fixtureClass": "adversarial",
+  "language": "python",
+  "title": "Adversarial Python — declared blind spots",
+  "description": "Star import, dynamic import, monkeypatching, and reflection. Each is outside the support matrix and MUST produce an RI-EXT-UNSUPPORTED diagnostic rather than an invented fact.",
+  "sourceRoot": ".",
+  "revisionIdentity": "upload-sha256",
+  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.0.0"],
+  "constructsCovered": ["py.module", "py.star_import", "py.dynamic_import", "py.monkeypatch", "py.reflection"],
+  "deterministic": false,
+  "expected": {
+    "nodes": [
+      {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
+       "evidence": [{"path": "src/dynamic.py", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "file", "stableKey": "file:src/dynamic.py", "name": "dynamic.py", "language": "python", "constructs": ["py.module"],
+       "evidence": [{"path": "src/dynamic.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]}
+    ],
+    "edges": [], "observations": [], "assertions": [],
+    "diagnostics": [
+      {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info",
+       "message": "Star import is outside the Python support matrix.", "producer": "python-ast@1.0.0",
+       "path": "src/dynamic.py", "span": {"startLine": 1, "endLine": 1}, "subject": "file:src/dynamic.py", "constructs": ["py.star_import"]},
+      {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info",
+       "message": "Dynamic import is outside the Python support matrix.", "producer": "python-ast@1.0.0",
+       "path": "src/dynamic.py", "span": {"startLine": 4, "endLine": 4}, "subject": "file:src/dynamic.py", "constructs": ["py.dynamic_import"]},
+      {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info",
+       "message": "Monkeypatching (setattr) is outside the Python support matrix.", "producer": "python-ast@1.0.0",
+       "path": "src/dynamic.py", "span": {"startLine": 5, "endLine": 5}, "subject": "file:src/dynamic.py", "constructs": ["py.monkeypatch"]},
+      {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info",
+       "message": "Reflection (getattr) is outside the Python support matrix.", "producer": "python-ast@1.0.0",
+       "path": "src/dynamic.py", "span": {"startLine": 6, "endLine": 6}, "subject": "file:src/dynamic.py", "constructs": ["py.reflection"]}
+    ]
+  }
+}

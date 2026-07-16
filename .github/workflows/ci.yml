@@ -127,6 +127,38 @@ jobs:
           PARTHA_TEST_REDIS_URL: redis://localhost:6379/0
         run: python -m pytest
 
+      # The pytest step above validates every benchmark invariant (including the
+      # failure paths). This step is the human-facing regression report and CI
+      # artifact: it runs the real benchmark command, writes Markdown + JSON to a
+      # temporary (never committed) directory, adds a summary to the job page, and
+      # its exit status is captured so the reports upload even on failure. A later
+      # step re-raises that status so a below-threshold benchmark fails the job.
+      - name: Run Repository Intelligence golden benchmark
+        id: ri_benchmark
+        working-directory: apps/backend
+        run: |
+          mkdir -p "$RUNNER_TEMP/ri-benchmark"
+          set +e
+          python tests/benchmark/run.py --report-dir "$RUNNER_TEMP/ri-benchmark"
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Upload benchmark reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ri-golden-benchmark
+          path: ${{ runner.temp }}/ri-benchmark
+          if-no-files-found: error
+
+      - name: Enforce benchmark gate
+        if: always()
+        run: |
+          if [ "${{ steps.ri_benchmark.outputs.status }}" != "0" ]; then
+            echo "Repository Intelligence golden benchmark failed (exit ${{ steps.ri_benchmark.outputs.status }})."
+            exit 1
+          fi
+          echo "Repository Intelligence golden benchmark passed."
+
   docker-compose:
     name: Docker Compose
     needs: repository-hygiene

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "ri-benchmark.v1",
+  "fixtureId": "min-trailing-newline",
+  "fixtureClass": "minimal",
+  "language": "mixed",
+  "title": "Minimal — trailing newline (final empty logical line)",
+  "description": "A file ending in a newline has a final empty logical line, so 'alpha\\nbeta\\n' has logical_line_count 3 (RFC-0001 §6.2). Exercises src.trailing_newline.",
+  "sourceRoot": ".",
+  "revisionIdentity": "upload-sha256",
+  "producerVersionSet": ["repository-inventory@1.0.0"],
+  "constructsCovered": ["src.trailing_newline"],
+  "deterministic": true,
+  "expected": {
+    "nodes": [
+      {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
+       "evidence": [{"path": "data.txt", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "file", "stableKey": "file:data.txt", "name": "data.txt", "constructs": ["src.trailing_newline"],
+       "evidence": [{"path": "data.txt", "startLine": 1, "endLine": 3, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]}
+    ],
+    "edges": [], "observations": [], "assertions": [], "diagnostics": []
+  }
+}

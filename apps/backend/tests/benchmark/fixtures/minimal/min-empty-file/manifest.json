@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "ri-benchmark.v1",
+  "fixtureId": "min-empty-file",
+  "fixtureClass": "minimal",
+  "language": "mixed",
+  "title": "Minimal — empty file (one logical empty line)",
+  "description": "A zero-byte text file: logical_line_count == 1 and whole-file evidence is exactly 1..1 (RFC-0001 §6.2). Exercises src.empty_file.",
+  "sourceRoot": ".",
+  "revisionIdentity": "upload-sha256",
+  "producerVersionSet": ["repository-inventory@1.0.0"],
+  "constructsCovered": ["src.empty_file"],
+  "deterministic": true,
+  "expected": {
+    "nodes": [
+      {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
+       "evidence": [{"path": "empty.txt", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "file", "stableKey": "file:empty.txt", "name": "empty.txt", "constructs": ["src.empty_file"],
+       "evidence": [{"path": "empty.txt", "startLine": 1, "endLine": 1, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]}
+    ],
+    "edges": [], "observations": [], "assertions": [], "diagnostics": []
+  }
+}

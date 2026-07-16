@@ -136,6 +136,11 @@ docker-compose.override.yml
 coverage/
 .nyc_output/
 
+# Repository Intelligence golden benchmark reports (generated; never commit —
+# CI writes them to a temporary directory, developers to a throwaway dir)
+apps/backend/.ri-benchmark/
+ri-benchmark-report/
+
 # ==========================================
 # OS generated
 # ==========================================

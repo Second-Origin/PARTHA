@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "ri-benchmark.v1",
+  "fixtureId": "min-py-decorator-route",
+  "fixtureClass": "minimal",
+  "language": "python",
+  "title": "Minimal Python — decorator and FastAPI route",
+  "description": "A decorated handler registered as a FastAPI route. Exercises py.decorator and py.fastapi_route.",
+  "sourceRoot": ".",
+  "revisionIdentity": "upload-sha256",
+  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.0.0"],
+  "constructsCovered": ["py.decorator", "py.fastapi_route", "py.function.def", "py.module"],
+  "deterministic": false,
+  "expected": {
+    "nodes": [
+      {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
+       "evidence": [{"path": "src/api.py", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "file", "stableKey": "file:src/api.py", "name": "api.py", "language": "python", "constructs": ["py.module"],
+       "evidence": [{"path": "src/api.py", "startLine": 1, "endLine": 14, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/api.py::audit", "name": "audit", "language": "python", "constructs": ["py.function.def"],
+       "evidence": [{"path": "src/api.py", "startLine": 6, "endLine": 7, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/api.py::health", "name": "health", "language": "python", "constructs": ["py.function.def", "py.decorator"],
+       "evidence": [{"path": "src/api.py", "startLine": 10, "endLine": 13, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
+    ],
+    "edges": [],
+    "observations": [
+      {"observedKind": "routes", "subjectKind": "file", "subjectKey": "file:src/api.py", "referentText": "GET /health", "constructs": ["py.fastapi_route"],
+       "evidence": {"path": "src/api.py", "startLine": 11, "endLine": 11, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}}
+    ],
+    "assertions": [], "diagnostics": []
+  }
+}

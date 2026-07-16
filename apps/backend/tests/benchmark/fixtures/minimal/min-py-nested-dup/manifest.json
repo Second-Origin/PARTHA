@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "ri-benchmark.v1",
+  "fixtureId": "min-py-nested-dup",
+  "fixtureClass": "minimal",
+  "language": "python",
+  "title": "Minimal Python — nested and duplicate definitions",
+  "description": "A nested function and a redefined name resolved with a discriminator. Exercises py.nested_function and py.duplicate_symbol, with an informational RI-KEY-DUP-SYMBOL diagnostic.",
+  "sourceRoot": ".",
+  "revisionIdentity": "upload-sha256",
+  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.0.0"],
+  "constructsCovered": ["py.function.def", "py.nested_function", "py.duplicate_symbol", "py.module"],
+  "deterministic": true,
+  "expected": {
+    "nodes": [
+      {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
+       "evidence": [{"path": "src/util.py", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "file", "stableKey": "file:src/util.py", "name": "util.py", "language": "python", "constructs": ["py.module"],
+       "evidence": [{"path": "src/util.py", "startLine": 1, "endLine": 9, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/util.py::outer", "name": "outer", "language": "python", "constructs": ["py.function.def", "py.duplicate_symbol"],
+       "evidence": [{"path": "src/util.py", "startLine": 1, "endLine": 4, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/util.py::outer.inner", "name": "inner", "language": "python", "constructs": ["py.nested_function"],
+       "evidence": [{"path": "src/util.py", "startLine": 2, "endLine": 3, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/util.py::outer#2", "name": "outer", "language": "python", "constructs": ["py.function.def", "py.duplicate_symbol"],
+       "evidence": [{"path": "src/util.py", "startLine": 7, "endLine": 8, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
+    ],
+    "edges": [], "observations": [], "assertions": [],
+    "diagnostics": [
+      {"code": "RI-KEY-DUP-SYMBOL", "category": "duplicate symbol", "severity": "info",
+       "message": "Redefined name 'outer' resolved with discriminator #2.", "producer": "python-ast@1.0.0",
+       "path": "src/util.py", "span": {"startLine": 7, "endLine": 8}, "subject": "src/util.py::outer#2", "constructs": ["py.duplicate_symbol"]}
+    ]
+  }
+}
