@@ -22,7 +22,6 @@ from app.intelligence.models import (
     SourceSymbol,
 )
 from app.models.repository import RepositoryRecord
-from app.parsers.tree_sitter_parser import TreeSitterParser
 from app.schemas.repository import FileTreeNode, RepositoryMeta
 
 SOURCE_EXTENSIONS = {"py", "ts", "tsx", "js", "jsx", "go", "rs", "java", "kt", "swift", "cs"}
@@ -66,10 +65,12 @@ CLOUD_TECHNOLOGIES = {
 
 
 class RepositoryIntelligenceEngine:
-    """Builds reusable repository intelligence from parser output and repository files."""
+    """Builds reusable repository intelligence from repository files.
 
-    def __init__(self, syntax_parser: TreeSitterParser | None = None) -> None:
-        self.syntax_parser = syntax_parser or TreeSitterParser()
+    Extraction here is regex over file text and carries no line provenance. The
+    evidence-backed extractors in ``app.extraction`` supersede it for TypeScript
+    and Python; wiring those into this build path is #93.
+    """
 
     def from_record(self, record: RepositoryRecord) -> RepositoryIntelligence:
         existing = self.load(record)
@@ -141,9 +142,6 @@ class RepositoryIntelligenceEngine:
         extension = node.extension
         language = node.language
         text = self._read_text(root, path)
-        syntax = self.syntax_parser.parse_symbols(text.encode("utf-8", errors="ignore"), extension)
-        if syntax.language and not language:
-            language = syntax.language
         role = self._role(path, extension)
         imports = self._imports(text, extension)
         exports = self._exports(text, extension)
