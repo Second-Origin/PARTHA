@@ -14,3 +14,12 @@ def test_python_matrix_lists_supported_and_unsupported():
     assert "reflection" in python.unsupported
     # nothing appears on both sides
     assert set(python.supported).isdisjoint(python.unsupported)
+
+
+def test_typescript_matrix_lists_supported_and_unsupported():
+    ts = SUPPORT_MATRIX["typescript"]
+    for entry in ("file", "import", "export", "function", "class", "interface", "type", "enum", "route"):
+        assert entry in ts.supported
+    for entry in ("dynamic-import", "decorator", "namespace", "commonjs-require"):
+        assert entry in ts.unsupported
+    assert set(ts.supported).isdisjoint(ts.unsupported)

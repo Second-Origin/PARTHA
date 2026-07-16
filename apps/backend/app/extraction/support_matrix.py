@@ -14,4 +14,11 @@ SUPPORT_MATRIX: dict[str, LanguageSupport] = {
         supported=("module", "import", "function", "class", "method", "decorator", "route"),
         unsupported=("star-import", "dynamic-import", "reflection", "metaclass"),
     ),
+    "typescript": LanguageSupport(
+        supported=(
+            "file", "import", "export", "function", "class", "method",
+            "interface", "type", "enum", "const", "route",
+        ),
+        unsupported=("dynamic-import", "decorator", "namespace", "commonjs-require", "ambient-module"),
+    ),
 }
