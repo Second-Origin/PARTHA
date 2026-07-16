@@ -277,6 +277,12 @@ class PythonExtractor:
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and any(a.name == "*" for a in node.names):
                 flag(node, f"star-import from {node.module or '.'} is unsupported")
+            elif isinstance(node, ast.ClassDef) and any(
+                keyword.arg == "metaclass" for keyword in node.keywords
+            ):
+                # The class itself is still extracted; what a metaclass does to it
+                # at runtime is not modelled, so say so rather than imply we know.
+                flag(node, f"metaclass on class {node.name} is unsupported")
             elif isinstance(node, ast.Call):
                 func = node.func
                 if isinstance(func, ast.Name) and func.id in _REFLECTION_CALLS:

@@ -249,6 +249,10 @@ class TypeScriptExtractor:
         def walk(node):
             if node.type in ("internal_module", "module") and node.child_by_field_name("name") is not None:
                 flag(node, "namespace/module declaration is unsupported")
+            elif node.type == "decorator":
+                # TypeScript decorators are declared unsupported: their semantics
+                # (and any metadata they attach) are not modelled here.
+                flag(node, f"TypeScript decorator {self._node_text(node, source)} is unsupported")
             elif node.type == "call_expression":
                 fn = node.child_by_field_name("function")
                 if fn is not None:
