@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "ri-benchmark.v1",
+  "fixtureId": "min-ts-imports-exports",
+  "fixtureClass": "minimal",
+  "language": "typescript",
+  "title": "Minimal TypeScript — imports, aliases, exports, re-exports",
+  "description": "Import, aliased import, export, and re-export as observed occurrences. Exercises ts.import, ts.import_alias, ts.export, ts.reexport.",
+  "sourceRoot": ".",
+  "revisionIdentity": "upload-sha256",
+  "producerVersionSet": ["repository-inventory@1.0.0", "typescript-ast@1.0.0"],
+  "constructsCovered": ["ts.module", "ts.import", "ts.import_alias", "ts.export", "ts.reexport"],
+  "deterministic": false,
+  "expected": {
+    "nodes": [
+      {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
+       "evidence": [{"path": "src/index.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "file", "stableKey": "file:src/index.ts", "name": "index.ts", "language": "typescript", "constructs": ["ts.module"],
+       "evidence": [{"path": "src/index.ts", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]}
+    ],
+    "edges": [],
+    "observations": [
+      {"observedKind": "imports", "subjectKind": "file", "subjectKey": "file:src/index.ts", "referentText": "fs.readFile", "constructs": ["ts.import"],
+       "evidence": {"path": "src/index.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}},
+      {"observedKind": "imports", "subjectKind": "file", "subjectKey": "file:src/index.ts", "referentText": "path.join", "constructs": ["ts.import_alias"],
+       "evidence": {"path": "src/index.ts", "startLine": 2, "endLine": 2, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}},
+      {"observedKind": "exports", "subjectKind": "file", "subjectKey": "file:src/index.ts", "referentText": "VERSION", "constructs": ["ts.export"],
+       "evidence": {"path": "src/index.ts", "startLine": 4, "endLine": 4, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}},
+      {"observedKind": "exports", "subjectKind": "file", "subjectKey": "file:src/index.ts", "referentText": "fs.readFile", "constructs": ["ts.reexport"],
+       "evidence": {"path": "src/index.ts", "startLine": 6, "endLine": 6, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}}
+    ],
+    "assertions": [], "diagnostics": []
+  }
+}

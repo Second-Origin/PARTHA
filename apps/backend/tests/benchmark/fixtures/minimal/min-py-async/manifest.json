@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "ri-benchmark.v1",
+  "fixtureId": "min-py-async",
+  "fixtureClass": "minimal",
+  "language": "python",
+  "title": "Minimal Python — async function definition",
+  "description": "A single top-level async function. Exercises py.async_function.def.",
+  "sourceRoot": ".",
+  "revisionIdentity": "upload-sha256",
+  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.0.0"],
+  "constructsCovered": ["py.async_function.def", "py.module"],
+  "deterministic": true,
+  "expected": {
+    "nodes": [
+      {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
+       "evidence": [{"path": "src/tasks.py", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "file", "stableKey": "file:src/tasks.py", "name": "tasks.py", "language": "python", "constructs": ["py.module"],
+       "evidence": [{"path": "src/tasks.py", "startLine": 1, "endLine": 3, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/tasks.py::fetch", "name": "fetch", "language": "python", "constructs": ["py.async_function.def"],
+       "evidence": [{"path": "src/tasks.py", "startLine": 1, "endLine": 2, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
+    ],
+    "edges": [], "observations": [], "assertions": [], "diagnostics": []
+  }
+}

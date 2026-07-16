@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "ri-benchmark.v1",
+  "fixtureId": "adv-ts-malformed",
+  "fixtureClass": "adversarial",
+  "language": "typescript",
+  "title": "Adversarial TypeScript — syntax error",
+  "description": "A file that fails to parse. It must emit an RI-SRC-MALFORMED diagnostic and no line-addressed facts. Exercises ts.syntax_error.",
+  "sourceRoot": ".",
+  "revisionIdentity": "upload-sha256",
+  "producerVersionSet": ["typescript-ast@1.0.0"],
+  "constructsCovered": ["ts.syntax_error"],
+  "deterministic": false,
+  "expected": {
+    "nodes": [], "edges": [], "observations": [], "assertions": [],
+    "diagnostics": [
+      {"code": "RI-SRC-MALFORMED", "category": "malformed source", "severity": "error",
+       "message": "src/broken.ts could not be parsed.", "producer": "typescript-ast@1.0.0",
+       "path": "src/broken.ts", "span": {"startLine": 1, "endLine": 1}, "subject": "file:src/broken.ts", "constructs": ["ts.syntax_error"]}
+    ]
+  }
+}
