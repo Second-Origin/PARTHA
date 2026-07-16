@@ -96,7 +96,11 @@ class PythonExtractor:
                     node_kind="module",
                     stable_key=module_key,
                     name=module_name(path),
-                    language="python",
+                    # A module is a directory, and a directory can hold more than
+                    # one language. Its record must be language-neutral or the
+                    # Python and TypeScript extractors emit conflicting records
+                    # for one key and the snapshot refuses to seal.
+                    language=None,
                     evidence=(module_ev,),
                 )
             )
@@ -250,7 +254,10 @@ class PythonExtractor:
                             code=RI_KEY_DUP_SYMBOL,
                             category="duplicate symbol",
                             severity="info",
-                            message=f"duplicate symbol name resolved with a discriminator: {final_key}",
+                            # The key lives in `subject`, the field meant for it;
+                            # repeating it here would put source-derived text in
+                            # `message`, which RFC §13 reserves from content.
+                            message="duplicate symbol name resolved with a discriminator",
                             path=canonical.normalize_repo_path(path),
                             subject=canonical.normalize_stable_key("symbol", final_key),
                         )
@@ -263,6 +270,10 @@ class PythonExtractor:
         normalized = canonical.normalize_repo_path(path)
 
         def flag(node, message: str) -> None:
+            # `message` names the construct; it never quotes source. Diagnostics
+            # are stored and surfaced, and RFC §13 forbids embedding repository
+            # content or secrets in `message`/`details` — the path and span
+            # already say exactly where to look.
             diagnostics.append(
                 ExtractedDiagnostic(
                     code=RI_EXT_UNSUPPORTED,
@@ -276,19 +287,21 @@ class PythonExtractor:
 
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and any(a.name == "*" for a in node.names):
-                flag(node, f"star-import from {node.module or '.'} is unsupported")
+                flag(node, "star-import is unsupported")
             elif isinstance(node, ast.ClassDef) and any(
                 keyword.arg == "metaclass" for keyword in node.keywords
             ):
                 # The class itself is still extracted; what a metaclass does to it
                 # at runtime is not modelled, so say so rather than imply we know.
-                flag(node, f"metaclass on class {node.name} is unsupported")
+                flag(node, "metaclass is unsupported")
             elif isinstance(node, ast.Call):
                 func = node.func
+                # These names come from this module's own closed vocabulary, not
+                # from arbitrary source text, so naming them leaks nothing.
                 if isinstance(func, ast.Name) and func.id in _REFLECTION_CALLS:
                     flag(node, f"reflection via {func.id}() is unsupported")
-                elif isinstance(func, ast.Name) and func.id == "__import__":
-                    flag(node, "dynamic import via __import__() is unsupported")
+                elif isinstance(func, ast.Name) and func.id in _DYNAMIC_IMPORT_CALLS:
+                    flag(node, f"dynamic import via {func.id}() is unsupported")
                 elif isinstance(func, ast.Attribute) and func.attr in _DYNAMIC_IMPORT_CALLS:
                     flag(node, f"dynamic import via {func.attr}() is unsupported")
 

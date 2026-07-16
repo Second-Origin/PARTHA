@@ -116,13 +116,15 @@ class TypeScriptExtractor:
                 )
             )
             # #89 requires module nodes as well as file nodes. The module is
-            # directory-scoped and shared by every file in that directory.
+            # directory-scoped and shared by every file in that directory —
+            # including files of another language, so the record carries no
+            # language of its own (see the Python extractor's module node).
             nodes.append(
                 ExtractedNode(
                     node_kind="module",
                     stable_key=module_stable_key(path),
                     name=module_name(path),
-                    language="typescript",
+                    language=None,
                     evidence=(file_ev,),
                 )
             )
@@ -216,7 +218,12 @@ class TypeScriptExtractor:
                 arguments = node.child_by_field_name("arguments")
                 if (fn is not None and arguments is not None
                         and self._node_text(fn, source) in _ROUTER_FACTORIES):
-                    collect_path_pairs(arguments)
+                    # createBrowserRouter(routes, opts?) — only the first argument
+                    # is the route table. The options object also accepts a `path`
+                    # (e.g. basename config), which is not a route.
+                    route_table = arguments.named_children[0] if arguments.named_children else None
+                    if route_table is not None:
+                        collect_path_pairs(route_table)
             elif node.type in ("jsx_self_closing_element", "jsx_opening_element"):
                 name_node = node.child_by_field_name("name")
                 if (name_node is not None
@@ -251,8 +258,11 @@ class TypeScriptExtractor:
                 flag(node, "namespace/module declaration is unsupported")
             elif node.type == "decorator":
                 # TypeScript decorators are declared unsupported: their semantics
-                # (and any metadata they attach) are not modelled here.
-                flag(node, f"TypeScript decorator {self._node_text(node, source)} is unsupported")
+                # (and any metadata they attach) are not modelled here. The
+                # message names the construct only — quoting the decorator source
+                # would embed repository content, and its arguments can hold
+                # secrets (RFC §13). The span says where to look.
+                flag(node, "TypeScript decorator is unsupported")
             elif node.type == "call_expression":
                 fn = node.child_by_field_name("function")
                 if fn is not None:
@@ -324,7 +334,10 @@ class TypeScriptExtractor:
                     ExtractedDiagnostic(
                         code=RI_KEY_DUP_SYMBOL, category="duplicate symbol",
                         severity="info",
-                        message=f"duplicate symbol name resolved with a discriminator: {final_key}",
+                        # The key lives in `subject`, the field meant for it;
+                        # repeating it here would put source-derived text in
+                        # `message`, which RFC §13 reserves from content.
+                        message="duplicate symbol name resolved with a discriminator",
                         path=canonical.normalize_repo_path(path), subject=key,
                     )
                 )
