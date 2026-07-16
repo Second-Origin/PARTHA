@@ -1589,15 +1589,19 @@ def _keys(source: str):
     return {n.stable_key for n in result.nodes if n.node_kind == "symbol"}, result
 
 
-def test_class_method_and_function_qualified_names():
+def test_class_methods_and_function_qualified_names():
+    # Two methods prove the traversal reaches every method_definition inside
+    # class_body, not just the class declaration itself.
     keys, _ = _keys(
         "export class AuthService {\n"
         "  login() {}\n"
+        "  logout() {}\n"
         "}\n"
         "export function issueToken() {}\n"
     )
     assert "src/auth/service.ts::AuthService" in keys
     assert "src/auth/service.ts::AuthService.login" in keys
+    assert "src/auth/service.ts::AuthService.logout" in keys
     assert "src/auth/service.ts::issueToken" in keys
 
 
@@ -1621,6 +1625,27 @@ def test_duplicate_overloads_get_discriminator():
     assert "src/auth/service.ts::fmt" in keys
     assert "src/auth/service.ts::fmt#2" in keys
     assert any(d.code == "RI-KEY-DUP-SYMBOL" for d in result.diagnostics)
+
+
+def test_top_level_const_becomes_symbol_with_exported_flag():
+    keys, result = _keys(
+        "export const router = createBrowserRouter([]);\n"
+        "const helper = 1;\n"
+    )
+    assert "src/auth/service.ts::router" in keys
+    assert "src/auth/service.ts::helper" in keys
+    router = next(n for n in result.nodes if n.stable_key == "src/auth/service.ts::router")
+    assert router.properties is not None and router.properties.get("exported") is True
+    helper = next(n for n in result.nodes if n.stable_key == "src/auth/service.ts::helper")
+    assert helper.properties is None or helper.properties.get("exported") is not True
+
+
+def test_exported_function_carries_exported_property():
+    _, result = _keys("export function issueToken() {}\n")
+    token = next(
+        n for n in result.nodes if n.stable_key == "src/auth/service.ts::issueToken"
+    )
+    assert token.properties is not None and token.properties.get("exported") is True
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1642,12 +1667,18 @@ Add a constant mapping declaration node types to the child field that holds the 
 ```python
 _NAMED_DECLARATIONS = {
     "function_declaration": "name",
+    "function_signature": "name",              # ambient/overload signatures (no body)
+    "generator_function_declaration": "name",
     "class_declaration": "name",
+    "abstract_class_declaration": "name",
     "interface_declaration": "name",
     "type_alias_declaration": "name",
     "enum_declaration": "name",
+    "method_definition": "name",               # emitted via the unified path, in class scope
 }
 ```
+
+Including `function_signature` is what makes overload signatures (`export function fmt(...): string;` with no body) each become an occurrence, so duplicates get `#2`/`#3` discriminators. Including `method_definition` is what fixes the class-method traversal: a method is reached with its enclosing class already on the scope stack, so the single emission path qualifies it as `Class.method` — no separate method branch is needed.
 
 In `extract`, replace `_ = tree` with:
 
@@ -1671,107 +1702,107 @@ Add these methods to `TypeScriptExtractor`:
     def _node_text(self, node, source: bytes) -> str:
         return source[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
 
+    def _is_exported(self, node) -> bool:
+        return node.parent is not None and node.parent.type == "export_statement"
+
+    def _is_top_level(self, node) -> bool:
+        parent = node.parent
+        if parent is None:
+            return False
+        if parent.type == "program":
+            return True
+        return (
+            parent.type == "export_statement"
+            and parent.parent is not None
+            and parent.parent.type == "program"
+        )
+
     def _collect_symbols(
         self, root, path, line_count, file_key, nodes, observations, diagnostics
     ) -> None:
         assigner = DiscriminatorAssigner()
-        ordinal = 0
         source = root.text  # bytes of the whole tree
+        counter = {"n": 0}  # mutable box so the one running ordinal is shared
 
-        def name_of(node) -> str | None:
-            field = _NAMED_DECLARATIONS.get(node.type)
-            if field is None:
+        def emit(name_node, decl_node, scope, exported):
+            """Emit one symbol node + its definition observation; return the name."""
+            name = self._node_text(name_node, source)
+            base_key = symbol_stable_key(path, scope, name)
+            final_key, duplicate = assigner.key(base_key)
+            key = canonical.normalize_stable_key("symbol", final_key)
+            # tree-sitter rows are 0-based; RFC spans are 1-based inclusive.
+            ev, diag = build_evidence(
+                path, decl_node.start_point[0] + 1, decl_node.end_point[0] + 1,
+                line_count, producer=self.producer,
+            )
+            if ev is None:
+                if diag is not None:
+                    diagnostics.append(diag)
                 return None
-            name_node = node.child_by_field_name(field)
-            return None if name_node is None else self._node_text(name_node, source)
-
-        def visit(node, scope: list[str]) -> None:
-            nonlocal ordinal
-            child_scope = scope
-            name = name_of(node)
-            if name is not None:
-                base_key = symbol_stable_key(path, scope, name)
-                final_key, duplicate = assigner.key(base_key)
-                key = canonical.normalize_stable_key("symbol", final_key)
-                # tree-sitter rows are 0-based; RFC spans are 1-based inclusive.
-                ev, diag = build_evidence(
-                    path, node.start_point[0] + 1, node.end_point[0] + 1,
-                    line_count, producer=self.producer,
+            counter["n"] += 1
+            nodes.append(
+                ExtractedNode(
+                    node_kind="symbol", stable_key=key, name=name,
+                    language="typescript", evidence=(ev,),
+                    properties={"exported": True} if exported else None,
                 )
-                if ev is None:
-                    if diag is not None:
-                        diagnostics.append(diag)
-                else:
-                    nodes.append(
-                        ExtractedNode(
-                            node_kind="symbol", stable_key=key, name=name,
-                            language="typescript", evidence=(ev,),
-                        )
+            )
+            observations.append(
+                ExtractedObservation(
+                    observed_kind="definition", subject_kind="symbol",
+                    subject_key=key, referent_text=None, ordinal=counter["n"], evidence=ev,
+                )
+            )
+            if duplicate:
+                diagnostics.append(
+                    ExtractedDiagnostic(
+                        code=RI_KEY_DUP_SYMBOL, category="duplicate symbol",
+                        severity="info",
+                        message=f"duplicate symbol name resolved with a discriminator: {final_key}",
+                        path=canonical.normalize_repo_path(path), subject=key,
                     )
-                    ordinal += 1
-                    observations.append(
-                        ExtractedObservation(
-                            observed_kind="definition", subject_kind="symbol",
-                            subject_key=key, referent_text=None, ordinal=ordinal, evidence=ev,
-                        )
-                    )
-                if duplicate:
-                    diagnostics.append(
-                        ExtractedDiagnostic(
-                            code=RI_KEY_DUP_SYMBOL, category="duplicate symbol",
-                            severity="info",
-                            message=f"duplicate symbol name resolved with a discriminator: {final_key}",
-                            path=canonical.normalize_repo_path(path), subject=key,
-                        )
-                    )
-                child_scope = [*scope, name]
-            # Methods live under class_body; recurse to find them and nested types.
+                )
+            return name
+
+        def visit(node, scope):
+            # Top-level const/let/var bindings become symbols (RFC §4.3). Their
+            # initializer expressions are intentionally not descended into here;
+            # route literals inside them are found by the separate route pass.
+            if node.type == "lexical_declaration":
+                if self._is_top_level(node):
+                    exported = self._is_exported(node)
+                    for declarator in node.named_children:
+                        if declarator.type != "variable_declarator":
+                            continue
+                        name_node = declarator.child_by_field_name("name")
+                        if name_node is not None and name_node.type == "identifier":
+                            emit(name_node, declarator, scope, exported)
+                return
+
+            child_scope = scope
+            field = _NAMED_DECLARATIONS.get(node.type)
+            if field is not None:
+                name_node = node.child_by_field_name(field)
+                if name_node is not None:
+                    # A method_definition arrives here with its enclosing class
+                    # already in `scope`, so the unified path qualifies it as
+                    # Class.method with no special-casing.
+                    emitted = emit(name_node, node, scope, self._is_exported(node))
+                    if emitted is not None:
+                        child_scope = [*scope, emitted]
+
             for child in node.named_children:
-                if child.type == "method_definition":
-                    method_name_node = child.child_by_field_name("name")
-                    if method_name_node is not None and name is not None:
-                        self._emit_method(
-                            child, path, line_count, [*scope, name],
-                            self._node_text(method_name_node, source),
-                            assigner, nodes, observations,
-                        )
-                else:
-                    visit(child, child_scope)
+                visit(child, child_scope)
 
         visit(root, [])
-
-    def _emit_method(
-        self, node, path, line_count, scope, name, assigner, nodes, observations
-    ) -> None:
-        base_key = symbol_stable_key(path, scope, name)
-        final_key, _ = assigner.key(base_key)
-        key = canonical.normalize_stable_key("symbol", final_key)
-        ev, _ = build_evidence(
-            path, node.start_point[0] + 1, node.end_point[0] + 1,
-            line_count, producer=self.producer,
-        )
-        if ev is None:
-            return
-        nodes.append(
-            ExtractedNode(
-                node_kind="symbol", stable_key=key, name=name,
-                language="typescript", evidence=(ev,),
-            )
-        )
-        observations.append(
-            ExtractedObservation(
-                observed_kind="definition", subject_kind="symbol",
-                subject_key=key, referent_text=None, ordinal=1, evidence=ev,
-            )
-        )
 ```
 
-Also handle top-level `export const` bindings: in `visit`, before recursing, if `node.type == "lexical_declaration"`, find each `variable_declarator`'s `name` child and emit a symbol the same way (add this branch mirroring the `name is not None` block, using the declarator's identifier text). Keep it minimal — one symbol per top-level const.
+The single `emit` closure is the only place a definition observation is created, so its `counter["n"]` gives every observation a distinct, monotonic ordinal — no hard-coded values. Methods, nested functions, top-level consts, and overload signatures all flow through it.
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/extraction/test_typescript_symbols.py -v`
-Expected: PASS. If `const` assertions in a later task need it, the `lexical_declaration` branch is already in place.
+Expected: PASS (all five tests: two-method traversal, interface/type/enum, overload discriminators, top-level const with the exported flag, and the exported-function property).
 
 - [ ] **Step 5: Commit**
 
@@ -1782,14 +1813,14 @@ git commit -m "feat(extraction): TypeScript extractor emits qualified symbols an
 
 ---
 
-### Task B3: TypeScript — import/export observations + exported property
+### Task B3: TypeScript — import/export-from observations
 
 **Files:**
 - Modify: `apps/backend/app/extraction/typescript.py`
 - Test: `apps/backend/tests/extraction/test_typescript_imports.py`
 
 **Interfaces:**
-- Produces: an `import` observation (`referent_text` = the module specifier) for each `import`/`export … from`; symbols that are exported carry `properties={"exported": True}`.
+- Produces: an `import` observation (`referent_text` = the module specifier) for each `import`/`export … from`. (The `exported` property on symbols is already emitted in Task B2.)
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1814,28 +1845,18 @@ def test_imports_become_observations():
         o.referent_text for o in result.observations if o.observed_kind == "import"
     )
     assert specifiers == ["./session", "./tokens"]
-
-
-def test_exported_symbol_carries_exported_property():
-    result = _extract("export function issueToken() {}\n")
-    token = next(
-        n for n in result.nodes if n.stable_key == "src/auth/service.ts::issueToken"
-    )
-    assert token.properties is not None and token.properties.get("exported") is True
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/extraction/test_typescript_imports.py -v`
-Expected: FAIL — no import observations, no exported property.
+Expected: FAIL — no import observations yet.
 
-- [ ] **Step 3: Add import collection and export detection**
+- [ ] **Step 3: Add import collection**
 
-In `_collect_symbols` (or a new `_collect_imports` called from `extract`), walk the tree for `import_statement` and `export_statement` nodes that have a `source` field (a `string` node). Emit an `import` observation with `referent_text` set to the string literal's inner text (strip the surrounding quotes), `subject_kind="file"`, `subject_key=file_key`, one-based span from `start_point`/`end_point`, incrementing a file-level ordinal.
+Add a `_collect_imports` called from `extract`. It walks the tree for `import_statement` and `export_statement` nodes that have a `source` field (a `string` node), emitting an `import` observation with `referent_text` set to the string literal's inner text (surrounding quotes stripped), `subject_kind="file"`, `subject_key=file_key`, a one-based span from `start_point`/`end_point`, and a running file-level ordinal that continues from the symbol observations.
 
-For the exported property: when visiting a named declaration, set `exported=True` if the declaration's parent node type is `export_statement`. Attach `properties={"exported": True}` to that symbol's `ExtractedNode` (merge with any existing properties).
-
-Concretely, add to `extract` before the `return`:
+Add to `extract` before the `return`:
 
 ```python
         self._collect_imports(tree.root_node, path, line_count, file_key, observations)
@@ -1873,18 +1894,16 @@ Add:
         walk(root)
 ```
 
-For the `exported` property, in `visit`, compute `exported = node.parent is not None and node.parent.type == "export_statement"` and pass `properties={"exported": True} if exported else None` into the symbol's `ExtractedNode(...)`.
-
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/extraction/test_typescript_imports.py tests/extraction/test_typescript_symbols.py -v`
-Expected: PASS (both).
+Expected: PASS (both — B2's symbol/exported tests still pass, and imports are now observed).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add apps/backend/app/extraction/typescript.py apps/backend/tests/extraction/test_typescript_imports.py
-git commit -m "feat(extraction): TypeScript extractor emits imports and exported property"
+git commit -m "feat(extraction): TypeScript extractor emits import observations"
 ```
 
 ---
@@ -2175,7 +2194,102 @@ git commit -m "feat(extraction): publish TypeScript support matrix"
 
 - [ ] **Step 1: Write the failing test**
 
-Create `apps/backend/tests/extraction/test_typescript_snapshot_integration.py` — identical structure to Task A11's test but importing `TypeScriptExtractor`, using producer `typescript-ast@1.0.0`, path `src/auth/service.ts`, source `b"export function issueToken() {\n  return 1;\n}\n"`, and a `repo:root` evidence with `logical_line_count=3`. Copy Task A11's `session`/`_repository`/`_to_evidence` helpers verbatim (change `extractor="typescript-ast"` in `_to_evidence`) and assert `sealed.state == "completed"`.
+Create `apps/backend/tests/extraction/test_typescript_snapshot_integration.py`:
+
+```python
+from __future__ import annotations
+
+from uuid import uuid4
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.core.database import register_sqlite_foreign_key_enforcement
+from app.extraction.typescript import TypeScriptExtractor
+from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
+from app.models import RepositoryRecord, User
+from app.models.base import Base
+
+UPLOAD_REVISION = "sha256:" + "a" * 64
+
+
+@pytest.fixture()
+def session(tmp_path):
+    register_sqlite_foreign_key_enforcement()
+    engine = create_engine(f"sqlite:///{tmp_path / 'snap.db'}")
+    Base.metadata.create_all(engine)
+    with sessionmaker(bind=engine)() as db:
+        yield db
+    engine.dispose()
+
+
+def _repository(session: Session) -> RepositoryRecord:
+    owner = User(id=str(uuid4()), email="o@example.com", password_hash=None)
+    session.add(owner)
+    session.commit()
+    record = RepositoryRecord(
+        id=str(uuid4()), owner_id=owner.id, name="repo", source="upload",
+        revision_kind="upload", revision_value=UPLOAD_REVISION,
+        local_path="/x", status="completed", file_tree=[],
+    )
+    session.add(record)
+    session.commit()
+    return record
+
+
+def _to_evidence(extracted) -> Evidence:
+    return Evidence(
+        path=extracted.path, start_line=extracted.start_line,
+        end_line=extracted.end_line, extractor="typescript-ast",
+        extractor_version="1.0.0", logical_line_count=extracted.logical_line_count,
+        granularity=extracted.granularity,
+    )
+
+
+def test_typescript_extraction_result_seals_into_a_snapshot(session):
+    repository = _repository(session)
+    result = TypeScriptExtractor().extract(
+        "src/auth/service.ts",
+        b"export function issueToken() {\n  return 1;\n}\n",
+    )
+    store = SnapshotStore(session)
+    snapshot = store.begin(
+        repository_id=repository.id,
+        revision=Revision("upload", UPLOAD_REVISION),
+        producer_version_set=["typescript-ast@1.0.0"],
+    )
+    # a repo:root node is required for a coherent snapshot (RFC §11.2 rule 5)
+    root_ev = Evidence(
+        path="src/auth/service.ts", start_line=1, end_line=1,
+        extractor="typescript-ast", extractor_version="1.0.0",
+        logical_line_count=1, granularity="file",
+    )
+    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[root_ev])
+    for node in result.nodes:
+        store.add_node(
+            snapshot, node_kind=node.node_kind, stable_key=node.stable_key,
+            name=node.name, language=node.language,
+            properties=node.properties,
+            evidence=[_to_evidence(e) for e in node.evidence],
+        )
+    for obs in result.observations:
+        store.add_observation(
+            snapshot, observed_kind=obs.observed_kind, subject_kind=obs.subject_kind,
+            subject_key=obs.subject_key, referent_text=obs.referent_text,
+            ordinal=obs.ordinal, evidence=_to_evidence(obs.evidence),
+        )
+    for diag in result.diagnostics:
+        store.add_diagnostic(
+            snapshot, code=diag.code, category=diag.category, severity=diag.severity,
+            message=diag.message, producer="typescript-ast@1.0.0", path=diag.path,
+            span=diag.span, subject=diag.subject, details=diag.details,
+        )
+
+    sealed = store.seal(snapshot)
+    assert sealed.state == "completed"
+    assert sealed.canonical_graph_hash.startswith("sha256:")
+```
 
 - [ ] **Step 2: Run and verify it passes**
 
