@@ -18,6 +18,7 @@ PYTHON_BLIND_SPOTS = {
     "star-import": ("app/a.py", "from os import *\n"),
     "dynamic-import": ("app/a.py", "import importlib\nm = importlib.import_module('os')\n"),
     "reflection": ("app/a.py", "x = getattr(object(), 'name', None)\n"),
+    "monkeypatch": ("app/a.py", "import os\nos.sep = '/'\n"),
     "metaclass": ("app/a.py", "class A(metaclass=Meta):\n    pass\n"),
 }
 

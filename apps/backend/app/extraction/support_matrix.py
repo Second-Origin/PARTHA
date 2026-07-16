@@ -12,7 +12,7 @@ class LanguageSupport:
 SUPPORT_MATRIX: dict[str, LanguageSupport] = {
     "python": LanguageSupport(
         supported=("module", "import", "function", "class", "method", "decorator", "route"),
-        unsupported=("star-import", "dynamic-import", "reflection", "metaclass"),
+        unsupported=("star-import", "dynamic-import", "reflection", "monkeypatch", "metaclass"),
     ),
     "typescript": LanguageSupport(
         supported=(
