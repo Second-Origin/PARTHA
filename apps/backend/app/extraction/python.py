@@ -84,7 +84,7 @@ class PythonExtractor:
                 ExtractedNode(
                     node_kind="module",
                     stable_key=module_key,
-                    name=posixpath.basename(canonical.normalize_repo_path(path)),
+                    name=self._module_name(path),
                     language="python",
                     evidence=(module_ev,),
                 )
@@ -109,6 +109,18 @@ class PythonExtractor:
     def _module_key(self, path: str) -> str:
         directory = posixpath.dirname(canonical.normalize_repo_path(path))
         return canonical.normalize_stable_key("module", f"mod:{directory}")
+
+    def _module_name(self, path: str) -> str | None:
+        """Name the module after its directory, not the file that evidenced it.
+
+        The stable key is directory-scoped (``mod:app/api``), so every file in a
+        directory must produce a byte-identical module record — naming it after
+        the file would make sibling modules conflicting records for one key and
+        the snapshot would refuse to seal. The repository root has no short name.
+        """
+
+        directory = posixpath.dirname(canonical.normalize_repo_path(path))
+        return posixpath.basename(directory) or None
 
     def _collect_imports(
         self, tree, path, line_count, module_key, observations, diagnostics
