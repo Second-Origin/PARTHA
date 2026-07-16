@@ -175,8 +175,12 @@ class PythonExtractor:
                     if diag is not None:
                         diagnostics.append(diag)
                 else:
-                    decorators = [self._decorator_name(d) for d in getattr(child, "decorator_list", [])]
-                    decorators = [d for d in decorators if d]
+                    decorator_nodes = [
+                        (self._decorator_name(d), d)
+                        for d in getattr(child, "decorator_list", [])
+                    ]
+                    decorator_nodes = [(n, d) for n, d in decorator_nodes if n]
+                    decorators = [n for n, _ in decorator_nodes]
                     properties = {"decorators": decorators} if decorators else None
                     nodes.append(
                         ExtractedNode(
@@ -198,6 +202,29 @@ class PythonExtractor:
                             evidence=ev,
                         )
                     )
+                    # A decorator sits above `def`/`class`, so it is outside the
+                    # symbol's own span. Give each one provenance for its source
+                    # lines rather than only a name in `properties` (#90).
+                    for decorator_name, decorator_node in decorator_nodes:
+                        dec_ev, dec_diag = build_evidence(
+                            path, decorator_node.lineno,
+                            decorator_node.end_lineno or decorator_node.lineno,
+                            line_count, producer=self.producer,
+                        )
+                        if dec_ev is None:
+                            if dec_diag is not None:
+                                diagnostics.append(dec_diag)
+                            continue
+                        observations.append(
+                            ExtractedObservation(
+                                observed_kind="decorator",
+                                subject_kind="symbol",
+                                subject_key=canonical.normalize_stable_key("symbol", final_key),
+                                referent_text=decorator_name,
+                                ordinal=_UNASSIGNED_ORDINAL,
+                                evidence=dec_ev,
+                            )
+                        )
                     for route_path, route_node in self._route_paths(child):
                         route_ev, route_diag = build_evidence(
                             path, route_node.lineno, route_node.end_lineno or route_node.lineno,
