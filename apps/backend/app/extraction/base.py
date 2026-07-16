@@ -61,3 +61,58 @@ class Extractor(Protocol):
     def supports(self, path: str) -> bool: ...
 
     def extract(self, path: str, source: bytes) -> ExtractionResult: ...
+
+
+# --- Diagnostic codes (RFC §8.2) -------------------------------------------
+
+RI_SRC_BINARY = "RI-SRC-BINARY"
+RI_SRC_MALFORMED = "RI-SRC-MALFORMED"
+RI_EXT_UNSUPPORTED = "RI-EXT-UNSUPPORTED"
+RI_SPAN_INVALID = "RI-SPAN-INVALID"
+RI_SEC_PATH_ESCAPE = "RI-SEC-PATH-ESCAPE"
+RI_KEY_DUP_SYMBOL = "RI-KEY-DUP-SYMBOL"
+
+_CATEGORY = {
+    RI_SRC_BINARY: "binary source",
+    RI_SRC_MALFORMED: "malformed source",
+    RI_EXT_UNSUPPORTED: "unsupported construct",
+    RI_SPAN_INVALID: "invalid span",
+    RI_SEC_PATH_ESCAPE: "path escape",
+    RI_KEY_DUP_SYMBOL: "duplicate symbol",
+}
+
+
+def logical_line_count(text: str) -> int:
+    """RFC §6.2: one logical line per file, plus one per U+000A."""
+
+    return 1 + text.count("\n")
+
+
+def decode_source(
+    path: str, source: bytes, *, producer: str
+) -> tuple[str | None, ExtractedDiagnostic | None]:
+    """Strict UTF-8 decode with RFC §6.2 binary/malformed handling.
+
+    Returns ``(text, None)`` for decodable text (a zero-byte file decodes to
+    ``""``), or ``(None, diagnostic)`` when the file is binary (contains a NUL
+    byte) or is not valid UTF-8.
+    """
+
+    if b"\x00" in source:
+        return None, ExtractedDiagnostic(
+            code=RI_SRC_BINARY,
+            category=_CATEGORY[RI_SRC_BINARY],
+            severity="info",
+            message="file contains a NUL byte and is excluded from line-addressed extraction",
+            path=path,
+        )
+    try:
+        return source.decode("utf-8"), None
+    except UnicodeDecodeError:
+        return None, ExtractedDiagnostic(
+            code=RI_SRC_MALFORMED,
+            category=_CATEGORY[RI_SRC_MALFORMED],
+            severity="error",
+            message="file is not valid UTF-8 and could not be decoded",
+            path=path,
+        )
