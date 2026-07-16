@@ -20,7 +20,7 @@
 > does not by itself implement snapshots, persistence, extractors, resolvers, queries, jobs,
 > migrations, or consumer migration. Downstream implementation is tracked in issues
 > [#87–#95](https://github.com/Second-Origin/PARTHA/issues/87); see
-> [§16, Dependency gate](#16-dependency-gate) and [§17, implementation status](#17-current-behavior-vs-accepted-contract-vs-unimplemented).
+> [§16, Dependency gate](#16-dependency-gate) and [§17, implementation status](#17-current-behavior-vs-accepted-contract-vs-implementation-status).
 
 ---
 
@@ -127,12 +127,11 @@ this RFC governs for `ri.v1` artifacts.
 
 ### 3.1 Problem this settles
 
-Today revision identity is coarse and mutable: `RepositoryService._metadata_with_intelligence`
-([`repository_service.py:275`](../../apps/backend/app/services/repository_service.py#L275)) stashes
-a `commitSha` inside the mutable `repo_metadata` JSON blob, and its own comment says *"Stored in
-metadata for now; promotion to a first-class column is M2 work."* A value inside a mutable blob is
+Before #87, revision identity was coarse and mutable: `RepositoryService._metadata_with_intelligence`
+stashed a `commitSha` inside the mutable `repo_metadata` JSON blob. A value inside a mutable blob is
 not an identity — it cannot be indexed, uniquely constrained, made immutable, or joined against a
-snapshot table. This section defines the identity that #87 and #88 make first-class.
+snapshot table. #87 now makes the identity in this section first-class; #88 keys normalized snapshots
+to it. The legacy description remains relevant to rows created before the migration.
 
 ### 3.2 Revision identity
 
@@ -1711,29 +1710,33 @@ parallel (fixtures early, scoring after approval); #95 last (on #92 and #94).
 
 ---
 
-## 17. Current behavior vs. accepted contract vs. unimplemented
+## 17. Current behavior vs. accepted contract vs. implementation status
 
 To keep this document honest about what exists (per [docs/README.md](../README.md) documentation
 rules), the three columns are explicit:
 
 | Concern | Current behavior (today) | Accepted `ri.v1` contract (this RFC) | Status |
 | --- | --- | --- | --- |
-| Storage | Mutable JSON blob on `repo_metadata` | Immutable sealed snapshots with nodes, edges, assertions, observations, evidence, and diagnostics (§11) | **Unimplemented** (#88) |
-| Pipeline identity | No pre-enqueue producer plan | Precomputed `producer_version_set` covers every enabled extractor/resolver/classifier (§3.3) | **Unimplemented** (#88/#93) |
-| Repository graph key | No canonical snapshot node key | Deterministic snapshot-scoped `repo:root`; database `repository_id` excluded from graph keys (§4.3) | **Unimplemented** (#88) |
+| Storage | Legacy regex consumers still read the mutable JSON blob; normalized snapshot tables and the sealing store now exist | Immutable sealed snapshots with nodes, edges, assertions, observations, evidence, and diagnostics (§11) | **Persistence implemented** (#88); production producers/queries remain #89–#92 |
+| Pipeline identity | `SnapshotStore` fixes and normalizes the planned set before a build; no production job planner invokes it yet | Precomputed `producer_version_set` covers every enabled extractor/resolver/classifier (§3.3) | **Persistence implemented** (#88); enqueue/job coordination remains #93 |
+| Repository graph key | The store validates exactly one deterministic `repo:root` before sealing; no production extractor emits it yet | Deterministic snapshot-scoped `repo:root`; database `repository_id` excluded from graph keys (§4.3) | **Persistence implemented** (#88); production emission remains #89/#90 |
 | Symbol spans | None on `SourceSymbol` ([`models.py:55`](../../apps/backend/app/intelligence/models.py#L55)) | Required line spans (§6) | **Unimplemented** (#89/#90) |
 | Extraction | Regex in `engine.py`; `TreeSitterParser` returns `[]` | Syntax-aware extractors with support matrices | **Unimplemented** (#89/#90) |
-| Revision identity | `commitSha` in a JSON blob | Indexed immutable columns (§3) | **Unimplemented** (#87) |
+| Revision identity | Indexed `revision_kind`/`revision_value`/`revision_ref`; `commitSha` is API compatibility only | Indexed immutable columns (§3) | **Implemented** (#87) |
 | Relationships | 4 of 8 declared types emitted; imports as text | Resolved edges + diagnostics (§5) | **Unimplemented** (#91) |
-| Inferred entity properties | Heuristic module roles embedded in the mutable model | Separate inferred property assertions; observed nodes remain unique (§5.6) | **Unimplemented** (#88/#92) |
-| Provenance | File paths only | Path + span + extractor/version (§6) | **Unimplemented** |
+| Inferred entity properties | Legacy heuristic module roles remain in the compatibility blob; the snapshot store supports separate validated assertions | Separate inferred property assertions; observed nodes remain unique (§5.6) | **Persistence implemented** (#88); production inference/querying remains #91/#92 |
+| Provenance | Legacy production output has file paths only; the normalized store validates path + span + producer/version | Path + span + extractor/version (§6) | **Persistence implemented** (#88); syntax-aware production remains #89/#90 |
 | Query API | Consumers read the whole blob | Versioned owner-scoped read API (§9.5) | **Unimplemented** (#92) |
 | Evidence-backed output | AI emits empty citation lists | Every claim cites a valid span (§7.4) | **Unimplemented** (#95) |
 
-**This RFC does not claim every capability in the "Accepted contract" column exists today.** Each
-capability becomes current behavior only when its implementation is merged. As of this update,
-PR #102 remains open, so the #87/#88 rows remain unimplemented in `dev`; #89–#95 also remain
-downstream work. No existing documentation is rewritten by this RFC to imply otherwise.
+**This RFC does not claim every capability in the "Accepted contract" column is current product
+behavior.** RFC-0001 is **Accepted** — independently ratified by
+[@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) on 2026-07-16
+([§1](#1-status-and-approval)); acceptance records the governing contract, not a claim of
+implementation. The #87 revision identity and #88 immutable snapshot-persistence boundary are
+implemented against that accepted contract, as the status column records. #89–#95 producers,
+queries, jobs, benchmarks, and consumer migration remain downstream work and are not current
+behavior. No existing documentation is rewritten by this RFC to imply otherwise.
 
 ---
 

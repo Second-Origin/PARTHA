@@ -54,10 +54,62 @@ class GitHubClient:
                 timeout=self.timeout_seconds,
             )
         except (subprocess.SubprocessError, OSError) as exc:
-            logger.warning("Unable to read HEAD commit for clone at %s: %s", repo_dir, exc)
+            logger.warning("Unable to read HEAD commit for cloned repository (%s).", type(exc).__name__)
             return None
         sha = result.stdout.strip()
         return sha or None
+
+    def read_head_ref(self, repo_dir: Path, requested_ref: str | None = None) -> str | None:
+        """Return the resolved ref HEAD points at (e.g. ``refs/heads/main``).
+
+        Recorded alongside the commit SHA as descriptive revision metadata
+        (RFC §3.2); it is a moving pointer and never revision identity. A
+        detached tag clone is resolved only after git confirms the requested tag
+        points at HEAD. Returns ``None`` when git cannot answer unambiguously.
+        """
+        try:
+            result = subprocess.run(
+                ["git", "symbolic-ref", "HEAD"],
+                cwd=str(repo_dir),
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout_seconds,
+            )
+        except (subprocess.SubprocessError, OSError):
+            # A tag clone has detached HEAD. Confirm the requested name against
+            # refs instead of fabricating a refs/heads value from user input.
+            if requested_ref:
+                for candidate, normalized in (
+                    (f"refs/heads/{requested_ref}", f"refs/heads/{requested_ref}"),
+                    (f"refs/tags/{requested_ref}", f"refs/tags/{requested_ref}"),
+                    (f"refs/remotes/origin/{requested_ref}", f"refs/heads/{requested_ref}"),
+                ):
+                    try:
+                        resolved = subprocess.run(
+                            ["git", "rev-parse", "--verify", f"{candidate}^{{commit}}"],
+                            cwd=str(repo_dir),
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                            timeout=self.timeout_seconds,
+                        ).stdout.strip()
+                        head = subprocess.run(
+                            ["git", "rev-parse", "HEAD"],
+                            cwd=str(repo_dir),
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                            timeout=self.timeout_seconds,
+                        ).stdout.strip()
+                    except (subprocess.SubprocessError, OSError):
+                        continue
+                    if resolved and resolved == head:
+                        return normalized
+            logger.warning("Unable to resolve HEAD to a normalized Git ref for cloned repository.")
+            return None
+        ref = result.stdout.strip()
+        return ref if ref.startswith("refs/") else None
 
     def clone_public_repository(self, url: str, destination: Path, branch: str | None = None) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -84,9 +136,14 @@ class GitHubClient:
             ) from exc
         except (subprocess.CalledProcessError, OSError) as exc:
             shutil.rmtree(destination, ignore_errors=True)
-            stderr = exc.stderr if isinstance(exc, subprocess.CalledProcessError) else str(exc)
-            # Keep raw git stderr (may contain local paths/URLs) server-side only.
-            logger.warning("git clone failed for %s: %s", url, stderr)
+            return_code = exc.returncode if isinstance(exc, subprocess.CalledProcessError) else None
+            # Raw stderr can contain the destination's absolute host path and is
+            # intentionally not logged.
+            logger.warning(
+                "git clone failed for public repository (error_type=%s, return_code=%s).",
+                type(exc).__name__,
+                return_code,
+            )
             raise ExternalServiceError(
                 "Failed to clone GitHub repository. Confirm the repository is public and the branch exists.",
             ) from exc

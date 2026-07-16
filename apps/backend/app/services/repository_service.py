@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
@@ -19,10 +20,15 @@ from app.schemas.repository import (
     RepositoryFileResponse,
     RepositoryListResponse,
     RepositoryResponse,
+    RepositoryRevision,
 )
 from app.storage.local import LocalStorage
 
 MAX_FILE_PREVIEW_BYTES = 512 * 1024
+
+# A git object name is a 40-character lowercase hex SHA-1 (RFC §3.2). ri.v1
+# targets the SHA-1 default git produces today.
+GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 IMAGE_MEDIA_TYPES = {
     ".png": "image/png",
@@ -71,18 +77,23 @@ class RepositoryService:
         repository_id = str(uuid4())
         url = self.github.validate_public_url(str(request.url))
         branch = self.github.validate_branch(request.branch)
-        existing = self.repository.find_by_source_for_owner(url, branch, self.owner_id)
-        if existing:
-            raise ConflictServiceError(
-                "Repository has already been imported.",
-                {"repositoryId": existing.id, "name": existing.name},
-            )
 
+        # A new commit is a new revision, so duplicate detection is keyed on the
+        # resolved commit SHA rather than URL+branch (#87). That requires cloning
+        # first: URL+branch is only a fallback when git identity is unavailable,
+        # and it must never block importing a genuinely new revision.
         destination = self.storage.reset_repository_path(repository_id)
         try:
             self.github.clone_public_repository(url, destination, branch)
             root = self._resolve_repository_root(destination)
             commit_sha = self.github.read_head_commit(destination)
+            revision_kind, revision_value, revision_ref = self._git_revision(destination, commit_sha, branch)
+            existing = self.repository.find_by_source_revision_for_owner(url, revision_value, self.owner_id)
+            if existing:
+                raise ConflictServiceError(
+                    "Repository has already been imported.",
+                    {"repositoryId": existing.id, "name": existing.name},
+                )
             tree, meta, total_size = self.parser.parse(root)
             self._validate_parsed_repository(meta.total_files)
             repository_intelligence = self.intelligence.build(repository_id, self.github.repository_name(url), root, tree, meta, total_size)
@@ -99,6 +110,9 @@ class RepositoryService:
             source="github",
             source_url=url,
             branch=branch,
+            revision_kind=revision_kind,
+            revision_value=revision_value,
+            revision_ref=revision_ref,
             local_path=str(root),
             size=total_size,
             file_count=meta.total_files,
@@ -108,7 +122,7 @@ class RepositoryService:
             analysis_progress=70,
             uploaded_at=now,
             analysed_at=None,
-            repo_metadata=self._metadata_with_intelligence(meta, repository_intelligence, commit_sha),
+            repo_metadata=self._metadata_with_intelligence(meta, repository_intelligence),
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
         return self.to_response(self.repository.add(record))
@@ -116,16 +130,20 @@ class RepositoryService:
     async def import_uploaded_repository(self, file: UploadFile) -> RepositoryResponse:
         repository_id = str(uuid4())
         repository_name = self._repository_name_from_archive(file.filename or repository_id)
-        existing = self.repository.find_by_name_for_owner(repository_name, self.owner_id)
-        if existing:
-            raise ConflictServiceError(
-                "Repository has already been imported.",
-                {"repositoryId": existing.id, "name": existing.name},
-            )
 
         archive_path = await self.storage.save_upload(repository_id, file, self.settings.max_upload_size_bytes)
         try:
+            # Uploads have no git history, so the immutable content hash is the
+            # revision. Duplicate detection is keyed on that content hash (#87),
+            # not the filename: a genuinely new archive is a new revision even
+            # if it is uploaded under a previously-used name.
             content_hash = self._content_hash_for_upload(archive_path)
+            existing = self.repository.find_by_revision_for_owner(content_hash, self.owner_id)
+            if existing:
+                raise ConflictServiceError(
+                    "Repository has already been imported.",
+                    {"repositoryId": existing.id, "name": existing.name},
+                )
             root = self.storage.extract_archive(archive_path, repository_id)
             tree, meta, total_size = self.parser.parse(root)
             self._validate_parsed_repository(meta.total_files)
@@ -145,6 +163,9 @@ class RepositoryService:
             source="upload",
             source_url=None,
             branch=None,
+            revision_kind="upload",
+            revision_value=content_hash,
+            revision_ref=None,
             local_path=str(root),
             size=total_size,
             file_count=meta.total_files,
@@ -154,7 +175,7 @@ class RepositoryService:
             analysis_progress=70,
             uploaded_at=now,
             analysed_at=None,
-            repo_metadata=self._metadata_with_intelligence(meta, repository_intelligence, content_hash),
+            repo_metadata=self._metadata_with_intelligence(meta, repository_intelligence),
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
         return self.to_response(self.repository.add(record))
@@ -226,6 +247,13 @@ class RepositoryService:
         raise ServiceError("Unable to read file preview.", {"path": path}) from exc
 
     def to_response(self, record: RepositoryRecord) -> RepositoryResponse:
+        revision = None
+        if record.revision_kind and record.revision_value:
+            revision = RepositoryRevision(
+                kind=record.revision_kind,
+                value=record.revision_value,
+                ref=record.revision_ref,
+            )
         return RepositoryResponse(
             id=record.id,
             name=record.name,
@@ -242,7 +270,10 @@ class RepositoryService:
             uploaded_at=record.uploaded_at,
             analysed_at=record.analysed_at,
             error_message=record.error_message,
-            commit_sha=(record.repo_metadata or {}).get("commitSha"),
+            revision=revision,
+            # Revision identity now comes from the first-class column, not the
+            # mutable metadata blob (#87). ``commit_sha`` is a compatibility alias.
+            commit_sha=record.revision_value,
             meta=record.repo_metadata,
             file_tree=record.file_tree,
         )
@@ -272,14 +303,29 @@ class RepositoryService:
                 return filename[: -len(suffix)]
         return Path(filename).stem
 
-    def _metadata_with_intelligence(self, meta, intelligence, commit_sha: str | None = None) -> dict:
+    def _metadata_with_intelligence(self, meta, intelligence) -> dict:
         metadata = meta.model_dump(mode="json", by_alias=True)
         metadata["intelligence"] = intelligence.model_dump(mode="json", by_alias=True)
-        # Commit-addressability seed: the git HEAD SHA for GitHub imports, or a
-        # stable content hash (sha256:...) for uploads that have no git history.
-        # Stored in metadata for now; promotion to a first-class column is M2 work.
-        metadata["commitSha"] = commit_sha
         return metadata
+
+    def _git_revision(
+        self,
+        destination: Path,
+        commit_sha: str | None,
+        requested_ref: str | None,
+    ) -> tuple[str, str, str]:
+        """Return ``(kind, value, ref)`` for a GitHub import (RFC §3.2).
+
+        New imports must always have both the immutable commit and the resolved
+        ref. Missing legacy identity is handled only by the migration; silently
+        creating a new repository without identity would violate RFC §3.2.
+        """
+        if not commit_sha or not GIT_SHA_RE.fullmatch(commit_sha):
+            raise ServiceError("Unable to determine an immutable Git commit for the imported repository.")
+        resolved_ref = self.github.read_head_ref(destination, requested_ref)
+        if not resolved_ref or not resolved_ref.startswith("refs/"):
+            raise ServiceError("Unable to determine the resolved Git ref for the imported repository.")
+        return "git", commit_sha, resolved_ref
 
     def _content_hash_for_upload(self, archive_path: Path) -> str:
         digest = hashlib.sha256()

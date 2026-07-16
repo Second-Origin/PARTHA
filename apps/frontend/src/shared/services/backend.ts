@@ -96,6 +96,8 @@ function mapRepositoryResponse(response: RepositoryResponse): Repository {
     uploadedAt: response.uploadedAt,
     analysedAt: response.analysedAt || undefined,
     errorMessage: response.errorMessage || undefined,
+    revision: response.revision,
+    commitSha: response.commitSha,
     meta: response.meta,
     fileTree: response.fileTree,
   };

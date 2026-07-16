@@ -79,3 +79,18 @@ curl -X POST http://localhost:8000/repositories/github \
 ```
 
 Only public GitHub HTTPS URLs are accepted. Ingestion and analysis run **synchronously** inside the request — a large repository will block until the clone, parse, and analysis finish.
+
+Repository responses include first-class source identity:
+
+```json
+{
+  "revision": {
+    "kind": "git",
+    "value": "0123456789abcdef0123456789abcdef01234567",
+    "ref": "refs/heads/main"
+  },
+  "commitSha": "0123456789abcdef0123456789abcdef01234567"
+}
+```
+
+For uploads, `kind` is `upload`, `value` is `sha256:<64 lowercase hex>`, and `ref` is `null`. `commitSha` remains a compatibility alias of `revision.value`; authoritative identity lives in the indexed revision columns, not `repo_metadata`. Re-importing the same source at a new commit or a changed archive creates a new repository revision. Snapshot query endpoints are not part of #87/#88 and remain #92.

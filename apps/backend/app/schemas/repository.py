@@ -46,6 +46,20 @@ class RepositoryMeta(CamelModel):
     license_name: str | None
 
 
+class RepositoryRevision(CamelModel):
+    """First-class repository revision identity (#87, RFC §3.2).
+
+    ``value`` is the immutable identity: a 40-char lowercase git commit SHA for
+    GitHub imports, or a ``sha256:<hex>`` archive content hash for uploads.
+    ``ref`` (e.g. ``refs/heads/main``) is a moving pointer — descriptive
+    metadata only, never identity, and always ``null`` for uploads.
+    """
+
+    kind: Literal["git", "upload"]
+    value: str
+    ref: str | None = None
+
+
 class RepositoryResponse(CamelModel):
     id: str
     name: str
@@ -62,6 +76,10 @@ class RepositoryResponse(CamelModel):
     uploaded_at: datetime
     analysed_at: datetime | None = None
     error_message: str | None = None
+    # First-class revision identity, sourced from indexed immutable columns and
+    # no longer from the mutable ``repo_metadata`` blob (#87). ``commit_sha`` is
+    # retained as a backward-compatible alias of ``revision.value``.
+    revision: RepositoryRevision | None = None
     commit_sha: str | None = None
     meta: RepositoryMeta | None = None
     file_tree: list[FileTreeNode] = Field(default_factory=list)
