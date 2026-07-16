@@ -27,6 +27,16 @@ def test_bare_imported_import_module_is_flagged():
     assert "RI-EXT-UNSUPPORTED" in codes
 
 
+def test_bare_aliased_import_module_is_flagged():
+    codes, _ = _codes("from importlib import import_module as load_module\nm = load_module('os')\n")
+    assert "RI-EXT-UNSUPPORTED" in codes
+
+
+def test_importlib_module_alias_is_flagged():
+    codes, _ = _codes("import importlib as imports\nm = imports.import_module('os')\n")
+    assert "RI-EXT-UNSUPPORTED" in codes
+
+
 def test_bare_dunder_import_is_flagged():
     codes, _ = _codes("m = __import__('os')\n")
     assert "RI-EXT-UNSUPPORTED" in codes
@@ -62,6 +72,11 @@ def test_augmented_assignment_to_an_import_is_flagged():
     assert "RI-EXT-UNSUPPORTED" in codes
 
 
+def test_tuple_target_with_imported_attribute_is_flagged():
+    codes, _ = _codes("import os\nos.sep, value = '/', 1\n")
+    assert "RI-EXT-UNSUPPORTED" in codes
+
+
 # Negative cases: attribute assignment is routine. Only rebinding an attribute on
 # a name this file imported is monkey-patching; flagging the rest would make the
 # diagnostic noise and train people to ignore it.
@@ -83,6 +98,38 @@ def test_rebinding_an_imported_name_itself_is_not_monkeypatching():
 
 def test_reading_an_imported_attribute_is_not_monkeypatching():
     codes, _ = _codes("import os\np = os.sep\n")
+    assert "RI-EXT-UNSUPPORTED" not in codes
+
+
+def test_parameter_shadowing_import_is_not_monkeypatching():
+    source = "import os\ndef configure(os):\n    os.sep = '/'\n"
+    codes, _ = _codes(source)
+    assert "RI-EXT-UNSUPPORTED" not in codes
+
+
+def test_local_rebinding_import_is_not_monkeypatching():
+    source = "import os\nos = object()\nos.sep = '/'\n"
+    codes, _ = _codes(source)
+    assert "RI-EXT-UNSUPPORTED" not in codes
+
+
+def test_local_import_module_definition_is_not_a_dynamic_import():
+    source = "def import_module(name):\n    return name\n\nimport_module('local')\n"
+    codes, _ = _codes(source)
+    assert "RI-EXT-UNSUPPORTED" not in codes
+
+
+def test_import_module_parameter_and_rebinding_are_not_dynamic_imports():
+    parameter_source = "def load(import_module):\n    return import_module('local')\n"
+    rebound_source = "from importlib import import_module\nimport_module = lambda name: name\nimport_module('local')\n"
+    parameter_codes, _ = _codes(parameter_source)
+    rebound_codes, _ = _codes(rebound_source)
+    assert "RI-EXT-UNSUPPORTED" not in parameter_codes
+    assert "RI-EXT-UNSUPPORTED" not in rebound_codes
+
+
+def test_unrelated_import_module_method_is_not_a_dynamic_import():
+    codes, _ = _codes("class Loader:\n    def import_module(self, name):\n        return name\n\nLoader().import_module('local')\n")
     assert "RI-EXT-UNSUPPORTED" not in codes
 
 

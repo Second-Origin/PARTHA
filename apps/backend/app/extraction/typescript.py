@@ -199,18 +199,41 @@ class TypeScriptExtractor:
                     )
                 )
 
-        def collect_path_pairs(node):
-            # Descends router-factory arguments only; nested `children` route
-            # tables are reached here, unrelated objects elsewhere are not.
-            if node.type == "pair":
-                key = node.child_by_field_name("key")
-                value = node.child_by_field_name("value")
-                if (key is not None and value is not None
-                        and self._node_text(key, source).strip("'\"") == "path"
-                        and value.type == "string"):
-                    emit(node, self._node_text(value, source).strip("'\"`"))
-            for child in node.named_children:
-                collect_path_pairs(child)
+        def pair_value(pair, name):
+            key = pair.child_by_field_name("key")
+            if key is None or self._node_text(key, source).strip("'\"") != name:
+                return None
+            return pair.child_by_field_name("value")
+
+        def collect_route_entry(node):
+            """Read direct route fields and follow only its ``children`` table.
+
+            A route entry is an object in the router's route-table array. Its
+            ``handle``, ``element``, and arbitrary metadata may contain objects
+            with their own ``path`` keys, but those are application data rather
+            than routes. ``children`` is the one RouteObject field that contains
+            another route table.
+            """
+
+            if node.type != "object":
+                return
+            for pair in node.named_children:
+                if pair.type != "pair":
+                    continue
+                path_value = pair_value(pair, "path")
+                if path_value is not None and path_value.type == "string":
+                    emit(pair, self._node_text(path_value, source).strip("'\"`"))
+                children_value = pair_value(pair, "children")
+                if children_value is not None:
+                    collect_route_table(children_value)
+
+        def collect_route_table(node):
+            # A factory's first argument and a route entry's `children` must be
+            # arrays of actual route objects. Do not recursively inspect their
+            # contents: unrelated nested objects are not route entries.
+            if node.type == "array":
+                for entry in node.named_children:
+                    collect_route_entry(entry)
 
         def walk(node):
             if node.type == "call_expression":
@@ -223,7 +246,7 @@ class TypeScriptExtractor:
                     # (e.g. basename config), which is not a route.
                     route_table = arguments.named_children[0] if arguments.named_children else None
                     if route_table is not None:
-                        collect_path_pairs(route_table)
+                        collect_route_table(route_table)
             elif node.type in ("jsx_self_closing_element", "jsx_opening_element"):
                 name_node = node.child_by_field_name("name")
                 if (name_node is not None
