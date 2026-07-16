@@ -97,6 +97,7 @@ class TypeScriptExtractor:
             tree.root_node, path, line_count, file_key, nodes, observations, diagnostics
         )
         self._collect_imports(tree.root_node, path, line_count, file_key, observations)
+        self._collect_routes(tree.root_node, path, line_count, file_key, observations)
         return ExtractionResult(
             nodes=tuple(nodes),
             observations=tuple(observations),
@@ -126,6 +127,44 @@ class TypeScriptExtractor:
                                 ordinal=ordinal, evidence=ev,
                             )
                         )
+            for child in node.named_children:
+                walk(child)
+
+        walk(root)
+
+    def _collect_routes(self, root, path, line_count, file_key, observations) -> None:
+        source = root.text
+        ordinal = len(observations)
+
+        def emit(node, literal):
+            nonlocal ordinal
+            ev, _ = build_evidence(
+                path, node.start_point[0] + 1, node.end_point[0] + 1,
+                line_count, producer=self.producer,
+            )
+            if ev is not None:
+                ordinal += 1
+                observations.append(
+                    ExtractedObservation(
+                        observed_kind="route", subject_kind="file",
+                        subject_key=file_key, referent_text=literal,
+                        ordinal=ordinal, evidence=ev,
+                    )
+                )
+
+        def walk(node):
+            if node.type == "pair":
+                key = node.child_by_field_name("key")
+                value = node.child_by_field_name("value")
+                if (key is not None and value is not None
+                        and self._node_text(key, source).strip("'\"") == "path"
+                        and value.type in ("string",)):
+                    emit(node, self._node_text(value, source).strip("'\"`"))
+            elif node.type == "jsx_attribute":
+                children = node.named_children
+                if children and self._node_text(children[0], source) == "path" and len(children) > 1:
+                    literal = self._node_text(children[1], source).strip("'\"{}`")
+                    emit(node, literal)
             for child in node.named_children:
                 walk(child)
 
