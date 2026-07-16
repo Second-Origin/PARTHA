@@ -12,6 +12,7 @@ from app.extraction.base import (
     RI_KEY_DUP_SYMBOL,
     RI_SEC_PATH_ESCAPE,
     RI_SRC_MALFORMED,
+    assign_ordinals,
     build_evidence,
     decode_source,
     logical_line_count,
@@ -22,6 +23,11 @@ from app.intelligence import canonical
 _ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
 _DYNAMIC_IMPORT_CALLS = {"import_module", "__import__"}
 _REFLECTION_CALLS = {"getattr", "setattr", "delattr"}
+
+# Collectors emit this; assign_ordinals sets the RFC §6.4 value on the way out.
+# It is deliberately invalid (ordinals are one-based) so a result that skipped
+# assignment fails loudly rather than persisting a wrong identity.
+_UNASSIGNED_ORDINAL = 0
 
 
 class PythonExtractor:
@@ -102,7 +108,7 @@ class PythonExtractor:
 
         return ExtractionResult(
             nodes=tuple(nodes),
-            observations=tuple(observations),
+            observations=assign_ordinals(observations),
             diagnostics=tuple(diagnostics),
         )
 
@@ -125,7 +131,6 @@ class PythonExtractor:
     def _collect_imports(
         self, tree, path, line_count, module_key, observations, diagnostics
     ) -> None:
-        ordinal = 0
         for node in ast.walk(tree):
             names: list[str] = []
             if isinstance(node, ast.Import):
@@ -141,7 +146,6 @@ class PythonExtractor:
             else:
                 continue
             for name in names:
-                ordinal += 1
                 ev, diag = build_evidence(
                     path, node.lineno, node.end_lineno or node.lineno, line_count,
                     producer=self.producer,
@@ -156,7 +160,7 @@ class PythonExtractor:
                         subject_kind="module",
                         subject_key=module_key,
                         referent_text=name,
-                        ordinal=ordinal,
+                        ordinal=_UNASSIGNED_ORDINAL,
                         evidence=ev,
                     )
                 )
@@ -167,10 +171,8 @@ class PythonExtractor:
         self, tree, path, line_count, nodes, observations, diagnostics
     ) -> None:
         assigner = DiscriminatorAssigner()
-        ordinal = 0
 
         def visit(scope: list[str], body) -> None:
-            nonlocal ordinal
             for child in body:
                 if not isinstance(child, self._DEF_TYPES):
                     continue
@@ -197,14 +199,13 @@ class PythonExtractor:
                             properties=properties,
                         )
                     )
-                    ordinal += 1
                     observations.append(
                         ExtractedObservation(
                             observed_kind="definition",
                             subject_kind="symbol",
                             subject_key=canonical.normalize_stable_key("symbol", final_key),
                             referent_text=None,
-                            ordinal=ordinal,
+                            ordinal=_UNASSIGNED_ORDINAL,
                             evidence=ev,
                         )
                     )
@@ -217,14 +218,13 @@ class PythonExtractor:
                             if route_diag is not None:
                                 diagnostics.append(route_diag)
                             continue
-                        ordinal += 1
                         observations.append(
                             ExtractedObservation(
                                 observed_kind="route",
                                 subject_kind="symbol",
                                 subject_key=canonical.normalize_stable_key("symbol", final_key),
                                 referent_text=route_path,
-                                ordinal=ordinal,
+                                ordinal=_UNASSIGNED_ORDINAL,
                                 evidence=route_ev,
                             )
                         )
