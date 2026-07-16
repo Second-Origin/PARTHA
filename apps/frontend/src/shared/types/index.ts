@@ -53,6 +53,12 @@ export interface RepositoryMeta {
   licenseName: string | null;
 }
 
+export interface RepositoryRevision {
+  kind: 'git' | 'upload';
+  value: string;
+  ref: string | null;
+}
+
 export interface Repository {
   id: string;
   name: string;
@@ -68,6 +74,8 @@ export interface Repository {
   uploadedAt: string;
   analysedAt?: string;
   errorMessage?: string;
+  revision?: RepositoryRevision | null;
+  commitSha?: string | null;
   meta: RepositoryMeta | null;
   fileTree: FileTreeNode[];
 }

@@ -78,7 +78,7 @@ flowchart LR
 
 ## Ingestion flow
 
-Both entry points converge on the same path: land the source on disk, parse it, build Repository Intelligence, persist everything on one row.
+Both entry points converge on the same production path: land the source on disk, compute immutable revision identity, parse it, build the legacy Repository Intelligence model, and persist the repository revision. The normalized `ri.v1` snapshot boundary exists alongside this path but is not populated by the legacy regex engine.
 
 ```mermaid
 sequenceDiagram
@@ -99,7 +99,7 @@ sequenceDiagram
     Parser-->>Repo: FileTreeNode[] + RepositoryMeta + size
     Repo->>RI: build(...)
     RI-->>Repo: RepositoryIntelligence
-    Repo->>DB: insert row (metadata + file_tree + serialized intelligence + commitSha)
+    Repo->>DB: insert row (revision kind/value/ref + metadata + file_tree + legacy intelligence)
     DB-->>UI: RepositoryResponse
 ```
 
@@ -113,8 +113,10 @@ This runs **synchronously inside the HTTP request**. A large repository blocks a
 
 | Store | Holds | Notes |
 | --- | --- | --- |
-| Relational DB | `users`, `refresh_tokens`, `repositories`, `ai_provider_configs` | SQLite by default for local development; PostgreSQL under Docker Compose. Four Alembic migrations. |
-| `repositories.repo_metadata` (JSON column) | Parser metadata, `commitSha`, and the **entire serialized Repository Intelligence** under the `intelligence` key. | There are **no graph tables**. The knowledge graph is a JSON blob on this column. |
+| Relational DB | `users`, `refresh_tokens`, `repositories`, `ai_provider_configs`, and normalized `ri_*` snapshot tables | SQLite by default for local development; PostgreSQL under Docker Compose. The current migration head adds revision identity plus immutable snapshot persistence. |
+| `repositories.revision_kind`, `revision_value`, `revision_ref` | Exact imported source identity: Git commit + resolved ref, or upload archive hash. | `revision_value` is indexed and immutable; a moving branch name is metadata, never identity. |
+| `repositories.repo_metadata` (JSON column) | Parser metadata and the **legacy/unverified** serialized Repository Intelligence under the `intelligence` key. | New imports no longer stash `commitSha` here. Existing legacy facts are retained for compatibility and are not copied into `ri.v1` observed facts. |
+| `ri_snapshots`, `ri_nodes`, `ri_edges`, `ri_assertions`, `ri_observations`, `ri_evidence`, `ri_derivations`, `ri_diagnostics` | Revision-addressed normalized `ri.v1` artifacts, provenance, lifecycle state, and canonical hash. | The persistence boundary and sealing rules are implemented. Syntax-aware producers, query APIs, durable jobs, benchmarks, and consumer migration remain #89–#95, so current product consumers do not read these tables yet. |
 | `repositories.file_tree` (JSON column) | The parsed file tree. | Serves the explorer. |
 | `ai_provider_configs` | One row per user: provider, model, base URL, and the **Fernet-encrypted** API key plus its last four characters. | Owner-scoped; the plaintext key is never stored and never returned to the client. |
 | Filesystem (`STORAGE_PATH`) | Extracted archives and cloned repositories; uploaded archives (deleted after extraction). | Repository source is read from here on demand for file preview. |
@@ -229,8 +231,8 @@ flowchart TB
 These are properties of the system as built, not a wish list.
 
 1. **Extraction is heuristic, not language-aware.** File roles, modules, and layers are inferred from path segments and filenames. Symbols come from regular expressions. `TreeSitterParser` returns nothing, even though `tree-sitter` is a declared dependency.
-2. **No line-level provenance.** Facts carry a file path and nothing finer. Revision identity (`commitSha`) lives on the repository row, not on the facts.
-3. **The knowledge graph is not persisted as a graph.** It is a JSON blob on `repo_metadata`. It cannot be queried, indexed, or joined. Four of the eight declared relationship types are never emitted.
+2. **No line-level provenance in production output.** The snapshot schema can store validated spans and derivations, but the current regex engine emits neither and is deliberately not promoted into `ri.v1`.
+3. **The graph store has no production producers or consumers yet.** Immutable normalized tables exist, but product surfaces still read the legacy JSON blob. Four of the eight legacy relationship types are never emitted; syntax-aware extraction/resolution and snapshot queries remain later issues.
 4. **Processing is synchronous and whole-repository.** No background jobs, no incremental re-analysis, no cancellation.
 5. **The rate limiter trusts only the direct socket peer for unauthenticated requests.** `X-Forwarded-For` is deliberately ignored, so behind a reverse proxy every unauthenticated client shares one IP budget until a trusted-proxy allowlist is designed. Authenticated requests are keyed per user and unaffected.
 6. **Dependency coverage is narrow.** Three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The API exposes explicit `not_computed` assessment statuses and does not emit a clean result or count without a scanner.

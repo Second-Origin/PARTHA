@@ -1,4 +1,5 @@
 import io
+import subprocess
 import tarfile
 import zipfile
 from pathlib import Path
@@ -55,9 +56,14 @@ def test_zip_upload_persists_repository_and_analysis_completes(auth_client):
     assert repository["analysisStage"] == "building-file-tree"
     assert repository["analysisProgress"] == 70
     assert repository["meta"]["framework"] == "React"
-    # Uploads have no git history, so a stable content hash stands in as the
-    # commit-addressability identifier (T9 / F2).
+    assert repository["revision"] == {
+        "kind": "upload",
+        "value": repository["commitSha"],
+        "ref": None,
+    }
     assert repository["commitSha"].startswith("sha256:")
+    assert len(repository["commitSha"]) == 71
+    assert "commitSha" not in repository["meta"]
 
     start_response = auth_client.post(f"/analysis/{repository['id']}/start")
     assert start_response.status_code == 200
@@ -202,6 +208,16 @@ def test_duplicate_upload_name_returns_conflict(auth_client):
     assert body["details"]["name"] == "repo"
 
 
+def test_same_upload_filename_with_new_content_creates_a_new_revision(auth_client):
+    first = _upload(auth_client, "repo.zip", _zip_bytes({"repo/main.py": "print('first')\n"}))
+    second = _upload(auth_client, "repo.zip", _zip_bytes({"repo/main.py": "print('second')\n"}))
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] != second.json()["id"]
+    assert first.json()["revision"]["value"] != second.json()["revision"]["value"]
+
+
 def test_github_import_uses_backend_validation_and_duplicate_detection(auth_client, monkeypatch: pytest.MonkeyPatch):
     def fake_clone(_: GitHubClient, __: str, destination: Path, ___: str | None = None) -> None:
         destination.mkdir(parents=True, exist_ok=True)
@@ -209,10 +225,17 @@ def test_github_import_uses_backend_validation_and_duplicate_detection(auth_clie
         (destination / "src").mkdir()
         (destination / "src" / "main.tsx").write_text("import React from 'react';", encoding="utf-8")
 
+    commits = iter(["a" * 40, "a" * 40, "b" * 40, "a" * 40])
     monkeypatch.setattr(GitHubClient, "clone_public_repository", fake_clone)
+    monkeypatch.setattr(GitHubClient, "read_head_commit", lambda *_: next(commits))
+    monkeypatch.setattr(GitHubClient, "read_head_ref", lambda *_: "refs/heads/main")
 
     first = auth_client.post("/repositories/github", json={"url": "https://github.com/example/demo"})
     duplicate = auth_client.post("/repositories/github", json={"url": "https://github.com/example/demo"})
+    new_revision = auth_client.post("/repositories/github", json={"url": "https://github.com/example/demo"})
+    shared_commit_other_source = auth_client.post(
+        "/repositories/github", json={"url": "https://github.com/example/fork"}
+    )
     malformed_branch = auth_client.post(
         "/repositories/github",
         json={"url": "https://github.com/example/other", "branch": "../main"},
@@ -220,14 +243,19 @@ def test_github_import_uses_backend_validation_and_duplicate_detection(auth_clie
 
     assert first.status_code == 201
     assert first.json()["status"] == "analysing"
+    assert first.json()["revision"] == {"kind": "git", "value": "a" * 40, "ref": "refs/heads/main"}
+    assert first.json()["commitSha"] == "a" * 40
+    assert "commitSha" not in first.json()["meta"]
     assert duplicate.status_code == 409
+    assert new_revision.status_code == 201
+    assert new_revision.json()["revision"]["value"] == "b" * 40
+    assert new_revision.json()["id"] != first.json()["id"]
+    assert shared_commit_other_source.status_code == 201
     assert malformed_branch.status_code == 422
     assert malformed_branch.json()["message"] == "Branch name contains unsupported characters."
 
 
 def test_github_clone_timeout_is_reported(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    import subprocess
-
     def fake_run(*args, **kwargs):
         raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs["timeout"])
 
@@ -238,6 +266,24 @@ def test_github_clone_timeout_is_reported(monkeypatch: pytest.MonkeyPatch, tmp_p
     auth_client = GitHubClient(Settings(clone_timeout_seconds=1))
     with pytest.raises(TimeoutServiceError):
         auth_client.clone_public_repository("https://github.com/example/demo", tmp_path / "demo")
+
+
+def test_git_head_ref_resolves_branches_and_detached_tags(tmp_path: Path):
+    from app.core.config import Settings
+
+    repository = tmp_path / "git-repository"
+    subprocess.run(["git", "init", "-b", "main", str(repository)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repository), "config", "user.name", "test"], check=True)
+    subprocess.run(["git", "-C", str(repository), "config", "user.email", "test@example.com"], check=True)
+    (repository / "README.md").write_text("revision\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repository), "add", "README.md"], check=True)
+    subprocess.run(["git", "-C", str(repository), "commit", "-m", "initial"], check=True, capture_output=True)
+
+    github = GitHubClient(Settings())
+    assert github.read_head_ref(repository) == "refs/heads/main"
+    subprocess.run(["git", "-C", str(repository), "tag", "v1.0.0"], check=True)
+    subprocess.run(["git", "-C", str(repository), "checkout", "--detach", "v1.0.0"], check=True, capture_output=True)
+    assert github.read_head_ref(repository, "v1.0.0") == "refs/tags/v1.0.0"
 
 
 def test_github_clone_over_size_limit_aborts_and_cleans_up(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):

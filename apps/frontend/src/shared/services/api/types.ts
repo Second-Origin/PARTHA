@@ -22,6 +22,17 @@ export interface PaginatedResponse<T> {
 }
 
 // Repository
+
+// First-class revision identity (#87). `value` is the immutable identity: a
+// 40-char lowercase git commit SHA for GitHub imports, or a `sha256:<hex>`
+// archive content hash for uploads. `ref` (e.g. `refs/heads/main`) is a moving
+// pointer — descriptive metadata only, never identity, and null for uploads.
+export interface RepositoryRevision {
+  kind: 'git' | 'upload';
+  value: string;
+  ref: string | null;
+}
+
 export interface RepositoryResponse {
   id: string;
   name: string;
@@ -38,6 +49,9 @@ export interface RepositoryResponse {
   uploadedAt: string;
   analysedAt: string | null;
   errorMessage: string | null;
+  revision: RepositoryRevision | null;
+  // Backward-compatible alias of `revision.value`.
+  commitSha: string | null;
   meta: RepositoryMeta | null;
   fileTree: FileTreeNode[];
 }

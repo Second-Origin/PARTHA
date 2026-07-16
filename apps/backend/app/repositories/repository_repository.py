@@ -28,17 +28,30 @@ class RepositoryRepository:
             return None
         return record
 
-    def find_by_name_for_owner(self, name: str, owner_id: str) -> RepositoryRecord | None:
+    def find_by_revision_for_owner(self, revision_value: str, owner_id: str) -> RepositoryRecord | None:
+        """Find an owner's upload already imported at this exact content hash."""
         statement = select(RepositoryRecord).where(
-            RepositoryRecord.name == name,
+            RepositoryRecord.revision_value == revision_value,
             RepositoryRecord.owner_id == owner_id,
         )
         return self.db.scalars(statement).first()
 
-    def find_by_source_for_owner(self, source_url: str, branch: str | None, owner_id: str) -> RepositoryRecord | None:
+    def find_by_source_revision_for_owner(
+        self,
+        source_url: str,
+        revision_value: str,
+        owner_id: str,
+    ) -> RepositoryRecord | None:
+        """Find the same GitHub source at the same immutable commit.
+
+        A commit SHA alone is not a repository identity: forks can legitimately
+        share commits. GitHub duplicate detection is therefore scoped by source
+        URL as well as immutable revision, while a new commit at the same URL is
+        accepted as a new repository revision.
+        """
         statement = select(RepositoryRecord).where(
             RepositoryRecord.source_url == source_url,
-            RepositoryRecord.branch == branch,
+            RepositoryRecord.revision_value == revision_value,
             RepositoryRecord.owner_id == owner_id,
         )
         return self.db.scalars(statement).first()

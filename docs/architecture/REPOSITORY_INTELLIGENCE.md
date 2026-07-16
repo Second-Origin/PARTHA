@@ -20,7 +20,9 @@ If your feature needs a repository fact that does not exist yet, the answer is a
 
 ## What Repository Intelligence currently means
 
-Concretely, it is one Pydantic model — `RepositoryIntelligence` ([`app/intelligence/models.py`](../../apps/backend/app/intelligence/models.py)) — built by one engine — `RepositoryIntelligenceEngine` ([`app/intelligence/engine.py`](../../apps/backend/app/intelligence/engine.py)) — and serialized onto the repository row.
+The production extraction path is still one Pydantic model — `RepositoryIntelligence` ([`app/intelligence/models.py`](../../apps/backend/app/intelligence/models.py)) — built by one engine — `RepositoryIntelligenceEngine` ([`app/intelligence/engine.py`](../../apps/backend/app/intelligence/engine.py)) — and serialized onto the repository row. That blob is retained as explicitly legacy/unverified compatibility data.
+
+The `ri.v1` persistence boundary now also exists: first-class repository revision columns, normalized snapshot/fact/provenance tables, deterministic canonical hashing, and a lifecycle store that validates and seals immutable snapshots. It does not run the legacy regex output through those tables. Syntax-aware producers, resolution, query APIs, durable jobs, determinism scoring, and consumer migration remain later work (#89–#95).
 
 ```mermaid
 flowchart LR
@@ -28,10 +30,14 @@ flowchart LR
     Parser["RepositoryParser<br/>file tree + metadata"]
     Engine["RepositoryIntelligenceEngine.build()"]
     Model["RepositoryIntelligence"]
-    Store[("repositories.repo_metadata<br/>intelligence key · JSON column")]
+    Store[("repositories.repo_metadata<br/>legacy intelligence JSON")]
+    Revision[("repositories.revision_*<br/>immutable source identity")]
+    Snapshot[("ri_* tables<br/>available persistence boundary")]
     Consumers["Consumers"]
 
     Root --> Parser --> Engine --> Model --> Store
+    Root --> Revision
+    Revision -. future conforming producers .-> Snapshot
     Store -->|"from_record()"| Consumers
 ```
 
@@ -96,13 +102,16 @@ At import, the engine builds `RepositoryIntelligence` and `RepositoryService` se
 
 ```text
 repositories.repo_metadata["intelligence"]   -- entire model, JSON
-repositories.repo_metadata["commitSha"]      -- git HEAD SHA, or "sha256:..." of the uploaded archive
+repositories.revision_kind/value/ref          -- first-class immutable revision identity
 repositories.file_tree                       -- parsed tree, JSON
+ri_snapshots + ri_* fact tables               -- normalized ri.v1 persistence boundary
 ```
 
-Consumers call `RepositoryIntelligenceEngine.from_record(record)`, which returns the persisted model if present and **rebuilds it from disk as a fallback** if it is missing or fails validation.
+The repository API returns `revision: {kind,value,ref}` and retains `commitSha` only as a compatibility alias of `revision.value`. New imports do not stash `commitSha` inside mutable metadata. A new Git commit or changed upload hash creates a new repository record; the same source at the same immutable revision remains a duplicate.
 
-**There are no graph tables.** The knowledge graph is a JSON blob inside a metadata column. It cannot be queried, indexed, joined, or partially updated — it is read and written whole.
+Consumers still call `RepositoryIntelligenceEngine.from_record(record)`, which returns the legacy model if present and **rebuilds it from disk as a fallback** if it is missing or fails validation. That compatibility path is not an `ri.v1` snapshot producer: its regex facts have no valid spans or versioned provenance and are never promoted to `observed`, `resolved`, or `inferred` rows.
+
+The normalized `ri_*` tables are ready for conforming producers. `SnapshotStore` fixes the complete semantic identity before a build, enforces same-snapshot foreign keys and provenance, validates derivation chains, computes the canonical graph hash, and seals the snapshot atomically. Completed snapshots reject mutation. There is intentionally no snapshot query API or consumer cutover in this change.
 
 ---
 
@@ -153,13 +162,13 @@ Two terms with distinct meanings. PARTHA uses them precisely, and supports neith
 
 **Evidence: partial.** Graph relationships and engineering-review findings carry the **file paths** they were derived from. That is real evidence, and it is enough to point a reader at the right file.
 
-**Provenance: incomplete.** Specifically:
+**Production provenance: incomplete.** The new persistence schema can store complete `ri.v1` provenance, but the current regex engine cannot produce it. Specifically:
 
 - **No line spans.** `SourceSymbol` has `id`, `name`, `kind`, `file_path`, and `exported`. It has **no start or end line**. Nothing in the model records where in a file a fact was found.
 - **No extraction method on the fact.** A consumer cannot tell whether a given fact was matched deterministically or inferred heuristically. That distinction lives in this document, not in the data.
-- **Revision identity is coarse.** `commitSha` (the git HEAD SHA, or a `sha256:` content hash for uploads) is stored on the **repository row**, not on the `RepositoryIntelligence` model or on any individual fact. Facts are not addressed to a revision, and re-importing does not version them.
+- **Revision identity is now exact at the repository boundary.** GitHub imports store a 40-character commit plus resolved ref; uploads store a `sha256:` archive identity. Legacy JSON facts still are not individually revision-addressed, while conforming snapshot rows are.
 
-The honest summary: **PARTHA can tell you which file a fact came from. It cannot tell you which line, from which revision, or how the fact was derived.**
+The honest summary: **the persistence layer can retain exact revisions, spans, producer versions, and derivations, but today's production regex output still tells consumers only which file a legacy fact came from.** No line-cited product claim exists until #89–#95 populate and consume conforming snapshots.
 
 This is why AI answers carry no citations. The AI context builder deliberately emits an empty citation list and sends the provider **no source content and no line numbers** — fabricating `1:1` placeholder citations would misrepresent a structural answer as line-level evidence. See [`app/ai/repository_context.py`](../../apps/backend/app/ai/repository_context.py).
 
@@ -171,9 +180,9 @@ Do not describe PARTHA as having evidence-backed or grounded output until line s
 
 - **Symbols:** regex-derived, Python and TS/JS only, no line spans, no signatures, no nesting, no cross-file resolution. Matches inside comments and strings are not excluded.
 - **Line spans:** not extracted anywhere in the system.
-- **Graph persistence:** a JSON blob on a metadata column. No graph tables, no queryability, no incremental update.
+- **Graph production and consumption:** normalized immutable graph tables exist, but no syntax-aware producer or query/consumer path populates and serves them yet. Product surfaces still read the legacy JSON blob.
 - **Relationships:** four of the eight declared types are never emitted. An import edge resolves to a declared dependency when the name matches and otherwise creates an `external:` node — there is no real module resolution.
-- **Revision identity:** recorded per repository, not per fact. No history, no diffing, no re-analysis on change.
+- **Revision identity:** first-class and immutable per imported repository revision. Snapshot history can be retained, but diff/query APIs and product re-analysis orchestration are not implemented.
 - **Dependencies:** three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The dependency API reports both assessments as explicit `not_computed` statuses; it emits no clean result or count without a scanner.
 - **Languages:** meaningful extraction covers Python and TypeScript/JavaScript. Other languages get file-tree and metadata treatment only.
 - **File size cap:** files over 512 KB are read as empty during extraction, so their contents contribute nothing.
