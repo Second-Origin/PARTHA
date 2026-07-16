@@ -96,11 +96,40 @@ class TypeScriptExtractor:
         self._collect_symbols(
             tree.root_node, path, line_count, file_key, nodes, observations, diagnostics
         )
+        self._collect_imports(tree.root_node, path, line_count, file_key, observations)
         return ExtractionResult(
             nodes=tuple(nodes),
             observations=tuple(observations),
             diagnostics=tuple(diagnostics),
         )
+
+    def _collect_imports(self, root, path, line_count, file_key, observations) -> None:
+        source = root.text
+        ordinal = len(observations)
+
+        def walk(node):
+            nonlocal ordinal
+            if node.type in ("import_statement", "export_statement"):
+                source_node = node.child_by_field_name("source")
+                if source_node is not None:
+                    literal = self._node_text(source_node, source).strip("'\"`")
+                    ev, _ = build_evidence(
+                        path, node.start_point[0] + 1, node.end_point[0] + 1,
+                        line_count, producer=self.producer,
+                    )
+                    if ev is not None:
+                        ordinal += 1
+                        observations.append(
+                            ExtractedObservation(
+                                observed_kind="import", subject_kind="file",
+                                subject_key=file_key, referent_text=literal,
+                                ordinal=ordinal, evidence=ev,
+                            )
+                        )
+            for child in node.named_children:
+                walk(child)
+
+        walk(root)
 
     def _node_text(self, node, source: bytes) -> str:
         return source[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
