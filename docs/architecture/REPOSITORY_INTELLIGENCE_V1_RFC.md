@@ -674,7 +674,7 @@ is what a `RI-RES-UNRESOLVED`/`RI-RES-AMBIGUOUS` diagnostic points at); it simpl
 | Field | Rule |
 | --- | --- |
 | `observation_id` | REQUIRED. Deterministic id (below). |
-| `observed_kind` | REQUIRED. One of `definition`, `import`, `call`, `route`, `implements`, `contains`. Extensible as a compatible addition. |
+| `observed_kind` | REQUIRED. One of `definition`, `import`, `call`, `route`, `implements`, `contains`, `decorator`. Extensible as a compatible addition. |
 | `subject` | REQUIRED. The stable key + kind of the node the occurrence is lexically inside (the enclosing file or symbol). This node MUST exist in the snapshot. |
 | `referent_text` | OPTIONAL. The raw, unresolved reference as written in source (the import specifier `"./tokens"`, the callee text `issueToken`, the route path `"/login"`). Present for occurrences that a resolver will attempt to resolve; absent for pure `definition` observations. |
 | `ordinal` | REQUIRED. One-based source order among observations whose other identity fields are identical. This disambiguates multiple identical occurrences on one line while columns are deferred. |
