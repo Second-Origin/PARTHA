@@ -8,6 +8,7 @@ from app.extraction.base import (
     ExtractedNode,
     ExtractedObservation,
     ExtractionResult,
+    RI_EXT_UNSUPPORTED,
     RI_KEY_DUP_SYMBOL,
     RI_SEC_PATH_ESCAPE,
     RI_SRC_MALFORMED,
@@ -19,6 +20,8 @@ from app.extraction.naming import DiscriminatorAssigner, symbol_stable_key
 from app.intelligence import canonical
 
 _ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
+_DYNAMIC_IMPORT_CALLS = {"import_module", "__import__"}
+_REFLECTION_CALLS = {"getattr", "setattr", "delattr"}
 
 
 class PythonExtractor:
@@ -95,6 +98,7 @@ class PythonExtractor:
         self._collect_symbols(
             tree, path, line_count, nodes, observations, diagnostics
         )
+        self._collect_blind_spots(tree, path, line_count, diagnostics)
 
         return ExtractionResult(
             nodes=tuple(nodes),
@@ -226,6 +230,33 @@ class PythonExtractor:
                 visit([*scope, child.name], child.body)
 
         visit([], tree.body)
+
+    def _collect_blind_spots(self, tree, path, line_count, diagnostics) -> None:
+        normalized = canonical.normalize_repo_path(path)
+
+        def flag(node, message: str) -> None:
+            diagnostics.append(
+                ExtractedDiagnostic(
+                    code=RI_EXT_UNSUPPORTED,
+                    category="unsupported construct",
+                    severity="info",
+                    message=message,
+                    path=normalized,
+                    span=(node.lineno, node.end_lineno or node.lineno),
+                )
+            )
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and any(a.name == "*" for a in node.names):
+                flag(node, f"star-import from {node.module or '.'} is unsupported")
+            elif isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Name) and func.id in _REFLECTION_CALLS:
+                    flag(node, f"reflection via {func.id}() is unsupported")
+                elif isinstance(func, ast.Name) and func.id == "__import__":
+                    flag(node, "dynamic import via __import__() is unsupported")
+                elif isinstance(func, ast.Attribute) and func.attr in _DYNAMIC_IMPORT_CALLS:
+                    flag(node, f"dynamic import via {func.attr}() is unsupported")
 
     def _decorator_name(self, decorator) -> str | None:
         target = decorator.func if isinstance(decorator, ast.Call) else decorator
