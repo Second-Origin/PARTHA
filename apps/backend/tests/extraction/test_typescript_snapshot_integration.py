@@ -90,3 +90,45 @@ def test_typescript_extraction_result_seals_into_a_snapshot(session):
     sealed = store.seal(snapshot)
     assert sealed.state == "completed"
     assert sealed.canonical_graph_hash.startswith("sha256:")
+
+
+def test_sibling_typescript_files_seal_into_one_snapshot(session):
+    # The module node is directory-scoped, so sibling files must produce an
+    # identical module record rather than a conflicting one.
+    repository = _repository(session)
+    store = SnapshotStore(session)
+    snapshot = store.begin(
+        repository_id=repository.id,
+        revision=Revision("upload", UPLOAD_REVISION),
+        producer_version_set=["typescript-ast@1.0.0"],
+    )
+    store.add_node(
+        snapshot, node_kind="repository", stable_key="repo:root",
+        evidence=[Evidence(
+            path="src/auth/service.ts", start_line=1, end_line=1,
+            extractor="typescript-ast", extractor_version="1.0.0",
+            logical_line_count=1, granularity="file",
+        )],
+    )
+    extractor = TypeScriptExtractor()
+    files = {
+        "src/auth/service.ts": b"export function issueToken() {\n  return 1;\n}\n",
+        "src/auth/tokens.ts": b"import { issueToken } from './service';\nexport const t = 1;\n",
+    }
+    for path, source in files.items():
+        result = extractor.extract(path, source)
+        for node in result.nodes:
+            store.add_node(
+                snapshot, node_kind=node.node_kind, stable_key=node.stable_key,
+                name=node.name, language=node.language, properties=node.properties,
+                evidence=[_to_evidence(e) for e in node.evidence],
+            )
+        for obs in result.observations:
+            store.add_observation(
+                snapshot, observed_kind=obs.observed_kind, subject_kind=obs.subject_kind,
+                subject_key=obs.subject_key, referent_text=obs.referent_text,
+                ordinal=obs.ordinal, evidence=_to_evidence(obs.evidence),
+            )
+
+    sealed = store.seal(snapshot)
+    assert sealed.state == "completed"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import posixpath
 from collections import defaultdict
 from collections.abc import Sequence
 
@@ -12,6 +13,26 @@ def symbol_stable_key(path: str, scope: Sequence[str], name: str) -> str:
     normalized = canonical.normalize_repo_path(path)
     qualified = ".".join([*scope, name])
     return f"{normalized}::{qualified}"
+
+
+def module_stable_key(path: str) -> str:
+    """Build the directory-scoped ``mod:<directory>`` key (RFC §4.3)."""
+
+    directory = posixpath.dirname(canonical.normalize_repo_path(path))
+    return canonical.normalize_stable_key("module", f"mod:{directory}")
+
+
+def module_name(path: str) -> str | None:
+    """Name a module after its directory, not the file that evidenced it.
+
+    The key is directory-scoped, so every file in a directory must produce a
+    byte-identical module record — naming it after the file would make sibling
+    modules conflicting records for one key and the snapshot would refuse to
+    seal. The repository root has no meaningful short name.
+    """
+
+    directory = posixpath.dirname(canonical.normalize_repo_path(path))
+    return posixpath.basename(directory) or None
 
 
 class DiscriminatorAssigner:
