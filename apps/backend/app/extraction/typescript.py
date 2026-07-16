@@ -19,7 +19,12 @@ from app.extraction.base import (
     decode_source,
     logical_line_count,
 )
-from app.extraction.naming import DiscriminatorAssigner, symbol_stable_key
+from app.extraction.naming import (
+    DiscriminatorAssigner,
+    module_name,
+    module_stable_key,
+    symbol_stable_key,
+)
 from app.intelligence import canonical
 
 _TS_LANGUAGE = Language(tsts.language_typescript())
@@ -106,6 +111,17 @@ class TypeScriptExtractor:
                     node_kind="file",
                     stable_key=file_key,
                     name=posixpath.basename(normalized_path),
+                    language="typescript",
+                    evidence=(file_ev,),
+                )
+            )
+            # #89 requires module nodes as well as file nodes. The module is
+            # directory-scoped and shared by every file in that directory.
+            nodes.append(
+                ExtractedNode(
+                    node_kind="module",
+                    stable_key=module_stable_key(path),
+                    name=module_name(path),
                     language="typescript",
                     evidence=(file_ev,),
                 )
