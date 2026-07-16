@@ -20,6 +20,18 @@ def test_dynamic_import_is_flagged():
     assert "RI-EXT-UNSUPPORTED" in codes
 
 
+def test_bare_imported_import_module_is_flagged():
+    # `from importlib import import_module` then a bare call is the same blind
+    # spot as the attribute form; the matrix promises a diagnostic for both.
+    codes, _ = _codes("from importlib import import_module\nm = import_module('os')\n")
+    assert "RI-EXT-UNSUPPORTED" in codes
+
+
+def test_bare_dunder_import_is_flagged():
+    codes, _ = _codes("m = __import__('os')\n")
+    assert "RI-EXT-UNSUPPORTED" in codes
+
+
 def test_reflection_is_flagged():
     codes, _ = _codes("x = getattr(object(), 'name', None)\n")
     assert "RI-EXT-UNSUPPORTED" in codes

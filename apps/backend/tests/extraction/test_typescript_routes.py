@@ -47,6 +47,23 @@ def test_nested_router_children_are_routes():
     assert sorted(_routes("src/app/routes/router.ts", source)) == ["/", "/nested"]
 
 
+def test_router_options_argument_is_not_a_route_table():
+    # createBrowserRouter(routes, opts) — only the first argument is the route
+    # table; `path` in the options object is not a route.
+    source = "const router = createBrowserRouter(routes, { path: '/not-a-route' });\n"
+    assert _routes("src/app/routes/router.ts", source) == []
+
+
+def test_router_options_argument_ignored_while_route_table_still_read():
+    source = (
+        "const router = createBrowserRouter(\n"
+        "  [{ path: '/login' }],\n"
+        "  { path: '/not-a-route', future: {} },\n"
+        ");\n"
+    )
+    assert _routes("src/app/routes/router.ts", source) == ["/login"]
+
+
 def test_route_inside_createbrowserrouter_variable_is_not_matched_elsewhere():
     # A `path` key in an unrelated object in the same file stays unmatched.
     source = (
