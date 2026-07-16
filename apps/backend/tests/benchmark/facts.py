@@ -6,11 +6,13 @@ A *fact* is the unit the benchmark scores. It uniformly represents the five
 can be compared with one exact identity.
 
 The comparison identity (:meth:`Fact.key`) is deliberately *semantic and
-complete*: it captures fact type, kind, subject/object/predicate, and — for
-facts that carry evidence — the full, normalized evidence span set (path +
-one-based inclusive lines + granularity + extractor). A fact with the right name
-but the wrong line span therefore does **not** match, which is the whole point
-of a provenance-aware benchmark (RFC-0001 §6.2, Issue #94).
+complete*: it captures fact type, kind, subject/object/predicate, node name and
+language, and — for facts that carry evidence — the full, normalized evidence
+span set (path + one-based inclusive lines + granularity + extractor). A node
+with the right stable key but the wrong name or language therefore does **not**
+match; neither does a fact with the right structural identity but the wrong line
+span. That is the whole point of a provenance-aware benchmark (RFC-0001 §6.2,
+Issue #94).
 
 Identities never include volatile database ids, so the benchmark never compares
 unstable primary keys (Issue #94 "Define the comparison identity explicitly").
@@ -71,6 +73,8 @@ class Fact:
     subject: str = ""       # stable key / subject, or diagnostic subject
     object: str = ""        # object stable key (edges), or diagnostic object
     predicate: str = ""     # edge/assertion/observation predicate
+    name: str = ""          # node display name; empty for non-node facts
+    language: str = ""      # node language; empty when absent / not applicable
     referent: str = ""      # observation referent_text
     truth_class: str = ""   # observed | resolved | inferred
     value: str = ""         # canonical JCS of an assertion value, when relevant
@@ -90,6 +94,8 @@ class Fact:
             self.subject,
             self.object,
             self.predicate,
+            self.name,
+            self.language,
             self.referent,
             self.truth_class,
             self.value,

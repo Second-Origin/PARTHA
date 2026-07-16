@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import io
 import json
 from pathlib import Path
 
 from benchmark import report as report_module
+from benchmark import run as run_module
 from benchmark import runner
 
 
@@ -49,3 +51,18 @@ def test_write_reports_emits_both_files(tmp_path: Path):
     json_path, markdown_path = report_module.write_reports(runner.run(), tmp_path / "out")
     assert json_path.is_file() and markdown_path.is_file()
     assert json.loads(json_path.read_text())["dataVersion"] == "ri-benchmark.v1"
+
+
+def test_documented_command_writes_to_a_strict_cp1252_stream(tmp_path: Path, monkeypatch):
+    output = io.BytesIO()
+    stream = io.TextIOWrapper(output, encoding="cp1252", errors="strict")
+    report_dir = tmp_path / "reports"
+    monkeypatch.setattr(run_module.sys, "stdout", stream)
+
+    exit_code = run_module.main(["--report-dir", str(report_dir)])
+    stream.flush()
+
+    assert exit_code == 0
+    assert b"RI Golden Benchmark: PASS" in output.getvalue()
+    assert json.loads((report_dir / "benchmark.json").read_text(encoding="utf-8"))["result"] == "pass"
+    assert "✅" in (report_dir / "benchmark.md").read_text(encoding="utf-8")

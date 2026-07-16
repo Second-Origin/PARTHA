@@ -51,8 +51,15 @@ class InventingAdapter:
             if record.fact.evidence:
                 span = record.fact.evidence[0]
                 ghosts.append(
-                    Fact(fact_type="node", kind="symbol", subject=f"{span.path}::ghost",
-                         truth_class="observed", evidence=(span,))
+                    Fact(
+                        fact_type="node",
+                        kind="symbol",
+                        subject=f"{span.path}::ghost",
+                        name="ghost",
+                        language=fixture.language if fixture.language != "mixed" else "",
+                        truth_class="observed",
+                        evidence=(span,),
+                    )
                 )
         return ghosts
 
@@ -71,7 +78,8 @@ class BadCitationAdapter:
                 broken = EvidenceSpan(span.path, span.start_line, 99999, span.extractor, span.extractor_version, span.granularity)
                 facts[index] = Fact(
                     fact_type=fact.fact_type, kind=fact.kind, subject=fact.subject, object=fact.object,
-                    predicate=fact.predicate, referent=fact.referent, truth_class=fact.truth_class,
+                    predicate=fact.predicate, name=fact.name, language=fact.language,
+                    referent=fact.referent, truth_class=fact.truth_class,
                     value=fact.value, severity=fact.severity, producer=fact.producer, evidence=(broken,),
                 )
                 break

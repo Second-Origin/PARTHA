@@ -14,6 +14,10 @@ seam so that:
 The benchmark deliberately does **not** ship a second repository parser
 (CONTRIBUTING §11.2, Issue #94): an adapter adapts the real extractor's output;
 it does not re-implement extraction.
+
+The future real adapter must populate ``Fact.name`` and ``Fact.language`` for
+node output exactly as emitted by the extractor. These values are part of the
+node comparison identity; non-node facts leave both fields empty.
 """
 
 from __future__ import annotations
