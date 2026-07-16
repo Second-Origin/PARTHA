@@ -140,6 +140,51 @@ def test_multiple_python_files_in_one_directory_seal(session):
     assert sealed.canonical_graph_hash.startswith("sha256:")
 
 
+def test_python_and_typescript_in_one_directory_seal(session):
+    # A directory holding both languages produces one `mod:src` record from each
+    # extractor. The module node is directory-scoped, so it must be
+    # language-neutral — otherwise the two records conflict on `language` and the
+    # snapshot refuses to seal, exactly as a differing `name` used to.
+    from app.extraction.typescript import TypeScriptExtractor
+
+    repository = _repository(session)
+    store = SnapshotStore(session)
+    snapshot = store.begin(
+        repository_id=repository.id,
+        revision=Revision("upload", UPLOAD_REVISION),
+        producer_version_set=["python-ast@1.0.0", "typescript-ast@1.0.0"],
+    )
+    store.add_node(
+        snapshot, node_kind="repository", stable_key="repo:root",
+        evidence=[Evidence(
+            path="src/app.py", start_line=1, end_line=1, extractor="python-ast",
+            extractor_version="1.0.0", logical_line_count=1, granularity="file",
+        )],
+    )
+    work = [
+        (PythonExtractor(), "src/app.py", b"def main():\n    return 0\n", "python-ast"),
+        (TypeScriptExtractor(), "src/app.ts", b"export function main() {\n  return 0;\n}\n", "typescript-ast"),
+    ]
+    for extractor, path, source, producer in work:
+        result = extractor.extract(path, source)
+        for node in result.nodes:
+            store.add_node(
+                snapshot, node_kind=node.node_kind, stable_key=node.stable_key,
+                name=node.name, language=node.language, properties=node.properties,
+                evidence=[
+                    Evidence(
+                        path=e.path, start_line=e.start_line, end_line=e.end_line,
+                        extractor=producer, extractor_version="1.0.0",
+                        logical_line_count=e.logical_line_count, granularity=e.granularity,
+                    )
+                    for e in node.evidence
+                ],
+            )
+
+    sealed = store.seal(snapshot)
+    assert sealed.state == "completed"
+
+
 def test_python_files_across_directories_seal(session):
     sealed = _seal_files(session, {
         "app/api/auth.py": b"def login():\n    return None\n",
