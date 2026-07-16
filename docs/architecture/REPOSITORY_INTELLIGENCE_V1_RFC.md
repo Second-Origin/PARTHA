@@ -9,7 +9,7 @@
 | **Author** | @parthrohit22 |
 | **Decision owners (ratifiers)** | An **independent project maintainer other than the author**. The author (@parthrohit22) cannot ratify their own RFC. Ratification is not yet recorded. |
 | **Created** | 2026-07-15 |
-| **Last updated** | 2026-07-15 |
+| **Last updated** | 2026-07-16 |
 | **Status** | **Proposed** |
 | **Supersedes** | — |
 | **Superseded by** | — |
@@ -53,6 +53,20 @@ maintainer other than the author** explicitly approves it. No such approval is r
 Approval releases the dependency gate in [§16](#16-dependency-gate). Until then, no downstream
 issue in the intelligence track (except #94 fixture construction) may begin, and none may be
 assigned against an unapproved draft.
+
+### 1.4 Ratification follow-up
+
+The original proposal was merged in [PR #99](https://github.com/Second-Origin/PARTHA/pull/99)
+without the independent-maintainer approval and final status update required by §1.2. Tracking
+issue [#86](https://github.com/Second-Origin/PARTHA/issues/86) was reopened on 2026-07-16 so that
+the missing ratification step can be completed explicitly rather than inferred from the earlier
+merge.
+
+This follow-up intentionally leaves the RFC **Proposed**. An independent project maintainer must
+first record approval. Only after that approval exists may a final pre-merge update set the status
+to **Accepted**, record the ratifier and ratification date, and close #86. Until that update is
+merged, the dependency gate in §16 remains in force for contributors who do not have an explicit
+repository-administrator exception.
 
 ---
 
