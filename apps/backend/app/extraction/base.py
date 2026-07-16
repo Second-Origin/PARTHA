@@ -4,6 +4,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
+from app.intelligence import canonical
+
 
 @dataclass(frozen=True)
 class ExtractedEvidence:
@@ -116,3 +118,51 @@ def decode_source(
             message="file is not valid UTF-8 and could not be decoded",
             path=path,
         )
+
+
+def build_evidence(
+    path: str,
+    start_line: int,
+    end_line: int,
+    logical_line_count: int,
+    *,
+    producer: str,
+    granularity: str = "span",
+) -> tuple[ExtractedEvidence | None, ExtractedDiagnostic | None]:
+    """Validate a span and path (RFC §4.2, §6.2), returning evidence or a diagnostic.
+
+    ``producer`` is the ``name@version`` identifier, carried into the diagnostic
+    so callers do not have to duplicate it.
+    """
+
+    try:
+        normalized = canonical.normalize_repo_path(path)
+    except canonical.PathEscapeError:
+        return None, ExtractedDiagnostic(
+            code=RI_SEC_PATH_ESCAPE,
+            category=_CATEGORY[RI_SEC_PATH_ESCAPE],
+            severity="error",
+            message="evidence path is absolute or escapes the repository root",
+            path=None,
+        )
+    if not (1 <= start_line <= end_line <= logical_line_count):
+        return None, ExtractedDiagnostic(
+            code=RI_SPAN_INVALID,
+            category=_CATEGORY[RI_SPAN_INVALID],
+            severity="error",
+            message=(
+                f"span {start_line}..{end_line} is not within 1..{logical_line_count}"
+            ),
+            path=normalized,
+            span=(start_line, end_line),
+        )
+    return (
+        ExtractedEvidence(
+            path=normalized,
+            start_line=start_line,
+            end_line=end_line,
+            logical_line_count=logical_line_count,
+            granularity=granularity,
+        ),
+        None,
+    )
