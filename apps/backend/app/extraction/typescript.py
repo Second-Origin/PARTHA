@@ -24,6 +24,10 @@ from app.intelligence import canonical
 _TS_LANGUAGE = Language(tsts.language_typescript())
 _TSX_LANGUAGE = Language(tsts.language_tsx())
 
+# react-router data-router factories: same call shape, same route-table argument.
+_ROUTER_FACTORIES = {"createBrowserRouter", "createHashRouter", "createMemoryRouter"}
+_ROUTE_ELEMENTS = {"Route"}
+
 _NAMED_DECLARATIONS = {
     "function_declaration": "name",
     "function_signature": "name",              # ambient/overload signatures (no body)
@@ -145,11 +149,24 @@ class TypeScriptExtractor:
         walk(root)
 
     def _collect_routes(self, root, path, line_count, file_key, observations) -> None:
+        """Emit a ``route`` observation per confirmed react-router path literal.
+
+        Only two contexts count: a ``path`` key inside an argument to a router
+        factory (``createBrowserRouter`` and friends), and a ``path`` attribute
+        on a ``<Route>`` element. A bare ``{path: ...}`` object or a ``path``
+        prop on any other component is not a route, and inventing one would be a
+        fabricated fact (RFC §7.2).
+        """
+
         source = root.text
+        seen: set[int] = set()
         ordinal = len(observations)
 
         def emit(node, literal):
             nonlocal ordinal
+            if node.id in seen:
+                return
+            seen.add(node.id)
             ev, _ = build_evidence(
                 path, node.start_point[0] + 1, node.end_point[0] + 1,
                 line_count, producer=self.producer,
@@ -164,19 +181,37 @@ class TypeScriptExtractor:
                     )
                 )
 
-        def walk(node):
+        def collect_path_pairs(node):
+            # Descends router-factory arguments only; nested `children` route
+            # tables are reached here, unrelated objects elsewhere are not.
             if node.type == "pair":
                 key = node.child_by_field_name("key")
                 value = node.child_by_field_name("value")
                 if (key is not None and value is not None
                         and self._node_text(key, source).strip("'\"") == "path"
-                        and value.type in ("string",)):
+                        and value.type == "string"):
                     emit(node, self._node_text(value, source).strip("'\"`"))
-            elif node.type == "jsx_attribute":
-                children = node.named_children
-                if children and self._node_text(children[0], source) == "path" and len(children) > 1:
-                    literal = self._node_text(children[1], source).strip("'\"{}`")
-                    emit(node, literal)
+            for child in node.named_children:
+                collect_path_pairs(child)
+
+        def walk(node):
+            if node.type == "call_expression":
+                fn = node.child_by_field_name("function")
+                arguments = node.child_by_field_name("arguments")
+                if (fn is not None and arguments is not None
+                        and self._node_text(fn, source) in _ROUTER_FACTORIES):
+                    collect_path_pairs(arguments)
+            elif node.type in ("jsx_self_closing_element", "jsx_opening_element"):
+                name_node = node.child_by_field_name("name")
+                if (name_node is not None
+                        and self._node_text(name_node, source) in _ROUTE_ELEMENTS):
+                    for child in node.named_children:
+                        if child.type != "jsx_attribute":
+                            continue
+                        parts = child.named_children
+                        if (len(parts) > 1
+                                and self._node_text(parts[0], source) == "path"):
+                            emit(child, self._node_text(parts[1], source).strip("'\"{}`"))
             for child in node.named_children:
                 walk(child)
 
