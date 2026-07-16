@@ -339,6 +339,7 @@ def _create_snapshot_tables() -> None:
         sa.Column("path", sa.String(length=1024), nullable=False),
         sa.Column("start_line", sa.Integer(), nullable=False),
         sa.Column("end_line", sa.Integer(), nullable=False),
+        sa.Column("logical_line_count", sa.Integer(), nullable=False),
         sa.Column("granularity", sa.String(length=16), nullable=False),
         sa.Column("extractor", sa.String(length=128), nullable=False),
         sa.Column("extractor_version", sa.String(length=64), nullable=False),
@@ -348,7 +349,11 @@ def _create_snapshot_tables() -> None:
             "CASE WHEN observation_ref IS NOT NULL THEN 1 ELSE 0 END) = 1",
             name="ck_ri_evidence_single_parent",
         ),
-        sa.CheckConstraint("start_line >= 1 AND end_line >= start_line", name="ck_ri_evidence_span"),
+        sa.CheckConstraint(
+            "start_line >= 1 AND end_line >= start_line AND "
+            "logical_line_count >= 1 AND end_line <= logical_line_count",
+            name="ck_ri_evidence_span",
+        ),
         sa.CheckConstraint("granularity IN ('span', 'file')", name="ck_ri_evidence_granularity"),
         sa.CheckConstraint("path NOT LIKE '/%'", name="ck_ri_evidence_relative_path"),
         sa.ForeignKeyConstraint(

@@ -321,12 +321,7 @@ class SnapshotStore:
         written, exactly as required for pre-enqueue idempotency (RFC §3.3).
         """
 
-        self._validate_revision(revision)
-        repository = self.db.get(RepositoryRecord, repository_id)
-        if repository is None:
-            raise SnapshotSealError("snapshot repository does not exist")
-        if (repository.revision_kind, repository.revision_value) != (revision.kind, revision.value):
-            raise SnapshotSealError("snapshot revision does not match its repository revision")
+        self._require_matching_repository(repository_id, revision)
 
         producers = canonical.normalize_producer_version_set(producer_version_set)
         if any("@" not in producer or producer.startswith("@") or producer.endswith("@") for producer in producers):
@@ -374,6 +369,12 @@ class SnapshotStore:
         ``building`` snapshot.
         """
 
+        # Validate the supplied revision and confirm it matches the repository
+        # *before* searching for a reusable snapshot. ``find_completed`` keys on
+        # ``revision_value`` alone, so an unvalidated malformed request (e.g. a
+        # ``git`` kind carrying an ``sha256:`` value) could otherwise be answered
+        # with an unrelated upload snapshot that merely shares the value.
+        self._require_matching_repository(repository_id, revision)
         resolved_config_hash = self._resolve_config_hash(
             config=config,
             config_hash=config_hash,
@@ -707,7 +708,11 @@ class SnapshotStore:
         """Validate, hash, and complete a snapshot in one transaction (RFC §11.2)."""
 
         self._require_building(snapshot)
-        facts = self._load_facts(snapshot)
+        # Load under no_autoflush so a post-insert mutation that violates a stored
+        # invariant is caught by _validate (and turned into a clean ``failed``
+        # transition) instead of tripping a database constraint mid-flush.
+        with self.db.no_autoflush:
+            facts = self._load_facts(snapshot)
         try:
             self._validate(snapshot, facts)
             graph_hash = self._compute_hash(snapshot, facts)
@@ -715,10 +720,14 @@ class SnapshotStore:
             if graph_hash != self._compute_hash(snapshot, facts):
                 raise SnapshotSealError("canonical graph hash is not reproducible")
         except SnapshotSealError:
-            snapshot.state = "failed"
-            snapshot.failure_code = snapshot.failure_code or "RI-INT-VALIDATION"
-            self._commit_transition(snapshot, from_state="building", to_state="failed")
+            self._fail_seal(snapshot)
             raise
+        except (canonical.CanonicalizationError, canonical.PathEscapeError) as exc:
+            # A canonicalization or path failure at seal time means the stored
+            # graph cannot be reduced to a valid canonical form. The build must
+            # transition to ``failed`` rather than remain stuck in ``building``.
+            self._fail_seal(snapshot)
+            raise SnapshotSealError(f"snapshot could not be canonicalized during seal: {exc}") from exc
 
         snapshot.canonical_graph_hash = graph_hash
         snapshot.actual_producers = self._observed_producers(facts)
@@ -744,6 +753,27 @@ class SnapshotStore:
 
     # -- internals -----------------------------------------------------------
 
+    def _fail_seal(self, snapshot: RiSnapshot) -> None:
+        """Transition a rejected build to ``failed`` and commit it (RFC §11.2)."""
+
+        self._discard_tampered_facts()
+        snapshot.state = "failed"
+        snapshot.failure_code = snapshot.failure_code or "RI-INT-VALIDATION"
+        self._commit_transition(snapshot, from_state="building", to_state="failed")
+
+    def _discard_tampered_facts(self) -> None:
+        """Revert in-memory edits to stored facts so the fail commit can proceed.
+
+        A post-insert mutation that :meth:`_validate` rejected (an over-long span,
+        an unnormalized path) is still pending in the session; expiring the dirty
+        fact rows restores their persisted values so the ``failed`` transition is
+        not itself blocked by the invalid edit or its database constraint.
+        """
+
+        for obj in list(self.db.dirty):
+            if isinstance(obj, _CHILD_TYPES):
+                self.db.expire(obj)
+
     def _require_building(self, snapshot: RiSnapshot) -> None:
         if snapshot.state != "building":
             raise SnapshotStateError(f"snapshot {snapshot.snapshot_id} is not building (state={snapshot.state})")
@@ -758,6 +788,22 @@ class SnapshotStore:
             allowed.discard(transition)
             if not allowed:
                 self.db.info.pop(_ALLOWED_TRANSITIONS_KEY, None)
+
+    def _require_matching_repository(self, repository_id: str, revision: Revision) -> RepositoryRecord:
+        """Validate ``revision`` and confirm it is this repository's revision.
+
+        The moving ``revision.ref`` is never part of semantic identity, so only
+        ``(kind, value)`` is compared against the repository's immutable revision
+        columns (RFC §3.3).
+        """
+
+        self._validate_revision(revision)
+        repository = self.db.get(RepositoryRecord, repository_id)
+        if repository is None:
+            raise SnapshotSealError("snapshot repository does not exist")
+        if (repository.revision_kind, repository.revision_value) != (revision.kind, revision.value):
+            raise SnapshotSealError("snapshot revision does not match its repository revision")
+        return repository
 
     @staticmethod
     def _validate_revision(revision: Revision) -> None:
@@ -836,6 +882,14 @@ class SnapshotStore:
             )
         ).first()
         if existing is not None:
+            # The same evidence identity must carry the same logical-line count;
+            # a producer that reports a different file length for an identical
+            # span is internally inconsistent and must not be silently merged.
+            if existing.logical_line_count != record.logical_line_count:
+                raise SnapshotSealError(
+                    f"conflicting logical_line_count for duplicate evidence on {normalized_path!r}: "
+                    f"{existing.logical_line_count} != {record.logical_line_count}"
+                )
             return existing
         evidence = RiEvidence(
             snapshot_id=snapshot.snapshot_id,
@@ -845,6 +899,7 @@ class SnapshotStore:
             path=normalized_path,
             start_line=record.start_line,
             end_line=record.end_line,
+            logical_line_count=record.logical_line_count,
             granularity=record.granularity,
             extractor=extractor,
             extractor_version=extractor_version,
@@ -947,8 +1002,11 @@ class SnapshotStore:
                 evidence_by_edge[record.edge_ref].append(record)
             elif record.observation_ref is not None:
                 evidence_by_observation[record.observation_ref].append(record)
-            # Provenance extractor must be a declared producer (RFC §11.2 rule 6).
-            self._require_producer(record.extractor, record.extractor_version, producer_set)
+            # Re-check every stored evidence record against the contract, so a
+            # post-insert mutation cannot smuggle an invalid span, an unnormalized
+            # or escaping path, or an undeclared producer into a sealed snapshot
+            # (RFC §6, §11.2, §13).
+            self._validate_stored_evidence(record, producer_set)
 
         # Rule 1: every observed node has >=1 valid evidence record.
         for node in facts.nodes:
@@ -1050,6 +1108,40 @@ class SnapshotStore:
             normalized_details = canonical.normalize_content(diagnostic.details or {})
             if diagnostic.details is not None and normalized_details != diagnostic.details:
                 raise SnapshotSealError("diagnostic details are not canonically normalized")
+
+    def _validate_stored_evidence(self, record: RiEvidence, producer_set: set[str]) -> None:
+        """Revalidate one persisted evidence record before sealing (RFC §6, §11.2).
+
+        Every check that :meth:`_add_evidence` runs at write time is re-asserted
+        against the stored row, so a direct mutation after insertion cannot leave
+        an invalid record in a completed snapshot. Path canonicalization failures
+        surface as :class:`SnapshotSealError` so the build fails rather than
+        remaining stuck in ``building``.
+        """
+
+        if not record.extractor or not record.extractor_version:
+            raise SnapshotSealError("stored evidence extractor and extractor_version must be non-empty")
+        if record.granularity not in {"span", "file"}:
+            raise SnapshotSealError(f"stored evidence has invalid granularity {record.granularity!r}")
+        try:
+            normalized_path = canonical.normalize_repo_path(record.path)
+        except canonical.PathEscapeError as exc:
+            raise SnapshotSealError(
+                f"stored evidence path {record.path!r} is absolute or escapes the repository root"
+            ) from exc
+        if not normalized_path:
+            raise SnapshotSealError("stored evidence path must identify a repository-relative file")
+        if normalized_path != record.path:
+            raise SnapshotSealError(f"stored evidence path {record.path!r} is not in normalized form")
+        if record.logical_line_count is None or record.logical_line_count < 1:
+            raise SnapshotSealError("stored evidence logical_line_count must be >= 1")
+        if not (1 <= record.start_line <= record.end_line <= record.logical_line_count):
+            raise SnapshotSealError(
+                f"stored evidence span {record.start_line}..{record.end_line} is not bounded by "
+                f"{record.logical_line_count} logical lines for {record.path!r}"
+            )
+        # Provenance extractor must be a declared producer (RFC §11.2 rule 6).
+        self._require_producer(record.extractor, record.extractor_version, producer_set)
 
     def _require_producer(self, producer: str, version: str, producer_set: set[str]) -> None:
         identifier = f"{producer}@{version}"

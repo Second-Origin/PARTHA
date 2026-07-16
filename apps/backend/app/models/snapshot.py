@@ -292,6 +292,11 @@ class RiEvidence(Base):
     path: Mapped[str] = mapped_column(String(1024), nullable=False)
     start_line: Mapped[int] = mapped_column(Integer, nullable=False)
     end_line: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Producer-supplied file length used only to bound the span (RFC §6.2). It is
+    # internal validation metadata: it is deliberately excluded from the canonical
+    # evidence record and the graph hash, so two equivalent graphs still hash
+    # identically regardless of the logical-line counts their producers reported.
+    logical_line_count: Mapped[int] = mapped_column(Integer, nullable=False)
     granularity: Mapped[str] = mapped_column(String(16), nullable=False, default="span")
     extractor: Mapped[str] = mapped_column(String(128), nullable=False)
     extractor_version: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -304,7 +309,14 @@ class RiEvidence(Base):
             "CASE WHEN observation_ref IS NOT NULL THEN 1 ELSE 0 END) = 1",
             name="ck_ri_evidence_single_parent",
         ),
-        CheckConstraint("start_line >= 1 AND end_line >= start_line", name="ck_ri_evidence_span"),
+        # One-based inclusive span bounded by the persisted logical-line count
+        # (RFC §6.2). The upper bound is what stops a post-insert mutation from
+        # stretching a span past the file it cites.
+        CheckConstraint(
+            "start_line >= 1 AND end_line >= start_line AND "
+            "logical_line_count >= 1 AND end_line <= logical_line_count",
+            name="ck_ri_evidence_span",
+        ),
         CheckConstraint("granularity IN ('span', 'file')", name="ck_ri_evidence_granularity"),
         # Defence in depth against absolute paths and traversal; full RFC §4.2
         # normalization/rejection happens in the persistence layer before insert.
