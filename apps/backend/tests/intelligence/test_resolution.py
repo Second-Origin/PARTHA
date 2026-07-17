@@ -130,12 +130,19 @@ def test_resolver_persists_all_supported_relationship_kinds(session):
 
 
 def test_ambiguous_reference_is_a_warning_without_a_guessed_edge(session):
+    # A single import binding whose module layout resolves to two files (a real
+    # `shared.ts` and `shared.tsx`) is genuine, binding-backed ambiguity — the
+    # only way a name reaches more than one candidate now that repository-wide
+    # same-name fallback is gone.
     store, snapshot = _store(session)
     _node(store, snapshot, "repository", "repo:root")
     _node(store, snapshot, "file", "file:src/source.ts")
+    _node(store, snapshot, "file", "file:src/shared.ts", path="src/shared.ts")
+    _node(store, snapshot, "file", "file:src/shared.tsx", path="src/shared.tsx")
     caller = _node(store, snapshot, "symbol", "src/source.ts::caller", name="caller", line=2)
-    _node(store, snapshot, "symbol", "src/a.ts::shared", name="shared", path="src/a.ts")
-    _node(store, snapshot, "symbol", "src/b.ts::shared", name="shared", path="src/b.ts")
+    _node(store, snapshot, "symbol", "src/shared.ts::shared", name="shared", path="src/shared.ts")
+    _node(store, snapshot, "symbol", "src/shared.tsx::shared", name="shared", path="src/shared.tsx")
+    _observation(store, snapshot, kind="import_binding", subject_kind="file", subject="file:src/source.ts", referent="./shared|shared|shared", path="src/source.ts", line=1)
     _observation(store, snapshot, kind="call", subject_kind="symbol", subject=caller.stable_key, referent="shared", path="src/source.ts", line=3)
 
     result = RelationshipResolver(store).resolve(snapshot)
@@ -145,9 +152,90 @@ def test_ambiguous_reference_is_a_warning_without_a_guessed_edge(session):
     assert diagnostic.code == "RI-RES-AMBIGUOUS"
     assert diagnostic.details == {
         "observation_id": diagnostic.details["observation_id"],
-        "candidates": ["src/a.ts::shared", "src/b.ts::shared"],
+        "candidates": ["src/shared.ts::shared", "src/shared.tsx::shared"],
     }
     assert _edge_triples(session, snapshot) == set()
+    assert store.seal(snapshot).state == "completed"
+
+
+def test_call_without_binding_does_not_borrow_a_repository_wide_name(session):
+    # One same-named symbol exists in another file, but nothing binds it here.
+    # A unique repository-wide name is not proof, so the call stays unresolved.
+    store, snapshot = _store(session)
+    _node(store, snapshot, "repository", "repo:root")
+    _node(store, snapshot, "file", "file:src/source.ts")
+    caller = _node(store, snapshot, "symbol", "src/source.ts::caller", name="caller", line=2)
+    _node(store, snapshot, "symbol", "src/other.ts::helper", name="helper", path="src/other.ts")
+    _observation(store, snapshot, kind="call", subject_kind="symbol", subject=caller.stable_key, referent="helper", path="src/source.ts", line=3)
+
+    result = RelationshipResolver(store).resolve(snapshot)
+    assert result.edges_added == 0
+    diagnostic = session.scalar(select(RiDiagnostic).where(RiDiagnostic.snapshot_id == snapshot.snapshot_id))
+    assert diagnostic is not None and diagnostic.code == "RI-RES-UNRESOLVED"
+    assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "calls"]
+    assert store.seal(snapshot).state == "completed"
+
+
+def test_broken_binding_does_not_fall_back_to_a_same_named_symbol(session):
+    # The binding names a module that resolves to no file node. Even with an
+    # unrelated `run` defined elsewhere, a failed binding stays unresolved
+    # rather than borrowing that symbol.
+    store, snapshot = _store(session)
+    _node(store, snapshot, "repository", "repo:root")
+    _node(store, snapshot, "file", "file:src/source.ts")
+    caller = _node(store, snapshot, "symbol", "src/source.ts::caller", name="caller", line=2)
+    _node(store, snapshot, "symbol", "src/other.ts::run", name="run", path="src/other.ts")
+    _observation(store, snapshot, kind="import_binding", subject_kind="file", subject="file:src/source.ts", referent="./missing|run|run", path="src/source.ts", line=1)
+    _observation(store, snapshot, kind="call", subject_kind="symbol", subject=caller.stable_key, referent="run", path="src/source.ts", line=3)
+
+    result = RelationshipResolver(store).resolve(snapshot)
+    assert result.edges_added == 0
+    codes = {
+        diagnostic.code
+        for diagnostic in session.scalars(select(RiDiagnostic).where(RiDiagnostic.snapshot_id == snapshot.snapshot_id))
+    }
+    assert codes == {"RI-RES-UNRESOLVED"}
+    assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "calls"]
+    assert store.seal(snapshot).state == "completed"
+
+
+def test_imported_route_handler_without_resolvable_binding_stays_unresolved(session):
+    # routes_to follows the same no-fallback rule as calls/implements: a handler
+    # referent whose binding does not resolve is unresolved, never matched to an
+    # unrelated same-named component elsewhere.
+    store, snapshot = _store(session)
+    _node(store, snapshot, "repository", "repo:root")
+    _node(store, snapshot, "file", "file:src/routes.ts", path="src/routes.ts")
+    route = _node(store, snapshot, "symbol", "src/routes.ts::(anonymous:route#1)", name="route", path="src/routes.ts", line=2)
+    _node(store, snapshot, "symbol", "src/other.ts::Handler", name="Handler", path="src/other.ts")
+    _observation(store, snapshot, kind="route", subject_kind="symbol", subject=route.stable_key, referent="/x", path="src/routes.ts", line=2)
+    _observation(store, snapshot, kind="route_handler", subject_kind="symbol", subject=route.stable_key, referent="Handler", path="src/routes.ts", line=2)
+    _observation(store, snapshot, kind="import_binding", subject_kind="file", subject="file:src/routes.ts", referent="./missing|Handler|Handler", path="src/routes.ts", line=1)
+
+    result = RelationshipResolver(store).resolve(snapshot)
+    assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "routes_to"]
+    codes = {
+        diagnostic.code
+        for diagnostic in session.scalars(select(RiDiagnostic).where(RiDiagnostic.snapshot_id == snapshot.snapshot_id))
+    }
+    assert codes == {"RI-RES-UNRESOLVED"}
+    assert store.seal(snapshot).state == "completed"
+
+
+def test_implemented_interface_without_evidence_stays_unresolved(session):
+    # `implements Contract` with no same-file definition and no import binding is
+    # unresolved even though exactly one `Contract` exists elsewhere.
+    store, snapshot = _store(session)
+    _node(store, snapshot, "repository", "repo:root")
+    _node(store, snapshot, "file", "file:src/impl.ts", path="src/impl.ts")
+    impl = _node(store, snapshot, "symbol", "src/impl.ts::Service", name="Service", path="src/impl.ts", line=2)
+    _node(store, snapshot, "symbol", "src/other.ts::Contract", name="Contract", path="src/other.ts")
+    _observation(store, snapshot, kind="implements", subject_kind="symbol", subject=impl.stable_key, referent="Contract", path="src/impl.ts", line=2)
+
+    result = RelationshipResolver(store).resolve(snapshot)
+    assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "implements"]
+    diagnostic = session.scalar(select(RiDiagnostic).where(RiDiagnostic.snapshot_id == snapshot.snapshot_id))
+    assert diagnostic is not None and diagnostic.code == "RI-RES-UNRESOLVED"
     assert store.seal(snapshot).state == "completed"
 
 
@@ -265,6 +353,10 @@ def test_python_extractor_route_inputs_resolve_to_the_decorated_handler(session)
 
 
 def test_golden_ambiguous_call_fixture_emits_a_diagnostic_not_an_edge(session):
+    # The fixture calls `shared()` with no import binding while two files export
+    # a `shared` symbol. Without lexical or import evidence the resolver proves
+    # nothing, so the honest outcome is a single unresolved diagnostic and no
+    # `calls` edge — never a guess at one of the same-named repository symbols.
     fixture = FIXTURE_ROOT / "ambiguous-call"
     store, snapshot = _store(session, ["typescript-ast@1.0.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
@@ -278,8 +370,93 @@ def test_golden_ambiguous_call_fixture_emits_a_diagnostic_not_an_edge(session):
     result = RelationshipResolver(store).resolve(snapshot)
     assert result.edges_added == 6  # three definitions, each with contains + defines
     diagnostics = list(session.scalars(select(RiDiagnostic).where(RiDiagnostic.snapshot_id == snapshot.snapshot_id)))
-    assert [(diagnostic.code, diagnostic.details["candidates"]) for diagnostic in diagnostics] == [
-        ("RI-RES-AMBIGUOUS", ["src/first.ts::shared", "src/second.ts::shared"])
-    ]
+    assert [diagnostic.code for diagnostic in diagnostics] == ["RI-RES-UNRESOLVED"]
     assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "calls"]
+    assert store.seal(snapshot).state == "completed"
+
+
+def _python_import_snapshot(session, source: bytes, *, files: list[str], dependencies: list[str] = ()):
+    """Persist a single Python source plus explicit file/dependency nodes.
+
+    File nodes stand in for the inventory extractor that runs alongside the
+    Python extractor in production; the resolver reads only stored nodes.
+    """
+
+    store, snapshot = _store(session, ["python-ast@1.0.0", RESOLVER_PRODUCER])
+    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
+        Evidence("app/main.py", 1, 1, "python-ast", "1.0.0", 3)
+    ])
+    for path in files:
+        store.add_node(snapshot, node_kind="file", stable_key=f"file:{path}", evidence=[
+            Evidence(path, 1, 1, "python-ast", "1.0.0", 1, "file")
+        ])
+    for name in dependencies:
+        store.add_node(snapshot, node_kind="dependency", stable_key=f"dep:pypi:{name}", name=name, evidence=[
+            Evidence("pyproject.toml", 1, 1, "python-ast", "1.0.0", 1)
+        ])
+    _persist_extraction(store, snapshot, PythonExtractor().extract("app/main.py", source), "python-ast")
+    return store, snapshot
+
+
+def test_python_absolute_from_import_resolves_to_the_module_file(session):
+    # `from pkg.service import run` is stored as referent `pkg.service.run`; the
+    # binding proves the module is `pkg.service`, so the import edge resolves to
+    # the module file `pkg/service.py`, not only `pkg/service/run.py`.
+    store, snapshot = _python_import_snapshot(
+        session, b"from pkg.service import run\n", files=["app/main.py", "pkg/service.py"]
+    )
+    result = RelationshipResolver(store).resolve(snapshot)
+    assert result.diagnostics_added == 0
+    assert ("file:app/main.py", "imports", "file:pkg/service.py") in _edge_triples(session, snapshot)
+    assert store.seal(snapshot).state == "completed"
+
+
+def test_python_absolute_from_import_prefers_local_module_over_dependency(session):
+    # A `dep:pypi:pkg` node with the same package root must not replace the local
+    # module once a local file candidate exists.
+    store, snapshot = _python_import_snapshot(
+        session, b"from pkg.service import run\n",
+        files=["app/main.py", "pkg/service.py"], dependencies=["pkg"],
+    )
+    result = RelationshipResolver(store).resolve(snapshot)
+    assert result.diagnostics_added == 0
+    triples = _edge_triples(session, snapshot)
+    assert ("file:app/main.py", "imports", "file:pkg/service.py") in triples
+    assert ("file:app/main.py", "imports", "dep:pypi:pkg") not in triples
+    assert store.seal(snapshot).state == "completed"
+
+
+def test_python_absolute_from_import_without_module_or_dependency_is_unresolved(session):
+    store, snapshot = _python_import_snapshot(
+        session, b"from pkg.service import run\n", files=["app/main.py"]
+    )
+    result = RelationshipResolver(store).resolve(snapshot)
+    assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "imports"]
+    diagnostic = session.scalar(select(RiDiagnostic).where(RiDiagnostic.snapshot_id == snapshot.snapshot_id))
+    assert diagnostic is not None and diagnostic.code == "RI-RES-UNRESOLVED"
+    assert store.seal(snapshot).state == "completed"
+
+
+def test_python_absolute_from_import_with_two_module_candidates_is_ambiguous(session):
+    # Both interpretations exist as files: `run` as a member of `pkg/service.py`
+    # and `run` as the submodule `pkg/service/run.py`. Deterministically ambiguous.
+    store, snapshot = _python_import_snapshot(
+        session, b"from pkg.service import run\n",
+        files=["app/main.py", "pkg/service.py", "pkg/service/run.py"],
+    )
+    result = RelationshipResolver(store).resolve(snapshot)
+    assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "imports"]
+    diagnostic = session.scalar(select(RiDiagnostic).where(RiDiagnostic.snapshot_id == snapshot.snapshot_id))
+    assert diagnostic is not None and diagnostic.code == "RI-RES-AMBIGUOUS"
+    assert diagnostic.details["candidates"] == ["file:pkg/service.py", "file:pkg/service/run.py"]
+    assert store.seal(snapshot).state == "completed"
+
+
+def test_python_relative_import_still_resolves_to_the_sibling_module(session):
+    store, snapshot = _python_import_snapshot(
+        session, b"from .service import run\n", files=["app/main.py", "app/service.py"]
+    )
+    result = RelationshipResolver(store).resolve(snapshot)
+    assert result.diagnostics_added == 0
+    assert ("file:app/main.py", "imports", "file:app/service.py") in _edge_triples(session, snapshot)
     assert store.seal(snapshot).state == "completed"

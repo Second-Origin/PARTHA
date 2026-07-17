@@ -49,8 +49,10 @@ class RelationshipResolver:
         A TypeScript/Python module specifier.  It resolves a local file or an
         already-observed dependency node.
     ``call`` / ``implements``
-        A direct reference.  The resolver accepts a full stable key or a simple
-        symbol name; names with more than one candidate stay ambiguous.
+        A direct reference.  It resolves only through proven evidence — a full
+        stable key, a same-file top-level definition, or an explicit import
+        binding — never a repository-wide same-name guess.  Multiple binding
+        targets stay ambiguous; missing evidence stays unresolved.
     ``route`` + ``route_handler``
         A route symbol and its extractor-recorded handler reference.  Both are
         needed, so a literal path alone is never treated as a handler claim.
@@ -134,7 +136,7 @@ class RelationshipResolver:
             diagnostics_added += diagnosed
 
         for input_ in inputs_by_kind["import"]:
-            added, diagnosed = self._resolve_import(input_, nodes_by_key)
+            added, diagnosed = self._resolve_import(input_, nodes_by_key, bindings_by_file)
             edges_added += added
             diagnostics_added += diagnosed
 
@@ -192,7 +194,10 @@ class RelationshipResolver:
         return 2, 0
 
     def _resolve_import(
-        self, input_: _ObservedInput, nodes_by_key: dict[str, RiNode]
+        self,
+        input_: _ObservedInput,
+        nodes_by_key: dict[str, RiNode],
+        bindings_by_file: dict[str, list[tuple[str, str, str]]],
     ) -> tuple[int, int]:
         subject = self._source_file(input_, nodes_by_key)
         if subject is None:
@@ -200,7 +205,13 @@ class RelationshipResolver:
         specifier = input_.observation.referent_text
         if not specifier:
             return self._unresolved(input_, "import has no module specifier")
-        candidates = self._import_candidates(specifier, input_.evidence.path, subject, nodes_by_key)
+        candidates = self._import_candidates(
+            specifier,
+            input_.evidence.path,
+            subject,
+            nodes_by_key,
+            bindings_by_file.get(subject.stable_key, ()),
+        )
         return self._resolve_candidates(input_, subject, "imports", candidates)
 
     def _resolve_reference(
@@ -294,12 +305,22 @@ class RelationshipResolver:
         source_path: str,
         source: RiNode,
         nodes_by_key: dict[str, RiNode],
+        bindings: list[tuple[str, str, str]] | tuple[tuple[str, str, str], ...] = (),
     ) -> list[RiNode]:
         file_candidates: set[str] = set()
         if specifier.startswith("."):
             file_candidates.update(self._relative_file_candidates(specifier, source_path))
         elif source_path.endswith(".py") and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", specifier):
             file_candidates.update(self._python_absolute_file_candidates(specifier))
+            # ``from a.b import c`` is stored as import referent ``a.b.c`` whose
+            # module is ``a.b`` — the imported name may be a submodule (``a/b/c.py``)
+            # or a member of ``a/b.py``.  The stored binding preserves that split,
+            # so the module file resolves without reparsing the source.
+            for binding_specifier, imported, _local in bindings:
+                if binding_specifier and f"{binding_specifier}.{imported}" == specifier:
+                    file_candidates.update(
+                        self._python_absolute_file_candidates(binding_specifier)
+                    )
         files = [
             node for key, node in nodes_by_key.items()
             if key in {f"file:{path}" for path in file_candidates} and node.node_kind == "file"
@@ -371,38 +392,46 @@ class RelationshipResolver:
         nodes_by_key: dict[str, RiNode],
         bindings: list[tuple[str, str, str]] | tuple[tuple[str, str, str], ...] = (),
     ) -> list[RiNode]:
+        """Return only targets a stored syntax fact uniquely proves.
+
+        Evidence is considered in a fixed order: a full stable-key referent, a
+        same-file top-level definition, then the explicit import bindings for the
+        source file.  There is deliberately no repository-wide same-name
+        fallback.  Without a same-file definition or an import binding, a lone
+        symbol with the same name elsewhere is not proof; and when a binding
+        exists but its module or exported symbol cannot be resolved, this returns
+        no candidate (an unresolved diagnostic) rather than borrowing an
+        unrelated same-named symbol.  Multiple binding targets stay ambiguous.
+        """
+
         direct = nodes_by_key.get(referent)
         if direct is not None and direct.node_kind == "symbol":
             return [direct]
         same_file = nodes_by_key.get(f"{source_path}::{referent}")
         if same_file is not None and same_file.node_kind == "symbol":
             return [same_file]
-        bound_candidates: list[RiNode] = []
         source = nodes_by_key.get(f"file:{source_path}")
-        if source is not None:
-            for specifier, imported, local in bindings:
-                if local != referent:
+        if source is None:
+            return []
+        bound_candidates: list[RiNode] = []
+        for specifier, imported, local in bindings:
+            if local != referent:
+                continue
+            for target_file in self._import_candidates(specifier, source_path, source, nodes_by_key):
+                if target_file.node_kind != "file":
                     continue
-                for target_file in self._import_candidates(specifier, source_path, source, nodes_by_key):
-                    if target_file.node_kind != "file":
-                        continue
-                    path = target_file.stable_key.removeprefix("file:")
-                    direct_target = nodes_by_key.get(f"{path}::{imported}")
-                    if direct_target is not None and direct_target.node_kind == "symbol":
-                        bound_candidates.append(direct_target)
-                    else:
-                        bound_candidates.extend(
-                            node for node in nodes_by_key.values()
-                            if node.node_kind == "symbol"
-                            and node.name == imported
-                            and node.stable_key.startswith(f"{path}::")
-                        )
-        if bound_candidates:
-            return bound_candidates
-        return [
-            node for node in nodes_by_key.values()
-            if node.node_kind == "symbol" and node.name == referent
-        ]
+                path = target_file.stable_key.removeprefix("file:")
+                direct_target = nodes_by_key.get(f"{path}::{imported}")
+                if direct_target is not None and direct_target.node_kind == "symbol":
+                    bound_candidates.append(direct_target)
+                else:
+                    bound_candidates.extend(
+                        node for node in nodes_by_key.values()
+                        if node.node_kind == "symbol"
+                        and node.name == imported
+                        and node.stable_key.startswith(f"{path}::")
+                    )
+        return bound_candidates
 
     @staticmethod
     def _source_file(input_: _ObservedInput, nodes_by_key: dict[str, RiNode]) -> RiNode | None:

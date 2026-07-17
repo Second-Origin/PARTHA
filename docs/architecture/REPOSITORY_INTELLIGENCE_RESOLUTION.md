@@ -28,7 +28,7 @@ edge.
 | --- | --- | --- |
 | `definition` | Symbol definition | `contains`, `defines` |
 | `import` | Module specifier | `imports` |
-| `import_binding` | `specifier|imported|local` exact binding representation | supports `calls`, `implements`, `routes_to` lookup |
+| `import_binding` | `specifier|imported|local` exact binding representation | supports `imports`, `calls`, `implements`, `routes_to` lookup |
 | `call` | Direct named call | `calls` |
 | `implements` | TypeScript `implements` clause | `implements` |
 | `route` + `route_handler` | Route declaration and one handler reference | `routes_to` |
@@ -52,23 +52,39 @@ single parent to the definition symbol.
 
 For a relative TypeScript/Python specifier, generate the complete candidate set
 without precedence: explicit extensions plus `.ts`, `.tsx`, `.py`, TypeScript
-`index.*`, and Python `__init__.py` forms. Python dotted imports also consider
-each stored module prefix, which preserves the existing extractor representation
-for `from .pkg import symbol`. Match candidates only against stored file nodes.
+`index.*`, and Python `__init__.py` forms. Relative Python dotted imports also
+consider each stored module prefix, which preserves the existing extractor
+representation for `from .pkg import symbol`.
 
-For a bare specifier, derive its npm package root (including scoped packages) or
-PEP 503-normalized PyPI root and match only an already-stored dependency node.
-No `external:*` placeholder is created. A `dependency` observation resolves
-`repo:root -> dependency` as `depends_on`.
+An absolute Python `from a.b import c` is stored as the import referent `a.b.c`,
+whose module is `a.b`. Because `c` may be either a submodule (`a/b/c.py`) or a
+member of the module `a/b.py`, the resolver derives module-file candidates from
+both the full referent and the stored `import_binding` module specifier `a.b`,
+using the binding rather than reparsing source. Match candidates only against
+stored file nodes; when any local file node matches, an external dependency
+with the same package root is never substituted.
+
+For a bare specifier with no matching local file node, derive its npm package
+root (including scoped packages) or PEP 503-normalized PyPI root and match only
+an already-stored dependency node. No `external:*` placeholder is created. A
+`dependency` observation resolves `repo:root -> dependency` as `depends_on`.
+Genuinely ambiguous module layouts stay ambiguous; unresolved ones stay
+diagnostics.
 
 ### References and implementations
 
-A direct stable-key referent wins. Otherwise, the resolver checks a same-file
-top-level symbol, then the explicit `import_binding` records for the source
-file, and finally all snapshot symbols with exactly that name. Multiple matches
-are ambiguous. TypeScript extraction emits `implements` only for direct
-`class ... implements ...` syntax; `extends` is intentionally not repurposed as
-an `implements` fact.
+A relationship is emitted only when a stored syntax fact uniquely proves it.
+Evidence is considered in a fixed order: a direct stable-key referent, then a
+same-file top-level symbol, then the explicit `import_binding` records for the
+source file. There is **no** repository-wide same-name fallback. Without a
+same-file definition or an import binding, a lone symbol elsewhere that happens
+to share the name is not proof and stays unresolved. When a binding exists but
+its module or exported symbol cannot be resolved, the reference stays
+unresolved rather than borrowing an unrelated same-named symbol; when a binding
+resolves to more than one target, it stays ambiguous. This applies identically
+to `calls`, `implements`, and `routes_to`. TypeScript extraction emits
+`implements` only for direct `class ... implements ...` syntax; `extends` is
+intentionally not repurposed as an `implements` fact.
 
 ### Routes
 
@@ -91,6 +107,12 @@ validates. Extractors remain the only producers of `observed` facts.
 ## Verification
 
 The focused resolver tests cover successful structural/import/call/route/
-dependency/implements edges, unresolved imports, ambiguous references, actual
-TypeScript alias resolution, and FastAPI decorator routes. Both warning paths
-are sealed successfully to prove that honest partial knowledge remains usable.
+dependency/implements edges, unresolved imports, actual TypeScript alias
+resolution, and FastAPI decorator routes. They also prove the no-fallback rule:
+a call, an imported route handler, and an implemented interface each stay
+unresolved when only an unrelated repository-wide same-name symbol exists or
+when an import binding is broken, while a binding that resolves to several
+targets stays ambiguous. A dedicated case shows an absolute `from a.b import c`
+resolving its import edge to the module file `a/b.py` even when a same-named
+dependency is present. All warning paths are sealed successfully to prove that
+honest partial knowledge remains usable.
