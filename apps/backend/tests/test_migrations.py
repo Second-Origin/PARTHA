@@ -1,36 +1,82 @@
+import os
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import MetaData, Table, create_engine, func, inspect, select
+from sqlalchemy.engine import make_url
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+
+
+@contextmanager
+def _migration_database_url(tmp_path: Path) -> Iterator[str]:
+    """Yield a clean migration target, preferring isolated PostgreSQL in CI."""
+    postgres_url = os.environ.get("PARTHA_TEST_PG_URL")
+    if not postgres_url:
+        yield f"sqlite:///{tmp_path / 'migration-roundtrip.db'}"
+        return
+
+    admin_url = make_url(postgres_url)
+    database_name = f"partha_migration_{uuid.uuid4().hex}"
+    migration_url = admin_url.set(database=database_name).render_as_string(
+        hide_password=False
+    )
+    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    quoted_database_name = admin_engine.dialect.identifier_preparer.quote(database_name)
+    database_created = False
+    try:
+        with admin_engine.connect() as connection:
+            connection.exec_driver_sql(f"CREATE DATABASE {quoted_database_name}")
+        database_created = True
+        yield migration_url
+    finally:
+        try:
+            if database_created:
+                with admin_engine.connect() as connection:
+                    connection.exec_driver_sql(
+                        f"DROP DATABASE IF EXISTS {quoted_database_name} WITH (FORCE)"
+                    )
+        finally:
+            admin_engine.dispose()
 
 
 def test_migrations_upgrade_and_downgrade_run_clean(tmp_path, monkeypatch):
     """The full revision chain applies and reverses on a fresh database.
 
-    Alembic's env.py reads the URL from settings, so point it at a throwaway
-    SQLite file. Running up -> down -> up proves both directions and that the
-    down does not leave state that blocks a re-apply.
+    CI uses an isolated PostgreSQL database. Local runs without PostgreSQL use
+    a throwaway SQLite file. Running up -> down -> up proves both directions
+    and that the downgrade does not leave state that blocks a re-apply.
     """
-    database_path = tmp_path / "migration-roundtrip.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path}")
-    monkeypatch.setenv("CORS_ORIGINS", "http://testserver")
+    with _migration_database_url(tmp_path) as database_url:
+        monkeypatch.setenv("DATABASE_URL", database_url)
+        monkeypatch.setenv("CORS_ORIGINS", "http://testserver")
 
-    from app.core import config
+        from app.core import config
 
-    config.get_settings.cache_clear()
-    try:
-        cfg = Config(str(BACKEND_ROOT / "alembic.ini"))
-        cfg.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
-
-        command.upgrade(cfg, "head")
-        command.downgrade(cfg, "base")
-        command.upgrade(cfg, "head")
-    finally:
         config.get_settings.cache_clear()
+        probe_engine = create_engine(database_url)
+        try:
+            assert inspect(probe_engine).get_table_names() == []
+
+            cfg = Config(str(BACKEND_ROOT / "alembic.ini"))
+            cfg.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
+
+            command.upgrade(cfg, "head")
+            assert "repositories" in inspect(probe_engine).get_table_names()
+
+            command.downgrade(cfg, "base")
+            assert "repositories" not in inspect(probe_engine).get_table_names()
+
+            command.upgrade(cfg, "head")
+            assert "repositories" in inspect(probe_engine).get_table_names()
+        finally:
+            probe_engine.dispose()
+            config.get_settings.cache_clear()
 
 
 def test_revision_backfill_classifies_exact_legacy_values_and_downgrade_preserves_metadata(

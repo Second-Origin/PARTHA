@@ -33,7 +33,7 @@ python -m pytest          # from apps/backend
 npm run test:backend      # from the repository root
 ```
 
-Tests run against per-test SQLite and the in-memory rate limiter. Three tests are gated on real services — refresh-token concurrency (PostgreSQL) and the Redis rate-limit backend — and skip unless `PARTHA_TEST_PG_URL` and `PARTHA_TEST_REDIS_URL` are set. CI provides both.
+Tests use per-test SQLite and the in-memory rate limiter by default. When `PARTHA_TEST_PG_URL` is set, the migration round trip runs against a fresh temporary PostgreSQL database and the PostgreSQL refresh-token concurrency test is enabled; without it, migrations fall back to SQLite and the concurrency test skips. Redis integration tests skip unless `PARTHA_TEST_REDIS_URL` is set. CI provides both services.
 
 ## Migrations
 
