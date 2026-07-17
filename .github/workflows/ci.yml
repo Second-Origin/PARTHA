@@ -72,12 +72,11 @@ jobs:
     needs: repository-hygiene
     runs-on: ubuntu-latest
 
-    # Postgres so the gated refresh-token concurrency test runs against a real
-    # database (SQLite serializes writes and cannot exercise the row-lock race),
-    # and Redis so the gated rate-limit backend test exercises the real atomic
-    # script and TTL behaviour. Every other test uses per-test SQLite and the
-    # in-memory rate-limit store, so neither service is required for the rest
-    # of the suite to run.
+    # Postgres validates the full migration round trip against the deployment
+    # dialect and lets the gated refresh-token concurrency test exercise its
+    # row-lock race. Redis lets the gated rate-limit tests exercise the real
+    # atomic script and TTL behaviour. Local runs retain SQLite and in-memory
+    # fallbacks where supported.
     services:
       postgres:
         image: postgres:16-alpine
