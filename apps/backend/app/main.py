@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import text
 
 from app.api.router import api_router
+from app.api.openapi import documented_responses, response_example
 from app.core import database
 from app.core.config import get_settings
 from app.core.exceptions import ErrorResponse, register_exception_handlers
@@ -21,6 +22,41 @@ from app.core.security_headers import SecurityHeadersMiddleware
 from app.models.base import Base
 
 logger = logging.getLogger(__name__)
+
+_READINESS_SCHEMA = {
+    "type": "object",
+    "required": ["status", "environment", "checks"],
+    "properties": {
+        "status": {"type": "string", "enum": ["ready", "not_ready"]},
+        "environment": {"type": "string"},
+        "checks": {
+            "type": "object",
+            "additionalProperties": {"type": "string", "enum": ["ok", "error"]},
+        },
+    },
+}
+_READINESS_EXAMPLE = {
+    "status": "ready",
+    "environment": "development",
+    "checks": {"database": "ok", "storage": "ok"},
+}
+_NOT_READY_EXAMPLE = {
+    "status": "not_ready",
+    "environment": "development",
+    "checks": {"database": "error", "storage": "ok"},
+}
+_READINESS_RESPONSES = documented_responses(
+    status.HTTP_200_OK,
+    "The API can reach its database and write to repository storage.",
+    _READINESS_EXAMPLE,
+    status.HTTP_500_INTERNAL_SERVER_ERROR,
+    schema=_READINESS_SCHEMA,
+)
+_READINESS_RESPONSES[status.HTTP_503_SERVICE_UNAVAILABLE] = response_example(
+    "The API is running but one or more readiness checks failed.",
+    _NOT_READY_EXAMPLE,
+    schema=_READINESS_SCHEMA,
+)
 
 
 def check_database_ready() -> bool:
@@ -131,11 +167,20 @@ def create_app() -> FastAPI:
                 response.headers["X-Request-ID"] = request_id
             reset_request_id(token)
 
-    @app.get("/health", tags=["system"])
+    @app.get(
+        "/health",
+        tags=["system"],
+        responses=documented_responses(
+            status.HTTP_200_OK,
+            "The API process is running.",
+            {"status": "ok", "environment": "development"},
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        ),
+    )
     def health() -> dict[str, str]:
         return {"status": "ok", "environment": settings.app_env}
 
-    @app.get("/ready", tags=["system"], response_model=None)
+    @app.get("/ready", tags=["system"], response_model=None, responses=_READINESS_RESPONSES)
     def readiness() -> dict[str, object] | JSONResponse:
         checks: dict[str, Literal["ok", "error"]] = {}
         checks["database"] = "ok" if check_database_ready() else "error"
@@ -151,7 +196,19 @@ def create_app() -> FastAPI:
             return payload
         return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload)
 
-    @app.get("/metrics", tags=["system"], response_class=PlainTextResponse)
+    @app.get(
+        "/metrics",
+        tags=["system"],
+        response_class=PlainTextResponse,
+        responses=documented_responses(
+            status.HTTP_200_OK,
+            "Prometheus-compatible runtime metrics.",
+            "partha_http_requests_total 1\\n",
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            media_type="text/plain",
+            schema={"type": "string"},
+        ),
+    )
     def metrics() -> str:
         return runtime_metrics.render_prometheus()
 
