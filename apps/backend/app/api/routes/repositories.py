@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, Query, Response, UploadFile, status
 
 from app.api.deps import get_current_user, get_repository_service
-from app.api.openapi import documented_responses, error_responses
+from app.api.openapi import documented_responses, error_responses, suppress_automatic_validation_error
 from app.schemas.repository import (
     GitHubImportRequest,
     RepositoryFileResponse,
@@ -136,10 +136,10 @@ def list_repositories(
         _REPOSITORY_EXAMPLE,
         401,
         404,
-        422,
         429,
         500,
     ),
+    openapi_extra=suppress_automatic_validation_error(),
 )
 def get_repository(
     repository_id: str,
@@ -181,7 +181,8 @@ def get_repository_file(
 @router.delete(
     "/{repository_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=error_responses(401, 404, 422, 429, 500),
+    responses=error_responses(401, 404, 429, 500),
+    openapi_extra=suppress_automatic_validation_error(),
 )
 def delete_repository(
     repository_id: str,

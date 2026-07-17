@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import get_analysis_service, get_current_user
-from app.api.openapi import documented_responses
+from app.api.openapi import documented_responses, suppress_automatic_validation_error
 from app.schemas.analysis import AnalysisStartResponse, AnalysisStatusResponse
 from app.schemas.architecture import ArchitectureResponse
 from app.schemas.dependencies import DependencyGraphResponse
@@ -12,7 +12,7 @@ from app.services.analysis_service import AnalysisService
 router = APIRouter(prefix="/analysis", tags=["analysis"], dependencies=[Depends(get_current_user)])
 
 _REPOSITORY_ID = "11111111-1111-1111-1111-111111111111"
-_COMMON_ERRORS = (401, 404, 422, 429, 500)
+_COMMON_ERRORS = (401, 404, 429, 500)
 
 
 @router.post(
@@ -24,6 +24,7 @@ _COMMON_ERRORS = (401, 404, 422, 429, 500)
         {"repositoryId": _REPOSITORY_ID, "status": "completed"},
         *_COMMON_ERRORS,
     ),
+    openapi_extra=suppress_automatic_validation_error(),
 )
 def start_analysis(
     repository_id: str,
@@ -49,6 +50,7 @@ def start_analysis(
         },
         *_COMMON_ERRORS,
     ),
+    openapi_extra=suppress_automatic_validation_error(),
 )
 def get_analysis_status(
     repository_id: str,
@@ -83,6 +85,7 @@ def get_analysis_status(
         },
         *_COMMON_ERRORS,
     ),
+    openapi_extra=suppress_automatic_validation_error(),
 )
 def get_architecture(
     repository_id: str,
@@ -107,6 +110,7 @@ def get_architecture(
         },
         *_COMMON_ERRORS,
     ),
+    openapi_extra=suppress_automatic_validation_error(),
 )
 def get_dependencies(
     repository_id: str,
@@ -140,6 +144,7 @@ def get_dependencies(
         },
         *_COMMON_ERRORS,
     ),
+    openapi_extra=suppress_automatic_validation_error(),
 )
 def get_review(
     repository_id: str,

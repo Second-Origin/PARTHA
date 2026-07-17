@@ -73,6 +73,8 @@ _ERROR_EXAMPLES: dict[int, dict[str, Any]] = {
     },
 }
 
+_SUPPRESS_AUTOMATIC_422_MARKER = "x-partha-suppress-automatic-422"
+
 
 def response_example(
     description: str,
@@ -104,6 +106,27 @@ def error_responses(*status_codes: int) -> dict[int, dict[str, Any]]:
         }
         for status_code in status_codes
     }
+
+
+def suppress_automatic_validation_error() -> dict[str, bool]:
+    """Mark an operation whose request shape cannot produce a 422 response.
+
+    FastAPI adds a default 422 response for every route with any parameter,
+    including unconstrained string path parameters. Routes using this marker are
+    filtered from the generated document after FastAPI has assembled it.
+    """
+    return {_SUPPRESS_AUTOMATIC_422_MARKER: True}
+
+
+def remove_suppressed_automatic_validation_errors(document: dict[str, Any]) -> None:
+    """Remove FastAPI's synthetic 422 response from explicitly marked operations."""
+    for path_item in document.get("paths", {}).values():
+        for operation in path_item.values():
+            if not isinstance(operation, dict) or not operation.pop(
+                _SUPPRESS_AUTOMATIC_422_MARKER, False
+            ):
+                continue
+            operation.get("responses", {}).pop("422", None)
 
 
 def documented_responses(
