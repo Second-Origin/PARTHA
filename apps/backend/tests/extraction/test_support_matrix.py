@@ -73,6 +73,22 @@ def test_python_blind_spot_emits_a_diagnostic(construct):
     )
 
 
+def test_unsupported_reflection_does_not_become_resolver_input():
+    result = PythonExtractor().extract("app/a.py", b"x = getattr(object(), 'name', None)\n")
+
+    assert not [
+        observation
+        for observation in result.observations
+        if observation.observed_kind == "call" and observation.referent_text == "getattr"
+    ]
+
+
+def test_unsupported_commonjs_require_does_not_become_resolver_input():
+    result = TypeScriptExtractor().extract("src/a.ts", b"const fs = require('fs');\n")
+
+    assert not [observation for observation in result.observations if observation.observed_kind == "call"]
+
+
 @pytest.mark.parametrize("construct", sorted(TYPESCRIPT_BLIND_SPOTS))
 def test_typescript_blind_spot_emits_a_diagnostic(construct):
     path, source = TYPESCRIPT_BLIND_SPOTS[construct]

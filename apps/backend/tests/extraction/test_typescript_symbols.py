@@ -65,3 +65,13 @@ def test_exported_function_carries_exported_property():
         n for n in result.nodes if n.stable_key == "src/auth/service.ts::issueToken"
     )
     assert token.properties is not None and token.properties.get("exported") is True
+
+
+def test_direct_implements_clause_becomes_a_resolver_observation():
+    _, result = _keys("interface Worker {}\nclass Runner implements Worker {}\n")
+    observations = [
+        (observation.subject_key, observation.referent_text)
+        for observation in result.observations
+        if observation.observed_kind == "implements"
+    ]
+    assert observations == [("src/auth/service.ts::Runner", "Worker")]

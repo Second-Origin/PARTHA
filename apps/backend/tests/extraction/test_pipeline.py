@@ -1,11 +1,12 @@
 from app.extraction.pipeline import ExtractionPipeline
+from app.extraction.manifests import DependencyManifestExtractor
 from app.extraction.python import PythonExtractor
 from app.extraction.typescript import TypeScriptExtractor
 
 
 def _pipeline(*, max_source_bytes: int = 512 * 1024) -> ExtractionPipeline:
     return ExtractionPipeline(
-        (PythonExtractor(), TypeScriptExtractor()),
+        (DependencyManifestExtractor(), PythonExtractor(), TypeScriptExtractor()),
         max_source_bytes=max_source_bytes,
     )
 

@@ -23,6 +23,21 @@ def test_jsx_route_path_becomes_route_observation():
     assert paths == ["/settings"]
 
 
+def test_static_component_route_records_a_handler_binding():
+    source = (
+        "function Dashboard() { return null; }\n"
+        "const router = createBrowserRouter([{ path: '/', Component: Dashboard }]);\n"
+    )
+    result = EXTRACTOR.extract("src/app/routes/router.ts", source.encode("utf-8"))
+    route = next(observation for observation in result.observations if observation.observed_kind == "route")
+    handlers = [
+        (observation.subject_key, observation.referent_text)
+        for observation in result.observations
+        if observation.observed_kind == "route_handler"
+    ]
+    assert handlers == [(route.subject_key, "Dashboard")]
+
+
 def _routes(path: str, source: str):
     result = EXTRACTOR.extract(path, source.encode("utf-8"))
     return [o.referent_text for o in result.observations if o.observed_kind == "route"]

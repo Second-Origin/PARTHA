@@ -210,6 +210,7 @@ class PythonExtractor:
         self._collect_symbols(
             tree, path, line_count, nodes, observations, diagnostics
         )
+        self._collect_calls(tree, path, line_count, module_key, observations, diagnostics)
         self._collect_blind_spots(tree, path, line_count, diagnostics)
 
         return ExtractionResult(
@@ -223,15 +224,22 @@ class PythonExtractor:
     ) -> None:
         for node in ast.walk(tree):
             names: list[str] = []
+            bindings: list[tuple[str, str, str]] = []
             if isinstance(node, ast.Import):
                 names = [alias.name for alias in node.names]
             elif isinstance(node, ast.ImportFrom):
                 level_prefix = "." * node.level
                 base = node.module or ""
+                module_specifier = f"{level_prefix}{base}"
                 names = [
                     f"{level_prefix}{base}.{alias.name}" if base else f"{level_prefix}{alias.name}"
                     for alias in node.names
                     if alias.name != "*"
+                ]
+                bindings = [
+                    (module_specifier, alias.name, alias.asname or alias.name)
+                    for alias in node.names
+                    if alias.name != "*" and module_specifier
                 ]
             else:
                 continue
@@ -254,6 +262,25 @@ class PythonExtractor:
                         evidence=ev,
                     )
                 )
+            for specifier, imported, local in bindings:
+                ev, diag = build_evidence(
+                    path, node.lineno, node.end_lineno or node.lineno, line_count,
+                    producer=self.producer,
+                )
+                if ev is None:
+                    if diag is not None:
+                        diagnostics.append(diag)
+                    continue
+                observations.append(
+                    ExtractedObservation(
+                        observed_kind="import_binding",
+                        subject_kind="module",
+                        subject_key=module_key,
+                        referent_text=f"{specifier}|{imported}|{local}",
+                        ordinal=_UNASSIGNED_ORDINAL,
+                        evidence=ev,
+                    )
+                )
 
     _DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
@@ -261,8 +288,10 @@ class PythonExtractor:
         self, tree, path, line_count, nodes, observations, diagnostics
     ) -> None:
         assigner = DiscriminatorAssigner()
+        route_ordinal = 0
 
         def visit(scope: list[str], body) -> None:
+            nonlocal route_ordinal
             for child in body:
                 if not isinstance(child, self._DEF_TYPES):
                     continue
@@ -335,12 +364,41 @@ class PythonExtractor:
                             if route_diag is not None:
                                 diagnostics.append(route_diag)
                             continue
+                        # A route is a source-level declaration with an identity
+                        # distinct from its handler.  The anonymous-key form is
+                        # explicitly revision-local and source ordered (RFC §4.3),
+                        # while the resolver later connects it to this function.
+                        route_ordinal += 1
+                        route_key = canonical.normalize_stable_key(
+                            "symbol",
+                            symbol_stable_key(path, [], f"(anonymous:route#{route_ordinal})"),
+                        )
+                        nodes.append(
+                            ExtractedNode(
+                                node_kind="symbol",
+                                stable_key=route_key,
+                                name="route",
+                                language="python",
+                                evidence=(route_ev,),
+                                properties={"route_path": route_path},
+                            )
+                        )
                         observations.append(
                             ExtractedObservation(
                                 observed_kind="route",
                                 subject_kind="symbol",
-                                subject_key=canonical.normalize_stable_key("symbol", final_key),
+                                subject_key=route_key,
                                 referent_text=route_path,
+                                ordinal=_UNASSIGNED_ORDINAL,
+                                evidence=route_ev,
+                            )
+                        )
+                        observations.append(
+                            ExtractedObservation(
+                                observed_kind="route_handler",
+                                subject_kind="symbol",
+                                subject_key=route_key,
+                                referent_text=canonical.normalize_stable_key("symbol", final_key),
                                 ordinal=_UNASSIGNED_ORDINAL,
                                 evidence=route_ev,
                             )
@@ -362,6 +420,41 @@ class PythonExtractor:
                 visit([*scope, child.name], child.body)
 
         visit([], tree.body)
+
+    def _collect_calls(self, tree, path, line_count, module_key, observations, diagnostics) -> None:
+        """Record direct named call occurrences for the downstream resolver.
+
+        The extractor only records the exact call spelling and its source span.
+        Selecting a definition (including deciding whether a same-named symbol is
+        local, imported, or ambiguous) is deliberately deferred to #91.
+        """
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            # These direct calls are already declared unsupported by the source
+            # support matrix.  They retain their explicit diagnostic, but must
+            # not become resolver input (or an observed relationship fact).
+            if node.func.id in {"dir", "getattr", "hasattr", "setattr", "vars"}:
+                continue
+            evidence, diagnostic = build_evidence(
+                path, node.lineno, node.end_lineno or node.lineno,
+                line_count, producer=self.producer,
+            )
+            if evidence is None:
+                if diagnostic is not None:
+                    diagnostics.append(diagnostic)
+                continue
+            observations.append(
+                ExtractedObservation(
+                    observed_kind="call",
+                    subject_kind="module",
+                    subject_key=module_key,
+                    referent_text=node.func.id,
+                    ordinal=_UNASSIGNED_ORDINAL,
+                    evidence=evidence,
+                )
+            )
 
     def _attribute_root(self, node):
         """Resolve ``a.b.c`` to its root ``Name``, or None if not name-rooted."""

@@ -140,8 +140,10 @@ class TypeScriptExtractor:
         self._collect_symbols(
             tree.root_node, path, line_count, file_key, nodes, observations, diagnostics
         )
+        self._collect_implements(tree.root_node, path, line_count, nodes, observations)
         self._collect_imports(tree.root_node, path, line_count, file_key, observations)
-        self._collect_routes(tree.root_node, path, line_count, file_key, observations)
+        self._collect_routes(tree.root_node, path, line_count, file_key, nodes, observations)
+        self._collect_calls(tree.root_node, path, line_count, file_key, observations)
         self._collect_blind_spots(tree.root_node, path, line_count, diagnostics)
         return ExtractionResult(
             nodes=tuple(nodes),
@@ -169,12 +171,112 @@ class TypeScriptExtractor:
                                 ordinal=_UNASSIGNED_ORDINAL, evidence=ev,
                             )
                         )
+                        if node.type == "import_statement":
+                            self._collect_import_bindings(
+                                node, literal, path, line_count, file_key, source, observations
+                            )
             for child in node.named_children:
                 walk(child)
 
         walk(root)
 
-    def _collect_routes(self, root, path, line_count, file_key, observations) -> None:
+    def _collect_implements(self, root, path, line_count, nodes, observations) -> None:
+        """Emit direct TypeScript ``class ... implements ...`` references.
+
+        Only the syntax-level `implements` clause is recorded. Resolving an
+        imported interface name is left to the stored-fact resolver, and
+        ``extends`` remains outside the registered v1 predicate set.
+        """
+
+        source = root.text
+        symbols = {node.stable_key: node for node in nodes if node.node_kind == "symbol"}
+
+        def walk(node):
+            if node.type == "class_declaration":
+                name = node.child_by_field_name("name")
+                if name is not None:
+                    class_key = canonical.normalize_stable_key(
+                        "symbol", symbol_stable_key(path, [], self._node_text(name, source))
+                    )
+                    if class_key in symbols:
+                        heritage = next(
+                            (child for child in node.named_children if child.type == "class_heritage"),
+                            None,
+                        )
+                        if heritage is not None:
+                            for clause in heritage.named_children:
+                                if clause.type != "implements_clause":
+                                    continue
+                                for target in clause.named_children:
+                                    evidence, _ = build_evidence(
+                                        path,
+                                        target.start_point[0] + 1,
+                                        target.end_point[0] + 1,
+                                        line_count,
+                                        producer=self.producer,
+                                    )
+                                    if evidence is not None:
+                                        observations.append(
+                                            ExtractedObservation(
+                                                observed_kind="implements",
+                                                subject_kind="symbol",
+                                                subject_key=class_key,
+                                                referent_text=self._node_text(target, source),
+                                                ordinal=_UNASSIGNED_ORDINAL,
+                                                evidence=evidence,
+                                            )
+                                        )
+            for child in node.named_children:
+                walk(child)
+
+        walk(root)
+
+    def _collect_import_bindings(
+        self, statement, specifier, path, line_count, file_key, source, observations
+    ) -> None:
+        """Record direct import aliases as resolver inputs without resolving them."""
+
+        clause = next((child for child in statement.named_children if child.type == "import_clause"), None)
+        if clause is None:
+            return
+
+        def emit(imported, local, node):
+            evidence, _ = build_evidence(
+                path, node.start_point[0] + 1, node.end_point[0] + 1,
+                line_count, producer=self.producer,
+            )
+            if evidence is not None:
+                observations.append(
+                    ExtractedObservation(
+                        observed_kind="import_binding",
+                        subject_kind="file",
+                        subject_key=file_key,
+                        # This is an exact, delimiter-safe representation of the
+                        # source binding.  The resolver consumes it as stored
+                        # extractor output; it never re-parses the source file.
+                        referent_text=f"{specifier}|{imported}|{local}",
+                        ordinal=_UNASSIGNED_ORDINAL,
+                        evidence=evidence,
+                    )
+                )
+
+        for child in clause.named_children:
+            if child.type == "identifier":
+                emit("default", self._node_text(child, source), child)
+            elif child.type == "named_imports":
+                for binding in child.named_children:
+                    if binding.type != "import_specifier":
+                        continue
+                    name = binding.child_by_field_name("name")
+                    alias = binding.child_by_field_name("alias")
+                    if name is not None:
+                        emit(
+                            self._node_text(name, source),
+                            self._node_text(alias, source) if alias is not None else self._node_text(name, source),
+                            binding,
+                        )
+
+    def _collect_routes(self, root, path, line_count, file_key, nodes, observations) -> None:
         """Emit a ``route`` observation per confirmed react-router path literal.
 
         Only two contexts count: a ``path`` key inside an argument to a router
@@ -186,8 +288,10 @@ class TypeScriptExtractor:
 
         source = root.text
         seen: set[int] = set()
+        route_ordinal = 0
 
-        def emit(node, literal):
+        def emit(node, literal, handler_referent=None, handler_node=None):
+            nonlocal route_ordinal
             if node.id in seen:
                 return
             seen.add(node.id)
@@ -196,13 +300,47 @@ class TypeScriptExtractor:
                 line_count, producer=self.producer,
             )
             if ev is not None:
+                route_ordinal += 1
+                route_key = canonical.normalize_stable_key(
+                    "symbol",
+                    symbol_stable_key(path, [], f"(anonymous:route#{route_ordinal})"),
+                )
+                nodes.append(
+                    ExtractedNode(
+                        node_kind="symbol",
+                        stable_key=route_key,
+                        name="route",
+                        language="typescript",
+                        evidence=(ev,),
+                        properties={"route_path": literal},
+                    )
+                )
                 observations.append(
                     ExtractedObservation(
-                        observed_kind="route", subject_kind="file",
-                        subject_key=file_key, referent_text=literal,
+                        observed_kind="route", subject_kind="symbol",
+                        subject_key=route_key, referent_text=literal,
                         ordinal=_UNASSIGNED_ORDINAL, evidence=ev,
                     )
                 )
+                if handler_referent:
+                    handler_ev, _ = build_evidence(
+                        path,
+                        handler_node.start_point[0] + 1 if handler_node is not None else node.start_point[0] + 1,
+                        handler_node.end_point[0] + 1 if handler_node is not None else node.end_point[0] + 1,
+                        line_count,
+                        producer=self.producer,
+                    )
+                    if handler_ev is not None:
+                        observations.append(
+                            ExtractedObservation(
+                                observed_kind="route_handler",
+                                subject_kind="symbol",
+                                subject_key=route_key,
+                                referent_text=handler_referent,
+                                ordinal=_UNASSIGNED_ORDINAL,
+                                evidence=handler_ev,
+                            )
+                        )
 
         def pair_value(pair, name):
             key = pair.child_by_field_name("key")
@@ -222,15 +360,38 @@ class TypeScriptExtractor:
 
             if node.type != "object":
                 return
+            path_pair = None
+            path_value = None
+            handler_referent = None
+            handler_node = None
+            child_tables = []
             for pair in node.named_children:
                 if pair.type != "pair":
                     continue
-                path_value = pair_value(pair, "path")
-                if path_value is not None and path_value.type == "string":
-                    emit(pair, self._node_text(path_value, source).strip("'\"`"))
+                candidate_path = pair_value(pair, "path")
+                if candidate_path is not None and candidate_path.type == "string":
+                    path_pair, path_value = pair, candidate_path
+                for handler_name in ("Component", "component"):
+                    handler_value = pair_value(pair, handler_name)
+                    if handler_value is not None and handler_value.type == "identifier":
+                        handler_referent, handler_node = self._node_text(handler_value, source), handler_value
+                element_value = pair_value(pair, "element")
+                if element_value is not None:
+                    jsx_handler = self._jsx_handler(element_value, source)
+                    if jsx_handler is not None:
+                        handler_referent, handler_node = jsx_handler
                 children_value = pair_value(pair, "children")
                 if children_value is not None:
-                    collect_route_table(children_value)
+                    child_tables.append(children_value)
+            if path_pair is not None and path_value is not None:
+                emit(
+                    path_pair,
+                    self._node_text(path_value, source).strip("'\"`"),
+                    handler_referent,
+                    handler_node,
+                )
+            for child_table in child_tables:
+                collect_route_table(child_table)
 
         def collect_route_table(node):
             # A factory's first argument and a route entry's `children` must be
@@ -256,13 +417,70 @@ class TypeScriptExtractor:
                 name_node = node.child_by_field_name("name")
                 if (name_node is not None
                         and self._node_text(name_node, source) in _ROUTE_ELEMENTS):
+                    path_attribute = None
+                    handler_referent = None
+                    handler_node = None
                     for child in node.named_children:
                         if child.type != "jsx_attribute":
                             continue
                         parts = child.named_children
                         if (len(parts) > 1
                                 and self._node_text(parts[0], source) == "path"):
-                            emit(child, self._node_text(parts[1], source).strip("'\"{}`"))
+                            path_attribute = child
+                            path_literal = self._node_text(parts[1], source).strip("'\"{}`")
+                        elif (len(parts) > 1
+                              and self._node_text(parts[0], source) == "element"):
+                            jsx_handler = self._jsx_handler(parts[1], source)
+                            if jsx_handler is not None:
+                                handler_referent, handler_node = jsx_handler
+                    if path_attribute is not None:
+                        emit(path_attribute, path_literal, handler_referent, handler_node)
+            for child in node.named_children:
+                walk(child)
+
+        walk(root)
+
+    def _jsx_handler(self, node, source: bytes):
+        """Return a direct JSX component reference, never a computed expression."""
+
+        if node.type == "jsx_expression" and node.named_children:
+            node = node.named_children[0]
+        if node.type not in ("jsx_element", "jsx_self_closing_element"):
+            return None
+        name = node.child_by_field_name("name")
+        if name is None:
+            return None
+        text = self._node_text(name, source)
+        return (text, name) if text and text[0].isupper() else None
+
+    def _collect_calls(self, root, path, line_count, file_key, observations) -> None:
+        """Record direct identifier calls; target selection is resolver work."""
+
+        source = root.text
+
+        def walk(node):
+            if node.type == "call_expression":
+                function = node.child_by_field_name("function")
+                if function is not None and function.type == "identifier":
+                    function_name = self._node_text(function, source)
+                    # CommonJS require() remains an explicitly unsupported
+                    # construct, so its diagnostic is the only emitted fact.
+                    if function_name != "require":
+                        evidence, _ = build_evidence(
+                            path, node.start_point[0] + 1, node.end_point[0] + 1,
+                            line_count, producer=self.producer,
+                        )
+                        if evidence is not None:
+                            observations.append(
+                                ExtractedObservation(
+                                    observed_kind="call",
+                                    subject_kind="file",
+                                    subject_key=file_key,
+                                    referent_text=function_name,
+                                    ordinal=_UNASSIGNED_ORDINAL,
+                                    evidence=evidence,
+                                )
+                            )
             for child in node.named_children:
                 walk(child)
 

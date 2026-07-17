@@ -1724,7 +1724,7 @@ rules), the three columns are explicit:
 | Symbol spans | Python/TypeScript extractors emit required spans; legacy `SourceSymbol` remains spanless | Required line spans (§6) | **Producer implemented** (#89/#90); product consumption remains #92/#93 |
 | Extraction | Legacy product ingestion still uses regex; standalone AST/tree-sitter extractors and support matrices are implemented and benchmarked | Syntax-aware extractors with support matrices | **Producer implemented** (#89/#90); durable product integration remains #93 |
 | Revision identity | Indexed `revision_kind`/`revision_value`/`revision_ref`; `commitSha` is API compatibility only | Indexed immutable columns (§3) | **Implemented** (#87) |
-| Relationships | 4 of 8 declared types emitted; imports as text | Resolved edges + diagnostics (§5) | **Unimplemented** (#91) |
+| Relationships | Deterministic resolver over stored observations, with resolved edges and explicit unresolved/ambiguous diagnostics | Resolved edges + diagnostics (§5) | **Implemented** (#91); product job wiring remains #93 |
 | Inferred entity properties | Legacy heuristic module roles remain in the compatibility blob; the snapshot store supports separate validated assertions | Separate inferred property assertions; observed nodes remain unique (§5.6) | **Persistence implemented** (#88); production inference/querying remains #91/#92 |
 | Provenance | Extractors emit path + span + producer/version and the normalized store validates them; legacy product consumers still receive file paths only | Path + span + extractor/version (§6) | **Producer and persistence implemented** (#88–#90); product orchestration/querying remains #92/#93 |
 | Query API | Consumers read the whole blob | Versioned owner-scoped read API (§9.5) | **Unimplemented** (#92) |
@@ -1736,7 +1736,7 @@ behavior.** RFC-0001 is **Accepted** — independently ratified by
 ([§1](#1-status-and-approval)); acceptance records the governing contract, not a claim of
 implementation. The #87 revision identity and #88 immutable snapshot-persistence boundary are
 implemented against that accepted contract, as the status column records. The #89/#90 producers
-and #94 benchmark are implemented; resolution, queries, jobs, and consumer migration remain
+and #94 benchmark plus #91 deterministic resolution are implemented; queries, jobs, and consumer migration remain
 downstream work and are not current product behavior. No existing documentation is rewritten by
 this RFC to imply otherwise.
 
