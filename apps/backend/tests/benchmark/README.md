@@ -54,6 +54,11 @@ the fixture bytes — never a fabricated Git SHA), `producerVersionSet`,
 assertions / diagnostics. Each expected fact carries its normalized evidence
 (path + one-based inclusive line span + granularity + extractor).
 
+`syntheticFiles` is an optional manifest map of raw path to UTF-8 content. It is
+part of the deterministic stored-revision byte map, but does not require the raw
+path to exist on the host filesystem. This is reserved for source-policy cases
+such as a Windows-invalid escaping path; it is not a golden-output generator.
+
 The loader (`loader.py`) fails clearly on unsupported schema versions, duplicate
 fixture ids, duplicate expected identities, missing source files, absolute or
 `..`-escaping paths, invalid line ranges, undeclared construct ids, malformed

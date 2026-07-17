@@ -4,14 +4,17 @@
   "fixtureClass": "adversarial",
   "language": "typescript",
   "title": "Adversarial TypeScript — syntax error",
-  "description": "A file that fails to parse. It must emit an RI-SRC-MALFORMED diagnostic and no line-addressed facts. Exercises ts.syntax_error.",
+  "description": "A file that fails to parse. It must emit RI-SRC-MALFORMED while the mandatory repository root remains evidenced by the stored text source (RFC-0001 §4.3, §6.2, §8). Exercises ts.syntax_error.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["typescript-ast@1.0.0"],
+  "producerVersionSet": ["typescript-ast@1.0.0", "repository-inventory@1.0.0"],
   "constructsCovered": ["ts.syntax_error"],
   "deterministic": false,
   "expected": {
-    "nodes": [], "edges": [], "observations": [], "assertions": [],
+    "nodes": [
+      {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
+       "evidence": [{"path": "src/broken.ts", "startLine": 1, "endLine": 1, "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]}
+    ], "edges": [], "observations": [], "assertions": [],
     "diagnostics": [
       {"code": "RI-SRC-MALFORMED", "category": "malformed source", "severity": "error",
        "message": "src/broken.ts could not be parsed.", "producer": "typescript-ast@1.0.0",

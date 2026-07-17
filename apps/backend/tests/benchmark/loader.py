@@ -21,7 +21,7 @@ import json
 from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from app.extraction.support_matrix import SUPPORT_MATRIX as PRODUCTION_SUPPORT_MATRIX
 from app.intelligence import canonical
@@ -33,7 +33,6 @@ from benchmark.sourcefiles import (
     decode_strict_utf8,
     is_binary,
     logical_line_count,
-    read_bytes,
 )
 
 
@@ -193,6 +192,23 @@ class ExpectedFact:
     raw: dict[str, Any]
 
 
+def _fixture_source_files(
+    directory: Path,
+    synthetic_files: tuple[tuple[str, bytes], ...] = (),
+) -> dict[str, bytes]:
+    """Return physical and manifest-declared source bytes in stable path order."""
+
+    files: dict[str, bytes] = {}
+    for path in sorted(directory.rglob("*")):
+        if not path.is_file() or path.name == "manifest.json":
+            continue
+        relative = path.relative_to(directory).as_posix()
+        files[relative] = path.read_bytes()
+    for path, content in synthetic_files:
+        files[path] = content
+    return {path: files[path] for path in sorted(files)}
+
+
 @dataclass(frozen=True)
 class LoadedFixture:
     fixture_id: str
@@ -208,17 +224,12 @@ class LoadedFixture:
     deterministic: bool
     expected: tuple[ExpectedFact, ...]
     max_source_bytes: int = 512 * 1024
+    synthetic_files: tuple[tuple[str, bytes], ...] = ()
 
     def source_files(self) -> dict[str, bytes]:
         """Every stored byte of the synthetic repository (everything but the manifest)."""
 
-        files: dict[str, bytes] = {}
-        for path in sorted(self.directory.rglob("*")):
-            if not path.is_file() or path.name == "manifest.json":
-                continue
-            relative = path.relative_to(self.directory).as_posix()
-            files[relative] = path.read_bytes()
-        return files
+        return _fixture_source_files(self.directory, self.synthetic_files)
 
     def revision_value(self) -> str:
         """A real, reproducible ``sha256:`` upload identity over the stored bytes.
@@ -367,13 +378,12 @@ def _build_fact(group: str, raw: dict[str, Any], *, where: str, producers: set[s
 
 
 def _validate_evidence_against_source(
-    fixture_dir: Path, span: EvidenceSpan, *, where: str
+    sources: Mapping[str, bytes], span: EvidenceSpan, *, where: str
 ) -> None:
     """Enforce RFC-0001 §6.2: the cited file exists, decodes, and the span is in range."""
 
-    source_path = fixture_dir / span.path
-    _require(source_path.is_file(), f"{where}: evidence cites missing source file {span.path!r}")
-    data = read_bytes(source_path)
+    data = sources.get(span.path)
+    _require(data is not None, f"{where}: evidence cites missing source file {span.path!r}")
     _require(not is_binary(data), f"{where}: evidence cites binary file {span.path!r} (no line spans allowed)")
     try:
         text = decode_strict_utf8(data)
@@ -391,6 +401,35 @@ def _validate_evidence_against_source(
             span.start_line == 1 and span.end_line == line_count,
             f"{where}: file-granularity evidence must span 1..{line_count} of {span.path!r}",
         )
+
+
+def _load_synthetic_files(data: dict[str, Any], *, where: str, directory: Path) -> tuple[tuple[str, bytes], ...]:
+    """Validate manifest-declared UTF-8 sources without normalizing their raw paths."""
+
+    raw_files = data.get(schema.SYNTHETIC_FILES_FIELD, {})
+    _require(
+        isinstance(raw_files, dict),
+        f"{where}: {schema.SYNTHETIC_FILES_FIELD} must be an object mapping paths to UTF-8 content",
+    )
+    physical_paths = {
+        path.relative_to(directory).as_posix()
+        for path in directory.rglob("*")
+        if path.is_file() and path.name != "manifest.json"
+    }
+    synthetic_files: list[tuple[str, bytes]] = []
+    for raw_path, content in sorted(raw_files.items()):
+        _require(
+            isinstance(raw_path, str) and raw_path and raw_path != "manifest.json",
+            f"{where}: synthetic source path must be a non-empty non-manifest string",
+        )
+        _require(isinstance(content, str), f"{where}: synthetic source {raw_path!r} must be UTF-8 text")
+        _require(raw_path not in physical_paths, f"{where}: synthetic source {raw_path!r} duplicates a stored file")
+        try:
+            encoded = content.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise ManifestError(f"{where}: synthetic source {raw_path!r} is not UTF-8 encodable") from exc
+        synthetic_files.append((raw_path, encoded))
+    return tuple(synthetic_files)
 
 
 def load_fixture(directory: Path, support_matrix: SupportMatrix) -> LoadedFixture:
@@ -424,6 +463,8 @@ def load_fixture(directory: Path, support_matrix: SupportMatrix) -> LoadedFixtur
             f"{where0}: producerVersionSet entry {producer!r} must be 'name@version'",
         )
     producers = set(producer_list)
+    synthetic_files = _load_synthetic_files(data, where=where0, directory=directory)
+    sources = _fixture_source_files(directory, synthetic_files)
 
     constructs_covered = tuple(data.get("constructsCovered", []))
     max_source_bytes = data.get("maxSourceBytes", 512 * 1024)
@@ -454,7 +495,7 @@ def load_fixture(directory: Path, support_matrix: SupportMatrix) -> LoadedFixtur
                 _require(construct_id in support_matrix, f"{where}: undeclared construct {construct_id!r}")
             # Provenance: every cited span must resolve in the stored revision.
             for span in fact.evidence:
-                _validate_evidence_against_source(directory, span, where=where)
+                _validate_evidence_against_source(sources, span, where=where)
             expected.append(ExpectedFact(group=group, fact=fact, constructs=fact_constructs, raw=raw))
 
     # Fixtures must actually declare something to measure.
@@ -474,6 +515,7 @@ def load_fixture(directory: Path, support_matrix: SupportMatrix) -> LoadedFixtur
         deterministic=bool(data.get("deterministic", False)),
         expected=tuple(expected),
         max_source_bytes=max_source_bytes,
+        synthetic_files=synthetic_files,
     )
 
 
