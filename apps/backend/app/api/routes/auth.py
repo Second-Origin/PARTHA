@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Cookie, Depends, Response, status
 
 from app.api.deps import get_auth_service, get_current_user
-from app.api.openapi import documented_responses, error_responses
+from app.api.openapi import documented_responses, error_responses, suppress_automatic_validation_error
 from app.auth.service import AuthService
 from app.core.config import Settings, get_settings
 from app.core.exceptions import UnauthorizedError
@@ -125,7 +125,8 @@ def refresh(
 @router.post(
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=error_responses(422, 429, 500),
+    responses=error_responses(429, 500),
+    openapi_extra=suppress_automatic_validation_error(),
 )
 def logout(
     refresh_token: str | None = Cookie(default=None, alias=REFRESH_COOKIE),

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from os import getpid
 import logging
 from time import perf_counter
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +11,11 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import text
 
 from app.api.router import api_router
-from app.api.openapi import documented_responses, response_example
+from app.api.openapi import (
+    documented_responses,
+    remove_suppressed_automatic_validation_errors,
+    response_example,
+)
 from app.core import database
 from app.core.config import get_settings
 from app.core.exceptions import ErrorResponse, register_exception_handlers
@@ -104,6 +108,15 @@ def create_app() -> FastAPI:
         description="Repository architecture intelligence backend for PARTHA.",
         lifespan=lifespan,
     )
+
+    default_openapi = app.openapi
+
+    def custom_openapi() -> dict[str, Any]:
+        document = default_openapi()
+        remove_suppressed_automatic_validation_errors(document)
+        return document
+
+    app.openapi = custom_openapi
 
     # Registered first (innermost) so it sits inside both SecurityHeadersMiddleware
     # and CORSMiddleware in the wrapped stack: 429 responses still pick up security
