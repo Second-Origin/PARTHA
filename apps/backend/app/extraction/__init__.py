@@ -6,6 +6,11 @@ from app.extraction.base import (
     ExtractionResult,
     Extractor,
 )
+from app.extraction.pipeline import (
+    DEFAULT_MAX_SOURCE_BYTES,
+    ExtractionPipeline,
+    ProducedExtraction,
+)
 
 __all__ = [
     "ExtractedDiagnostic",
@@ -14,4 +19,7 @@ __all__ = [
     "ExtractedObservation",
     "ExtractionResult",
     "Extractor",
+    "DEFAULT_MAX_SOURCE_BYTES",
+    "ExtractionPipeline",
+    "ProducedExtraction",
 ]

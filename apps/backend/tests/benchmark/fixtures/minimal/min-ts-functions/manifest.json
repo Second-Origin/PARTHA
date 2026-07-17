@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "ri-benchmark.v1",
+  "fixtureId": "min-ts-functions",
+  "fixtureClass": "minimal",
+  "language": "typescript",
+  "title": "Minimal TypeScript — function declarations",
+  "description": "A sync and an async function declaration. Exercises ts.function and ts.async_function.",
+  "sourceRoot": ".",
+  "revisionIdentity": "upload-sha256",
+  "producerVersionSet": ["repository-inventory@1.0.0", "typescript-ast@1.0.0"],
+  "constructsCovered": ["ts.module", "ts.function", "ts.async_function"],
+  "deterministic": true,
+  "expected": {
+    "nodes": [
+      {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
+       "evidence": [{"path": "src/util.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "file", "stableKey": "file:src/util.ts", "name": "util.ts", "language": "typescript", "constructs": ["ts.module"],
+       "evidence": [{"path": "src/util.ts", "startLine": 1, "endLine": 8, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "module", "stableKey": "mod:src", "name": "src", "constructs": ["ts.directory_module"],
+       "evidence": [{"path": "src/util.ts", "startLine": 1, "endLine": 8, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/util.ts::add", "name": "add", "language": "typescript", "constructs": ["ts.function"],
+       "evidence": [{"path": "src/util.ts", "startLine": 1, "endLine": 3, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/util.ts::load", "name": "load", "language": "typescript", "constructs": ["ts.async_function"],
+       "evidence": [{"path": "src/util.ts", "startLine": 5, "endLine": 7, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]}
+    ],
+    "edges": [], "observations": [
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/util.ts::add","ordinal":1,"constructs":["ts.function"],"evidence":{"path":"src/util.ts","startLine":1,"endLine":3,"extractor":"typescript-ast","extractorVersion":"1.0.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/util.ts::load","ordinal":1,"constructs":["ts.async_function"],"evidence":{"path":"src/util.ts","startLine":5,"endLine":7,"extractor":"typescript-ast","extractorVersion":"1.0.0"}}
+    ], "assertions": [], "diagnostics": []
+  }
+}

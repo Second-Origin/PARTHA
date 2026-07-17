@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "ri-benchmark.v1",
+  "fixtureId": "real-py-fastapi",
+  "fixtureClass": "realistic",
+  "language": "python",
+  "title": "Realistic Python — a small FastAPI service",
+  "description": "A coherent FastAPI module: a from-import, a settings class, a factory function, and two decorated routes, plus a resolved contains edge and an inferred classification assertion. Exercises the full fact model end to end.",
+  "sourceRoot": ".",
+  "revisionIdentity": "upload-sha256",
+  "producerVersionSet": ["python-ast@1.0.0", "relationship-resolver@1.0.0", "repository-inventory@1.0.0", "role-classifier@1.0.0"],
+  "constructsCovered": ["py.module", "py.from_import", "py.class.def", "py.function.def", "py.decorator", "py.fastapi_route"],
+  "deterministic": true,
+  "expected": {
+    "nodes": [
+      {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
+       "evidence": [{"path": "src/service.py", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "file", "stableKey": "file:src/service.py", "name": "service.py", "language": "python", "constructs": ["src.file"],
+       "evidence": [{"path": "src/service.py", "startLine": 1, "endLine": 22, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "module", "stableKey": "mod:src", "name": "src", "constructs": ["py.module"],
+       "evidence": [{"path": "src/service.py", "startLine": 1, "endLine": 22, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/service.py::Settings", "name": "Settings", "language": "python", "constructs": ["py.class.def"],
+       "evidence": [{"path": "src/service.py", "startLine": 6, "endLine": 7, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/service.py::get_settings", "name": "get_settings", "language": "python", "constructs": ["py.function.def"],
+       "evidence": [{"path": "src/service.py", "startLine": 10, "endLine": 11, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/service.py::read_user", "name": "read_user", "language": "python", "properties": {"decorators": ["app.get"]}, "constructs": ["py.function.def", "py.decorator"],
+       "evidence": [{"path": "src/service.py", "startLine": 15, "endLine": 16, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/service.py::create_user", "name": "create_user", "language": "python", "properties": {"decorators": ["app.post"]}, "constructs": ["py.function.def", "py.decorator"],
+       "evidence": [{"path": "src/service.py", "startLine": 20, "endLine": 21, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
+    ],
+    "edges": [
+      {"subjectKind": "repository", "subjectKey": "repo:root", "predicate": "contains", "objectKind": "file", "objectKey": "file:src/service.py",
+       "producer": "relationship-resolver", "producerVersion": "1.0.0",
+       "evidence": [{"path": "src/service.py", "startLine": 1, "endLine": 22, "granularity": "file", "extractor": "relationship-resolver", "extractorVersion": "1.0.0"}]}
+    ],
+    "observations": [
+      {"observedKind": "import", "subjectKind": "module", "subjectKey": "mod:src", "referentText": "fastapi.FastAPI", "ordinal": 1, "constructs": ["py.from_import"],
+       "evidence": {"path": "src/service.py", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.py::Settings","ordinal":1,"constructs":["py.class.def"],"evidence":{"path":"src/service.py","startLine":6,"endLine":7,"extractor":"python-ast","extractorVersion":"1.0.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.py::get_settings","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/service.py","startLine":10,"endLine":11,"extractor":"python-ast","extractorVersion":"1.0.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.py::read_user","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/service.py","startLine":15,"endLine":16,"extractor":"python-ast","extractorVersion":"1.0.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.py::create_user","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/service.py","startLine":20,"endLine":21,"extractor":"python-ast","extractorVersion":"1.0.0"}},
+      {"observedKind":"decorator","subjectKind":"symbol","subjectKey":"src/service.py::read_user","referentText":"app.get","ordinal":1,"constructs":["py.decorator"],"evidence":{"path":"src/service.py","startLine":14,"endLine":14,"extractor":"python-ast","extractorVersion":"1.0.0"}},
+      {"observedKind":"decorator","subjectKind":"symbol","subjectKey":"src/service.py::create_user","referentText":"app.post","ordinal":1,"constructs":["py.decorator"],"evidence":{"path":"src/service.py","startLine":19,"endLine":19,"extractor":"python-ast","extractorVersion":"1.0.0"}},
+      {"observedKind": "route", "subjectKind": "symbol", "subjectKey": "src/service.py::read_user", "referentText": "/users/{user_id}", "ordinal": 1, "constructs": ["py.fastapi_route"],
+       "evidence": {"path": "src/service.py", "startLine": 14, "endLine": 14, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}},
+      {"observedKind": "route", "subjectKind": "symbol", "subjectKey": "src/service.py::create_user", "referentText": "/users", "ordinal": 1, "constructs": ["py.fastapi_route"],
+       "evidence": {"path": "src/service.py", "startLine": 19, "endLine": 19, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}}
+    ],
+    "assertions": [
+      {"subjectKind": "file", "subjectKey": "file:src/service.py", "predicate": "classified_as",
+       "value": {"classification": "route_module", "confidence": "heuristic"},
+       "producer": "role-classifier", "producerVersion": "1.0.0"}
+    ],
+    "diagnostics": []
+  }
+}

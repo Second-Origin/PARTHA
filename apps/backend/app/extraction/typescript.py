@@ -91,17 +91,22 @@ class TypeScriptExtractor:
 
         nodes: list[ExtractedNode] = []
         diagnostics: list[ExtractedDiagnostic] = []
+        file_key = canonical.normalize_stable_key("file", f"file:{normalized_path}")
 
         if tree.root_node.has_error:
-            diagnostics.append(
-                ExtractedDiagnostic(
-                    code=RI_SRC_MALFORMED, category="malformed source",
-                    severity="error", message="file has TypeScript syntax errors",
-                    path=normalized_path,
+            return ExtractionResult(
+                diagnostics=(
+                    ExtractedDiagnostic(
+                        code=RI_SRC_MALFORMED,
+                        category="malformed source",
+                        severity="error",
+                        message="file has TypeScript syntax errors",
+                        path=normalized_path,
+                        subject=file_key,
+                    ),
                 )
             )
 
-        file_key = canonical.normalize_stable_key("file", f"file:{normalized_path}")
         file_ev, file_diag = build_evidence(
             path, 1, line_count, line_count, producer=self.producer, granularity="file"
         )
@@ -266,6 +271,7 @@ class TypeScriptExtractor:
     def _collect_blind_spots(self, root, path, line_count, diagnostics) -> None:
         source = root.text
         normalized = canonical.normalize_repo_path(path)
+        file_subject = canonical.normalize_stable_key("file", f"file:{normalized}")
 
         def flag(node, message):
             diagnostics.append(
@@ -273,6 +279,7 @@ class TypeScriptExtractor:
                     code=RI_EXT_UNSUPPORTED, category="unsupported construct",
                     severity="info", message=message, path=normalized,
                     span=(node.start_point[0] + 1, node.end_point[0] + 1),
+                    subject=file_subject,
                 )
             )
 

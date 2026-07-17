@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "ri-benchmark-thresholds.v1",
+  "precision": "0.95",
+  "recall": "0.90",
+  "provenanceValidity": "1.00",
+  "determinism": "1.00",
+  "note": "Issue #94 acceptance thresholds. Values are exact fractions and all are enforced against the real extraction workflow. Do NOT lower any threshold without documenting the reason on Issue #94 and obtaining maintainer agreement."
+}

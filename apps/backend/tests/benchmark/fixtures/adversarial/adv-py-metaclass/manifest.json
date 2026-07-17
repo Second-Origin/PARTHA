@@ -1,0 +1,16 @@
+{
+  "schemaVersion":"ri-benchmark.v1","fixtureId":"adv-py-metaclass","fixtureClass":"adversarial","language":"python",
+  "title":"Adversarial Python — metaclass","description":"A declared metaclass remains visible as an unsupported diagnostic while the class definition is still extracted.",
+  "sourceRoot":".","revisionIdentity":"upload-sha256","producerVersionSet":["python-ast@1.0.0","repository-inventory@1.0.0"],
+  "constructsCovered":["py.module","py.class.def","py.metaclass"],"deterministic":true,
+  "expected":{"nodes":[
+    {"nodeKind":"repository","stableKey":"repo:root","name":"repository","evidence":[{"path":"src/meta.py","startLine":1,"endLine":1,"extractor":"repository-inventory","extractorVersion":"1.0.0"}]},
+    {"nodeKind":"file","stableKey":"file:src/meta.py","name":"meta.py","language":"python","evidence":[{"path":"src/meta.py","startLine":1,"endLine":3,"granularity":"file","extractor":"repository-inventory","extractorVersion":"1.0.0"}]},
+    {"nodeKind":"module","stableKey":"mod:src","name":"src","constructs":["py.module"],"evidence":[{"path":"src/meta.py","startLine":1,"endLine":3,"granularity":"file","extractor":"python-ast","extractorVersion":"1.0.0"}]},
+    {"nodeKind":"symbol","stableKey":"src/meta.py::Model","name":"Model","language":"python","constructs":["py.class.def"],"evidence":[{"path":"src/meta.py","startLine":1,"endLine":2,"extractor":"python-ast","extractorVersion":"1.0.0"}]}
+  ],"edges":[],"observations":[
+    {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/meta.py::Model","ordinal":1,"constructs":["py.class.def"],"evidence":{"path":"src/meta.py","startLine":1,"endLine":2,"extractor":"python-ast","extractorVersion":"1.0.0"}}
+  ],"assertions":[],"diagnostics":[
+    {"code":"RI-EXT-UNSUPPORTED","category":"unsupported construct","severity":"info","message":"metaclass is unsupported","producer":"python-ast@1.0.0","path":"src/meta.py","span":{"startLine":1,"endLine":2},"subject":"file:src/meta.py","constructs":["py.metaclass"]}
+  ]}
+}

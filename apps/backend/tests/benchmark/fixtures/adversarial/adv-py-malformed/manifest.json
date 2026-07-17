@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "ri-benchmark.v1",
+  "fixtureId": "adv-py-malformed",
+  "fixtureClass": "adversarial",
+  "language": "python",
+  "title": "Adversarial Python — syntax error",
+  "description": "A file that fails to parse. It must emit RI-SRC-MALFORMED while the mandatory repository root remains evidenced by the stored text source (RFC-0001 §4.3, §6.2, §8). Exercises py.syntax_error.",
+  "sourceRoot": ".",
+  "revisionIdentity": "upload-sha256",
+  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.0.0"],
+  "constructsCovered": ["py.syntax_error", "src.malformed_source"],
+  "deterministic": false,
+  "expected": {
+    "nodes": [
+      {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
+       "evidence": [{"path": "src/broken.py", "startLine": 1, "endLine": 1, "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]}
+    ], "edges": [], "observations": [], "assertions": [],
+    "diagnostics": [
+      {"code": "RI-SRC-MALFORMED", "category": "malformed source", "severity": "error",
+       "message": "src/broken.py could not be parsed.", "producer": "python-ast@1.0.0",
+       "path": "src/broken.py", "subject": "file:src/broken.py", "constructs": ["py.syntax_error", "src.malformed_source"]}
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion":"ri-benchmark.v1","fixtureId":"adv-ts-more-blindspots","fixtureClass":"adversarial","language":"typescript",
+  "title":"Adversarial TypeScript — ambient module, decorator, and CommonJS","description":"Each remaining declared TypeScript blind spot produces its exact real diagnostic.",
+  "sourceRoot":".","revisionIdentity":"upload-sha256","producerVersionSet":["repository-inventory@1.0.0","typescript-ast@1.0.0"],
+  "constructsCovered":["ts.module","ts.directory_module","ts.class","ts.const","ts.ambient_module","ts.decorator","ts.commonjs_require"],"deterministic":true,
+  "expected":{"nodes":[
+    {"nodeKind":"repository","stableKey":"repo:root","name":"repository","evidence":[{"path":"src/legacy.ts","startLine":1,"endLine":1,"extractor":"repository-inventory","extractorVersion":"1.0.0"}]},
+    {"nodeKind":"file","stableKey":"file:src/legacy.ts","name":"legacy.ts","language":"typescript","constructs":["ts.module"],"evidence":[{"path":"src/legacy.ts","startLine":1,"endLine":7,"granularity":"file","extractor":"typescript-ast","extractorVersion":"1.0.0"}]},
+    {"nodeKind":"module","stableKey":"mod:src","name":"src","constructs":["ts.directory_module"],"evidence":[{"path":"src/legacy.ts","startLine":1,"endLine":7,"granularity":"file","extractor":"typescript-ast","extractorVersion":"1.0.0"}]},
+    {"nodeKind":"symbol","stableKey":"src/legacy.ts::Service","name":"Service","language":"typescript","constructs":["ts.class"],"evidence":[{"path":"src/legacy.ts","startLine":3,"endLine":4,"extractor":"typescript-ast","extractorVersion":"1.0.0"}]},
+    {"nodeKind":"symbol","stableKey":"src/legacy.ts::fs","name":"fs","language":"typescript","constructs":["ts.const"],"evidence":[{"path":"src/legacy.ts","startLine":6,"endLine":6,"extractor":"typescript-ast","extractorVersion":"1.0.0"}]}
+  ],"edges":[],"observations":[
+    {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/legacy.ts::Service","ordinal":1,"constructs":["ts.class"],"evidence":{"path":"src/legacy.ts","startLine":3,"endLine":4,"extractor":"typescript-ast","extractorVersion":"1.0.0"}},
+    {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/legacy.ts::fs","ordinal":1,"constructs":["ts.const"],"evidence":{"path":"src/legacy.ts","startLine":6,"endLine":6,"extractor":"typescript-ast","extractorVersion":"1.0.0"}}
+  ],"assertions":[],"diagnostics":[
+    {"code":"RI-EXT-UNSUPPORTED","category":"unsupported construct","severity":"info","message":"namespace/module declaration is unsupported","producer":"typescript-ast@1.0.0","path":"src/legacy.ts","span":{"startLine":1,"endLine":1},"subject":"file:src/legacy.ts","constructs":["ts.ambient_module"]},
+    {"code":"RI-EXT-UNSUPPORTED","category":"unsupported construct","severity":"info","message":"TypeScript decorator is unsupported","producer":"typescript-ast@1.0.0","path":"src/legacy.ts","span":{"startLine":3,"endLine":3},"subject":"file:src/legacy.ts","constructs":["ts.decorator"]},
+    {"code":"RI-EXT-UNSUPPORTED","category":"unsupported construct","severity":"info","message":"CommonJS require() is unsupported","producer":"typescript-ast@1.0.0","path":"src/legacy.ts","span":{"startLine":6,"endLine":6},"subject":"file:src/legacy.ts","constructs":["ts.commonjs_require"]}
+  ]}
+}
