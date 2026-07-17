@@ -4,6 +4,7 @@ import zipfile
 from app.ai.providers.registry import ProviderRegistry
 from app.ai.types import AiProviderConfig, AiProviderResponse, PromptBundle
 from app.api.deps import get_provider_registry
+from tests.api_assertions import assert_error_response
 
 
 def _zip_bytes(files: dict[str, bytes]) -> bytes:
@@ -20,6 +21,44 @@ class ContractProvider:
         assert prompt.system_prompt.startswith("You are PARTHA's repository assistant")
         assert prompt.user_prompt == "Summarize this repository"
         return AiProviderResponse(content="Repository summary from test provider.")
+
+
+class ConnectionTestProvider:
+    async def complete(self, config: AiProviderConfig, prompt: PromptBundle) -> AiProviderResponse:
+        assert config.provider == "openai"
+        assert prompt.system_prompt == "Reply with the single word: ok"
+        assert prompt.user_prompt == "Connection test."
+        return AiProviderResponse(content="ok")
+
+
+def test_ai_test_endpoint_checks_the_saved_provider_without_external_network(auth_client):
+    registry = ProviderRegistry()
+    registry.register("openai", ConnectionTestProvider())
+    auth_client.app.dependency_overrides[get_provider_registry] = lambda: registry
+
+    try:
+        configured = auth_client.put(
+            "/ai/config",
+            json={"provider": "openai", "apiKey": "test-key", "model": "test-model"},
+        )
+        assert configured.status_code == 200
+
+        response = auth_client.post("/ai/test", json={"provider": "openai"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["ok"] is True
+        assert body["message"] == "openai connection succeeded."
+        assert body["checkedAt"]
+    finally:
+        auth_client.app.dependency_overrides.pop(get_provider_registry, None)
+
+
+def test_ai_test_endpoint_returns_the_standard_error_without_a_provider(auth_client):
+    response = auth_client.post("/ai/test", json={})
+
+    error = assert_error_response(response, 422, "validation_error")
+    assert "choose an ai provider" in error.message.lower()
 
 
 def test_ai_query_endpoint_preserves_public_response_contract(auth_client):

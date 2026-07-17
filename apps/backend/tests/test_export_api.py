@@ -3,6 +3,8 @@ import io
 import json
 import zipfile
 
+from tests.api_assertions import assert_error_response
+
 
 def _zip_bytes(files: dict[str, str]) -> bytes:
     buffer = io.BytesIO()
@@ -155,12 +157,12 @@ def test_export_rejects_invalid_format(auth_client):
 
     response = _export(auth_client, repository_id, "review", "xml")
 
-    assert response.status_code == 422
-    assert response.json()["code"] == "request_validation_error"
+    error = assert_error_response(response, 422, "request_validation_error")
+    assert error.details is not None
+    assert "errors" in error.details
 
 
 def test_export_missing_repository_returns_not_found(auth_client):
     response = _export(auth_client, "00000000-0000-0000-0000-000000000000", "review", "json")
 
-    assert response.status_code == 404
-    assert response.json()["code"] == "not_found"
+    assert_error_response(response, 404, "not_found")

@@ -10,6 +10,7 @@ import uuid
 
 from sqlalchemy import select
 
+from tests.api_assertions import assert_error_response
 from tests.conftest import register_user
 
 
@@ -84,6 +85,18 @@ def test_delete_returns_404_for_another_users_repository(client, make_auth_heade
         assert db.scalars(select(RepositoryRecord).where(RepositoryRecord.id == repository_id)).first() is not None
     finally:
         db.close()
+
+
+def test_owner_can_delete_a_repository(client, make_auth_headers):
+    alice = make_auth_headers("alice@example.com")
+    repository_id = _seed_repository(alice["user"]["id"])
+
+    deleted = client.delete(f"/repositories/{repository_id}", headers=alice["headers"])
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+
+    missing = client.get(f"/repositories/{repository_id}", headers=alice["headers"])
+    assert_error_response(missing, 404, "not_found")
 
 
 def test_unauthenticated_repository_access_is_rejected(client):

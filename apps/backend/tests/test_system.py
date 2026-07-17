@@ -127,6 +127,10 @@ def test_unhandled_errors_use_standard_shape():
         "details": None,
         "request_id": response.headers["X-Request-ID"],
     }
+    body = response.text.lower()
+    assert "boom" not in body
+    assert "runtimeerror" not in body
+    assert "traceback" not in body
 
 
 def test_json_logging_includes_structured_fields(capsys):

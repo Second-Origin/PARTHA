@@ -12,6 +12,7 @@ import zipfile
 
 from sqlalchemy import select
 
+from tests.api_assertions import assert_error_response
 from tests.conftest import register_user
 
 
@@ -74,6 +75,21 @@ def _fresh_key() -> str:
 # --- no-leak API contract ------------------------------------------------------
 
 
+def test_ai_config_starts_empty_for_a_new_user(client):
+    auth = register_user(client, "empty-config@example.com")
+
+    response = client.get("/ai/config", headers=auth["headers"])
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": None,
+        "model": None,
+        "baseUrl": None,
+        "hasApiKey": False,
+        "apiKeyLast4": None,
+    }
+
+
 def test_saved_key_is_encrypted_at_rest_and_never_returned_in_full(client):
     auth = register_user(client, "keys@example.com")
     save = client.put(
@@ -87,7 +103,9 @@ def test_saved_key_is_encrypted_at_rest_and_never_returned_in_full(client):
     assert body["apiKeyLast4"] == "1234"
     assert "sk-secret-ABCD1234" not in json.dumps(body)
 
-    got = client.get("/ai/config", headers=auth["headers"]).json()
+    get_response = client.get("/ai/config", headers=auth["headers"])
+    assert get_response.status_code == 200
+    got = get_response.json()
     assert got["hasApiKey"] is True
     assert got["apiKeyLast4"] == "1234"
     assert "sk-secret-ABCD1234" not in json.dumps(got)
@@ -160,10 +178,8 @@ def test_provider_config_is_scoped_per_user(client, make_auth_headers):
 def test_missing_key_for_new_provider_is_a_clear_error(client):
     auth = register_user(client, "missing@example.com")
     response = client.put("/ai/config", json={"provider": "openai"}, headers=auth["headers"])
-    assert response.status_code == 422
-    body = response.json()
-    assert body["code"] == "validation_error"
-    assert "API key is required" in body["message"]
+    error = assert_error_response(response, 422, "validation_error")
+    assert "API key is required" in error.message
 
 
 def test_saving_without_key_carries_the_existing_key_forward(client):
@@ -192,5 +208,5 @@ def test_ai_query_without_provider_config_returns_a_clear_error(client):
         json={"repositoryId": repository_id, "query": "Summarize this repo"},
         headers=auth["headers"],
     )
-    assert response.status_code == 422
-    assert "not configured" in response.json()["message"].lower()
+    error = assert_error_response(response, 422, "validation_error")
+    assert "not configured" in error.message.lower()
