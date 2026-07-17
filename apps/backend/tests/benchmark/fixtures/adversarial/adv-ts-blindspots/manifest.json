@@ -15,9 +15,13 @@
       {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
        "evidence": [{"path": "src/dynamic.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
       {"nodeKind": "file", "stableKey": "file:src/dynamic.ts", "name": "dynamic.ts", "language": "typescript", "constructs": ["ts.module"],
-       "evidence": [{"path": "src/dynamic.ts", "startLine": 1, "endLine": 8, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]}
+       "evidence": [{"path": "src/dynamic.ts", "startLine": 1, "endLine": 8, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind":"module","stableKey":"mod:src","name":"src","constructs":["ts.directory_module"],"evidence":[{"path":"src/dynamic.ts","startLine":1,"endLine":8,"granularity":"file","extractor":"typescript-ast","extractorVersion":"1.0.0"}]},
+      {"nodeKind":"symbol","stableKey":"src/dynamic.ts::load","name":"load","language":"typescript","constructs":["ts.function"],"evidence":[{"path":"src/dynamic.ts","startLine":5,"endLine":7,"extractor":"typescript-ast","extractorVersion":"1.0.0"}]}
     ],
-    "edges": [], "observations": [], "assertions": [],
+    "edges": [], "observations": [
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/dynamic.ts::load","ordinal":1,"constructs":["ts.function"],"evidence":{"path":"src/dynamic.ts","startLine":5,"endLine":7,"extractor":"typescript-ast","extractorVersion":"1.0.0"}}
+    ], "assertions": [],
     "diagnostics": [
       {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info",
        "message": "TypeScript namespace is outside the support matrix.", "producer": "typescript-ast@1.0.0",

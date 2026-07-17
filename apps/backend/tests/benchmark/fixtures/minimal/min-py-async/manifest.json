@@ -14,11 +14,16 @@
     "nodes": [
       {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
        "evidence": [{"path": "src/tasks.py", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
-      {"nodeKind": "file", "stableKey": "file:src/tasks.py", "name": "tasks.py", "language": "python", "constructs": ["py.module"],
+      {"nodeKind": "file", "stableKey": "file:src/tasks.py", "name": "tasks.py", "language": "python", "constructs": ["src.file"],
        "evidence": [{"path": "src/tasks.py", "startLine": 1, "endLine": 3, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "module", "stableKey": "mod:src", "name": "src", "constructs": ["py.module"],
+       "evidence": [{"path": "src/tasks.py", "startLine": 1, "endLine": 3, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/tasks.py::fetch", "name": "fetch", "language": "python", "constructs": ["py.async_function.def"],
        "evidence": [{"path": "src/tasks.py", "startLine": 1, "endLine": 2, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
     ],
-    "edges": [], "observations": [], "assertions": [], "diagnostics": []
+    "edges": [], "observations": [
+      {"observedKind": "definition", "subjectKind": "symbol", "subjectKey": "src/tasks.py::fetch", "ordinal": 1, "constructs": ["py.async_function.def"],
+       "evidence": {"path": "src/tasks.py", "startLine": 1, "endLine": 2, "extractor": "python-ast", "extractorVersion": "1.0.0"}}
+    ], "assertions": [], "diagnostics": []
   }
 }

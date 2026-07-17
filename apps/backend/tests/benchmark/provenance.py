@@ -2,8 +2,8 @@
 
 For every fact that carries evidence, this independently re-derives the RFC-0001
 §6.2 checks from the *stored bytes* — it does not trust the loader or the fact
-model. That makes it (a) a real gate on the golden corpus now and (b) the exact
-validator that runs over a live extractor's citations once #89/#90 merge.
+model. The same validator gates both the independently authored golden corpus and
+every citation emitted by the real extractors.
 
 A citation is valid iff:
 

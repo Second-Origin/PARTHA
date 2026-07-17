@@ -15,18 +15,18 @@
       {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
        "evidence": [{"path": "src/server.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
       {"nodeKind": "file", "stableKey": "file:src/server.ts", "name": "server.ts", "language": "typescript", "constructs": ["ts.module"],
-       "evidence": [{"path": "src/server.ts", "startLine": 1, "endLine": 8, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
-      {"nodeKind": "symbol", "stableKey": "src/server.ts::start", "name": "start", "language": "typescript", "constructs": ["ts.function"],
+       "evidence": [{"path": "src/server.ts", "startLine": 1, "endLine": 8, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind":"module","stableKey":"mod:src","name":"src","constructs":["ts.directory_module"],"evidence":[{"path":"src/server.ts","startLine":1,"endLine":8,"granularity":"file","extractor":"typescript-ast","extractorVersion":"1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/server.ts::start", "name": "start", "language": "typescript", "properties": {"exported": true}, "constructs": ["ts.function", "ts.export"],
        "evidence": [{"path": "src/server.ts", "startLine": 3, "endLine": 5, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]}
+      ,{"nodeKind":"symbol","stableKey":"src/server.ts::server","name":"server","language":"typescript","properties":{"exported":true},"constructs":["ts.const","ts.export"],"evidence":[{"path":"src/server.ts","startLine":7,"endLine":7,"extractor":"typescript-ast","extractorVersion":"1.0.0"}]}
     ],
     "edges": [],
     "observations": [
-      {"observedKind": "imports", "subjectKind": "file", "subjectKey": "file:src/server.ts", "referentText": "http.createServer", "constructs": ["ts.import"],
+      {"observedKind": "import", "subjectKind": "file", "subjectKey": "file:src/server.ts", "referentText": "http", "ordinal": 1, "constructs": ["ts.import"],
        "evidence": {"path": "src/server.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}},
-      {"observedKind": "exports", "subjectKind": "file", "subjectKey": "file:src/server.ts", "referentText": "start", "constructs": ["ts.export"],
-       "evidence": {"path": "src/server.ts", "startLine": 3, "endLine": 3, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}},
-      {"observedKind": "exports", "subjectKind": "file", "subjectKey": "file:src/server.ts", "referentText": "server", "constructs": ["ts.export"],
-       "evidence": {"path": "src/server.ts", "startLine": 7, "endLine": 7, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}}
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/server.ts::start","ordinal":1,"constructs":["ts.function","ts.export"],"evidence":{"path":"src/server.ts","startLine":3,"endLine":5,"extractor":"typescript-ast","extractorVersion":"1.0.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/server.ts::server","ordinal":1,"constructs":["ts.const","ts.export"],"evidence":{"path":"src/server.ts","startLine":7,"endLine":7,"extractor":"typescript-ast","extractorVersion":"1.0.0"}}
     ],
     "assertions": [], "diagnostics": []
   }

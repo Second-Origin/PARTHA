@@ -16,9 +16,13 @@ SUPPORT_MATRIX: dict[str, LanguageSupport] = {
     ),
     "typescript": LanguageSupport(
         supported=(
-            "file", "import", "export", "function", "class", "method",
+            "file", "module", "import", "export", "function", "class", "method",
             "interface", "type", "enum", "const", "route",
         ),
         unsupported=("dynamic-import", "decorator", "namespace", "commonjs-require", "ambient-module"),
+    ),
+    "source": LanguageSupport(
+        supported=("repository", "file", "empty-file", "trailing-newline"),
+        unsupported=("binary-file", "malformed-source", "large-file", "path-escape"),
     ),
 }

@@ -13,13 +13,8 @@ leaks into the product. It exercises the *real* merged contracts:
 - ``app.intelligence.snapshot_store`` / ``app.models.snapshot`` — the immutable
   ``ri.v1`` ``SnapshotStore`` (RFC-0001 §11).
 
-Dependency status (see ``README.md`` and the PR description): the syntax-aware
-TypeScript/Python extractors and their published support matrices land in
-**#89/#90**, which are not merged into ``dev`` yet. Everything here that depends
-only on the merged #86 evidence contract and #88 persistence is implemented and
-enforced now (fixtures, expected facts, the scorer, provenance validity, and
-determinism). Live precision/recall scoring plugs a real extractor into the
-:mod:`benchmark.adapter` boundary once #89/#90 merge; until then that stage is
-reported as ``deferred`` and is never green-washed into a fabricated perfect
-score.
+The default :mod:`benchmark.adapter` runs the merged Python and TypeScript
+extractors through the production source-policy pipeline. Every run therefore
+enforces measured precision, recall, golden and real-emission citation validity,
+support-matrix parity, and repeated-real-extraction snapshot determinism.
 """

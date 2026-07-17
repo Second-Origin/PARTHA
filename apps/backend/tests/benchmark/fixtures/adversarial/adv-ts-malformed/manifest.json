@@ -15,7 +15,7 @@
     "diagnostics": [
       {"code": "RI-SRC-MALFORMED", "category": "malformed source", "severity": "error",
        "message": "src/broken.ts could not be parsed.", "producer": "typescript-ast@1.0.0",
-       "path": "src/broken.ts", "span": {"startLine": 1, "endLine": 1}, "subject": "file:src/broken.ts", "constructs": ["ts.syntax_error"]}
+       "path": "src/broken.ts", "subject": "file:src/broken.ts", "constructs": ["ts.syntax_error"]}
     ]
   }
 }

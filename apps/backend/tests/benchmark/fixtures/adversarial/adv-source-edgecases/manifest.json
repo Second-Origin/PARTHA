@@ -3,25 +3,27 @@
   "fixtureId": "adv-source-edgecases",
   "fixtureClass": "adversarial",
   "language": "mixed",
-  "title": "Adversarial — binary, oversized, and path-escape source",
-  "description": "A committed small binary file (NUL byte) plus manifest-declared oversized and path-escaping cases represented as diagnostics — no huge file or unsafe path is committed. Exercises src.binary_file, src.large_file, src.path_escape.",
+  "title": "Adversarial source policy — binary, size limit, and path escape",
+  "description": "Stored bytes exercise the real repository source-policy layer with a fixture-specific 64-byte budget and a safe POSIX filename containing a backslash that normalizes to an escaping path.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
   "producerVersionSet": ["repository-inventory@1.0.0"],
+  "maxSourceBytes": 64,
   "constructsCovered": ["src.binary_file", "src.large_file", "src.path_escape"],
   "deterministic": false,
   "expected": {
     "nodes": [], "edges": [], "observations": [], "assertions": [],
     "diagnostics": [
+      {"code": "RI-SEC-PATH-ESCAPE", "category": "path escape", "severity": "error",
+       "message": "source path is absolute or escapes the repository root", "producer": "repository-inventory@1.0.0",
+       "constructs": ["src.path_escape"]},
       {"code": "RI-SRC-BINARY", "category": "binary source", "severity": "info",
-       "message": "blob.bin contains a NUL byte and is excluded from line extraction.", "producer": "repository-inventory@1.0.0",
+       "message": "file contains a NUL byte and is excluded from line-addressed extraction", "producer": "repository-inventory@1.0.0",
        "path": "blob.bin", "subject": "file:blob.bin", "constructs": ["src.binary_file"]},
       {"code": "RI-LIMIT-SKIP", "category": "resource-limit skip", "severity": "info",
-       "message": "src/huge.generated.js exceeds the file-size budget and was skipped.", "producer": "repository-inventory@1.0.0",
-       "details": {"budgetBytes": 524288, "reportedBytes": 1048576}, "constructs": ["src.large_file"]},
-      {"code": "RI-SEC-PATH-ESCAPE", "category": "path escape", "severity": "warning",
-       "message": "An entry escaped the repository root and produced no node.", "producer": "repository-inventory@1.0.0",
-       "details": {"attemptedPath": "../../etc/passwd"}, "constructs": ["src.path_escape"]}
+       "message": "file exceeds the configured source-size budget", "producer": "repository-inventory@1.0.0",
+       "path": "src/large.py", "subject": "file:src/large.py",
+       "details": {"budgetBytes": 64, "reportedBytes": 96}, "constructs": ["src.large_file"]}
     ]
   }
 }

@@ -172,6 +172,9 @@ class PythonExtractor:
                         severity="error",
                         message="file could not be parsed as Python",
                         path=canonical.normalize_repo_path(path),
+                        subject=canonical.normalize_stable_key(
+                            "file", f"file:{canonical.normalize_repo_path(path)}"
+                        ),
                     ),
                 )
             )
@@ -424,6 +427,7 @@ class PythonExtractor:
 
     def _collect_blind_spots(self, tree, path, line_count, diagnostics) -> None:
         normalized = canonical.normalize_repo_path(path)
+        file_subject = canonical.normalize_stable_key("file", f"file:{normalized}")
 
         def flag(node, message: str) -> None:
             # `message` names the construct; it never quotes source. Diagnostics
@@ -438,6 +442,7 @@ class PythonExtractor:
                     message=message,
                     path=normalized,
                     span=(node.lineno, node.end_lineno or node.lineno),
+                    subject=file_subject,
                 )
             )
 

@@ -22,17 +22,24 @@ def test_full_benchmark_passes_and_reports_all_real_signals():
     assert result.determinism and all(r.deterministic for r in result.determinism)
     assert result.parity.passed
     assert result.diagnostics.passed
+    assert result.scoring.available
+    assert result.scoring.report is not None
+    assert result.scoring.report.overall.precision == 1
+    assert result.scoring.report.overall.recall == 1
+    assert result.scoring.actual_provenance is not None
+    assert result.scoring.actual_provenance.validity == 1
     # All three fixture classes and both languages are represented.
     assert set(result.corpus.by_class) == {"minimal", "realistic", "adversarial"}
     assert {"python", "typescript"} <= set(result.corpus.by_language)
 
 
-def test_precision_recall_is_deferred_not_greenwashed():
+def test_precision_recall_is_measured_by_the_real_extractors():
     result = runner.run()
-    # With no extractor merged, scoring is deferred — never a fabricated 1.0.
-    assert result.scoring.deferred
-    assert result.scoring.report is None
-    # A deferred stage must not, by itself, fail the build.
+    assert result.scoring.available
+    assert result.scoring.report is not None
+    assert result.scoring.report.overall.true_positives > 0
+    assert result.scoring.report.false_positives == []
+    assert result.scoring.report.false_negatives == []
     assert result.scoring_gate_passed
 
 
@@ -42,9 +49,19 @@ def test_reports_are_deterministic_and_serialisable():
     assert first == second, "JSON report must be byte-stable across runs"
     payload = json.loads(first)
     assert payload["result"] == "pass"
-    assert payload["provenance"]["validity"] == "1.0000"
+    assert payload["goldenFixtureProvenance"]["validity"] == "1.0000"
+    assert payload["scoring"]["status"] == "scored"
+    assert payload["scoring"]["realExtractorProvenance"]["validity"] == "1.0000"
+    assert "deferred" not in first.lower()
+    assert "unavailable" not in first.lower()
     markdown = report_module.to_markdown(runner.run())
     assert "Repository Intelligence Golden Benchmark" in markdown
+    assert "lang:python" in markdown
+    assert "class:adversarial" in markdown
+    assert "False positives" in markdown
+    assert "False negatives" in markdown
+    assert "deferred" not in markdown.lower()
+    assert "unavailable" not in markdown.lower()
 
 
 def test_write_reports_emits_both_files(tmp_path: Path):
