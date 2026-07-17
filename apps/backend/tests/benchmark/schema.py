@@ -22,6 +22,12 @@ REVISION_IDENTITY_METHODS = ("upload-sha256",)
 # ``ri.v1`` output kinds the manifest may declare under ``expected``.
 FACT_GROUPS = ("nodes", "edges", "observations", "assertions", "diagnostics")
 
+# Optional UTF-8 source entries injected into a fixture's stored revision. This
+# permits adversarial raw paths that a host filesystem cannot materialize (for
+# example a Windows-invalid backslash path) without weakening source-policy
+# coverage or making the repository un-checkout-able on that host.
+SYNTHETIC_FILES_FIELD = "syntheticFiles"
+
 # RFC-0001 §8.2 diagnostic codes (the ``ri.v1`` baseline set).
 DIAGNOSTIC_CODES = frozenset(
     {

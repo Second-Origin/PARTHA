@@ -107,6 +107,40 @@ def test_sanity_base_manifest_loads(tmp_path: Path):
     assert symbol.language == "python"
 
 
+def test_manifest_synthetic_sources_are_deterministic_and_do_not_need_host_paths(tmp_path: Path):
+    manifest = _base_manifest()
+    manifest["syntheticFiles"] = {
+        "z-last.txt": "last\n",
+        "..\\escape.py": "def must_not_extract():\n    pass\n",
+    }
+    directory = _write_fixture(tmp_path, manifest)
+
+    first = load_fixture(directory, SUPPORT_MATRIX)
+    second = load_fixture(directory, SUPPORT_MATRIX)
+
+    assert list(first.source_files()) == ["..\\escape.py", "README.md", "src/a.py", "z-last.txt"]
+    assert first.source_files()["..\\escape.py"] == b"def must_not_extract():\n    pass\n"
+    assert first.revision_value() == second.revision_value()
+
+
+@pytest.mark.parametrize(
+    "synthetic_files, message",
+    [
+        ([], "syntheticFiles must be an object"),
+        ({"": "text"}, "synthetic source path must be a non-empty"),
+        ({"README.md": "duplicate"}, "duplicates a stored file"),
+        ({"src/synthetic.py": 7}, "must be UTF-8 text"),
+    ],
+)
+def test_loader_rejects_invalid_synthetic_sources(tmp_path: Path, synthetic_files, message: str):
+    manifest = _base_manifest()
+    manifest["syntheticFiles"] = synthetic_files
+    directory = _write_fixture(tmp_path, manifest)
+
+    with pytest.raises(ManifestError, match=message):
+        load_fixture(directory, SUPPORT_MATRIX)
+
+
 @pytest.mark.parametrize(
     "mutate, message",
     [

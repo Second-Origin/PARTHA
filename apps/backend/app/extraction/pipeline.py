@@ -4,8 +4,9 @@ This module is the production boundary that turns a stored repository revision
 into extractor runs.  It does not parse source: Python and TypeScript parsing is
 delegated exclusively to their real :class:`Extractor` implementations.  The
 pipeline owns the repository-wide concerns that no single language extractor
-can own: inventory nodes, path normalization, and the output-affecting file-size
-budget required by RFC-0001 sections 6.2, 8.2, and 12.7.
+can own: inventory nodes, the mandatory repository root, path normalization,
+and the output-affecting file-size budget required by RFC-0001 sections 4.3,
+6.2, 8.2, and 12.7.
 """
 
 from __future__ import annotations
@@ -80,6 +81,16 @@ class ExtractionPipeline:
                 )
                 continue
 
+            # The mandatory repository entity is an observed fact, so it needs
+            # valid stored-source evidence even when language extraction later
+            # reports a non-fatal diagnostic and emits no file-level facts.
+            # Establish that evidence before the parser and size-policy branches
+            # to keep a diagnostics-only text repository sealable.
+            if repository_evidence is None:
+                evidence = self._whole_file_evidence(path, source)
+                if evidence is not None:
+                    repository_evidence = self._repo_evidence(evidence)
+
             file_key = canonical.normalize_stable_key("file", f"file:{path}")
             if len(source) > self.max_source_bytes:
                 inventory_diagnostics.append(
@@ -120,15 +131,6 @@ class ExtractionPipeline:
                         inventory_nodes.append(
                             self._file_node(path, evidence, self._language(path))
                         )
-                        repository_evidence = repository_evidence or self._repo_evidence(
-                            evidence
-                        )
-                elif result.nodes:
-                    evidence = self._whole_file_evidence(path, source)
-                    if evidence is not None:
-                        repository_evidence = repository_evidence or self._repo_evidence(
-                            evidence
-                        )
                 continue
 
             text, diagnostic = decode_source(
@@ -159,7 +161,6 @@ class ExtractionPipeline:
                 granularity="file",
             )
             inventory_nodes.append(self._file_node(path, evidence, self._language(path)))
-            repository_evidence = repository_evidence or self._repo_evidence(evidence)
 
         if repository_evidence is not None:
             inventory_nodes.insert(

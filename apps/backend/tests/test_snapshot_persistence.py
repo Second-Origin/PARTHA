@@ -9,6 +9,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import register_sqlite_foreign_key_enforcement
+from app.extraction.pipeline import ExtractionPipeline
+from app.extraction.python import PythonExtractor
 from app.intelligence import canonical
 from app.intelligence.snapshot_store import (
     Evidence,
@@ -449,6 +451,59 @@ def test_fatal_diagnostic_fails_snapshot_but_nonfatal_diagnostic_can_seal(db):
     )
     assert diagnostic.details["candidates"] == ["src/a.py::target", "src/z.py::target"]
     assert store.seal(nonfatal).state == "completed"
+
+
+def test_diagnostics_only_real_extraction_emits_root_and_seals(db):
+    """A non-fatal parse error must not violate the mandatory root invariant."""
+
+    session, _ = db
+    repository = _repository(session, _owner(session))
+    runs = ExtractionPipeline((PythonExtractor(),)).run(
+        {"src/broken.py": b"def broken(:\n    return\n"}
+    )
+    producers = [run.producer for run in runs]
+    store = SnapshotStore(session)
+    snapshot = _begin(store, repository, producer_version_set=producers)
+
+    for run in runs:
+        for node in run.result.nodes:
+            store.add_node(
+                snapshot,
+                node_kind=node.node_kind,
+                stable_key=node.stable_key,
+                name=node.name,
+                language=node.language,
+                properties=node.properties,
+                evidence=[
+                    Evidence(
+                        path=evidence.path,
+                        start_line=evidence.start_line,
+                        end_line=evidence.end_line,
+                        extractor=run.producer_name,
+                        extractor_version=run.producer_version,
+                        logical_line_count=evidence.logical_line_count,
+                        granularity=evidence.granularity,
+                    )
+                    for evidence in node.evidence
+                ],
+            )
+        for diagnostic in run.result.diagnostics:
+            store.add_diagnostic(
+                snapshot,
+                code=diagnostic.code,
+                category=diagnostic.category,
+                severity=diagnostic.severity,
+                message=diagnostic.message,
+                producer=run.producer,
+                path=diagnostic.path,
+                span=diagnostic.span,
+                subject=diagnostic.subject,
+                details=diagnostic.details,
+            )
+
+    assert [node.stable_key for run in runs for node in run.result.nodes] == ["repo:root"]
+    assert [diagnostic.code for run in runs for diagnostic in run.result.diagnostics] == ["RI-SRC-MALFORMED"]
+    assert store.seal(snapshot).state == "completed"
 
 
 def test_every_completed_snapshot_mutation_route_is_rejected(db):

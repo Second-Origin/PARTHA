@@ -4,15 +4,19 @@
   "fixtureClass": "adversarial",
   "language": "mixed",
   "title": "Adversarial source policy — binary, size limit, and path escape",
-  "description": "Stored bytes exercise the real repository source-policy layer with a fixture-specific 64-byte budget and a safe POSIX filename containing a backslash that normalizes to an escaping path.",
+  "description": "Stored bytes exercise the real repository source-policy layer with a fixture-specific 64-byte budget and a manifest-declared raw escape path that no host filesystem must materialize.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
   "producerVersionSet": ["repository-inventory@1.0.0"],
   "maxSourceBytes": 64,
   "constructsCovered": ["src.binary_file", "src.large_file", "src.path_escape"],
   "deterministic": false,
+  "syntheticFiles": {"..\\escape.py": "def must_not_extract():\n    pass\n"},
   "expected": {
-    "nodes": [], "edges": [], "observations": [], "assertions": [],
+    "nodes": [
+      {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
+       "evidence": [{"path": "src/large.py", "startLine": 1, "endLine": 1, "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]}
+    ], "edges": [], "observations": [], "assertions": [],
     "diagnostics": [
       {"code": "RI-SEC-PATH-ESCAPE", "category": "path escape", "severity": "error",
        "message": "source path is absolute or escapes the repository root", "producer": "repository-inventory@1.0.0",
