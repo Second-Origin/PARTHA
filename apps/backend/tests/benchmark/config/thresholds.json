@@ -4,5 +4,5 @@
   "recall": "0.90",
   "provenanceValidity": "1.00",
   "determinism": "1.00",
-  "note": "Provisional Phase-0 acceptance bar from Issue #94. Values are exact fractions. Do NOT lower any threshold without documenting the reason on Issue #94 and obtaining maintainer agreement. precision/recall are enforced against a live extractor once #89/#90 merge; provenanceValidity and determinism are enforced now."
+  "note": "Issue #94 acceptance thresholds. Values are exact fractions and all are enforced against the real extraction workflow. Do NOT lower any threshold without documenting the reason on Issue #94 and obtaining maintainer agreement."
 }

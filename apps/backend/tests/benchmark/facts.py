@@ -76,9 +76,12 @@ class Fact:
     name: str = ""          # node display name; empty for non-node facts
     language: str = ""      # node language; empty when absent / not applicable
     referent: str = ""      # observation referent_text
+    ordinal: int = 0        # observation identity ordinal; zero when not applicable
     truth_class: str = ""   # observed | resolved | inferred
     value: str = ""         # canonical JCS of an assertion value, when relevant
     severity: str = ""      # diagnostic severity
+    category: str = ""      # diagnostic category
+    message: str = ""       # deterministic diagnostic message
     producer: str = ""      # diagnostic producer (producer@version)
     # Provenance -------------------------------------------------------------
     evidence: tuple[EvidenceSpan, ...] = ()
@@ -97,6 +100,7 @@ class Fact:
             self.name,
             self.language,
             self.referent,
+            self.ordinal,
             self.truth_class,
             self.value,
             self.severity,

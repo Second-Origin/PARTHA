@@ -33,9 +33,18 @@
         "stableKey": "file:src/greeting.py",
         "name": "greeting.py",
         "language": "python",
-        "constructs": ["py.module"],
+        "constructs": ["src.file"],
         "evidence": [
           {"path": "src/greeting.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}
+        ]
+      },
+      {
+        "nodeKind": "module",
+        "stableKey": "mod:src",
+        "name": "src",
+        "constructs": ["py.module"],
+        "evidence": [
+          {"path": "src/greeting.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.0.0"}
         ]
       },
       {
@@ -60,7 +69,10 @@
       }
     ],
     "edges": [],
-    "observations": [],
+    "observations": [
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/greeting.py::greet","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/greeting.py","startLine":1,"endLine":2,"extractor":"python-ast","extractorVersion":"1.0.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/greeting.py::farewell","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/greeting.py","startLine":5,"endLine":6,"extractor":"python-ast","extractorVersion":"1.0.0"}}
+    ],
     "assertions": [],
     "diagnostics": []
   }

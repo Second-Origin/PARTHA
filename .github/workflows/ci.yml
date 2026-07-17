@@ -142,6 +142,26 @@ jobs:
           python tests/benchmark/run.py --report-dir "$RUNNER_TEMP/ri-benchmark"
           echo "status=$?" >> "$GITHUB_OUTPUT"
 
+      - name: Validate benchmark report contract
+        if: always() && steps.ri_benchmark.outcome != 'skipped'
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report_path = Path(os.environ["RUNNER_TEMP"]) / "ri-benchmark" / "benchmark.json"
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          scoring = report.get("scoring", {})
+          if scoring.get("status") != "scored":
+              raise SystemExit("benchmark did not publish real precision/recall measurements")
+          if scoring.get("realExtractorProvenance") is None:
+              raise SystemExit("benchmark did not publish real-extractor citation validity")
+          rendered = json.dumps(report).lower()
+          if "deferred" in rendered or "unavailable" in rendered:
+              raise SystemExit("benchmark report contains a skipped live measurement")
+          PY
+
       - name: Upload benchmark reports
         if: always() && steps.ri_benchmark.outcome != 'skipped'
         uses: actions/upload-artifact@v4

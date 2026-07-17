@@ -12,7 +12,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from benchmark.runner import BenchmarkReport
-from benchmark.scorer import Counts
+from benchmark.scorer import Counts, LabeledFact
 
 
 def _ratio(value: Fraction) -> str:
@@ -29,22 +29,57 @@ def _counts_dict(counts: Counts) -> dict[str, object]:
     }
 
 
+def _citation_dict(report) -> dict[str, object]:
+    return {
+        "total": report.total,
+        "valid": report.valid_count,
+        "validity": _ratio(report.validity),
+        "invalid": [
+            {
+                "fixtureId": check.fixture_id,
+                "subject": check.subject,
+                "path": check.path,
+                "startLine": check.start_line,
+                "endLine": check.end_line,
+                "reason": check.reason,
+            }
+            for check in report.invalid
+        ],
+    }
+
+
+def _fact_dict(item: LabeledFact) -> dict[str, object]:
+    return {
+        "fixtureId": item.fixture_id,
+        "fixtureClass": item.fixture_class,
+        "language": item.language,
+        "factType": item.fact.fact_type,
+        "kind": item.fact.kind,
+        "subject": item.fact.subject,
+        "key": repr(item.fact.key()),
+    }
+
+
 def to_json_dict(report: BenchmarkReport) -> dict[str, object]:
     scoring: dict[str, object]
-    if report.scoring.deferred:
+    if not report.scoring.available or report.scoring.report is None:
         scoring = {
-            "status": "deferred",
-            "reason": "No extractor available; precision/recall scoring lands with #89/#90.",
+            "status": "unavailable",
+            "reason": "The real extraction adapter did not produce measurements.",
         }
     else:
-        assert report.scoring.report is not None
+        score_report = report.scoring.report
         scoring = {
             "status": "scored",
-            "overall": _counts_dict(report.scoring.report.overall),
-            "byLanguage": {k: _counts_dict(v) for k, v in sorted(report.scoring.report.by_language.items())},
-            "byClass": {k: _counts_dict(v) for k, v in sorted(report.scoring.report.by_class.items())},
-            "actualProvenanceValidity": (
-                _ratio(report.scoring.actual_provenance.validity) if report.scoring.actual_provenance else None
+            "overall": _counts_dict(score_report.overall),
+            "byLanguage": {k: _counts_dict(v) for k, v in sorted(score_report.by_language.items())},
+            "byClass": {k: _counts_dict(v) for k, v in sorted(score_report.by_class.items())},
+            "falsePositives": [_fact_dict(item) for item in score_report.false_positives],
+            "falseNegatives": [_fact_dict(item) for item in score_report.false_negatives],
+            "realExtractorProvenance": (
+                _citation_dict(report.scoring.actual_provenance)
+                if report.scoring.actual_provenance is not None
+                else None
             ),
         }
     return {
@@ -75,16 +110,7 @@ def to_json_dict(report: BenchmarkReport) -> dict[str, object]:
             }
             for fixture in report.fixtures
         ],
-        "provenance": {
-            "total": report.provenance.total,
-            "valid": report.provenance.valid_count,
-            "validity": _ratio(report.provenance.validity),
-            "invalid": [
-                {"fixtureId": c.fixture_id, "subject": c.subject, "path": c.path,
-                 "startLine": c.start_line, "endLine": c.end_line, "reason": c.reason}
-                for c in report.provenance.invalid
-            ],
-        },
+        "goldenFixtureProvenance": _citation_dict(report.provenance),
         "determinism": [
             {
                 "fixtureId": r.fixture_id,
@@ -119,6 +145,12 @@ def _table(header: list[str], rows: list[list[str]]) -> list[str]:
     return lines
 
 
+def _fact_label(item: LabeledFact) -> str:
+    fact = item.fact
+    identity = fact.subject or fact.referent or fact.object or fact.name or "(no subject)"
+    return f"`{item.fixture_id}` · `{fact.fact_type}:{fact.kind}` · `{identity}`"
+
+
 def to_markdown(report: BenchmarkReport) -> str:
     result = "✅ PASS" if report.passed else "❌ FAIL"
     lines: list[str] = [
@@ -134,14 +166,14 @@ def to_markdown(report: BenchmarkReport) -> str:
         *_table(
             ["Metric", "Threshold", "Enforced now?"],
             [
-                ["precision", _ratio(report.thresholds.precision), "when extractor available (#89/#90)"],
-                ["recall", _ratio(report.thresholds.recall), "when extractor available (#89/#90)"],
+                ["precision", _ratio(report.thresholds.precision), "yes"],
+                ["recall", _ratio(report.thresholds.recall), "yes"],
                 ["provenance validity", _ratio(report.thresholds.provenance_validity), "yes"],
                 ["determinism", _ratio(report.thresholds.determinism), "yes"],
             ],
         ),
         "",
-        "## Provenance / citation validity",
+        "## Golden fixture citation validity",
         "",
         f"{report.provenance.valid_count} / {report.provenance.total} citations valid "
         f"(validity **{_ratio(report.provenance.validity)}**).",
@@ -158,13 +190,18 @@ def to_markdown(report: BenchmarkReport) -> str:
             )
         )
 
-    lines += ["", "## Snapshot determinism", ""]
+    lines += ["", "## Real-extraction determinism", ""]
     if report.determinism:
         lines.extend(
             _table(
-                ["Fixture", "Deterministic", "Canonical graph hash"],
+                ["Fixture", "Deterministic", "Sealed hash A", "Sealed hash B"],
                 [
-                    [r.fixture_id, "yes" if r.deterministic else "**NO**", f"`{r.sealed_hash_a}`"]
+                    [
+                        r.fixture_id,
+                        "yes" if r.deterministic else "**NO**",
+                        f"`{r.sealed_hash_a}`",
+                        f"`{r.sealed_hash_b}`",
+                    ]
                     for r in report.determinism
                 ],
             )
@@ -181,15 +218,11 @@ def to_markdown(report: BenchmarkReport) -> str:
     )
 
     lines += ["", "## Extraction quality (precision / recall)", ""]
-    if report.scoring.deferred:
-        lines.append(
-            "> **Deferred.** No Repository Intelligence extractor is merged yet. Precision/recall "
-            "scoring plugs into the adapter boundary once **#89/#90** merge their extractors and "
-            "support matrices; it is intentionally **not** scored against the golden facts themselves."
-        )
+    if not report.scoring.available or report.scoring.report is None:
+        lines.append("**Unavailable:** the real extraction adapter did not produce measurements.")
     else:
-        assert report.scoring.report is not None
-        overall = report.scoring.report.overall
+        score_report = report.scoring.report
+        overall = score_report.overall
         lines.extend(
             _table(
                 ["Scope", "TP", "FP", "FN", "Precision", "Recall"],
@@ -198,10 +231,45 @@ def to_markdown(report: BenchmarkReport) -> str:
                 + [
                     [f"lang:{lang}", str(c.true_positives), str(c.false_positives), str(c.false_negatives),
                      _ratio(c.precision), _ratio(c.recall)]
-                    for lang, c in sorted(report.scoring.report.by_language.items())
+                    for lang, c in sorted(score_report.by_language.items())
+                ]
+                + [
+                    [f"class:{fixture_class}", str(c.true_positives), str(c.false_positives),
+                     str(c.false_negatives), _ratio(c.precision), _ratio(c.recall)]
+                    for fixture_class, c in sorted(score_report.by_class.items())
                 ],
             )
         )
+        actual_provenance = report.scoring.actual_provenance
+        lines += ["", "## Real extractor citation validity", ""]
+        if actual_provenance is None:
+            lines.append("**Unavailable:** no real-extractor citation validation result was produced.")
+        else:
+            lines.append(
+                f"{actual_provenance.valid_count} / {actual_provenance.total} citations valid "
+                f"(validity **{_ratio(actual_provenance.validity)}**)."
+            )
+            if actual_provenance.invalid:
+                lines.extend(
+                    ["", *_table(
+                        ["Fixture", "Subject", "Path", "Span", "Reason"],
+                        [
+                            [c.fixture_id, c.subject, c.path, f"{c.start_line}..{c.end_line}", c.reason]
+                            for c in actual_provenance.invalid
+                        ],
+                    )]
+                )
+
+        lines += ["", "## False positives", ""]
+        if score_report.false_positives:
+            lines.extend(f"- {_fact_label(item)}" for item in score_report.false_positives)
+        else:
+            lines.append("_None._")
+        lines += ["", "## False negatives", ""]
+        if score_report.false_negatives:
+            lines.extend(f"- {_fact_label(item)}" for item in score_report.false_negatives)
+        else:
+            lines.append("_None._")
 
     failures = report.failures()
     lines += ["", "## Failures", ""]
@@ -215,13 +283,25 @@ def to_markdown(report: BenchmarkReport) -> str:
 
 def to_step_summary(report: BenchmarkReport) -> str:
     status = "PASS ✅" if report.passed else "FAIL ❌"
-    scoring = "deferred (#89/#90)" if report.scoring.deferred else "scored"
+    if report.scoring.report is None:
+        scoring = "unavailable"
+    else:
+        overall = report.scoring.report.overall
+        scoring = f"precision {_ratio(overall.precision)}, recall {_ratio(overall.recall)}"
+    actual_provenance = report.scoring.actual_provenance
+    actual_citations = (
+        f"{_ratio(actual_provenance.validity)} ({actual_provenance.valid_count}/{actual_provenance.total})"
+        if actual_provenance is not None
+        else "unavailable"
+    )
     return (
         f"### RI Golden Benchmark: {status}\n\n"
         f"- Fixtures: {report.corpus.total}\n"
-        f"- Provenance validity: {_ratio(report.provenance.validity)} "
+        f"- Golden fixture citation validity: {_ratio(report.provenance.validity)} "
         f"({report.provenance.valid_count}/{report.provenance.total})\n"
-        f"- Determinism: {sum(1 for r in report.determinism if r.deterministic)}/{len(report.determinism)} stable\n"
+        f"- Real extractor citation validity: {actual_citations}\n"
+        f"- Real-extraction determinism: "
+        f"{sum(1 for r in report.determinism if r.deterministic)}/{len(report.determinism)} stable\n"
         f"- Support-matrix parity: {'pass' if report.parity.passed else 'fail'}\n"
         f"- Precision/recall: {scoring}\n"
     )
@@ -231,13 +311,25 @@ def to_console_summary(report: BenchmarkReport) -> str:
     """Render the step summary with ASCII-only status markers for local consoles."""
 
     status = "PASS" if report.passed else "FAIL"
-    scoring = "deferred (#89/#90)" if report.scoring.deferred else "scored"
+    if report.scoring.report is None:
+        scoring = "unavailable"
+    else:
+        overall = report.scoring.report.overall
+        scoring = f"precision {_ratio(overall.precision)}, recall {_ratio(overall.recall)}"
+    actual_provenance = report.scoring.actual_provenance
+    actual_citations = (
+        f"{_ratio(actual_provenance.validity)} ({actual_provenance.valid_count}/{actual_provenance.total})"
+        if actual_provenance is not None
+        else "unavailable"
+    )
     return (
         f"RI Golden Benchmark: {status}\n"
         f"- Fixtures: {report.corpus.total}\n"
-        f"- Provenance validity: {_ratio(report.provenance.validity)} "
+        f"- Golden fixture citation validity: {_ratio(report.provenance.validity)} "
         f"({report.provenance.valid_count}/{report.provenance.total})\n"
-        f"- Determinism: {sum(1 for r in report.determinism if r.deterministic)}/{len(report.determinism)} stable\n"
+        f"- Real extractor citation validity: {actual_citations}\n"
+        f"- Real-extraction determinism: "
+        f"{sum(1 for r in report.determinism if r.deterministic)}/{len(report.determinism)} stable\n"
         f"- Support-matrix parity: {'pass' if report.parity.passed else 'fail'}\n"
         f"- Precision/recall: {scoring}\n"
     )

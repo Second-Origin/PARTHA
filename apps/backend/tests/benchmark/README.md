@@ -6,30 +6,24 @@ and recall, citation/provenance validity, and snapshot-hash determinism. It is
 the regression guard that answers "is the repository model actually correct?",
 which a green test suite alone cannot.
 
-> **Scope / honesty note.** The syntax-aware TypeScript and Python extractors and
-> their published support matrices land in **#89 / #90**, which are **not merged
-> into `dev`** yet. This change implements everything that depends only on the
-> merged #86 evidence contract and #88 `SnapshotStore`: the fixture corpus,
-> independently-derived expected facts, the scorer, provenance validity, and
-> determinism. **Precision/recall against a live extractor is deferred**: it plugs
-> into the [`adapter.py`](adapter.py) boundary when #89/#90 merge, and is reported
-> as `deferred` — never scored against the golden facts themselves, which would
-> manufacture a meaningless perfect score. This benchmark does **not** prove the
-> extractors are good yet; it proves the *corpus* and the *measurement machinery*
-> are correct and ready to hold them to account.
+The default runner sends every applicable fixture's stored bytes through the
+production source-policy pipeline and the merged Python and TypeScript
+extractors. It compares only real emitted nodes, observations, and diagnostics
+with the independently authored golden facts; it never copies expected output
+into the actual side.
 
 ## Where things live
 
 | Path | What it is |
 | --- | --- |
 | [`fixtures/{minimal,realistic,adversarial}/`](fixtures) | The versioned golden corpus: synthetic source + a `manifest.json` of expected facts per fixture. |
-| [`config/benchmark_support_matrix.json`](config/benchmark_support_matrix.json) | The construct taxonomy (**provisional**, benchmark-owned; reconcile with #89/#90). |
+| [`config/benchmark_support_matrix.json`](config/benchmark_support_matrix.json) | The benchmark construct taxonomy and validated mapping to every production support-matrix entry. |
 | [`config/thresholds.json`](config/thresholds.json) | The versioned, exact-fraction acceptance thresholds. |
 | [`facts.py`](facts.py) / [`scorer.py`](scorer.py) | The fact model and precision/recall scorer. |
 | [`loader.py`](loader.py) / [`schema.py`](schema.py) | Strict manifest loading and validation. |
 | [`provenance.py`](provenance.py) | Citation validity against the stored revision (RFC-0001 §6.2). |
-| [`determinism.py`](determinism.py) | Real `SnapshotStore` + canonical-hash determinism. |
-| [`adapter.py`](adapter.py) | The seam where the real #89/#90 extractors plug in. |
+| [`determinism.py`](determinism.py) | Repeated real extraction persisted through `SnapshotStore`, with canonical-hash determinism. |
+| [`adapter.py`](adapter.py) | Exact conversion from real extractor results to comparable benchmark facts. |
 | [`runner.py`](runner.py) / [`report.py`](report.py) / [`run.py`](run.py) | Orchestration, gating, and Markdown/JSON reports. |
 
 ## Running it locally
@@ -81,13 +75,13 @@ recall    = TP / (TP + FN)          (= 1 when TP + FN = 0, i.e. nothing expected
 ```
 
 Counting is multiset-aware, so a duplicate emission is one TP and one FP. The
-thresholds (`config/thresholds.json`) are the provisional Phase-0 bar from Issue
+thresholds (`config/thresholds.json`) are the enforced acceptance bar from Issue
 #94:
 
 | Metric | Threshold | Enforced today? |
 | --- | --- | --- |
-| precision | ≥ 0.95 | when an extractor is available (#89/#90) |
-| recall | ≥ 0.90 | when an extractor is available (#89/#90) |
+| precision | ≥ 0.95 | **yes** |
+| recall | ≥ 0.90 | **yes** |
 | provenance validity | = 1.00 | **yes** |
 | determinism | = 1.00 | **yes** |
 
@@ -127,13 +121,18 @@ invariant and failure-path test) and then a dedicated step runs
 `ri-golden-benchmark` artifact (even on failure), writes a summary to the job
 page, and fails the job when the benchmark is below threshold.
 
-## What #94 does and does not prove
+## What #94 proves
 
-- **Does:** the golden corpus is internally valid, every golden citation resolves
-  to a real span in the stored revision, the real snapshot pipeline is
-  deterministic over that corpus, the scorer is correct, and the whole gate fails
-  a bad extractor, invalid citation, broken manifest, or non-deterministic build.
-- **Does not (yet):** measure real extraction precision/recall — no extractor is
-  merged. It also does not imply product output is generally evidence-backed; the
-  production engine still emits file-level evidence only (see
-  [`docs/architecture/REPOSITORY_INTELLIGENCE.md`](../../../../docs/architecture/REPOSITORY_INTELLIGENCE.md)).
+- the golden corpus is internally valid and every golden citation resolves to
+  the stored revision;
+- the real extractor output meets the configured precision and recall gates;
+- every citation emitted by the real extractors is valid;
+- repeated real extraction, including reversed insertion order, seals to the
+  same product canonical graph hash;
+- support-matrix drift, duplicate/cross-fixture facts, invalid citations, bad
+  precision/recall, and nondeterminism fail the build.
+
+This benchmark does not claim the legacy product ingestion path has migrated to
+the normalized snapshot graph. That orchestration and consumer cutover remain
+separate work; see
+[`docs/architecture/REPOSITORY_INTELLIGENCE.md`](../../../../docs/architecture/REPOSITORY_INTELLIGENCE.md).

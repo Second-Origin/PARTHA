@@ -14,8 +14,10 @@
     "nodes": [
       {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
        "evidence": [{"path": "src/models.py", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
-      {"nodeKind": "file", "stableKey": "file:src/models.py", "name": "models.py", "language": "python", "constructs": ["py.module"],
+      {"nodeKind": "file", "stableKey": "file:src/models.py", "name": "models.py", "language": "python", "constructs": ["src.file"],
        "evidence": [{"path": "src/models.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "module", "stableKey": "mod:src", "name": "src", "constructs": ["py.module"],
+       "evidence": [{"path": "src/models.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/models.py::Account", "name": "Account", "language": "python", "constructs": ["py.class.def"],
        "evidence": [{"path": "src/models.py", "startLine": 1, "endLine": 6, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/models.py::Account.deposit", "name": "deposit", "language": "python", "constructs": ["py.method.def"],
@@ -23,6 +25,10 @@
       {"nodeKind": "symbol", "stableKey": "src/models.py::Account.balance", "name": "balance", "language": "python", "constructs": ["py.method.def"],
        "evidence": [{"path": "src/models.py", "startLine": 5, "endLine": 6, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
     ],
-    "edges": [], "observations": [], "assertions": [], "diagnostics": []
+    "edges": [], "observations": [
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/models.py::Account","ordinal":1,"constructs":["py.class.def"],"evidence":{"path":"src/models.py","startLine":1,"endLine":6,"extractor":"python-ast","extractorVersion":"1.0.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/models.py::Account.deposit","ordinal":1,"constructs":["py.method.def"],"evidence":{"path":"src/models.py","startLine":2,"endLine":3,"extractor":"python-ast","extractorVersion":"1.0.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/models.py::Account.balance","ordinal":1,"constructs":["py.method.def"],"evidence":{"path":"src/models.py","startLine":5,"endLine":6,"extractor":"python-ast","extractorVersion":"1.0.0"}}
+    ], "assertions": [], "diagnostics": []
   }
 }

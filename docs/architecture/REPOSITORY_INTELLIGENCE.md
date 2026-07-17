@@ -22,7 +22,7 @@ If your feature needs a repository fact that does not exist yet, the answer is a
 
 The production extraction path is still one Pydantic model — `RepositoryIntelligence` ([`app/intelligence/models.py`](../../apps/backend/app/intelligence/models.py)) — built by one engine — `RepositoryIntelligenceEngine` ([`app/intelligence/engine.py`](../../apps/backend/app/intelligence/engine.py)) — and serialized onto the repository row. That blob is retained as explicitly legacy/unverified compatibility data.
 
-The `ri.v1` persistence boundary now also exists: first-class repository revision columns, normalized snapshot/fact/provenance tables, deterministic canonical hashing, and a lifecycle store that validates and seals immutable snapshots. It does not run the legacy regex output through those tables. Syntax-aware producers, resolution, query APIs, durable jobs, determinism scoring, and consumer migration remain later work (#89–#95).
+The `ri.v1` persistence boundary now also exists: first-class repository revision columns, normalized snapshot/fact/provenance tables, deterministic canonical hashing, and a lifecycle store that validates and seals immutable snapshots. Evidence-backed Python and TypeScript extractors, their support matrices, and the repository-level source-policy pipeline also exist under `app/extraction`; the Issue #94 benchmark executes and validates that real pipeline. Product ingestion still does not run either the legacy regex output or the new extractors through the normalized snapshot tables. Resolution, query APIs, durable job orchestration, and consumer migration remain separate work (#91–#93 and #95).
 
 ```mermaid
 flowchart LR
@@ -37,7 +37,7 @@ flowchart LR
 
     Root --> Parser --> Engine --> Model --> Store
     Root --> Revision
-    Revision -. future conforming producers .-> Snapshot
+    Revision -. future product orchestration .-> Snapshot
     Store -->|"from_record()"| Consumers
 ```
 
@@ -45,18 +45,26 @@ flowchart LR
 
 ## Where parsing happens
 
-Exactly two places in the backend read repository source from disk:
+The legacy product path reads repository source from disk in exactly two places:
 
 1. **`RepositoryParser`** walks the extracted tree and produces `FileTreeNode[]` plus `RepositoryMeta` (languages, framework guess, entry point, counts, README/license presence).
 2. **`RepositoryIntelligenceEngine`** reads individual file contents during `build()` — capped at 512 KB per file — to extract imports, exports, routes, symbols, and technology hints, and reads dependency manifests from the repository root.
 
 There is one further direct read that is **not** parsing: `RepositoryService.read_file` serves the explorer's file preview. It is a path-checked read for display only and feeds no analysis.
 
-Nothing else may open a repository file.
+Nothing else may open a repository file. The evidence-backed extractors accept
+stored bytes from their caller; they do not walk or open a repository themselves.
+`ExtractionPipeline` applies normalized-path and source-size policy before
+dispatching those bytes through each extractor's real `supports()` method.
 
-### `TreeSitterParser` is a placeholder
+### Syntax-aware extractors are a separate, real boundary
 
-`app/parsers/tree_sitter_parser.py` is **not functional**. It maps a file extension to a language name and always returns an empty symbol list. `tree-sitter` is a declared dependency but is not wired into parsing. All symbol extraction today is regex-based, inside `RepositoryIntelligenceEngine`. Do not read the class name as a promise of syntax-aware parsing.
+`PythonExtractor` uses Python's AST and `TypeScriptExtractor` uses tree-sitter.
+Both emit normalized nodes, observations, diagnostics, and line evidence through
+the `ExtractionResult` contract. Their declared support and blind spots live in
+`app/extraction/support_matrix.py`. They supersede the legacy regex engine for a
+future normalized-snapshot build, but product ingestion has not been switched to
+that build yet.
 
 ---
 
@@ -162,13 +170,13 @@ Two terms with distinct meanings. PARTHA uses them precisely, and supports neith
 
 **Evidence: partial.** Graph relationships and engineering-review findings carry the **file paths** they were derived from. That is real evidence, and it is enough to point a reader at the right file.
 
-**Production provenance: incomplete.** The new persistence schema can store complete `ri.v1` provenance, but the current regex engine cannot produce it. Specifically:
+**Product-consumed provenance: incomplete.** The new persistence schema can store complete `ri.v1` provenance and the standalone extractors can produce it, but the current product path still consumes the legacy regex engine. Specifically:
 
 - **No line spans.** `SourceSymbol` has `id`, `name`, `kind`, `file_path`, and `exported`. It has **no start or end line**. Nothing in the model records where in a file a fact was found.
 - **No extraction method on the fact.** A consumer cannot tell whether a given fact was matched deterministically or inferred heuristically. That distinction lives in this document, not in the data.
 - **Revision identity is now exact at the repository boundary.** GitHub imports store a 40-character commit plus resolved ref; uploads store a `sha256:` archive identity. Legacy JSON facts still are not individually revision-addressed, while conforming snapshot rows are.
 
-The honest summary: **the persistence layer can retain exact revisions, spans, producer versions, and derivations, but today's production regex output still tells consumers only which file a legacy fact came from.** No line-cited product claim exists until #89–#95 populate and consume conforming snapshots.
+The honest summary: **the persistence layer can retain exact revisions, spans, producer versions, and derivations, and the extractor boundary emits conforming spans; today's product consumers still receive only the legacy file-level facts.** No line-cited product claim exists until the durable snapshot workflow populates and serves conforming snapshots.
 
 This is why AI answers carry no citations. The AI context builder deliberately emits an empty citation list and sends the provider **no source content and no line numbers** — fabricating `1:1` placeholder citations would misrepresent a structural answer as line-level evidence. See [`app/ai/repository_context.py`](../../apps/backend/app/ai/repository_context.py).
 
@@ -179,8 +187,8 @@ Do not describe PARTHA as having evidence-backed or grounded output until line s
 ## Current limitations
 
 - **Symbols:** regex-derived, Python and TS/JS only, no line spans, no signatures, no nesting, no cross-file resolution. Matches inside comments and strings are not excluded.
-- **Line spans:** not extracted anywhere in the system.
-- **Graph production and consumption:** normalized immutable graph tables exist, but no syntax-aware producer or query/consumer path populates and serves them yet. Product surfaces still read the legacy JSON blob.
+- **Line spans:** emitted by the Python and TypeScript extractors, but not yet populated and served by the product ingestion/query path.
+- **Graph production and consumption:** normalized immutable graph tables and syntax-aware producers exist, but no durable product job or query/consumer path populates and serves them yet. Product surfaces still read the legacy JSON blob.
 - **Relationships:** four of the eight declared types are never emitted. An import edge resolves to a declared dependency when the name matches and otherwise creates an `external:` node — there is no real module resolution.
 - **Revision identity:** first-class and immutable per imported repository revision. Snapshot history can be retained, but diff/query APIs and product re-analysis orchestration are not implemented.
 - **Dependencies:** three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The dependency API reports both assessments as explicit `not_computed` statuses; it emits no clean result or count without a scanner.
@@ -192,10 +200,12 @@ Do not describe PARTHA as having evidence-backed or grounded output until line s
 
 ## Contributing to the engine
 
-1. Add the fact to the model in `app/intelligence/models.py`.
-2. Extract it in `app/intelligence/engine.py`.
-3. Cover it with a test in `apps/backend/tests/test_repository_intelligence.py`.
-4. Consume it in the feature that needed it.
+1. Add observed syntax facts to the shared extraction contract and the relevant
+   extractor; keep heuristic legacy fields in `app/intelligence/models.py`.
+2. Update the published support matrix and focused extractor tests.
+3. Add or update an independently authored benchmark fixture and golden manifest.
+4. Consume the normalized fact only through the Repository Intelligence query
+   boundary once that boundary supports it.
 5. If the fact is heuristic, say so — in the model, in the API, and in the UI.
 
 Adding a parser inside a consumer to avoid step 1 is the single change most likely to be rejected in review.

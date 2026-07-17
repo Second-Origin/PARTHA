@@ -71,6 +71,7 @@ class Extractor(Protocol):
 RI_SRC_BINARY = "RI-SRC-BINARY"
 RI_SRC_MALFORMED = "RI-SRC-MALFORMED"
 RI_EXT_UNSUPPORTED = "RI-EXT-UNSUPPORTED"
+RI_LIMIT_SKIP = "RI-LIMIT-SKIP"
 RI_SPAN_INVALID = "RI-SPAN-INVALID"
 RI_SEC_PATH_ESCAPE = "RI-SEC-PATH-ESCAPE"
 RI_KEY_DUP_SYMBOL = "RI-KEY-DUP-SYMBOL"
@@ -79,6 +80,7 @@ _CATEGORY = {
     RI_SRC_BINARY: "binary source",
     RI_SRC_MALFORMED: "malformed source",
     RI_EXT_UNSUPPORTED: "unsupported construct",
+    RI_LIMIT_SKIP: "resource-limit skip",
     RI_SPAN_INVALID: "invalid span",
     RI_SEC_PATH_ESCAPE: "path escape",
     RI_KEY_DUP_SYMBOL: "duplicate symbol",
@@ -134,13 +136,21 @@ def decode_source(
     byte) or is not valid UTF-8.
     """
 
+    try:
+        normalized_path = canonical.normalize_repo_path(path)
+        subject = canonical.normalize_stable_key("file", f"file:{normalized_path}")
+    except canonical.PathEscapeError:
+        normalized_path = None
+        subject = None
+
     if b"\x00" in source:
         return None, ExtractedDiagnostic(
             code=RI_SRC_BINARY,
             category=_CATEGORY[RI_SRC_BINARY],
             severity="info",
             message="file contains a NUL byte and is excluded from line-addressed extraction",
-            path=path,
+            path=normalized_path,
+            subject=subject,
         )
     try:
         return source.decode("utf-8"), None
@@ -150,7 +160,8 @@ def decode_source(
             category=_CATEGORY[RI_SRC_MALFORMED],
             severity="error",
             message="file is not valid UTF-8 and could not be decoded",
-            path=path,
+            path=normalized_path,
+            subject=subject,
         )
 
 

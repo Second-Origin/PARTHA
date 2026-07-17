@@ -1702,8 +1702,9 @@ update records that approval in the contract:
   evidence-record definition in [§6](#6-provenance-contract) and the canonical hash in
   [§12](#12-canonical-graph-hash)).
 - **Contract acceptance and implementation status are distinct.** Approval permits downstream work;
-  it does not make that work current product behavior. At the time of this update, PR #102 remains
-  open, so its #87/#88 implementation is not described here as merged or current behavior.
+  it does not make that work current product behavior. PR #102 implemented #87/#88, and PR #103
+  implemented the standalone #89/#90 extractors. Product orchestration and consumer migration
+  remain separate downstream work.
 
 Dependency order (from the #86 comment): #87 → #88 → {#89, #90} → #91 → #92 → #93 (on #88); #94 in
 parallel (fixtures early, scoring after approval); #95 last (on #92 and #94).
@@ -1719,13 +1720,13 @@ rules), the three columns are explicit:
 | --- | --- | --- | --- |
 | Storage | Legacy regex consumers still read the mutable JSON blob; normalized snapshot tables and the sealing store now exist | Immutable sealed snapshots with nodes, edges, assertions, observations, evidence, and diagnostics (§11) | **Persistence implemented** (#88); production producers/queries remain #89–#92 |
 | Pipeline identity | `SnapshotStore` fixes and normalizes the planned set before a build; no production job planner invokes it yet | Precomputed `producer_version_set` covers every enabled extractor/resolver/classifier (§3.3) | **Persistence implemented** (#88); enqueue/job coordination remains #93 |
-| Repository graph key | The store validates exactly one deterministic `repo:root` before sealing; no production extractor emits it yet | Deterministic snapshot-scoped `repo:root`; database `repository_id` excluded from graph keys (§4.3) | **Persistence implemented** (#88); production emission remains #89/#90 |
-| Symbol spans | None on `SourceSymbol` ([`models.py:55`](../../apps/backend/app/intelligence/models.py#L55)) | Required line spans (§6) | **Unimplemented** (#89/#90) |
-| Extraction | Regex in `engine.py`; `TreeSitterParser` returns `[]` | Syntax-aware extractors with support matrices | **Unimplemented** (#89/#90) |
+| Repository graph key | `ExtractionPipeline` emits deterministic `repo:root`; `SnapshotStore` validates exactly one before sealing; no product job invokes that pipeline yet | Deterministic snapshot-scoped `repo:root`; database `repository_id` excluded from graph keys (§4.3) | **Producer and persistence implemented** (#88–#90); job integration remains #93 |
+| Symbol spans | Python/TypeScript extractors emit required spans; legacy `SourceSymbol` remains spanless | Required line spans (§6) | **Producer implemented** (#89/#90); product consumption remains #92/#93 |
+| Extraction | Legacy product ingestion still uses regex; standalone AST/tree-sitter extractors and support matrices are implemented and benchmarked | Syntax-aware extractors with support matrices | **Producer implemented** (#89/#90); durable product integration remains #93 |
 | Revision identity | Indexed `revision_kind`/`revision_value`/`revision_ref`; `commitSha` is API compatibility only | Indexed immutable columns (§3) | **Implemented** (#87) |
 | Relationships | 4 of 8 declared types emitted; imports as text | Resolved edges + diagnostics (§5) | **Unimplemented** (#91) |
 | Inferred entity properties | Legacy heuristic module roles remain in the compatibility blob; the snapshot store supports separate validated assertions | Separate inferred property assertions; observed nodes remain unique (§5.6) | **Persistence implemented** (#88); production inference/querying remains #91/#92 |
-| Provenance | Legacy production output has file paths only; the normalized store validates path + span + producer/version | Path + span + extractor/version (§6) | **Persistence implemented** (#88); syntax-aware production remains #89/#90 |
+| Provenance | Extractors emit path + span + producer/version and the normalized store validates them; legacy product consumers still receive file paths only | Path + span + extractor/version (§6) | **Producer and persistence implemented** (#88–#90); product orchestration/querying remains #92/#93 |
 | Query API | Consumers read the whole blob | Versioned owner-scoped read API (§9.5) | **Unimplemented** (#92) |
 | Evidence-backed output | AI emits empty citation lists | Every claim cites a valid span (§7.4) | **Unimplemented** (#95) |
 
@@ -1734,9 +1735,10 @@ behavior.** RFC-0001 is **Accepted** — independently ratified by
 [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) on 2026-07-16
 ([§1](#1-status-and-approval)); acceptance records the governing contract, not a claim of
 implementation. The #87 revision identity and #88 immutable snapshot-persistence boundary are
-implemented against that accepted contract, as the status column records. #89–#95 producers,
-queries, jobs, benchmarks, and consumer migration remain downstream work and are not current
-behavior. No existing documentation is rewritten by this RFC to imply otherwise.
+implemented against that accepted contract, as the status column records. The #89/#90 producers
+and #94 benchmark are implemented; resolution, queries, jobs, and consumer migration remain
+downstream work and are not current product behavior. No existing documentation is rewritten by
+this RFC to imply otherwise.
 
 ---
 

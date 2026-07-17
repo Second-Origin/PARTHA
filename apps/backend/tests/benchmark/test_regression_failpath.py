@@ -79,8 +79,10 @@ class BadCitationAdapter:
                 facts[index] = Fact(
                     fact_type=fact.fact_type, kind=fact.kind, subject=fact.subject, object=fact.object,
                     predicate=fact.predicate, name=fact.name, language=fact.language,
-                    referent=fact.referent, truth_class=fact.truth_class,
-                    value=fact.value, severity=fact.severity, producer=fact.producer, evidence=(broken,),
+                    referent=fact.referent, ordinal=fact.ordinal, truth_class=fact.truth_class,
+                    value=fact.value, severity=fact.severity, category=fact.category,
+                    message=fact.message, producer=fact.producer, evidence=(broken,),
+                    details=fact.details,
                 )
                 break
         return facts
@@ -88,7 +90,7 @@ class BadCitationAdapter:
 
 def test_a_perfect_extractor_passes_scoring():
     result = runner.run(adapter=PerfectAdapter())
-    assert not result.scoring.deferred
+    assert result.scoring.available
     assert result.scoring.report is not None
     assert result.scoring.report.overall.precision == 1
     assert result.scoring.report.overall.recall == 1
@@ -125,6 +127,21 @@ def test_a_broken_manifest_fails_the_build(tmp_path: Path):
     (fixture_dir / "manifest.json").write_text(json.dumps({"schemaVersion": "ri-benchmark.v999"}), encoding="utf-8")
     result = runner.run(fixtures_dir=tmp_path)
     assert result.load_error is not None
+    assert not result.passed
+    assert result.exit_code == 1
+
+
+def test_a_support_matrix_mismatch_fails_the_build(tmp_path: Path):
+    source = runner.paths.SUPPORT_MATRIX_PATH
+    matrix = json.loads(source.read_text(encoding="utf-8"))
+    matrix["productionMappings"]["py.function.def"]["construct"] = "not-a-real-construct"
+    matrix_path = tmp_path / "support-matrix.json"
+    matrix_path.write_text(json.dumps(matrix), encoding="utf-8")
+
+    result = runner.run(support_matrix_path=matrix_path)
+
+    assert result.load_error is not None
+    assert "unknown production construct" in result.load_error
     assert not result.passed
     assert result.exit_code == 1
 

@@ -9,11 +9,9 @@ when any enforceable gate fails:
 - determinism fails;
 - the fixture/support-matrix parity check fails;
 - an expected (required) diagnostic is missing for a declared blind spot;
-- precision or recall is below threshold **when an extractor is available**.
-
-Precision/recall is *deferred* (reported, never green-washed, and not counted as
-a pass) while the #89/#90 extractors are unmerged and the adapter reports
-``available = False``.
+- the real extraction adapter is unavailable;
+- precision or recall is below threshold; or
+- any citation emitted by the real extractors is invalid.
 """
 
 from __future__ import annotations
@@ -74,11 +72,6 @@ class ScoringOutcome:
     report: ScoreReport | None = None
     actual_provenance: ProvenanceResult | None = None
 
-    @property
-    def deferred(self) -> bool:
-        return not self.available
-
-
 @dataclass
 class BenchmarkReport:
     data_version: str
@@ -103,14 +96,14 @@ class BenchmarkReport:
 
     @property
     def scoring_gate_passed(self) -> bool:
-        """Scoring gates the build only when a real extractor is available."""
+        """Require real measurements and enforce every extraction-quality gate."""
 
-        if self.scoring.deferred or self.scoring.report is None:
-            return True
+        if not self.scoring.available or self.scoring.report is None:
+            return False
         overall = self.scoring.report.overall
         provenance_ok = (
-            self.scoring.actual_provenance is None
-            or self.scoring.actual_provenance.validity >= self.thresholds.provenance_validity
+            self.scoring.actual_provenance is not None
+            and self.scoring.actual_provenance.validity >= self.thresholds.provenance_validity
         )
         return (
             overall.precision >= self.thresholds.precision
@@ -153,12 +146,28 @@ class BenchmarkReport:
         for construct in self.parity.uncovered_unsupported:
             reasons.append(f"parity: unsupported construct {construct!r} is not exercised by any fixture")
         reasons.extend(f"diagnostics: {item}" for item in self.diagnostics.missing)
-        if not self.scoring_gate_passed and self.scoring.report is not None:
+        if not self.scoring.available or self.scoring.report is None:
+            reasons.append("scoring: the real extraction adapter did not produce measurements")
+        elif not self.scoring_gate_passed:
             overall = self.scoring.report.overall
-            reasons.append(
-                f"scoring: precision {float(overall.precision):.4f} / recall {float(overall.recall):.4f} "
-                f"below thresholds {float(self.thresholds.precision):.4f}/{float(self.thresholds.recall):.4f}"
-            )
+            if overall.precision < self.thresholds.precision:
+                reasons.append(
+                    f"scoring: precision {float(overall.precision):.4f} is below "
+                    f"{float(self.thresholds.precision):.4f}"
+                )
+            if overall.recall < self.thresholds.recall:
+                reasons.append(
+                    f"scoring: recall {float(overall.recall):.4f} is below "
+                    f"{float(self.thresholds.recall):.4f}"
+                )
+            if self.scoring.actual_provenance is None:
+                reasons.append("real extractor provenance: no citation validation result was produced")
+            else:
+                for check in self.scoring.actual_provenance.invalid:
+                    reasons.append(
+                        f"real extractor provenance: {check.fixture_id} {check.subject} "
+                        f"{check.path} — {check.reason}"
+                    )
         return reasons
 
 
@@ -227,8 +236,11 @@ def _run_scoring(fixtures: list[LoadedFixture], adapter: ExtractionAdapter) -> S
     expected: list[LabeledFact] = []
     actual: list[LabeledFact] = []
     provenance = ProvenanceResult()
+    scored_fact_types = getattr(adapter, "scored_fact_types", None)
     for fixture in fixtures:
         for record in fixture.expected:
+            if scored_fact_types is not None and record.fact.fact_type not in scored_fact_types:
+                continue
             expected.append(_labeled(fixture, record.fact, record.constructs))
         emitted = adapter.extract(fixture)
         for fact in emitted:
@@ -248,16 +260,16 @@ def run(
     """Run the full benchmark and return a gated :class:`BenchmarkReport`."""
 
     adapter = adapter or default_adapter()
-    support_matrix = load_support_matrix(support_matrix_path)
     thresholds = load_thresholds(thresholds_path)
 
     try:
+        support_matrix = load_support_matrix(support_matrix_path)
         fixtures = load_corpus(fixtures_dir, support_matrix)
     except ManifestError as exc:
         return BenchmarkReport(
             data_version=BENCHMARK_DATA_VERSION,
             thresholds=thresholds,
-            support_matrix_note=support_matrix.note,
+            support_matrix_note="Support-matrix or corpus validation failed.",
             corpus=CorpusSummary(0, {}, {}),
             fixtures=[],
             provenance=ProvenanceResult(),

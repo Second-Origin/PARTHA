@@ -21,4 +21,8 @@ def test_commonjs_require_flagged():
 
 
 def test_parse_error_is_malformed():
-    assert "RI-SRC-MALFORMED" in _codes("class {{{ broken\n")
+    result = EXTRACTOR.extract("src/x.ts", b"class {{{ broken\n")
+
+    assert [diagnostic.code for diagnostic in result.diagnostics] == ["RI-SRC-MALFORMED"]
+    assert result.nodes == ()
+    assert result.observations == ()

@@ -23,6 +23,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from app.extraction.support_matrix import SUPPORT_MATRIX as PRODUCTION_SUPPORT_MATRIX
 from app.intelligence import canonical
 
 from benchmark import schema
@@ -52,6 +53,8 @@ class ConstructSpec:
     supported: bool
     description: str
     expected_diagnostic: str | None
+    matrix_language: str
+    matrix_construct: str
 
 
 @dataclass(frozen=True)
@@ -93,6 +96,12 @@ def load_support_matrix(path: Path) -> SupportMatrix:
     raw = data.get("constructs")
     if not isinstance(raw, dict) or not raw:
         raise ManifestError(f"{path}: 'constructs' must be a non-empty object")
+    mappings = data.get("productionMappings")
+    if not isinstance(mappings, dict) or set(mappings) != set(raw):
+        raise ManifestError(
+            f"{path}: productionMappings must map every benchmark construct exactly once"
+        )
+    covered_production: set[tuple[str, str]] = set()
     for construct_id, spec in sorted(raw.items()):
         language = spec.get("language")
         if language not in schema.LANGUAGES:
@@ -107,12 +116,45 @@ def load_support_matrix(path: Path) -> SupportMatrix:
             )
         if expected_diagnostic is not None and expected_diagnostic not in schema.DIAGNOSTIC_CODES:
             raise ManifestError(f"{path}: construct {construct_id!r} has unknown diagnostic {expected_diagnostic!r}")
+        mapping = mappings[construct_id]
+        matrix_language = str(mapping.get("language", ""))
+        matrix_construct = str(mapping.get("construct", ""))
+        if matrix_language not in PRODUCTION_SUPPORT_MATRIX:
+            raise ManifestError(
+                f"{path}: construct {construct_id!r} maps to unknown production matrix {matrix_language!r}"
+            )
+        production = PRODUCTION_SUPPORT_MATRIX[matrix_language]
+        production_supported = matrix_construct in production.supported
+        production_unsupported = matrix_construct in production.unsupported
+        if not (production_supported or production_unsupported):
+            raise ManifestError(
+                f"{path}: construct {construct_id!r} maps to unknown production construct "
+                f"{matrix_language}.{matrix_construct}"
+            )
+        if supported != production_supported:
+            raise ManifestError(
+                f"{path}: construct {construct_id!r} support status disagrees with "
+                f"{matrix_language}.{matrix_construct}"
+            )
+        covered_production.add((matrix_language, matrix_construct))
         constructs[construct_id] = ConstructSpec(
             construct_id=construct_id,
             language=language,
             supported=supported,
             description=str(spec.get("description", "")),
             expected_diagnostic=expected_diagnostic,
+            matrix_language=matrix_language,
+            matrix_construct=matrix_construct,
+        )
+    missing_production = sorted(
+        (language, construct)
+        for language, matrix in PRODUCTION_SUPPORT_MATRIX.items()
+        for construct in (*matrix.supported, *matrix.unsupported)
+        if (language, construct) not in covered_production
+    )
+    if missing_production:
+        raise ManifestError(
+            f"{path}: production support constructs have no benchmark mapping: {missing_production}"
         )
     return SupportMatrix(constructs=constructs, note=str(data.get("note", "")))
 
@@ -165,6 +207,7 @@ class LoadedFixture:
     constructs_covered: tuple[str, ...]
     deterministic: bool
     expected: tuple[ExpectedFact, ...]
+    max_source_bytes: int = 512 * 1024
 
     def source_files(self) -> dict[str, bytes]:
         """Every stored byte of the synthetic repository (everything but the manifest)."""
@@ -232,6 +275,7 @@ def _build_fact(group: str, raw: dict[str, Any], *, where: str, producers: set[s
             name=str(raw.get("name", "")),
             language=str(raw.get("language", "")),
             truth_class="observed",
+            value=canonical_value(raw.get("properties")) if raw.get("properties") is not None else "",
             evidence=evidence,
         )
     if group == "edges":
@@ -261,6 +305,7 @@ def _build_fact(group: str, raw: dict[str, Any], *, where: str, producers: set[s
             subject=subject,
             predicate=observed_kind,
             referent=str(raw.get("referentText", "")),
+            ordinal=int(raw.get("ordinal", 1)),
             evidence=(span,),
         )
     if group == "assertions":
@@ -301,7 +346,11 @@ def _build_fact(group: str, raw: dict[str, Any], *, where: str, producers: set[s
                 f"{where}: diagnostic span must be one-based and inclusive",
             )
         location = canonical_value(
-            {"path": normalized_path, "span": {"startLine": span["startLine"], "endLine": span["endLine"]} if span else None}
+            {
+                "details": raw.get("details"),
+                "path": normalized_path,
+                "span": {"startLine": span["startLine"], "endLine": span["endLine"]} if span else None,
+            }
         )
         return Fact(
             fact_type="diagnostic",
@@ -309,6 +358,8 @@ def _build_fact(group: str, raw: dict[str, Any], *, where: str, producers: set[s
             subject=str(raw.get("subject", "")),
             object=str(raw.get("object", "")),
             severity=severity,
+            category=str(raw.get("category", "")),
+            message=str(raw.get("message", "")),
             producer=producer,
             value=location,
         )
@@ -375,6 +426,11 @@ def load_fixture(directory: Path, support_matrix: SupportMatrix) -> LoadedFixtur
     producers = set(producer_list)
 
     constructs_covered = tuple(data.get("constructsCovered", []))
+    max_source_bytes = data.get("maxSourceBytes", 512 * 1024)
+    _require(
+        isinstance(max_source_bytes, int) and max_source_bytes >= 1,
+        f"{where0}: maxSourceBytes must be a positive integer",
+    )
     for construct_id in constructs_covered:
         _require(construct_id in support_matrix, f"{where0}: undeclared support-matrix construct {construct_id!r}")
         _require(
@@ -417,6 +473,7 @@ def load_fixture(directory: Path, support_matrix: SupportMatrix) -> LoadedFixtur
         constructs_covered=constructs_covered,
         deterministic=bool(data.get("deterministic", False)),
         expected=tuple(expected),
+        max_source_bytes=max_source_bytes,
     )
 
 
