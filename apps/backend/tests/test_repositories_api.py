@@ -1,3 +1,6 @@
+from tests.api_assertions import assert_error_response
+
+
 def test_list_repositories_starts_empty(auth_client):
     response = auth_client.get("/repositories")
 
@@ -8,5 +11,4 @@ def test_list_repositories_starts_empty(auth_client):
 def test_github_import_rejects_non_github_url(auth_client):
     response = auth_client.post("/repositories/github", json={"url": "https://example.com/project"})
 
-    assert response.status_code == 422
-    assert response.json()["code"] == "validation_error"
+    assert_error_response(response, 422, "validation_error")

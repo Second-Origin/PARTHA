@@ -15,6 +15,7 @@ import zipfile
 from app.ai.providers.registry import ProviderRegistry
 from app.ai.types import AiProviderResponse
 from app.api.deps import get_provider_registry
+from tests.api_assertions import assert_error_response
 from tests.conftest import register_user
 
 
@@ -98,10 +99,8 @@ def test_stream_without_provider_config_returns_clear_error_not_empty_stream(cli
     )
 
     # A clear 422, produced before streaming — not a 200 with an empty stream.
-    assert response.status_code == 422
-    body = response.json()
-    assert body["code"] == "validation_error"
-    assert "not configured" in body["message"].lower()
+    error = assert_error_response(response, 422, "validation_error")
+    assert "not configured" in error.message.lower()
     assert not _is_event_stream(response)
 
 
@@ -119,11 +118,10 @@ def test_stream_cross_owner_returns_404_before_streaming(client, make_auth_heade
     # 404, never 200 or 403: a non-owner's request is indistinguishable from a
     # missing repository, and it fails before any stream starts (JSON error body,
     # not an SSE stream).
-    assert response.status_code == 404
-    assert response.json()["code"] == "not_found"
+    assert_error_response(response, 404, "not_found")
     assert not _is_event_stream(response)
 
 
 def test_stream_requires_authentication(client):
     response = client.post("/ai/stream", json={"repositoryId": "any", "query": "hi"})
-    assert response.status_code == 401
+    assert_error_response(response, 401, "unauthorized")

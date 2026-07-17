@@ -6,6 +6,7 @@ import pytest
 
 from app.core.config import get_settings
 from app.services.repository_service import MAX_FILE_PREVIEW_BYTES
+from tests.api_assertions import assert_error_response
 
 
 def _zip_bytes(files: dict[str, bytes]) -> bytes:
@@ -112,8 +113,7 @@ def test_path_traversal_is_rejected(auth_client):
 
     response = _get_file(auth_client, repository_id, "/../../secret.txt")
 
-    assert response.status_code == 422
-    assert response.json()["code"] == "validation_error"
+    assert_error_response(response, 422, "validation_error")
 
 
 def test_symlink_escape_is_rejected(auth_client):
@@ -139,8 +139,7 @@ def test_missing_file_returns_not_found(auth_client):
 
     response = _get_file(auth_client, repository_id, "/does-not-exist.ts")
 
-    assert response.status_code == 404
-    assert response.json()["code"] == "not_found"
+    assert_error_response(response, 404, "not_found")
 
 
 def test_file_endpoint_requires_existing_repository(auth_client):

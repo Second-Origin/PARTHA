@@ -2,6 +2,8 @@ import uuid
 
 import pytest
 
+from tests.api_assertions import assert_error_response
+
 REGISTER = {"email": "alice@example.com", "password": "correct-horse-battery"}
 COOKIE = "partha_refresh"
 
@@ -47,13 +49,14 @@ def test_register_duplicate_email_conflicts(client):
     assert _register(client).status_code == 201
 
     duplicate = _register(client)
-    assert duplicate.status_code == 409
-    assert duplicate.json()["code"] == "conflict_error"
+    assert_error_response(duplicate, 409, "conflict_error")
 
 
 def test_register_rejects_short_password(client):
     response = _register(client, password="short")
-    assert response.status_code == 422
+    error = assert_error_response(response, 422, "request_validation_error")
+    assert error.details is not None
+    assert "errors" in error.details
 
 
 def test_register_commit_time_collision_is_reported_as_conflict(client, monkeypatch):
@@ -144,9 +147,9 @@ def test_login_wrong_password_and_unknown_email_are_indistinguishable(client):
     wrong_password = client.post("/auth/login", json={"email": REGISTER["email"], "password": "not-the-password"})
     unknown_email = client.post("/auth/login", json={"email": "nobody@example.com", "password": "whatever-here"})
 
-    assert wrong_password.status_code == unknown_email.status_code == 401
-    assert wrong_password.json() == unknown_email.json() | {"request_id": wrong_password.json()["request_id"]}
-    assert wrong_password.json()["code"] == "unauthorized"
+    wrong_error = assert_error_response(wrong_password, 401, "unauthorized")
+    unknown_error = assert_error_response(unknown_email, 401, "unauthorized")
+    assert wrong_error.model_dump(exclude={"request_id"}) == unknown_error.model_dump(exclude={"request_id"})
 
 
 def test_user_without_credential_cannot_login(client):
@@ -172,7 +175,7 @@ def test_user_without_credential_cannot_login(client):
 
 
 def test_me_requires_a_token(client):
-    assert client.get("/auth/me").status_code == 401
+    assert_error_response(client.get("/auth/me"), 401, "unauthorized")
 
 
 def test_me_rejects_garbage_token(client):
@@ -222,7 +225,7 @@ def test_refresh_reuse_revokes_the_whole_family(client):
 
 
 def test_refresh_without_cookie_is_unauthorized(client):
-    assert client.post("/auth/refresh").status_code == 401
+    assert_error_response(client.post("/auth/refresh"), 401, "unauthorized")
 
 
 def test_logout_revokes_and_is_idempotent(client):

@@ -8,6 +8,7 @@ import pytest
 
 from app.github.client import GitHubClient
 from app.core.exceptions import TimeoutServiceError
+from tests.api_assertions import assert_error_response
 
 
 def _zip_bytes(files: dict[str, str]) -> bytes:
@@ -76,6 +77,18 @@ def test_zip_upload_persists_repository_and_analysis_completes(auth_client):
     assert status["stage"] == "completed"
     assert status["progress"] == 100
     assert status["completedAt"] is not None
+
+    architecture_response = auth_client.get(f"/analysis/{repository['id']}/architecture")
+    assert architecture_response.status_code == 200
+    architecture = architecture_response.json()
+    assert architecture["repositoryId"] == repository["id"]
+    assert architecture["summary"]["framework"] == "React"
+
+    review_response = auth_client.get(f"/analysis/{repository['id']}/review")
+    assert review_response.status_code == 200
+    review = review_response.json()
+    assert review["repositoryId"] == repository["id"]
+    assert review["summary"]["totalFindings"] == len(review["findings"])
 
     list_response = auth_client.get("/repositories")
     assert list_response.status_code == 200
@@ -179,19 +192,15 @@ def test_tar_gz_upload_is_supported(auth_client):
 def test_invalid_archive_returns_backend_validation_error(auth_client):
     response = _upload(auth_client, "broken.zip", b"not an archive")
 
-    assert response.status_code == 422
-    body = response.json()
-    assert body["code"] == "validation_error"
-    assert body["message"] == "Unsupported archive format. Upload a ZIP or TAR archive."
+    error = assert_error_response(response, 422, "validation_error")
+    assert error.message == "Unsupported archive format. Upload a ZIP or TAR archive."
 
 
 def test_empty_archive_is_rejected(auth_client):
     response = _upload(auth_client, "empty.zip", _zip_bytes({}))
 
-    assert response.status_code == 422
-    body = response.json()
-    assert body["code"] == "validation_error"
-    assert body["message"] == "Repository archive does not contain any readable files."
+    error = assert_error_response(response, 422, "validation_error")
+    assert error.message == "Repository archive does not contain any readable files."
 
 
 def test_duplicate_upload_name_returns_conflict(auth_client):
@@ -251,8 +260,8 @@ def test_github_import_uses_backend_validation_and_duplicate_detection(auth_clie
     assert new_revision.json()["revision"]["value"] == "b" * 40
     assert new_revision.json()["id"] != first.json()["id"]
     assert shared_commit_other_source.status_code == 201
-    assert malformed_branch.status_code == 422
-    assert malformed_branch.json()["message"] == "Branch name contains unsupported characters."
+    error = assert_error_response(malformed_branch, 422, "validation_error")
+    assert error.message == "Branch name contains unsupported characters."
 
 
 def test_github_clone_timeout_is_reported(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
