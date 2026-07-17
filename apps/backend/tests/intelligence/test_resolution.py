@@ -213,6 +213,7 @@ def test_imported_route_handler_without_resolvable_binding_stays_unresolved(sess
     _observation(store, snapshot, kind="import_binding", subject_kind="file", subject="file:src/routes.ts", referent="./missing|Handler|Handler", path="src/routes.ts", line=1)
 
     result = RelationshipResolver(store).resolve(snapshot)
+    assert result.edges_added == 0
     assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "routes_to"]
     codes = {
         diagnostic.code
@@ -233,6 +234,7 @@ def test_implemented_interface_without_evidence_stays_unresolved(session):
     _observation(store, snapshot, kind="implements", subject_kind="symbol", subject=impl.stable_key, referent="Contract", path="src/impl.ts", line=2)
 
     result = RelationshipResolver(store).resolve(snapshot)
+    assert result.edges_added == 0
     assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "implements"]
     diagnostic = session.scalar(select(RiDiagnostic).where(RiDiagnostic.snapshot_id == snapshot.snapshot_id))
     assert diagnostic is not None and diagnostic.code == "RI-RES-UNRESOLVED"
@@ -431,6 +433,7 @@ def test_python_absolute_from_import_without_module_or_dependency_is_unresolved(
         session, b"from pkg.service import run\n", files=["app/main.py"]
     )
     result = RelationshipResolver(store).resolve(snapshot)
+    assert result.edges_added == 0
     assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "imports"]
     diagnostic = session.scalar(select(RiDiagnostic).where(RiDiagnostic.snapshot_id == snapshot.snapshot_id))
     assert diagnostic is not None and diagnostic.code == "RI-RES-UNRESOLVED"
@@ -445,6 +448,7 @@ def test_python_absolute_from_import_with_two_module_candidates_is_ambiguous(ses
         files=["app/main.py", "pkg/service.py", "pkg/service/run.py"],
     )
     result = RelationshipResolver(store).resolve(snapshot)
+    assert result.edges_added == 0
     assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "imports"]
     diagnostic = session.scalar(select(RiDiagnostic).where(RiDiagnostic.snapshot_id == snapshot.snapshot_id))
     assert diagnostic is not None and diagnostic.code == "RI-RES-AMBIGUOUS"
