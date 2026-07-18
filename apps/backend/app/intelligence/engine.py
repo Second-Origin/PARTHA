@@ -43,13 +43,16 @@ CONFIG_NAMES = {
 }
 ENVIRONMENT_TEMPLATE_NAMES = {".env.example", ".env.sample", ".env.template", ".env.dist"}
 SECRET_KEY_NAME_PATTERN = re.compile(
-    r"(?:^|_)(?:api_?key|access_?key|auth_?token|client_?secret|credential|password|private_?key|secret|token)(?:$|_)",
+    r"(?:^|_)(?:api_?key|access_?key|auth_?token|client_?secret|credential|password|private_?key|secret_?key|secret|token)$",
     flags=re.IGNORECASE,
 )
 PLACEHOLDER_VALUE_PATTERN = re.compile(
     r"^(?:\$\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*|<[^>]+>|\[[^]]+\]|(?:example|sample|placeholder|replace|your)[\s_-].*|(?:change|replace)[\s_-]?me|not[\s_-]?a[\s_-]?real[\s_-]?.*|x+|\*+)$",
     flags=re.IGNORECASE,
 )
+NUMBER_VALUE_PATTERN = re.compile(r"[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?", flags=re.IGNORECASE)
+PATH_VALUE_PATTERN = re.compile(r"^(?:[A-Za-z]:[\\/]|[/~]|\.{1,2}[\\/]|file://)", flags=re.IGNORECASE)
+URL_VALUE_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 DATABASE_TECHNOLOGIES = {
     "postgres": "PostgreSQL",
     "postgresql": "PostgreSQL",
@@ -84,7 +87,18 @@ class RepositoryIntelligenceEngine:
 
     def from_record(self, record: RepositoryRecord) -> RepositoryIntelligence:
         existing = self.load(record)
-        if existing and (not existing.discovery.environment_files or existing.discovery.environment_file_evidence):
+        if existing:
+            if existing.discovery.environment_files and not existing.discovery.environment_file_evidence:
+                # Legacy cache entries predate content-derived environment evidence. Upgrade
+                # them in bounded O(environment files) time without rereading or rebuilding
+                # the repository. Unknown legacy content is deliberately treated as a runtime
+                # file, which cannot produce a critical secret-exposure finding.
+                evidence = [
+                    EnvironmentFileEvidence(path=path, evidence_class="runtime_env_file_present")
+                    for path in existing.discovery.environment_files
+                ]
+                discovery = existing.discovery.model_copy(update={"environment_file_evidence": evidence})
+                return existing.model_copy(update={"discovery": discovery})
             return existing
         return self.build(
             repository_id=record.id,
@@ -409,12 +423,38 @@ class RepositoryIntelligenceEngine:
                 continue
             key, value = clean.split("=", 1)
             key = key.strip()
-            value = value.strip().strip("\"'")
+            value = self._parse_dotenv_value(value)
             if not key or self._is_placeholder_value(value):
                 continue
-            if SECRET_KEY_NAME_PATTERN.search(key) or self._has_embedded_credentials(value):
+            if self._has_embedded_credentials(value) or (
+                SECRET_KEY_NAME_PATTERN.search(key) and self._is_credible_secret_value(value)
+            ):
                 keys.add(key)
         return sorted(keys)
+
+    def _parse_dotenv_value(self, value: str) -> str:
+        """Remove dotenv quoting and an unquoted, whitespace-delimited comment."""
+        normalized = value.strip()
+        quote: str | None = None
+        escaped = False
+        for index, character in enumerate(normalized):
+            if escaped:
+                escaped = False
+                continue
+            if quote:
+                if character == "\\" and quote == '"':
+                    escaped = True
+                elif character == quote:
+                    quote = None
+                continue
+            if character in {'"', "'"}:
+                quote = character
+            elif character == "#" and (index == 0 or normalized[index - 1].isspace()):
+                normalized = normalized[:index].rstrip()
+                break
+        if len(normalized) >= 2 and normalized[0] == normalized[-1] and normalized[0] in {'"', "'"}:
+            normalized = normalized[1:-1]
+        return normalized
 
     def _is_placeholder_value(self, value: str) -> bool:
         normalized = value.strip()
@@ -437,6 +477,31 @@ class RepositoryIntelligenceEngine:
         }:
             return True
         return bool(PLACEHOLDER_VALUE_PATTERN.fullmatch(normalized))
+
+    def _is_credible_secret_value(self, value: str) -> bool:
+        """Require value-shaped evidence in addition to a sensitive key name."""
+        normalized = value.strip()
+        if self._is_placeholder_value(normalized):
+            return False
+        if normalized.lower() in {"true", "false", "yes", "no", "on", "off", "enabled", "disabled"}:
+            return False
+        if NUMBER_VALUE_PATTERN.fullmatch(normalized):
+            return False
+        if PATH_VALUE_PATTERN.match(normalized):
+            return False
+        if URL_VALUE_PATTERN.match(normalized):
+            return self._has_embedded_credentials(normalized)
+        if len(normalized) < 8:
+            return False
+        character_classes = sum(
+            (
+                any(character.islower() for character in normalized),
+                any(character.isupper() for character in normalized),
+                any(character.isdigit() for character in normalized),
+                any(not character.isalnum() for character in normalized),
+            )
+        )
+        return character_classes >= 2 or len(normalized) >= 16
 
     def _has_embedded_credentials(self, value: str) -> bool:
         if "-----BEGIN" in value and "PRIVATE KEY-----" in value:
