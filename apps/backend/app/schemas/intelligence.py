@@ -9,10 +9,11 @@ from app.schemas.base import CamelModel
 
 
 FactKind = Literal["node", "edge", "observation"]
+SchemaVersion = Literal["ri.v1"]
 
 
 class RiEvidenceResponse(CamelModel):
-    schema_version: str
+    schema_version: SchemaVersion
     fact_kind: FactKind
     fact_id: str
     path: str
@@ -71,7 +72,7 @@ class RiPagination(CamelModel):
 
 
 class RiSnapshotMetadataResponse(CamelModel):
-    schema_version: str
+    schema_version: SchemaVersion
     snapshot_id: str
     repository_id: str
     revision_kind: Literal["git", "upload"]
@@ -88,37 +89,37 @@ class RiSnapshotMetadataResponse(CamelModel):
 
 
 class RiSymbolsResponse(CamelModel):
-    schema_version: str
+    schema_version: SchemaVersion
     data: list[RiNodeResponse]
     pagination: RiPagination
 
 
 class RiNeighboursResponse(CamelModel):
-    schema_version: str
+    schema_version: SchemaVersion
     node_key: str
     data: list[RiEdgeResponse]
     pagination: RiPagination
 
 
 class RiReferencesResponse(CamelModel):
-    schema_version: str
+    schema_version: SchemaVersion
     data: list[RiEdgeResponse]
     pagination: RiPagination
 
 
 class RiAssertionsResponse(CamelModel):
-    schema_version: str
+    schema_version: SchemaVersion
     data: list[RiAssertionResponse]
     pagination: RiPagination
 
 
 class RiPathsResponse(CamelModel):
-    schema_version: str
+    schema_version: SchemaVersion
     data: list[RiPathResponse]
     pagination: RiPagination
 
 
 class RiEvidenceResponsePage(CamelModel):
-    schema_version: str
+    schema_version: SchemaVersion
     data: list[RiEvidenceResponse]
     pagination: RiPagination
