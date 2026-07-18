@@ -117,7 +117,7 @@ def get_architecture(
                             "startLine": 3,
                             "endLine": 3,
                             "extractor": "dependency-manifest",
-                            "extractorVersion": "1.1.0",
+                            "extractorVersion": "1.2.0",
                             "ecosystem": "npm",
                             "version": "^18.3.0",
                             "type": "production",

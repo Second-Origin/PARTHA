@@ -196,7 +196,7 @@ def test_dependency_endpoint_returns_nested_manifest_provenance_and_malformed_di
             "startLine": 2,
             "endLine": 2,
             "extractor": "dependency-manifest",
-            "extractorVersion": "1.1.0",
+            "extractorVersion": "1.2.0",
             "ecosystem": "pypi",
             "version": ">=0.115",
             "type": "production",
@@ -208,7 +208,7 @@ def test_dependency_endpoint_returns_nested_manifest_provenance_and_malformed_di
             "startLine": 1,
             "endLine": 1,
             "extractor": "dependency-manifest",
-            "extractorVersion": "1.1.0",
+            "extractorVersion": "1.2.0",
             "ecosystem": "pypi",
             "version": "==0.116",
             "type": "production",
@@ -221,7 +221,7 @@ def test_dependency_endpoint_returns_nested_manifest_provenance_and_malformed_di
             "severity": "error",
             "message": "dependency manifest could not be parsed or has an unsupported structure",
             "path": "apps/broken/package.json",
-            "producer": "dependency-manifest@1.1.0",
+            "producer": "dependency-manifest@1.2.0",
             "details": None,
         }
     ]

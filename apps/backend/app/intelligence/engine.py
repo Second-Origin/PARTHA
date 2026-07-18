@@ -325,9 +325,10 @@ class RepositoryIntelligenceEngine:
         from app.extraction.pipeline import ExtractionPipeline
 
         extractor = DependencyManifestExtractor()
-        sources: dict[str, bytes] = {}
-        manifest_paths: list[str] = []
+        pipeline = ExtractionPipeline((extractor,))
+        manifest_count = 0
         diagnostics: list[DependencyDiagnostic] = []
+        declarations_by_key: dict[str, list[DependencyDeclaration]] = defaultdict(list)
         for file in sorted(files, key=lambda item: item.path):
             try:
                 path = canonical.normalize_repo_path(file.path.lstrip("/"))
@@ -335,9 +336,10 @@ class RepositoryIntelligenceEngine:
                 continue
             if not extractor.supports(path):
                 continue
-            manifest_paths.append(path)
+            manifest_count += 1
+            source_path = root / path
             try:
-                sources[path] = (root / path).read_bytes()
+                reported_bytes = source_path.stat().st_size
             except OSError:
                 # The parser inventory is the source of truth. A file that
                 # disappears between inventory and analysis cannot become a
@@ -352,44 +354,93 @@ class RepositoryIntelligenceEngine:
                         producer=extractor.producer,
                     )
                 )
-
-        declarations_by_key: dict[str, list[DependencyDeclaration]] = defaultdict(list)
-        pipeline = ExtractionPipeline((extractor,))
-        for run in pipeline.run(sources):
-            for diagnostic in run.result.diagnostics:
+                continue
+            if reported_bytes > pipeline.max_source_bytes:
                 diagnostics.append(
                     DependencyDiagnostic(
-                        code=diagnostic.code,
-                        category=diagnostic.category,
-                        severity=diagnostic.severity,
-                        message=diagnostic.message,
-                        path=diagnostic.path,
-                        producer=run.producer,
-                        details=dict(diagnostic.details) if diagnostic.details is not None else None,
+                        code="RI-LIMIT-SKIP",
+                        category="resource-limit skip",
+                        severity="info",
+                        message="file exceeds the configured source-size budget",
+                        path=path,
+                        producer=f"{pipeline.inventory_name}@{pipeline.inventory_version}",
+                        details={
+                            "budgetBytes": pipeline.max_source_bytes,
+                            "reportedBytes": reported_bytes,
+                        },
                     )
                 )
-            if run.producer != extractor.producer:
                 continue
-            for node in run.result.nodes:
-                if node.node_kind != "dependency" or node.properties is None or not node.evidence:
-                    continue
-                properties = node.properties
-                evidence = node.evidence[0]
-                ecosystem = str(properties["ecosystem"])
-                version = properties.get("version")
-                declaration = DependencyDeclaration(
-                    name=node.name or node.stable_key.rsplit(":", 1)[-1],
-                    manifest_path=str(properties["manifest_path"]),
-                    workspace_path=str(properties["workspace_path"]),
-                    start_line=evidence.start_line,
-                    end_line=evidence.end_line,
-                    extractor=run.producer_name,
-                    extractor_version=run.producer_version,
-                    ecosystem=ecosystem,
-                    version=str(version) if version is not None else None,
-                    type=properties["dependency_type"],  # type: ignore[arg-type]
+            try:
+                # Read at most one byte past the configured budget. This is a
+                # second guard against a file growing after ``stat()`` and keeps
+                # each candidate bounded rather than retaining all manifests.
+                with source_path.open("rb") as source_file:
+                    source = source_file.read(pipeline.max_source_bytes + 1)
+            except OSError:
+                diagnostics.append(
+                    DependencyDiagnostic(
+                        code="RI-SRC-MALFORMED",
+                        category="malformed source",
+                        severity="error",
+                        message="dependency manifest could not be read from the parser-approved inventory",
+                        path=path,
+                        producer=extractor.producer,
+                    )
                 )
-                declarations_by_key[node.stable_key].append(declaration)
+                continue
+            if len(source) > pipeline.max_source_bytes:
+                diagnostics.append(
+                    DependencyDiagnostic(
+                        code="RI-LIMIT-SKIP",
+                        category="resource-limit skip",
+                        severity="info",
+                        message="file exceeds the configured source-size budget",
+                        path=path,
+                        producer=f"{pipeline.inventory_name}@{pipeline.inventory_version}",
+                        details={
+                            "budgetBytes": pipeline.max_source_bytes,
+                            "reportedBytes": len(source),
+                        },
+                    )
+                )
+                continue
+
+            for run in pipeline.run({path: source}):
+                for diagnostic in run.result.diagnostics:
+                    diagnostics.append(
+                        DependencyDiagnostic(
+                            code=diagnostic.code,
+                            category=diagnostic.category,
+                            severity=diagnostic.severity,
+                            message=diagnostic.message,
+                            path=diagnostic.path,
+                            producer=run.producer,
+                            details=dict(diagnostic.details) if diagnostic.details is not None else None,
+                        )
+                    )
+                if run.producer != extractor.producer:
+                    continue
+                for node in run.result.nodes:
+                    if node.node_kind != "dependency" or node.properties is None or not node.evidence:
+                        continue
+                    properties = node.properties
+                    evidence = node.evidence[0]
+                    ecosystem = str(properties["ecosystem"])
+                    version = properties.get("version")
+                    declaration = DependencyDeclaration(
+                        name=node.name or node.stable_key.rsplit(":", 1)[-1],
+                        manifest_path=str(properties["manifest_path"]),
+                        workspace_path=str(properties["workspace_path"]),
+                        start_line=evidence.start_line,
+                        end_line=evidence.end_line,
+                        extractor=run.producer_name,
+                        extractor_version=run.producer_version,
+                        ecosystem=ecosystem,
+                        version=str(version) if version is not None else None,
+                        type=properties["dependency_type"],  # type: ignore[arg-type]
+                    )
+                    declarations_by_key[node.stable_key].append(declaration)
 
         dependencies: list[RepositoryDependency] = []
         for stable_key, declarations in sorted(declarations_by_key.items()):
@@ -419,7 +470,7 @@ class RepositoryIntelligenceEngine:
             )
         return (
             sorted(dependencies, key=lambda dependency: (dependency.ecosystem, dependency.name.lower(), dependency.id)),
-            len(manifest_paths),
+            manifest_count,
             sorted(
                 diagnostics,
                 key=lambda diagnostic: (
