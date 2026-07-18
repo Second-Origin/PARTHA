@@ -23,6 +23,7 @@ from app.core.exceptions import UnauthorizedError
 from app.github.client import GitHubClient
 from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
+from app.intelligence.query_service import SnapshotQueryService
 from app.models.user import User
 from app.parsers.repository_parser import RepositoryParser
 from app.repositories.repository_repository import RepositoryRepository
@@ -82,6 +83,13 @@ def get_repository_parser() -> RepositoryParser:
 
 def get_repository_intelligence_engine() -> RepositoryIntelligenceEngine:
     return RepositoryIntelligenceEngine()
+
+
+def get_snapshot_query_service(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SnapshotQueryService:
+    return SnapshotQueryService(db, current_user.id)
 
 
 def get_repository_service(

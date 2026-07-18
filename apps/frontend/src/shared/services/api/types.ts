@@ -83,6 +83,96 @@ export interface RepositoryFileResponse {
   mediaType: string | null;
 }
 
+// Repository Intelligence snapshot queries (`/intelligence/v1`). These are
+// read-only views of sealed, owner-scoped normalized facts, not legacy metadata.
+export type RiSchemaVersion = 'ri.v1';
+
+export interface RiPagination {
+  offset: number;
+  limit: number;
+  total: number;
+}
+
+export interface RiEvidence {
+  schemaVersion: RiSchemaVersion;
+  factKind: 'node' | 'edge' | 'observation';
+  factId: string;
+  path: string;
+  startLine: number;
+  endLine: number;
+  granularity: 'span' | 'file';
+  extractor: string;
+  extractorVersion: string;
+}
+
+export interface RiNode {
+  stableKey: string;
+  nodeKind: string;
+  name: string | null;
+  language: string | null;
+  truthClass: 'observed';
+  properties: Record<string, unknown> | null;
+  evidence: RiEvidence[];
+}
+
+export interface RiEdge {
+  edgeId: string;
+  subjectKind: string;
+  subjectKey: string;
+  predicate: string;
+  objectKind: string;
+  objectKey: string;
+  truthClass: 'resolved';
+  producer: string;
+  producerVersion: string;
+  evidence: RiEvidence[];
+  derivedFrom: Array<{ kind: string; identity: string }>;
+}
+
+export interface RiAssertion {
+  assertionId: string;
+  subjectKind: string;
+  subjectKey: string;
+  predicate: string;
+  value: Record<string, unknown>;
+  truthClass: 'inferred';
+  producer: string;
+  producerVersion: string;
+  derivedFrom: Array<{ kind: string; identity: string }>;
+}
+
+export interface RiSnapshotMetadata {
+  schemaVersion: RiSchemaVersion;
+  snapshotId: string;
+  repositoryId: string;
+  revisionKind: 'git' | 'upload';
+  revisionValue: string;
+  revisionRef: string | null;
+  state: 'completed';
+  producerVersionSet: string[];
+  producerSetHash: string;
+  configHash: string;
+  canonicalGraphHash: string;
+  createdAt: string;
+  updatedAt: string;
+  sealedAt: string;
+}
+
+export interface RiCollectionResponse<T> {
+  schemaVersion: RiSchemaVersion;
+  data: T[];
+  pagination: RiPagination;
+}
+
+export interface RiPath {
+  path: string;
+  node: RiNode;
+}
+
+export interface RiNeighboursResponse extends RiCollectionResponse<RiEdge> {
+  nodeKey: string;
+}
+
 // Analysis
 export interface AnalysisStartResponse {
   repositoryId: string;

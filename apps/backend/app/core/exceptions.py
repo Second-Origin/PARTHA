@@ -48,6 +48,10 @@ class ValidationServiceError(ServiceError):
     code = "validation_error"
 
 
+class UnsupportedSchemaVersionError(ValidationServiceError):
+    code = "unsupported_schema_version"
+
+
 class ConflictServiceError(ServiceError):
     status_code = status.HTTP_409_CONFLICT
     code = "conflict_error"
