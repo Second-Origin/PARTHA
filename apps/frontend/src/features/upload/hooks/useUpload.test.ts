@@ -99,6 +99,23 @@ describe('useUpload', () => {
     expect(uploadRepository).not.toHaveBeenCalled();
   });
 
+  it('accepts an archive of exactly the maximum size', () => {
+    const uploadRepository = mockUpload();
+    const file = archiveFile('at-limit.zip');
+    Object.defineProperty(file, 'size', { value: MAX_FILE_SIZE });
+    const hook = renderHook(() => useUpload());
+
+    act(() => {
+      hook.result.current.selectFile([file]);
+    });
+
+    expect(hook.result.current.uploadFile?.size).toBe(MAX_FILE_SIZE);
+    expect(hook.result.current.error).toBeNull();
+    expect(hook.result.current.empty).toBe(false);
+    expect(hook.result.current.success).toBe(true);
+    expect(uploadRepository).not.toHaveBeenCalled();
+  });
+
   it('rejects duplicate archive repository names case-insensitively', () => {
     repositoryState.repositories = [repository('existing-id', 'Existing-Project')];
     const uploadRepository = mockUpload();
