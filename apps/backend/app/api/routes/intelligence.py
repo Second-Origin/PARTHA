@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import get_current_user, get_snapshot_query_service
-from app.api.openapi import documented_responses, suppress_automatic_validation_error
+from app.api.openapi import documented_responses
 from app.intelligence.query_service import SnapshotQueryService
 from app.schemas.intelligence import (
     RiAssertionResponse,
@@ -117,8 +117,7 @@ def _pagination(offset: int, limit: int, total: int) -> RiPagination:
 @router.get(
     "/{snapshot_id}",
     response_model=RiSnapshotMetadataResponse,
-    responses=documented_responses(200, "Sealed snapshot metadata.", {"schemaVersion": "ri.v1"}, 401, 404, 429, 500),
-    openapi_extra=suppress_automatic_validation_error(),
+    responses=documented_responses(200, "Sealed ri.v1 snapshot metadata.", {"schemaVersion": "ri.v1"}, 401, 404, 422, 429, 500),
 )
 def get_snapshot(snapshot_id: str, service: SnapshotQueryService = Depends(get_snapshot_query_service)) -> RiSnapshotMetadataResponse:
     return _metadata(service.metadata(snapshot_id))

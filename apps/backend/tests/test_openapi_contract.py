@@ -37,7 +37,7 @@ EXPECTED_RESPONSES = {
     ("GET", "/repositories/{repository_id}"): {200, 401, 404, 429, 500},
     ("GET", "/repositories/{repository_id}/file"): {200, 401, 404, 422, 429, 500},
     ("DELETE", "/repositories/{repository_id}"): {204, 401, 404, 429, 500},
-    ("GET", "/intelligence/v1/snapshots/{snapshot_id}"): {200, 401, 404, 429, 500},
+    ("GET", "/intelligence/v1/snapshots/{snapshot_id}"): {200, 401, 404, 422, 429, 500},
     ("GET", "/intelligence/v1/snapshots/{snapshot_id}/symbols"): {200, 401, 404, 422, 429, 500},
     ("GET", "/intelligence/v1/snapshots/{snapshot_id}/neighbours"): {200, 401, 404, 422, 429, 500},
     ("GET", "/intelligence/v1/snapshots/{snapshot_id}/references"): {200, 401, 404, 422, 429, 500},

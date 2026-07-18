@@ -7,7 +7,7 @@ import pytest
 from tests.conftest import register_user
 
 
-def _seed_snapshot(owner_id: str, *, suffix: str = "one") -> tuple[str, str]:
+def _seed_snapshot(owner_id: str, *, suffix: str = "one", schema_version: str = "ri.v1") -> tuple[str, str]:
     """Persist a sealed graph while deliberately pointing at no real worktree."""
 
     from app.core.database import SessionLocal
@@ -37,6 +37,7 @@ def _seed_snapshot(owner_id: str, *, suffix: str = "one") -> tuple[str, str]:
             repository_id=repository_id,
             revision=Revision("upload", revision_value),
             producer_version_set=["inventory@1.0.0", "resolver@1.0.0"],
+            schema_version=schema_version,
         )
 
         def evidence(path: str, start: int, end: int, producer: str = "inventory") -> Evidence:
@@ -165,6 +166,25 @@ def test_snapshot_query_mappings_and_deterministic_pagination(client, make_auth_
     assert any(item["factKind"] == "edge" and item["extractor"] == "resolver" for item in evidence.json()["data"])
 
 
+def test_query_rejects_owner_visible_unsupported_schema_without_cross_owner_disclosure(client, make_auth_headers):
+    owner = make_auth_headers("owner-v2-query@example.com")
+    other_owner = make_auth_headers("other-v2-query@example.com")
+    _, snapshot_id = _seed_snapshot(owner["user"]["id"], schema_version="ri.v2")
+    path = f"/intelligence/v1/snapshots/{snapshot_id}"
+
+    rejected = client.get(path, headers=owner["headers"])
+    assert rejected.status_code == 422
+    assert rejected.json()["code"] == "unsupported_schema_version"
+    assert rejected.json()["message"] == "Unsupported snapshot schema version: ri.v2."
+    assert rejected.json()["details"] == {"received": "ri.v2", "supported": ["ri.v1"]}
+
+    denied = client.get(path, headers=other_owner["headers"])
+    missing = client.get("/intelligence/v1/snapshots/snap_missing", headers=other_owner["headers"])
+    assert denied.status_code == missing.status_code == 404
+    assert denied.json()["code"] == missing.json()["code"] == "not_found"
+    assert denied.json()["message"] == missing.json()["message"] == "Snapshot not found."
+
+
 @pytest.mark.parametrize("query", ["?limit=0", "?limit=101", "?offset=-1"])
 def test_snapshot_query_rejects_invalid_pagination(client, make_auth_headers, query):
     owner = make_auth_headers(f"pagination-{uuid4().hex}@example.com")
@@ -179,3 +199,4 @@ def test_snapshot_query_openapi_documents_versioned_routes_and_schemas(client):
     assert "/intelligence/v1/snapshots/{snapshot_id}/symbols" in document["paths"]
     assert "RiSymbolsResponse" in document["components"]["schemas"]
     assert "RiEvidenceResponse" in document["components"]["schemas"]
+    assert document["components"]["schemas"]["RiSymbolsResponse"]["properties"]["schemaVersion"]["const"] == "ri.v1"

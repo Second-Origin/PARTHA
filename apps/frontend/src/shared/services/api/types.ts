@@ -85,6 +85,8 @@ export interface RepositoryFileResponse {
 
 // Repository Intelligence snapshot queries (`/intelligence/v1`). These are
 // read-only views of sealed, owner-scoped normalized facts, not legacy metadata.
+export type RiSchemaVersion = 'ri.v1';
+
 export interface RiPagination {
   offset: number;
   limit: number;
@@ -92,7 +94,7 @@ export interface RiPagination {
 }
 
 export interface RiEvidence {
-  schemaVersion: string;
+  schemaVersion: RiSchemaVersion;
   factKind: 'node' | 'edge' | 'observation';
   factId: string;
   path: string;
@@ -140,7 +142,7 @@ export interface RiAssertion {
 }
 
 export interface RiSnapshotMetadata {
-  schemaVersion: string;
+  schemaVersion: RiSchemaVersion;
   snapshotId: string;
   repositoryId: string;
   revisionKind: 'git' | 'upload';
@@ -157,7 +159,7 @@ export interface RiSnapshotMetadata {
 }
 
 export interface RiCollectionResponse<T> {
-  schemaVersion: string;
+  schemaVersion: RiSchemaVersion;
   data: T[];
   pagination: RiPagination;
 }

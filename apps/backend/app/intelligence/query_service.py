@@ -5,7 +5,7 @@ from collections import defaultdict
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, UnsupportedSchemaVersionError
 from app.models.snapshot import RiAssertion, RiDerivation, RiEdge, RiEvidence, RiNode, RiSnapshot
 
 
@@ -15,6 +15,8 @@ class SnapshotQueryService:
     def __init__(self, db: Session, owner_id: str) -> None:
         self.db = db
         self.owner_id = owner_id
+
+    supported_schema_versions = ("ri.v1",)
 
     def metadata(self, snapshot_id: str) -> RiSnapshot:
         return self._snapshot(snapshot_id)
@@ -164,6 +166,11 @@ class SnapshotQueryService:
         ).first()
         if snapshot is None:
             raise NotFoundError("Snapshot not found.")
+        if snapshot.schema_version not in self.supported_schema_versions:
+            raise UnsupportedSchemaVersionError(
+                f"Unsupported snapshot schema version: {snapshot.schema_version}.",
+                details={"received": snapshot.schema_version, "supported": list(self.supported_schema_versions)},
+            )
         return snapshot
 
     def _page(self, model, where: tuple, order_by: tuple, offset: int, limit: int):
