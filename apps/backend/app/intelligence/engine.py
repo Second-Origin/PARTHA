@@ -43,7 +43,8 @@ CONFIG_NAMES = {
 }
 ENVIRONMENT_TEMPLATE_NAMES = {".env.example", ".env.sample", ".env.template", ".env.dist"}
 SECRET_KEY_NAME_PATTERN = re.compile(
-    r"(?:^|_)(?:api_?key|access_?key|auth_?token|client_?secret|credential|password|private_?key|secret_?key|secret|token)$",
+    r"(?:^|_)(?:api_?key|access_?key(?:_?id)?|auth_?token|client_?secret|"
+    r"credentials?|passw(?:or)?d|pwd|private_?key|secret_?key|secret|token)$",
     flags=re.IGNORECASE,
 )
 PLACEHOLDER_VALUE_PATTERN = re.compile(

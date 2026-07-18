@@ -102,6 +102,10 @@ def test_security_related_configuration_is_not_credible_secret_evidence(tmp_path
         ("AUTH_SECRET_KEY", "synthetic-secret-123"),
         ("DJANGO_SECRET_KEY", "synthetic-secret-123"),
         ("SESSION_SECRET_KEY", "synthetic-secret-123"),
+        ("AWS_ACCESS_KEY_ID", "synthetic-access-key-123"),
+        ("SERVICE_CREDENTIALS", "synthetic-credentials-123"),
+        ("DB_PASSWD", "synthetic-password-123"),
+        ("DB_PWD", "synthetic-password-123"),
     ],
 )
 def test_secret_key_names_with_credible_values_remain_secret_evidence(tmp_path: Path, key: str, value: str):
