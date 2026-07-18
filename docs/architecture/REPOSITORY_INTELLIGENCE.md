@@ -22,7 +22,7 @@ If your feature needs a repository fact that does not exist yet, the answer is a
 
 The production extraction path is still one Pydantic model — `RepositoryIntelligence` ([`app/intelligence/models.py`](../../apps/backend/app/intelligence/models.py)) — built by one engine — `RepositoryIntelligenceEngine` ([`app/intelligence/engine.py`](../../apps/backend/app/intelligence/engine.py)) — and serialized onto the repository row. That blob is retained as explicitly legacy/unverified compatibility data.
 
-The `ri.v1` persistence boundary now also exists: first-class repository revision columns, normalized snapshot/fact/provenance tables, deterministic canonical hashing, and a lifecycle store that validates and seals immutable snapshots. Evidence-backed Python and TypeScript extractors, their support matrices, the repository-level source-policy pipeline, and deterministic [relationship resolution](REPOSITORY_INTELLIGENCE_RESOLUTION.md) over stored observations exist under `app/extraction` and `app/intelligence`; the Issue #94 benchmark executes and validates the extraction pipeline. The versioned, owner-scoped `/intelligence/v1/snapshots` API reads sealed `ri.v1` normalized snapshots only and explicitly rejects unsupported snapshot schema versions; it never falls back to legacy metadata or a repository working tree. Product ingestion still does not run either the legacy regex output or the new extractors through the normalized snapshot tables, and durable job orchestration and consumer migration remain separate work (#93 and #95).
+The `ri.v1` persistence boundary now also exists: first-class repository revision columns, normalized snapshot/fact/provenance tables, deterministic canonical hashing, and a lifecycle store that validates and seals immutable snapshots. Evidence-backed Python and TypeScript extractors, their support matrices, the repository-level source-policy pipeline, and deterministic [relationship resolution](REPOSITORY_INTELLIGENCE_RESOLUTION.md) over stored observations exist under `app/extraction` and `app/intelligence`; the Issue #94 benchmark executes and validates the extraction pipeline. The versioned, owner-scoped `/intelligence/v1/snapshots` API reads sealed `ri.v1` normalized snapshots only and explicitly rejects unsupported snapshot schema versions; it never falls back to legacy metadata or a repository working tree. The Architecture Graph consumes that query boundary for relationships when a sealed snapshot exists, while its module inventory and discovery summary remain legacy compatibility data. Product ingestion still does not run the new extractors through the normalized snapshot tables, so the graph reports relationship extraction as unavailable until a conforming producer has stored a snapshot; durable job orchestration remains separate work (#93).
 
 ```mermaid
 flowchart LR
@@ -119,7 +119,7 @@ The repository API returns `revision: {kind,value,ref}` and retains `commitSha` 
 
 Consumers still call `RepositoryIntelligenceEngine.from_record(record)`, which returns the legacy model if present and **rebuilds it from disk as a fallback** if it is missing or fails validation. That compatibility path is not an `ri.v1` snapshot producer: its regex facts have no valid spans or versioned provenance and are never promoted to `observed`, `resolved`, or `inferred` rows.
 
-The normalized `ri_*` tables are ready for conforming producers. `SnapshotStore` fixes the complete semantic identity before a build, enforces same-snapshot foreign keys and provenance, validates derivation chains, computes the canonical graph hash, and seals the snapshot atomically. Completed snapshots reject mutation. The query API exposes sealed snapshot metadata, symbols, stored resolved relationships, inferred assertions, file facts, and evidence spans; product consumers have not yet migrated to it.
+The normalized `ri_*` tables are ready for conforming producers. `SnapshotStore` fixes the complete semantic identity before a build, enforces same-snapshot foreign keys and provenance, validates derivation chains, computes the canonical graph hash, and seals the snapshot atomically. Completed snapshots reject mutation. The query API exposes sealed snapshot metadata, symbols, stored resolved relationships, inferred assertions, file facts, and evidence spans. Architecture relationship construction now uses its owner-scoped persisted-fact query; other product consumers remain on the legacy model.
 
 ---
 
@@ -139,7 +139,7 @@ Each relationship carries an `evidence` list — which currently holds **file pa
 
 | Consumer | Module | Reads |
 | --- | --- | --- |
-| Architecture | `app/analysis/` | modules, files, discovery |
+| Architecture | `app/analysis/` | legacy modules/discovery plus resolved edges, diagnostics, and evidence from the latest sealed snapshot |
 | Dependency graph | `app/graph/` | dependencies, `depends_on` relationships |
 | Engineering review | `app/review/` | discovery, statistics, file roles and sizes |
 | Documentation | `app/services/documentation_service.py` | discovery, files, routes, architecture, dependencies |
@@ -174,13 +174,13 @@ Environment-file review findings also name their evidence class: a committed tem
 
 For the `Oversized Source Files` review signal, PARTHA evaluates only authored source-code extensions above the configured threshold. It excludes documentation and configuration files, common dependency lockfiles, generated or minified filenames, and files under vendor, generated, dependency, or build-output directories. The finding includes each retained file's measured byte size; size is a review signal, not a diagnosis of a design issue.
 
-**Product-consumed provenance: incomplete.** The new persistence schema can store complete `ri.v1` provenance and the standalone extractors can produce it, but the current product path still consumes the legacy regex engine. Specifically:
+**Product-consumed provenance: incomplete.** Architecture relationships expose exact snapshot fact IDs and line spans when a sealed `ri.v1` snapshot exists, but product ingestion does not create one yet and other product paths still consume the legacy regex engine. Specifically:
 
 - **No line spans.** `SourceSymbol` has `id`, `name`, `kind`, `file_path`, and `exported`. It has **no start or end line**. Nothing in the model records where in a file a fact was found.
 - **No extraction method on the fact.** A consumer cannot tell whether a given fact was matched deterministically or inferred heuristically. That distinction lives in this document, not in the data.
 - **Revision identity is now exact at the repository boundary.** GitHub imports store a 40-character commit plus resolved ref; uploads store a `sha256:` archive identity. Legacy JSON facts still are not individually revision-addressed, while conforming snapshot rows are.
 
-The honest summary: **the persistence layer can retain exact revisions, spans, producer versions, and derivations, and the extractor boundary emits conforming spans; today's product consumers still receive only the legacy file-level facts.** No line-cited product claim exists until the durable snapshot workflow populates and serves conforming snapshots.
+The honest summary: **the persistence layer can retain exact revisions, spans, producer versions, and derivations, and the Architecture Graph can serve evidence-backed relationships from a conforming sealed snapshot; normal product ingestion does not populate that snapshot yet.** Without one, the graph returns `not-extracted` rather than claiming that a module is isolated.
 
 This is why AI answers carry no citations. The AI context builder deliberately emits an empty citation list and sends the provider **no source content and no line numbers** — fabricating `1:1` placeholder citations would misrepresent a structural answer as line-level evidence. See [`app/ai/repository_context.py`](../../apps/backend/app/ai/repository_context.py).
 
@@ -192,7 +192,7 @@ Do not describe PARTHA as having evidence-backed or grounded output until line s
 
 - **Symbols:** regex-derived, Python and TS/JS only, no line spans, no signatures, no nesting, no cross-file resolution. Matches inside comments and strings are not excluded.
 - **Line spans:** emitted by the Python and TypeScript extractors and returned unchanged when a sealed snapshot exists, but product ingestion does not yet create those snapshots.
-- **Graph production and consumption:** normalized immutable graph tables, syntax-aware producers, and a sealed-snapshot query API exist, but no durable product job populates them and product surfaces still read the legacy JSON blob.
+- **Graph production and consumption:** normalized immutable graph tables, syntax-aware producers, and a sealed-snapshot query API exist. Architecture relationships consume sealed facts when present, but no durable product job populates them; module classification and other product surfaces still read the legacy JSON blob.
 - **Relationships:** four of the eight declared types are never emitted. An import edge resolves to a declared dependency when the name matches and otherwise creates an `external:` node — there is no real module resolution.
 - **Revision identity:** first-class and immutable per imported repository revision. Snapshot history can be retained, but diff/query APIs and product re-analysis orchestration are not implemented.
 - **Dependencies:** three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The dependency API reports both assessments as explicit `not_computed` statuses; it emits no clean result or count without a scanner.

@@ -114,8 +114,9 @@ def get_repository_service(
 
 def get_architecture_analyzer(
     intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
+    snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
 ) -> ArchitectureAnalyzer:
-    return ArchitectureAnalyzer(intelligence)
+    return ArchitectureAnalyzer(intelligence, snapshots)
 
 
 def get_dependency_graph_builder(

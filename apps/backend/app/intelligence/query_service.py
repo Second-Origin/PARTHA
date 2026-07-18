@@ -1,12 +1,36 @@
 """Read-only, owner-scoped queries over sealed ``ri.v1`` snapshots (#92)."""
 
 from collections import defaultdict
+from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError, UnsupportedSchemaVersionError
-from app.models.snapshot import RiAssertion, RiDerivation, RiEdge, RiEvidence, RiNode, RiSnapshot
+from app.models.snapshot import (
+    RiAssertion,
+    RiDerivation,
+    RiDiagnostic,
+    RiEdge,
+    RiEvidence,
+    RiNode,
+    RiObservation,
+    RiSnapshot,
+)
+
+
+@dataclass(frozen=True)
+class ArchitectureSnapshotFacts:
+    """Persisted facts needed to build evidence-backed architecture relationships."""
+
+    snapshot: RiSnapshot
+    nodes: list[RiNode]
+    observations: list[RiObservation]
+    edges: list[RiEdge]
+    node_evidence: dict[int, list[RiEvidence]]
+    observation_evidence: dict[int, list[RiEvidence]]
+    edge_evidence: dict[int, list[RiEvidence]]
+    diagnostics: list[RiDiagnostic]
 
 
 class SnapshotQueryService:
@@ -20,6 +44,65 @@ class SnapshotQueryService:
 
     def metadata(self, snapshot_id: str) -> RiSnapshot:
         return self._snapshot(snapshot_id)
+
+    def architecture_facts(self, repository_id: str) -> ArchitectureSnapshotFacts | None:
+        """Return the newest sealed snapshot facts for an owner-scoped repository.
+
+        This internal consumer query uses the normalized store behind the public
+        #92 endpoints. ``None`` means no sealed snapshot is available; it is not
+        evidence that the repository has no relationships.
+        """
+
+        snapshot = self._latest_snapshot(repository_id)
+        if snapshot is None:
+            return None
+        nodes = list(
+            self.db.scalars(
+                select(RiNode)
+                .where(RiNode.snapshot_id == snapshot.snapshot_id)
+                .order_by(RiNode.stable_key, RiNode.id)
+            ).all()
+        )
+        edges = list(
+            self.db.scalars(
+                select(RiEdge)
+                .where(RiEdge.snapshot_id == snapshot.snapshot_id)
+                .order_by(RiEdge.subject_key, RiEdge.predicate, RiEdge.object_key, RiEdge.edge_id, RiEdge.id)
+            ).all()
+        )
+        observations = list(
+            self.db.scalars(
+                select(RiObservation)
+                .where(RiObservation.snapshot_id == snapshot.snapshot_id)
+                .order_by(RiObservation.observation_id, RiObservation.id)
+            ).all()
+        )
+        diagnostics = list(
+            self.db.scalars(
+                select(RiDiagnostic)
+                .where(RiDiagnostic.snapshot_id == snapshot.snapshot_id)
+                .order_by(
+                    RiDiagnostic.path,
+                    RiDiagnostic.span_start_line,
+                    RiDiagnostic.code,
+                    RiDiagnostic.id,
+                )
+            ).all()
+        )
+        return ArchitectureSnapshotFacts(
+            snapshot=snapshot,
+            nodes=nodes,
+            observations=observations,
+            edges=edges,
+            node_evidence=self._evidence_for(snapshot, "node_ref", [node.id for node in nodes]),
+            observation_evidence=self._evidence_for(
+                snapshot,
+                "observation_ref",
+                [observation.id for observation in observations],
+            ),
+            edge_evidence=self._evidence_for(snapshot, "edge_ref", [edge.id for edge in edges]),
+            diagnostics=diagnostics,
+        )
 
     def symbols(self, snapshot_id: str, *, offset: int, limit: int) -> tuple[RiSnapshot, list[RiNode], int]:
         snapshot = self._snapshot(snapshot_id)
@@ -167,6 +250,26 @@ class SnapshotQueryService:
         if snapshot is None:
             raise NotFoundError("Snapshot not found.")
         if snapshot.schema_version not in self.supported_schema_versions:
+            raise UnsupportedSchemaVersionError(
+                f"Unsupported snapshot schema version: {snapshot.schema_version}.",
+                details={"received": snapshot.schema_version, "supported": list(self.supported_schema_versions)},
+            )
+        return snapshot
+
+    def _latest_snapshot(self, repository_id: str) -> RiSnapshot | None:
+        from app.models.repository import RepositoryRecord
+
+        snapshot = self.db.scalars(
+            select(RiSnapshot)
+            .join(RepositoryRecord, RepositoryRecord.id == RiSnapshot.repository_id)
+            .where(
+                RiSnapshot.repository_id == repository_id,
+                RiSnapshot.state == "completed",
+                RepositoryRecord.owner_id == self.owner_id,
+            )
+            .order_by(RiSnapshot.sealed_at.desc(), RiSnapshot.snapshot_id)
+        ).first()
+        if snapshot is not None and snapshot.schema_version not in self.supported_schema_versions:
             raise UnsupportedSchemaVersionError(
                 f"Unsupported snapshot schema version: {snapshot.schema_version}.",
                 details={"received": snapshot.schema_version, "supported": list(self.supported_schema_versions)},
