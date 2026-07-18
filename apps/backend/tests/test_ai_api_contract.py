@@ -26,6 +26,8 @@ class ContractProvider:
 class ConnectionTestProvider:
     async def complete(self, config: AiProviderConfig, prompt: PromptBundle) -> AiProviderResponse:
         assert config.provider == "openai"
+        assert config.api_key == "test-key"
+        assert config.model == "test-model"
         assert prompt.system_prompt == "Reply with the single word: ok"
         assert prompt.user_prompt == "Connection test."
         return AiProviderResponse(content="ok")

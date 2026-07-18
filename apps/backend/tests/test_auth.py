@@ -238,6 +238,25 @@ def test_logout_revokes_and_is_idempotent(client):
     assert client.post("/auth/logout").status_code == 204
 
 
+def test_logout_rate_limit_error_uses_the_standard_envelope(client, monkeypatch):
+    # Logout is a public, idempotent route. Set its real middleware budget to
+    # zero so the first ASGI request deterministically exercises its documented
+    # 429 response without changing the route or relying on timing.
+    settings = client.app.state.rate_limit_settings
+    monkeypatch.setattr(
+        client.app.state,
+        "rate_limit_settings",
+        settings.model_copy(update={"rate_limit_default_per_minute": 0}),
+    )
+
+    response = client.post("/auth/logout")
+
+    error = assert_error_response(response, 429, "rate_limited")
+    assert error.details is not None
+    assert error.details["retryAfterSeconds"] >= 1
+    assert int(response.headers["Retry-After"]) >= 1
+
+
 # --- storage hygiene ----------------------------------------------------------
 
 
