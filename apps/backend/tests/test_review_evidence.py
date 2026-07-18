@@ -60,7 +60,9 @@ def test_findings_carry_specific_impact_and_evidence(tmp_path: Path):
     assert all(finding.problem != finding.title for finding in review.findings)
 
     # Real, file-level evidence is attached where it exists.
-    assert ".env" in findings["env-file-present"].affected_files
+    assert ".env" in findings["env-secret-like-value-detected"].affected_files
+    assert findings["env-secret-like-value-detected"].severity == "critical"
+    assert "API_SECRET" in findings["env-secret-like-value-detected"].problem
     assert findings["large-files"].affected_files
     assert any("big.ts" in path for path in findings["large-files"].affected_files)
 
