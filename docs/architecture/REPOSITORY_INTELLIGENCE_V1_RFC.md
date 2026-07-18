@@ -1727,7 +1727,7 @@ rules), the three columns are explicit:
 | Relationships | Deterministic resolver over stored observations, with resolved edges and explicit unresolved/ambiguous diagnostics | Resolved edges + diagnostics (§5) | **Implemented** (#91); product job wiring remains #93 |
 | Inferred entity properties | Legacy heuristic module roles remain in the compatibility blob; the snapshot store supports separate validated assertions | Separate inferred property assertions; observed nodes remain unique (§5.6) | **Persistence implemented** (#88); production inference/querying remains #91/#92 |
 | Provenance | Extractors emit path + span + producer/version and the normalized store validates them; legacy product consumers still receive file paths only | Path + span + extractor/version (§6) | **Producer and persistence implemented** (#88–#90); product orchestration/querying remains #92/#93 |
-| Query API | Consumers read the whole blob | Versioned owner-scoped read API (§9.5) | **Unimplemented** (#92) |
+| Query API | Consumers read the whole blob | Versioned owner-scoped read API (§9.5) | **Implemented** (#92); durable population and consumer migration remain separate work |
 | Evidence-backed output | AI emits empty citation lists | Every claim cites a valid span (§7.4) | **Unimplemented** (#95) |
 
 **This RFC does not claim every capability in the "Accepted contract" column is current product
@@ -1736,7 +1736,7 @@ behavior.** RFC-0001 is **Accepted** — independently ratified by
 ([§1](#1-status-and-approval)); acceptance records the governing contract, not a claim of
 implementation. The #87 revision identity and #88 immutable snapshot-persistence boundary are
 implemented against that accepted contract, as the status column records. The #89/#90 producers
-and #94 benchmark plus #91 deterministic resolution are implemented; queries, jobs, and consumer migration remain
+and #94 benchmark plus #91 deterministic resolution and #92 sealed-snapshot queries are implemented; durable jobs and consumer migration remain
 downstream work and are not current product behavior. No existing documentation is rewritten by
 this RFC to imply otherwise.
 
