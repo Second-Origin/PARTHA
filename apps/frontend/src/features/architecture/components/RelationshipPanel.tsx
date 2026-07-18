@@ -14,7 +14,8 @@ export function RelationshipPanel() {
     : [];
   const diagnostics = selectedNode
     ? model.diagnostics.filter((diagnostic) => (
-        (diagnostic.path && selectedNode.files.includes(diagnostic.path))
+        diagnostic.nodeIds?.includes(selectedNode.id)
+        || (diagnostic.path && selectedNode.files.includes(diagnostic.path))
         || diagnostic.subjectKey === selectedNode.id
         || diagnostic.objectKey === selectedNode.id
       ))
@@ -99,7 +100,7 @@ export function RelationshipPanel() {
             {selectedNode && diagnostics.length > 0 && (
               <div className="pt-2 space-y-1">
                 {diagnostics.map((diagnostic, index) => (
-                  <p key={`${diagnostic.code}-${diagnostic.path ?? index}`} className="text-[10px] text-amber-400">
+                  <p key={`${diagnostic.code}-${diagnostic.path ?? 'unknown'}-${diagnostic.startLine ?? 'unknown'}-${index}`} className="text-[10px] text-amber-400">
                     {diagnostic.code}: {diagnostic.message}
                     {diagnostic.path && ` (${diagnostic.path}${diagnostic.startLine ? `:${diagnostic.startLine}` : ''})`}
                   </p>

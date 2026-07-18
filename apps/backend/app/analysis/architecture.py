@@ -4,6 +4,7 @@ from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.intelligence.query_service import ArchitectureSnapshotFacts, SnapshotQueryService
 from app.intelligence.models import RepositoryModule
 from app.models.repository import RepositoryRecord
+from app.models.snapshot import RiDiagnostic, RiEvidence, RiNode
 from app.schemas.architecture import (
     ArchEdge,
     ArchEvidence,
@@ -82,6 +83,12 @@ class ArchitectureAnalyzer:
         nodes = self._nodes_for_modules(modules)
         nodes.extend(self._dependency_nodes(facts))
         edges, diagnostics, unresolved_node_ids, covered_paths = self._edges_for_modules(modules, nodes, facts)
+        edge_endpoint_ids = {node_id for edge in edges for node_id in (edge.source, edge.target)}
+        nodes = [node for node in nodes if node.layer != "external" or node.id in edge_endpoint_ids]
+        remaining_node_ids = {node.id for node in nodes}
+        for diagnostic in diagnostics:
+            if diagnostic.node_ids is not None:
+                diagnostic.node_ids = [node_id for node_id in diagnostic.node_ids if node_id in remaining_node_ids] or None
         self._set_relationship_states(modules, nodes, edges, unresolved_node_ids, covered_paths, facts is not None)
         layers = self._layers_for_nodes(nodes)
         arch_modules = [
@@ -208,7 +215,7 @@ class ArchitectureAnalyzer:
                 modules_by_file.setdefault(self._normalize_path(path), []).append(module.id)
         snapshot_node_by_key = {item.stable_key: item for item in facts.nodes}
         node_ids = {node.id for node in nodes}
-        diagnostics = [self._architecture_diagnostic(item) for item in facts.diagnostics]
+        diagnostics = [self._architecture_diagnostic(item, modules_by_file, node_ids) for item in facts.diagnostics]
         unresolved_node_ids: set[str] = set()
         # Inventory-only file nodes prove that a path exists, not that a
         # relationship-capable extractor ran. Count only evidence emitted by a
@@ -255,13 +262,43 @@ class ArchitectureAnalyzer:
                 facts,
                 is_subject=False,
             )
+            root_scope_evidence = [
+                item
+                for item in evidence_rows
+                if fact.predicate == "depends_on"
+                and fact.subject_kind == "repository"
+                and not posixpath.dirname(self._normalize_path(item.path))
+            ]
+            if root_scope_evidence:
+                diagnostics.append(
+                    ArchitectureDiagnostic(
+                        code="ARCH-REL-REPO-SCOPED",
+                        category="relationship mapping",
+                        severity="info",
+                        message="A repository-root dependency declaration is kept repository-scoped and is not attributed to modules.",
+                        path=root_scope_evidence[0].path,
+                        start_line=root_scope_evidence[0].start_line,
+                        end_line=root_scope_evidence[0].end_line,
+                        subject_key=fact.subject_key,
+                        object_key=fact.object_key,
+                        details={"factId": fact.edge_id, "predicate": fact.predicate},
+                        node_ids=[fact.object_key] if fact.object_key in node_ids else None,
+                    )
+                )
+                if len(root_scope_evidence) == len(evidence_rows):
+                    continue
             pairs = sorted(
                 (source, target)
                 for source in source_ids
                 for target in target_ids
                 if source in node_ids and target in node_ids
             )
-            if not pairs:
+            non_self_pairs = [(source, target) for source, target in pairs if source != target]
+            if pairs and not non_self_pairs:
+                # A resolved fact wholly inside one architecture module remains
+                # extraction evidence, but it is not a module-to-module edge.
+                continue
+            if not non_self_pairs:
                 diagnostics.append(
                     ArchitectureDiagnostic(
                         code="ARCH-REL-ENDPOINT-UNMAPPED",
@@ -274,6 +311,7 @@ class ArchitectureAnalyzer:
                         subject_key=fact.subject_key,
                         object_key=fact.object_key,
                         details={"factId": fact.edge_id, "predicate": fact.predicate},
+                        node_ids=sorted(source_ids | target_ids) or None,
                     )
                 )
                 unresolved_node_ids.update(source_ids | target_ids)
@@ -288,8 +326,8 @@ class ArchitectureAnalyzer:
                 )
                 for item in evidence_rows
             ]
-            for index, (source, target) in enumerate(pairs, start=1):
-                edge_id = fact.edge_id if len(pairs) == 1 else f"{fact.edge_id}:{index}"
+            for index, (source, target) in enumerate(non_self_pairs, start=1):
+                edge_id = fact.edge_id if len(non_self_pairs) == 1 else f"{fact.edge_id}:{index}"
                 edges.append(
                     ArchEdge(
                         id=edge_id,
@@ -320,10 +358,10 @@ class ArchitectureAnalyzer:
         self,
         node_kind: str,
         stable_key: str,
-        edge_evidence,
+        edge_evidence: list[RiEvidence],
         modules_by_file: dict[str, list[str]],
         module_by_id: dict[str, RepositoryModule],
-        snapshot_node_by_key,
+        snapshot_node_by_key: dict[str, RiNode],
         facts: ArchitectureSnapshotFacts,
         *,
         is_subject: bool,
@@ -356,11 +394,17 @@ class ArchitectureAnalyzer:
             }
         return set()
 
-    def _modules_for_evidence_scope(self, evidence, module_by_id: dict[str, RepositoryModule]) -> set[str]:
+    def _modules_for_evidence_scope(
+        self,
+        evidence: list[RiEvidence],
+        module_by_id: dict[str, RepositoryModule],
+    ) -> set[str]:
         result: set[str] = set()
         for item in evidence:
             path = self._normalize_path(item.path)
             directory = posixpath.dirname(path)
+            if not directory:
+                continue
             for module in module_by_id.values():
                 if any(
                     self._path_is_within(self._normalize_path(file_path), directory)
@@ -392,7 +436,24 @@ class ArchitectureAnalyzer:
             else:
                 node.relationship_state = "not-extracted"
 
-    def _architecture_diagnostic(self, item) -> ArchitectureDiagnostic:
+    def _architecture_diagnostic(
+        self,
+        item: RiDiagnostic,
+        modules_by_file: dict[str, list[str]],
+        node_ids: set[str],
+    ) -> ArchitectureDiagnostic:
+        attributed_node_ids: set[str] = set()
+        if item.path:
+            attributed_node_ids.update(modules_by_file.get(self._normalize_path(item.path), []))
+        for key in (item.subject_key, item.object_key):
+            if key is None:
+                continue
+            if key in node_ids:
+                attributed_node_ids.add(key)
+                continue
+            path = self._path_for_stable_key("file" if key.startswith("file:") else "symbol", key)
+            if path is not None:
+                attributed_node_ids.update(modules_by_file.get(path, []))
         return ArchitectureDiagnostic(
             code=item.code,
             category=item.category,
@@ -404,6 +465,7 @@ class ArchitectureAnalyzer:
             subject_key=item.subject_key,
             object_key=item.object_key,
             details=dict(item.details) if item.details is not None else None,
+            node_ids=sorted(attributed_node_ids) or None,
         )
 
     @staticmethod

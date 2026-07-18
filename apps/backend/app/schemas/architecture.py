@@ -47,6 +47,7 @@ class ArchitectureDiagnostic(CamelModel):
     subject_key: str | None = None
     object_key: str | None = None
     details: dict[str, object] | None = None
+    node_ids: list[str] | None = None
 
 
 class ArchNode(CamelModel):

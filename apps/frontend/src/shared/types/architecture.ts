@@ -70,6 +70,7 @@ export interface ArchitectureDiagnostic {
   subjectKey?: string;
   objectKey?: string;
   details?: Record<string, unknown>;
+  nodeIds?: string[];
 }
 
 export interface ArchLayer {

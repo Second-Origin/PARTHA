@@ -31,11 +31,16 @@ def _upload(auth_client, files: dict[str, bytes]) -> dict:
     return repository
 
 
-def _persist_snapshot(repository_id: str, sources: dict[str, bytes]) -> str:
+def _persist_snapshot(
+    repository_id: str,
+    sources: dict[str, bytes],
+    *,
+    snapshot_sources: dict[str, bytes] | None = None,
+) -> str:
     from app.core.database import SessionLocal
 
     pipeline = ExtractionPipeline([TypeScriptExtractor(), DependencyManifestExtractor()])
-    runs = pipeline.run(sources)
+    runs = pipeline.run(snapshot_sources or sources)
     producer_version_set = sorted({run.producer for run in runs} | {"relationship-resolver@1.0.0"})
 
     with SessionLocal() as session:
@@ -105,11 +110,14 @@ def _evidence(item, extractor: str, version: str) -> Evidence:
 def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
     sources = {
         "README.md": b"# Architecture fixture\n",
+        "package.json": b'{\n  "dependencies": {\n    "lodash": "4.17.21"\n  }\n}\n',
         "src/alpha/index.ts": (
             b"import { beta } from '../beta';\n"
+            b"import { helper } from './util';\n"
             b"import React from 'react';\n"
-            b"export const alpha = beta();\n"
+            b"export const alpha = beta() + helper();\n"
         ),
+        "src/alpha/util.ts": b"export function helper() { return 1; }\n",
         "src/beta/index.ts": b"export function beta() { return 1; }\n",
         "src/lonely/index.ts": b"export const lonely = 1;\n",
         "src/ambiguous/index.ts": b"import '../shared';\nexport const ambiguous = 1;\n",
@@ -137,8 +145,8 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
     nodes = {node["id"]: node for node in architecture["nodes"]}
 
     # Both modules have the same persisted role (entrypoint); neither is collapsed.
-    assert nodes["module:alpha"]["tags"][1] == "entrypoint"
-    assert nodes["module:beta"]["tags"][1] == "entrypoint"
+    assert "entrypoint" in nodes["module:alpha"]["tags"]
+    assert "entrypoint" in nodes["module:beta"]["tags"]
     assert architecture["relationshipSnapshotId"] == snapshot_id
 
     import_edges = [
@@ -164,6 +172,14 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
     assert "module:alpha" in nodes["module:beta"]["dependents"]
     assert nodes["module:alpha"]["relationshipState"] == "connected"
     assert nodes["module:beta"]["relationshipState"] == "connected"
+    assert any(
+        item["source"] == "module:alpha"
+        and item["target"] == "module:beta"
+        and item["predicate"] == "calls"
+        for item in architecture["edges"]
+    )
+    assert not any(item["source"] == item["target"] for item in architecture["edges"])
+    assert not any(item["code"] == "ARCH-REL-ENDPOINT-UNMAPPED" for item in architecture["diagnostics"])
 
     dependency_edges = [
         item
@@ -171,6 +187,17 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
         if item["source"] == "module:alpha" and item["target"] == "dep:npm:react"
     ]
     assert {item["predicate"] for item in dependency_edges} == {"imports", "depends_on"}
+    assert not any(item["target"] == "dep:npm:lodash" for item in architecture["edges"])
+    assert "dep:npm:lodash" not in nodes
+    assert "dep:npm:react" in nodes
+    root_scope_diagnostic = next(
+        item
+        for item in architecture["diagnostics"]
+        if item["code"] == "ARCH-REL-REPO-SCOPED"
+        and item["path"] == "package.json"
+        and item["severity"] == "info"
+    )
+    assert root_scope_diagnostic["nodeIds"] is None
     assert nodes["module:lonely"]["relationshipState"] == "no-observed-relationships"
     assert nodes["module:documentation"]["relationshipState"] == "not-extracted"
 
@@ -191,6 +218,31 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
         and item["startLine"] == edge["evidence"][0]["startLine"]
         for item in evidence_response.json()["data"]
     )
+
+
+def test_architecture_reports_resolved_facts_without_module_mapping(auth_client):
+    sources = {
+        "README.md": b"# Mapping fixture\n",
+        "src/beta/index.ts": b"export function beta() { return 1; }\n",
+    }
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(
+        repository["id"],
+        sources,
+        snapshot_sources={
+            **sources,
+            "unmapped.ts": b"import { beta } from './src/beta';\nexport const use = beta();\n",
+        },
+    )
+
+    response = auth_client.get(f"/analysis/{repository['id']}/architecture")
+
+    assert response.status_code == 200
+    architecture = response.json()
+    diagnostic = next(item for item in architecture["diagnostics"] if item["code"] == "ARCH-REL-ENDPOINT-UNMAPPED")
+    assert diagnostic["subjectKey"] == "file:unmapped.ts"
+    assert diagnostic["objectKey"] == "file:src/beta/index.ts"
+    assert diagnostic["nodeIds"] == ["module:beta"]
 
 
 def test_architecture_without_snapshot_does_not_claim_isolation(auth_client):
@@ -215,5 +267,6 @@ def test_architecture_without_snapshot_does_not_claim_isolation(auth_client):
             "subjectKey": None,
             "objectKey": None,
             "details": None,
+            "nodeIds": None,
         }
     ]
