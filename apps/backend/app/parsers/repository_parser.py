@@ -16,6 +16,13 @@ IGNORED_DIRS = {
     ".venv",
     "venv",
     "__pycache__",
+    ".cache",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".tox",
+    "vendor",
+    "vendors",
+    "generated",
 }
 
 LANGUAGE_BY_EXTENSION = {

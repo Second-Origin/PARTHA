@@ -20,6 +20,8 @@ class DependencyGraphBuilder:
                 name=dependency.name,
                 version=dependency.version,
                 type=dependency.type,
+                ecosystem=dependency.ecosystem,
+                declarations=dependency.declarations,
                 size=None,
             )
             for dependency in repository_intelligence.dependencies
@@ -35,6 +37,8 @@ class DependencyGraphBuilder:
             nodes=nodes,
             edges=edges,
             total_dependencies=len(nodes),
+            manifest_count=repository_intelligence.dependency_manifest_count,
+            diagnostics=repository_intelligence.dependency_diagnostics,
             vulnerability_assessment=DependencyAssessment(status="not_computed"),
             outdated_assessment=DependencyAssessment(status="not_computed"),
         )
