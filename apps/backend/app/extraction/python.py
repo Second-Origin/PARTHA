@@ -222,6 +222,14 @@ class PythonExtractor:
     def _collect_imports(
         self, tree, path, line_count, module_key, observations, diagnostics
     ) -> None:
+        # Only direct module-level imports can safely act as file-wide name
+        # bindings. A function- or block-local binding must not leak into an
+        # unrelated call site during downstream resolution.
+        module_binding_statements = {
+            id(statement)
+            for statement in tree.body
+            if isinstance(statement, (ast.Import, ast.ImportFrom))
+        }
         for node in ast.walk(tree):
             names: list[str] = []
             bindings: list[tuple[str, str, str]] = []
@@ -236,11 +244,12 @@ class PythonExtractor:
                     for alias in node.names
                     if alias.name != "*"
                 ]
-                bindings = [
-                    (module_specifier, alias.name, alias.asname or alias.name)
-                    for alias in node.names
-                    if alias.name != "*" and module_specifier
-                ]
+                if id(node) in module_binding_statements:
+                    bindings = [
+                        (module_specifier, alias.name, alias.asname or alias.name)
+                        for alias in node.names
+                        if alias.name != "*" and module_specifier
+                    ]
             else:
                 continue
             for name in names:
@@ -429,14 +438,24 @@ class PythonExtractor:
         local, imported, or ambiguous) is deliberately deferred to #91.
         """
 
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
-                continue
+        def is_lexically_local(name: str, scope: _BindingScope) -> bool:
+            if name in scope.global_names:
+                return False
+            if name in scope.nonlocal_names:
+                parent = scope._nonlocal_parent()
+                return parent is not None and is_lexically_local(name, parent)
+            if name in scope.bindings:
+                return scope.kind != "module"
+            return scope.parent is not None and is_lexically_local(name, scope.parent)
+
+        def emit(node: ast.Call, scope: _BindingScope) -> None:
+            if not isinstance(node.func, ast.Name):
+                return
             # These direct calls are already declared unsupported by the source
             # support matrix.  They retain their explicit diagnostic, but must
             # not become resolver input (or an observed relationship fact).
             if node.func.id in {"dir", "getattr", "hasattr", "setattr", "vars"}:
-                continue
+                return
             evidence, diagnostic = build_evidence(
                 path, node.lineno, node.end_lineno or node.lineno,
                 line_count, producer=self.producer,
@@ -444,7 +463,7 @@ class PythonExtractor:
             if evidence is None:
                 if diagnostic is not None:
                     diagnostics.append(diagnostic)
-                continue
+                return
             observations.append(
                 ExtractedObservation(
                     observed_kind="call",
@@ -455,6 +474,81 @@ class PythonExtractor:
                     evidence=evidence,
                 )
             )
+            if is_lexically_local(node.func.id, scope):
+                observations.append(
+                    ExtractedObservation(
+                        observed_kind="call_shadowed",
+                        subject_kind="module",
+                        subject_key=module_key,
+                        referent_text=node.func.id,
+                        ordinal=_UNASSIGNED_ORDINAL,
+                        evidence=evidence,
+                    )
+                )
+
+        def scan_signature(node, scope: _BindingScope) -> None:
+            for decorator in node.decorator_list:
+                scan(decorator, scope)
+            for default in (*node.args.defaults, *node.args.kw_defaults):
+                if default is not None:
+                    scan(default, scope)
+            for argument in (
+                *node.args.posonlyargs,
+                *node.args.args,
+                *node.args.kwonlyargs,
+            ):
+                if argument.annotation is not None:
+                    scan(argument.annotation, scope)
+            if node.args.vararg is not None and node.args.vararg.annotation is not None:
+                scan(node.args.vararg.annotation, scope)
+            if node.args.kwarg is not None and node.args.kwarg.annotation is not None:
+                scan(node.args.kwarg.annotation, scope)
+            if getattr(node, "returns", None) is not None:
+                scan(node.returns, scope)
+
+        def class_scope(node: ast.ClassDef, parent: _BindingScope) -> _BindingScope:
+            declarations = _ScopeDeclarations()
+            for statement in node.body:
+                declarations.visit(statement)
+            return _BindingScope(
+                parent,
+                kind="class",
+                bindings={name: _BINDING_LOCAL for name in declarations.names},
+            )
+
+        def scan(node, scope: _BindingScope) -> None:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                scan_signature(node, scope)
+                function_scope = self._function_scope(node, self._function_parent(scope))
+                for statement in node.body:
+                    scan(statement, function_scope)
+                return
+            if isinstance(node, ast.Lambda):
+                for default in (*node.args.defaults, *node.args.kw_defaults):
+                    if default is not None:
+                        scan(default, scope)
+                lambda_scope = self._function_scope(node, self._function_parent(scope))
+                scan(node.body, lambda_scope)
+                return
+            if isinstance(node, ast.ClassDef):
+                for decorator in node.decorator_list:
+                    scan(decorator, scope)
+                for base in node.bases:
+                    scan(base, scope)
+                for keyword in node.keywords:
+                    scan(keyword.value, scope)
+                nested_scope = class_scope(node, scope)
+                for statement in node.body:
+                    scan(statement, nested_scope)
+                return
+            if isinstance(node, ast.Call):
+                emit(node, scope)
+            for child in ast.iter_child_nodes(node):
+                scan(child, scope)
+
+        module_scope = _BindingScope()
+        for statement in tree.body:
+            scan(statement, module_scope)
 
     def _attribute_root(self, node):
         """Resolve ``a.b.c`` to its root ``Name``, or None if not name-rooted."""

@@ -456,6 +456,164 @@ def test_python_absolute_from_import_with_two_module_candidates_is_ambiguous(ses
     assert store.seal(snapshot).state == "completed"
 
 
+def test_shadowed_typescript_parameter_does_not_resolve_to_same_file_global(session):
+    store, snapshot = _store(session, ["typescript-ast@1.0.0", RESOLVER_PRODUCER])
+    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
+        Evidence("src/main.ts", 1, 1, "typescript-ast", "1.0.0", 2)
+    ])
+    _persist_extraction(
+        store,
+        snapshot,
+        TypeScriptExtractor().extract(
+            "src/main.ts",
+            b"export function target() { return 1; }\n"
+            b"export function caller(target: () => number) { return target(); }\n",
+        ),
+        "typescript-ast",
+    )
+
+    result = RelationshipResolver(store).resolve(snapshot)
+
+    assert result.diagnostics_added == 1
+    assert (
+        "src/main.ts::caller",
+        "calls",
+        "src/main.ts::target",
+    ) not in _edge_triples(session, snapshot)
+    diagnostic = session.scalar(
+        select(RiDiagnostic).where(
+            RiDiagnostic.snapshot_id == snapshot.snapshot_id,
+            RiDiagnostic.code == "RI-RES-UNRESOLVED",
+        )
+    )
+    assert diagnostic is not None
+    assert diagnostic.message == "calls target is shadowed by a local binding"
+
+
+def test_shadowed_python_parameter_does_not_resolve_to_same_file_global(session):
+    store, snapshot = _store(session, ["python-ast@1.0.0", RESOLVER_PRODUCER])
+    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
+        Evidence("app/main.py", 1, 1, "python-ast", "1.0.0", 4)
+    ])
+    store.add_node(snapshot, node_kind="file", stable_key="file:app/main.py", evidence=[
+        Evidence("app/main.py", 1, 4, "python-ast", "1.0.0", 4, "file")
+    ])
+    _persist_extraction(
+        store,
+        snapshot,
+        PythonExtractor().extract(
+            "app/main.py",
+            b"def target():\n    return 1\n"
+            b"def caller(target):\n    return target()\n",
+        ),
+        "python-ast",
+    )
+
+    result = RelationshipResolver(store).resolve(snapshot)
+
+    assert result.diagnostics_added == 1
+    assert (
+        "app/main.py::caller",
+        "calls",
+        "app/main.py::target",
+    ) not in _edge_triples(session, snapshot)
+
+
+def test_default_imported_react_route_handler_resolves(session):
+    store, snapshot = _store(session, ["typescript-ast@1.0.0", RESOLVER_PRODUCER])
+    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
+        Evidence("src/routes.tsx", 1, 1, "typescript-ast", "1.0.0", 2)
+    ])
+    extractor = TypeScriptExtractor()
+    _persist_extraction(
+        store,
+        snapshot,
+        extractor.extract(
+            "src/Home.tsx",
+            b"const Home = () => null;\nexport default Home;\n",
+        ),
+        "typescript-ast",
+    )
+    _persist_extraction(
+        store,
+        snapshot,
+        extractor.extract(
+            "src/routes.tsx",
+            b"import Home from './Home';\n"
+            b"const routes = createBrowserRouter([{ path: '/', Component: Home }]);\n",
+        ),
+        "typescript-ast",
+    )
+
+    RelationshipResolver(store).resolve(snapshot)
+
+    assert (
+        "src/routes.tsx::(anonymous:route#1)",
+        "routes_to",
+        "src/Home.tsx::Home",
+    ) in _edge_triples(session, snapshot)
+
+
+def test_top_level_and_recursive_calls_resolve_without_dropping_self_edges(session):
+    store, snapshot = _store(session, ["typescript-ast@1.0.0", RESOLVER_PRODUCER])
+    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
+        Evidence("src/main.ts", 1, 1, "typescript-ast", "1.0.0", 4)
+    ])
+    _persist_extraction(
+        store,
+        snapshot,
+        TypeScriptExtractor().extract(
+            "src/main.ts",
+            b"export function recurse(value: number): number {\n"
+            b"  return value > 0 ? recurse(value - 1) : value;\n"
+            b"}\n"
+            b"recurse(2);\n",
+        ),
+        "typescript-ast",
+    )
+
+    result = RelationshipResolver(store).resolve(snapshot)
+
+    assert result.diagnostics_added == 0
+    triples = _edge_triples(session, snapshot)
+    assert (
+        "src/main.ts::recurse",
+        "calls",
+        "src/main.ts::recurse",
+    ) in triples
+    assert (
+        "file:src/main.ts",
+        "calls",
+        "src/main.ts::recurse",
+    ) in triples
+
+
+def test_abstract_generic_implements_resolves_to_base_interface(session):
+    store, snapshot = _store(session, ["typescript-ast@1.0.0", RESOLVER_PRODUCER])
+    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
+        Evidence("src/worker.ts", 1, 1, "typescript-ast", "1.0.0", 2)
+    ])
+    _persist_extraction(
+        store,
+        snapshot,
+        TypeScriptExtractor().extract(
+            "src/worker.ts",
+            b"export interface Worker<T> { run(value: T): void; }\n"
+            b"export abstract class Runner implements Worker<string> { abstract run(value: string): void; }\n",
+        ),
+        "typescript-ast",
+    )
+
+    result = RelationshipResolver(store).resolve(snapshot)
+
+    assert result.diagnostics_added == 0
+    assert (
+        "src/worker.ts::Runner",
+        "implements",
+        "src/worker.ts::Worker",
+    ) in _edge_triples(session, snapshot)
+
+
 def test_python_relative_import_still_resolves_to_the_sibling_module(session):
     store, snapshot = _python_import_snapshot(
         session, b"from .service import run\n", files=["app/main.py", "app/service.py"]

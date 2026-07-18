@@ -142,7 +142,9 @@ class TypeScriptExtractor:
         )
         self._collect_implements(tree.root_node, path, line_count, nodes, observations)
         self._collect_imports(tree.root_node, path, line_count, file_key, observations)
-        self._collect_routes(tree.root_node, path, line_count, file_key, nodes, observations)
+        self._collect_routes(
+            tree.root_node, path, line_count, file_key, nodes, observations, diagnostics
+        )
         self._collect_calls(tree.root_node, path, line_count, file_key, observations)
         self._collect_blind_spots(tree.root_node, path, line_count, diagnostics)
         return ExtractionResult(
@@ -192,13 +194,24 @@ class TypeScriptExtractor:
         symbols = {node.stable_key: node for node in nodes if node.node_kind == "symbol"}
 
         def walk(node):
-            if node.type == "class_declaration":
+            if node.type in ("class_declaration", "abstract_class_declaration"):
                 name = node.child_by_field_name("name")
                 if name is not None:
-                    class_key = canonical.normalize_stable_key(
-                        "symbol", symbol_stable_key(path, [], self._node_text(name, source))
-                    )
-                    if class_key in symbols:
+                    class_name = self._node_text(name, source)
+                    start_line = node.start_point[0] + 1
+                    end_line = node.end_point[0] + 1
+                    class_candidates = [
+                        symbol
+                        for symbol in symbols.values()
+                        if symbol.name == class_name
+                        and any(
+                            evidence.start_line == start_line
+                            and evidence.end_line == end_line
+                            for evidence in symbol.evidence
+                        )
+                    ]
+                    if len(class_candidates) == 1:
+                        class_key = class_candidates[0].stable_key
                         heritage = next(
                             (child for child in node.named_children if child.type == "class_heritage"),
                             None,
@@ -208,6 +221,7 @@ class TypeScriptExtractor:
                                 if clause.type != "implements_clause":
                                     continue
                                 for target in clause.named_children:
+                                    reference = target.child_by_field_name("name") or target
                                     evidence, _ = build_evidence(
                                         path,
                                         target.start_point[0] + 1,
@@ -221,7 +235,7 @@ class TypeScriptExtractor:
                                                 observed_kind="implements",
                                                 subject_kind="symbol",
                                                 subject_key=class_key,
-                                                referent_text=self._node_text(target, source),
+                                                referent_text=self._node_text(reference, source),
                                                 ordinal=_UNASSIGNED_ORDINAL,
                                                 evidence=evidence,
                                             )
@@ -276,7 +290,9 @@ class TypeScriptExtractor:
                             binding,
                         )
 
-    def _collect_routes(self, root, path, line_count, file_key, nodes, observations) -> None:
+    def _collect_routes(
+        self, root, path, line_count, file_key, nodes, observations, diagnostics
+    ) -> None:
         """Emit a ``route`` observation per confirmed react-router path literal.
 
         Only two contexts count: a ``path`` key inside an argument to a router
@@ -289,6 +305,28 @@ class TypeScriptExtractor:
         source = root.text
         seen: set[int] = set()
         route_ordinal = 0
+
+        def flag_dynamic_path(node) -> None:
+            diagnostics.append(
+                ExtractedDiagnostic(
+                    code=RI_EXT_UNSUPPORTED,
+                    category="unsupported construct",
+                    severity="info",
+                    message="dynamic route path is unsupported",
+                    path=canonical.normalize_repo_path(path),
+                    span=(node.start_point[0] + 1, node.end_point[0] + 1),
+                    subject=file_key,
+                )
+            )
+
+        def jsx_path_literal(node) -> str | None:
+            if node.type == "jsx_expression":
+                if len(node.named_children) != 1:
+                    return None
+                node = node.named_children[0]
+            if node.type != "string":
+                return None
+            return self._node_text(node, source).strip("'\"`")
 
         def emit(node, literal, handler_referent=None, handler_node=None):
             nonlocal route_ordinal
@@ -369,8 +407,11 @@ class TypeScriptExtractor:
                 if pair.type != "pair":
                     continue
                 candidate_path = pair_value(pair, "path")
-                if candidate_path is not None and candidate_path.type == "string":
-                    path_pair, path_value = pair, candidate_path
+                if candidate_path is not None:
+                    if candidate_path.type == "string":
+                        path_pair, path_value = pair, candidate_path
+                    else:
+                        flag_dynamic_path(candidate_path)
                 for handler_name in ("Component", "component"):
                     handler_value = pair_value(pair, handler_name)
                     if handler_value is not None and handler_value.type == "identifier":
@@ -426,8 +467,11 @@ class TypeScriptExtractor:
                         parts = child.named_children
                         if (len(parts) > 1
                                 and self._node_text(parts[0], source) == "path"):
-                            path_attribute = child
-                            path_literal = self._node_text(parts[1], source).strip("'\"{}`")
+                            path_literal = jsx_path_literal(parts[1])
+                            if path_literal is None:
+                                flag_dynamic_path(parts[1])
+                            else:
+                                path_attribute = child
                         elif (len(parts) > 1
                               and self._node_text(parts[0], source) == "element"):
                             jsx_handler = self._jsx_handler(parts[1], source)
@@ -458,7 +502,56 @@ class TypeScriptExtractor:
 
         source = root.text
 
-        def walk(node):
+        function_scope_types = {
+            "function_declaration",
+            "function_expression",
+            "generator_function_declaration",
+            "generator_function",
+            "arrow_function",
+            "method_definition",
+        }
+
+        def binding_names(pattern) -> set[str]:
+            if pattern is None:
+                return set()
+            if pattern.type in ("identifier", "shorthand_property_identifier_pattern"):
+                return {self._node_text(pattern, source)}
+            names: set[str] = set()
+            for child in pattern.named_children:
+                names.update(binding_names(child))
+            return names
+
+        def scope_bindings(function) -> set[str]:
+            names: set[str] = set()
+            parameters = function.child_by_field_name("parameters")
+            if parameters is not None:
+                for parameter in parameters.named_children:
+                    names.update(binding_names(parameter.child_by_field_name("pattern")))
+            parameter = function.child_by_field_name("parameter")
+            if parameter is not None:
+                names.update(binding_names(parameter))
+
+            body = function.child_by_field_name("body")
+
+            def collect(node) -> None:
+                if node is not body and node.type in function_scope_types:
+                    names.update(binding_names(node.child_by_field_name("name")))
+                    return
+                if node.type in ("class_declaration", "abstract_class_declaration"):
+                    names.update(binding_names(node.child_by_field_name("name")))
+                    return
+                if node.type == "variable_declarator":
+                    names.update(binding_names(node.child_by_field_name("name")))
+                for child in node.named_children:
+                    collect(child)
+
+            if body is not None:
+                collect(body)
+            return names
+
+        def walk(node, shadowed: frozenset[str] = frozenset()):
+            if node.type in function_scope_types:
+                shadowed = shadowed | frozenset(scope_bindings(node))
             if node.type == "call_expression":
                 function = node.child_by_field_name("function")
                 if function is not None and function.type == "identifier":
@@ -481,8 +574,19 @@ class TypeScriptExtractor:
                                     evidence=evidence,
                                 )
                             )
+                            if function_name in shadowed:
+                                observations.append(
+                                    ExtractedObservation(
+                                        observed_kind="call_shadowed",
+                                        subject_kind="file",
+                                        subject_key=file_key,
+                                        referent_text=function_name,
+                                        ordinal=_UNASSIGNED_ORDINAL,
+                                        evidence=evidence,
+                                    )
+                                )
             for child in node.named_children:
-                walk(child)
+                walk(child, shadowed)
 
         walk(root)
 
@@ -530,6 +634,38 @@ class TypeScriptExtractor:
     def _is_exported(self, node) -> bool:
         return node.parent is not None and node.parent.type == "export_statement"
 
+    def _default_export_names(self, root, source: bytes) -> set[str]:
+        """Return module-local symbols explicitly exported as ``default``."""
+
+        names: set[str] = set()
+        for statement in root.named_children:
+            if statement.type != "export_statement":
+                continue
+            if any(child.type == "default" for child in statement.children):
+                target = (
+                    statement.child_by_field_name("declaration")
+                    or statement.child_by_field_name("value")
+                )
+                if target is not None:
+                    name = target.child_by_field_name("name") or target
+                    if name.type in ("identifier", "type_identifier"):
+                        names.add(self._node_text(name, source))
+            for clause in statement.named_children:
+                if clause.type != "export_clause":
+                    continue
+                for specifier in clause.named_children:
+                    if specifier.type != "export_specifier":
+                        continue
+                    name = specifier.child_by_field_name("name")
+                    alias = specifier.child_by_field_name("alias")
+                    if (
+                        name is not None
+                        and alias is not None
+                        and self._node_text(alias, source) == "default"
+                    ):
+                        names.add(self._node_text(name, source))
+        return names
+
     def _is_top_level(self, node) -> bool:
         parent = node.parent
         if parent is None:
@@ -547,6 +683,7 @@ class TypeScriptExtractor:
     ) -> None:
         assigner = DiscriminatorAssigner()
         source = root.text  # bytes of the whole tree
+        default_export_names = self._default_export_names(root, source)
 
         def emit(name_node, decl_node, scope, exported):
             """Emit one symbol node + its definition observation; return the name."""
@@ -563,11 +700,17 @@ class TypeScriptExtractor:
                 if diag is not None:
                     diagnostics.append(diag)
                 return None
+            is_default_export = name in default_export_names
+            properties = None
+            if exported or is_default_export:
+                properties = {"exported": True}
+                if is_default_export:
+                    properties["default_export"] = True
             nodes.append(
                 ExtractedNode(
                     node_kind="symbol", stable_key=key, name=name,
                     language="typescript", evidence=(ev,),
-                    properties={"exported": True} if exported else None,
+                    properties=properties,
                 )
             )
             observations.append(

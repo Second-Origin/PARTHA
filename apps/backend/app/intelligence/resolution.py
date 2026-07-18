@@ -48,11 +48,14 @@ class RelationshipResolver:
     ``import``
         A TypeScript/Python module specifier.  It resolves a local file or an
         already-observed dependency node.
-    ``call`` / ``implements``
+    ``call`` / ``call_shadowed`` / ``implements``
         A direct reference.  It resolves only through proven evidence — a full
         stable key, a same-file top-level definition, or an explicit import
-        binding — never a repository-wide same-name guess.  Multiple binding
-        targets stay ambiguous; missing evidence stays unresolved.
+        binding — never a repository-wide same-name guess. ``call_shadowed``
+        marks a call-site name that lexical extraction proved local, forcing the
+        paired call to remain unresolved instead of borrowing a global/imported
+        symbol. Multiple binding targets stay ambiguous; missing evidence stays
+        unresolved.
     ``route`` + ``route_handler``
         A route symbol and its extractor-recorded handler reference.  Both are
         needed, so a literal path alone is never treated as a handler claim.
@@ -126,6 +129,10 @@ class RelationshipResolver:
             parsed = self._parse_import_binding(input_.observation.referent_text)
             if source is not None and parsed is not None:
                 bindings_by_file[source.stable_key].append(parsed)
+        shadowed_calls = {
+            self._reference_input_key(input_)
+            for input_ in inputs_by_kind["call_shadowed"]
+        }
 
         edges_added = 0
         diagnostics_added = 0
@@ -141,9 +148,14 @@ class RelationshipResolver:
             diagnostics_added += diagnosed
 
         for input_ in inputs_by_kind["call"]:
-            added, diagnosed = self._resolve_reference(
-                input_, nodes_by_key, evidence_by_node, bindings_by_file, predicate="calls"
-            )
+            if self._reference_input_key(input_) in shadowed_calls:
+                added, diagnosed = self._unresolved(
+                    input_, "calls target is shadowed by a local binding"
+                )
+            else:
+                added, diagnosed = self._resolve_reference(
+                    input_, nodes_by_key, evidence_by_node, bindings_by_file, predicate="calls"
+                )
             edges_added += added
             diagnostics_added += diagnosed
 
@@ -223,9 +235,15 @@ class RelationshipResolver:
         *,
         predicate: str,
     ) -> tuple[int, int]:
-        subject = nodes_by_key.get(input_.observation.subject_key)
+        observed_subject = nodes_by_key.get(input_.observation.subject_key)
+        subject = observed_subject
         if subject is None or subject.node_kind != "symbol":
             subject = self._containing_symbol(input_, nodes_by_key, evidence_by_node)
+            if subject is None and observed_subject is not None and observed_subject.node_kind in {
+                "file",
+                "module",
+            }:
+                subject = observed_subject
         if subject is None:
             return self._unresolved(input_, f"{predicate} source symbol is absent from the snapshot")
         referent = input_.observation.referent_text
@@ -290,7 +308,7 @@ class RelationshipResolver:
         predicate: str,
         candidates: list[RiNode],
     ) -> tuple[int, int]:
-        unique = {candidate.stable_key: candidate for candidate in candidates if candidate.stable_key != subject.stable_key}
+        unique = {candidate.stable_key: candidate for candidate in candidates}
         ordered = [unique[key] for key in sorted(unique)]
         if not ordered:
             return self._unresolved(input_, f"{predicate} has no resolvable target")
@@ -421,6 +439,15 @@ class RelationshipResolver:
                 if target_file.node_kind != "file":
                     continue
                 path = target_file.stable_key.removeprefix("file:")
+                if imported == "default":
+                    bound_candidates.extend(
+                        node
+                        for node in nodes_by_key.values()
+                        if node.node_kind == "symbol"
+                        and node.stable_key.startswith(f"{path}::")
+                        and bool((node.properties or {}).get("default_export"))
+                    )
+                    continue
                 direct_target = nodes_by_key.get(f"{path}::{imported}")
                 if direct_target is not None and direct_target.node_kind == "symbol":
                     bound_candidates.append(direct_target)
@@ -548,4 +575,15 @@ class RelationshipResolver:
             evidence.granularity,
             evidence.extractor,
             evidence.extractor_version,
+        )
+
+    @staticmethod
+    def _reference_input_key(input_: _ObservedInput) -> tuple[str, str | None, str, int, int, int]:
+        return (
+            input_.observation.subject_key,
+            input_.observation.referent_text,
+            input_.evidence.path,
+            input_.evidence.start_line,
+            input_.evidence.end_line,
+            input_.observation.ordinal,
         )

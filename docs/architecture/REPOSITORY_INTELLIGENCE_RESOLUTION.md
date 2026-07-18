@@ -30,6 +30,7 @@ edge.
 | `import` | Module specifier | `imports` |
 | `import_binding` | `specifier|imported|local` exact binding representation | supports `imports`, `calls`, `implements`, `routes_to` lookup |
 | `call` | Direct named call | `calls` |
+| `call_shadowed` | The paired call-site name is lexically local to its function/class scope | forces the paired `call` to an unresolved diagnostic |
 | `implements` | TypeScript `implements` clause | `implements` |
 | `route` + `route_handler` | Route declaration and one handler reference | `routes_to` |
 | `dependency` | Direct manifest declaration on a dependency node | `depends_on` |
@@ -37,6 +38,12 @@ edge.
 `import_binding` uses an unambiguous delimiter format because `ri.v1`
 observations intentionally have only `referent_text`; it is still direct
 extractor output, not resolver-generated source interpretation.
+
+Python `import_binding` is emitted only for a direct module-level import. A
+function- or block-local import still produces an `import` observation, but it
+cannot be exposed as a file-wide name binding. Calls through such local names
+carry `call_shadowed` and fail closed until scope-qualified import bindings are
+part of the stored contract.
 
 ## Algorithms
 
@@ -76,15 +83,24 @@ diagnostics.
 A relationship is emitted only when a stored syntax fact uniquely proves it.
 Evidence is considered in a fixed order: a direct stable-key referent, then a
 same-file top-level symbol, then the explicit `import_binding` records for the
-source file. There is **no** repository-wide same-name fallback. Without a
+source file. Before lookup, a paired `call_shadowed` observation forces the
+call to remain unresolved; a parameter, function-local import, or local
+declaration can therefore never borrow a same-named global/imported symbol.
+There is **no** repository-wide same-name fallback. Without a
 same-file definition or an import binding, a lone symbol elsewhere that happens
 to share the name is not proof and stays unresolved. When a binding exists but
 its module or exported symbol cannot be resolved, the reference stays
 unresolved rather than borrowing an unrelated same-named symbol; when a binding
-resolves to more than one target, it stays ambiguous. This applies identically
-to `calls`, `implements`, and `routes_to`. TypeScript extraction emits
-`implements` only for direct `class ... implements ...` syntax; `extends` is
-intentionally not repurposed as an `implements` fact.
+resolves to more than one target, it stays ambiguous. A default import resolves
+only to a symbol carrying an explicit stored `default_export` property; the
+resolver never substitutes the only symbol in a file. A call inside a symbol
+uses that symbol as its source; a top-level call retains its observed
+file/module source, and recursive calls may produce an intentional self-edge.
+This applies identically to `calls`, `implements`, and `routes_to`. TypeScript
+extraction emits `implements` for direct concrete or abstract class clauses,
+and generic targets use their AST base reference while retaining evidence over
+the complete clause. `extends` is intentionally not repurposed as an
+`implements` fact.
 
 ### Routes
 
@@ -93,7 +109,9 @@ declaration. A `route_handler` observation must name exactly one direct handler
 reference for the route. Python decorators bind the route to their decorated
 function. TypeScript records static `Component`, `component`, and JSX `element`
 references. Lazy, computed, or otherwise unsupported route handlers remain
-unresolved rather than being inferred from a path.
+unresolved rather than being inferred from a path. A dynamic JSX/object route
+path produces `RI-EXT-UNSUPPORTED`; it is never materialized as a literal route
+property or used as the subject of a resolved route relationship.
 
 ## Truth classes and provenance
 
@@ -114,5 +132,8 @@ unresolved when only an unrelated repository-wide same-name symbol exists or
 when an import binding is broken, while a binding that resolves to several
 targets stays ambiguous. A dedicated case shows an absolute `from a.b import c`
 resolving its import edge to the module file `a/b.py` even when a same-named
-dependency is present. All warning paths are sealed successfully to prove that
-honest partial knowledge remains usable.
+dependency is present. Adversarial cases cover local parameter shadowing in
+both languages, module-local Python import bindings, default-imported React
+route handlers, dynamic JSX route paths, top-level and recursive calls, and
+abstract generic `implements` clauses. All warning paths are sealed
+successfully to prove that honest partial knowledge remains usable.
