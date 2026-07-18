@@ -172,11 +172,12 @@ def test_query_rejects_owner_visible_unsupported_schema_without_cross_owner_disc
     _, snapshot_id = _seed_snapshot(owner["user"]["id"], schema_version="ri.v2")
     path = f"/intelligence/v1/snapshots/{snapshot_id}"
 
-    rejected = client.get(path, headers=owner["headers"])
-    assert rejected.status_code == 422
-    assert rejected.json()["code"] == "unsupported_schema_version"
-    assert rejected.json()["message"] == "Unsupported snapshot schema version: ri.v2."
-    assert rejected.json()["details"] == {"received": "ri.v2", "supported": ["ri.v1"]}
+    for suffix in ["", "/symbols", "/neighbours?nodeKey=repo:root", "/references", "/assertions", "/paths", "/evidence"]:
+        rejected = client.get(f"{path}{suffix}", headers=owner["headers"])
+        assert rejected.status_code == 422
+        assert rejected.json()["code"] == "unsupported_schema_version"
+        assert rejected.json()["message"] == "Unsupported snapshot schema version: ri.v2."
+        assert rejected.json()["details"] == {"received": "ri.v2", "supported": ["ri.v1"]}
 
     denied = client.get(path, headers=other_owner["headers"])
     missing = client.get("/intelligence/v1/snapshots/snap_missing", headers=other_owner["headers"])
