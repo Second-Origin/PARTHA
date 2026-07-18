@@ -45,12 +45,14 @@ ARTIFACT_DIRECTORY_NAMES = frozenset(
         ".next",
         ".nuxt",
         "__generated__",
+        "bin",
         "build",
         "coverage",
         "dist",
         "gen",
         "generated",
         "node_modules",
+        "obj",
         "out",
         "target",
         "third-party",
@@ -60,6 +62,7 @@ ARTIFACT_DIRECTORY_NAMES = frozenset(
 )
 GENERATED_SOURCE_SUFFIXES = (
     ".designer.cs",
+    ".g.cs",
     ".g.ts",
     ".gen.js",
     ".gen.ts",
@@ -71,7 +74,9 @@ GENERATED_SOURCE_SUFFIXES = (
     ".min.cjs",
     ".min.js",
     ".min.mjs",
+    ".pb.go",
     "_pb2.py",
+    "_pb2_grpc.py",
 )
 CONFIGURATION_SOURCE_SUFFIXES = (
     ".conf.js",
