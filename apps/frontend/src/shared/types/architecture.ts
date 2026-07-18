@@ -18,6 +18,8 @@ export type ArchNodeType =
   | 'cache';
 
 export type ArchEdgeType = 'dependency' | 'import' | 'api-call' | 'data-flow' | 'event' | 'reads' | 'writes' | 'calls' | 'config-usage';
+export type RelationshipState = 'connected' | 'no-observed-relationships' | 'unresolved' | 'not-extracted';
+export type TruthClass = 'resolved' | 'inferred';
 
 export type HeatmapMode = 'none' | 'complexity' | 'usage' | 'size' | 'critical';
 
@@ -35,6 +37,15 @@ export interface ArchNode {
   tags: string[];
   layer: string;
   parentModule?: string;
+  relationshipState: RelationshipState;
+}
+
+export interface ArchEvidence {
+  snapshotId: string;
+  factId: string;
+  path: string;
+  startLine: number;
+  endLine: number;
 }
 
 export interface ArchEdge {
@@ -43,6 +54,22 @@ export interface ArchEdge {
   target: string;
   label?: string;
   type: ArchEdgeType;
+  predicate: string;
+  truthClass: TruthClass;
+  evidence: ArchEvidence[];
+}
+
+export interface ArchitectureDiagnostic {
+  code: string;
+  category: string;
+  severity: 'fatal' | 'error' | 'warning' | 'info';
+  message: string;
+  path?: string;
+  startLine?: number;
+  endLine?: number;
+  subjectKey?: string;
+  objectKey?: string;
+  details?: Record<string, unknown>;
 }
 
 export interface ArchLayer {
@@ -78,6 +105,8 @@ export interface ArchitectureModel {
   edges: ArchEdge[];
   modules: ArchModule[];
   requestFlow: RequestFlowStep[];
+  relationshipSnapshotId?: string;
+  diagnostics: ArchitectureDiagnostic[];
   summary: {
     language: string;
     framework: string;

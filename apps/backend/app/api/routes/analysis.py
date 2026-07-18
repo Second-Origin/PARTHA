@@ -74,6 +74,15 @@ def get_analysis_status(
             "edges": [],
             "modules": [],
             "requestFlow": [],
+            "relationshipSnapshotId": None,
+            "diagnostics": [
+                {
+                    "code": "ARCH-REL-NOT-EXTRACTED",
+                    "category": "relationship extraction",
+                    "severity": "info",
+                    "message": "No sealed repository-intelligence snapshot is available for relationship analysis.",
+                }
+            ],
             "summary": {
                 "language": "Python",
                 "framework": "FastAPI",

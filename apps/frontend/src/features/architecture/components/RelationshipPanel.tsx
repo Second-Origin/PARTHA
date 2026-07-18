@@ -12,6 +12,19 @@ export function RelationshipPanel() {
   const edges = selectedNodeId
     ? model.edges.filter((e) => e.source === selectedNodeId || e.target === selectedNodeId)
     : [];
+  const diagnostics = selectedNode
+    ? model.diagnostics.filter((diagnostic) => (
+        (diagnostic.path && selectedNode.files.includes(diagnostic.path))
+        || diagnostic.subjectKey === selectedNode.id
+        || diagnostic.objectKey === selectedNode.id
+      ))
+    : [];
+
+  const emptyMessage = selectedNode?.relationshipState === 'no-observed-relationships'
+    ? 'No observed relationships in the persisted snapshot'
+    : selectedNode?.relationshipState === 'unresolved'
+      ? 'Relationships were observed but could not be resolved confidently'
+      : 'Relationship extraction is not available for this module';
 
   return (
     <div className="border-t border-border bg-card">
@@ -40,7 +53,9 @@ export function RelationshipPanel() {
             {!selectedNode ? (
               <p className="text-xs text-muted-foreground py-2">Select a node to view its relationships</p>
             ) : edges.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-2">No relationships found</p>
+              <div className="py-2">
+                <p className="text-xs text-muted-foreground">{emptyMessage}</p>
+              </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1">
                 {edges.map((edge) => {
@@ -61,13 +76,34 @@ export function RelationshipPanel() {
                         {isOutgoing ? 'OUT' : 'IN'}
                       </span>
                       <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium text-foreground truncate">{targetNode.name}</p>
-                        <p className="text-[10px] text-muted-foreground capitalize">{edge.type.replace('-', ' ')}</p>
+                        <p className="text-[10px] text-muted-foreground capitalize">
+                          {edge.predicate.replace('_', ' ')} · {edge.truthClass}
+                        </p>
+                        {edge.evidence[0] && (
+                          <p
+                            className="text-[10px] text-primary truncate"
+                            title={`${edge.evidence[0].factId} in snapshot ${edge.evidence[0].snapshotId}`}
+                          >
+                            {edge.evidence[0].path}:{edge.evidence[0].startLine}
+                            {edge.evidence[0].endLine !== edge.evidence[0].startLine && `-${edge.evidence[0].endLine}`}
+                          </p>
+                        )}
                       </div>
                     </div>
                   );
                 })}
+              </div>
+            )}
+            {selectedNode && diagnostics.length > 0 && (
+              <div className="pt-2 space-y-1">
+                {diagnostics.map((diagnostic, index) => (
+                  <p key={`${diagnostic.code}-${diagnostic.path ?? index}`} className="text-[10px] text-amber-400">
+                    {diagnostic.code}: {diagnostic.message}
+                    {diagnostic.path && ` (${diagnostic.path}${diagnostic.startLine ? `:${diagnostic.startLine}` : ''})`}
+                  </p>
+                ))}
               </div>
             )}
           </div>

@@ -1,11 +1,16 @@
+import posixpath
+
 from app.intelligence.engine import RepositoryIntelligenceEngine
+from app.intelligence.query_service import ArchitectureSnapshotFacts, SnapshotQueryService
 from app.intelligence.models import RepositoryModule
 from app.models.repository import RepositoryRecord
 from app.schemas.architecture import (
     ArchEdge,
+    ArchEvidence,
     ArchLayer,
     ArchModule,
     ArchitectureResponse,
+    ArchitectureDiagnostic,
     ArchitectureSummary,
     ArchNode,
     RequestFlowStep,
@@ -29,27 +34,55 @@ ROLE_TO_NODE_TYPE = {
     "unknown": "shared-library",
 }
 
+RELATIONSHIP_EDGE_TYPES = {
+    "imports": "import",
+    "calls": "calls",
+    "routes_to": "api-call",
+    "implements": "dependency",
+    "depends_on": "dependency",
+}
+
 
 class ArchitectureAnalyzer:
-    def __init__(self, intelligence: RepositoryIntelligenceEngine | None = None) -> None:
+    def __init__(
+        self,
+        intelligence: RepositoryIntelligenceEngine | None = None,
+        snapshots: SnapshotQueryService | None = None,
+    ) -> None:
         self.intelligence = intelligence or RepositoryIntelligenceEngine()
+        self.snapshots = snapshots
 
     def build_architecture(self, record: RepositoryRecord) -> ArchitectureResponse:
-        repository_intelligence = self.intelligence.from_record(record)
-        modules = repository_intelligence.modules or [
+        # Architecture requests are persisted-data reads. ``from_record`` has a
+        # legacy compatibility fallback that rebuilds from ``local_path``; using
+        # it here would make a read endpoint depend on the working tree.
+        repository_intelligence = self.intelligence.load(record)
+        modules = (repository_intelligence.modules if repository_intelligence is not None else []) or [
             RepositoryModule(
                 id="module:repository",
                 name="Repository",
                 role="unknown",
                 layer="shared",
                 path_prefix="/",
-                files=[file.path for file in repository_intelligence.files[:25]],
+                files=(
+                    [file.path for file in repository_intelligence.files]
+                    if repository_intelligence is not None
+                    else self._persisted_file_paths(record.file_tree or [])
+                ),
                 symbols=[],
                 dependencies=[],
             )
         ]
+        frameworks = repository_intelligence.discovery.frameworks if repository_intelligence is not None else []
+        primary_language = (
+            repository_intelligence.discovery.primary_language if repository_intelligence is not None else "Unknown"
+        )
+        entry_points = repository_intelligence.discovery.entry_points if repository_intelligence is not None else []
+        facts = self.snapshots.architecture_facts(record.id) if self.snapshots is not None else None
         nodes = self._nodes_for_modules(modules)
-        edges = self._edges_for_modules(modules, nodes)
+        nodes.extend(self._dependency_nodes(facts))
+        edges, diagnostics, unresolved_node_ids, covered_paths = self._edges_for_modules(modules, nodes, facts)
+        self._set_relationship_states(modules, nodes, edges, unresolved_node_ids, covered_paths, facts is not None)
         layers = self._layers_for_nodes(nodes)
         arch_modules = [
             ArchModule(
@@ -65,20 +98,22 @@ class ArchitectureAnalyzer:
         return ArchitectureResponse(
             repository_id=record.id,
             repository_name=record.name,
-            architecture_type=self._architecture_type(repository_intelligence.discovery.frameworks),
+            architecture_type=self._architecture_type(frameworks),
             detected_layers=layers,
             nodes=nodes,
             edges=edges,
             modules=arch_modules,
             request_flow=self._request_flow(modules),
             summary=ArchitectureSummary(
-                language=repository_intelligence.discovery.primary_language,
-                framework=repository_intelligence.discovery.frameworks[0] if repository_intelligence.discovery.frameworks else "Unknown",
+                language=primary_language,
+                framework=frameworks[0] if frameworks else "Unknown",
                 total_modules=len(arch_modules),
                 total_nodes=len(nodes),
-                entry_point=repository_intelligence.discovery.entry_points[0] if repository_intelligence.discovery.entry_points else "/",
-                architecture_pattern=self._architecture_type(repository_intelligence.discovery.frameworks),
+                entry_point=entry_points[0] if entry_points else "/",
+                architecture_pattern=self._architecture_type(frameworks),
             ),
+            relationship_snapshot_id=facts.snapshot.snapshot_id if facts is not None else None,
+            diagnostics=diagnostics,
         )
 
     def _nodes_for_modules(self, modules: list[RepositoryModule]) -> list[ArchNode]:
@@ -103,34 +138,294 @@ class ArchitectureAnalyzer:
             )
         return nodes
 
-    def _edges_for_modules(self, modules: list[RepositoryModule], nodes: list[ArchNode]) -> list[ArchEdge]:
+    def _persisted_file_paths(self, tree: list[dict]) -> list[str]:
+        paths: list[str] = []
+        for item in tree:
+            if item.get("type") == "file" and isinstance(item.get("path"), str):
+                paths.append(item["path"])
+            children = item.get("children")
+            if isinstance(children, list):
+                paths.extend(self._persisted_file_paths(children))
+        return sorted(set(paths))
+
+    def _dependency_nodes(self, facts: ArchitectureSnapshotFacts | None) -> list[ArchNode]:
+        if facts is None:
+            return []
+        relationship_keys = {
+            key
+            for edge in facts.edges
+            if edge.predicate in RELATIONSHIP_EDGE_TYPES
+            for key in (edge.subject_key, edge.object_key)
+        }
+        result: list[ArchNode] = []
+        for item in facts.nodes:
+            if item.node_kind != "dependency" or item.stable_key not in relationship_keys:
+                continue
+            evidence = facts.node_evidence.get(item.id, [])
+            result.append(
+                ArchNode(
+                    id=item.stable_key,
+                    name=item.name or item.stable_key,
+                    type="shared-library",
+                    description="External dependency from resolved repository evidence.",
+                    responsibilities=["Provides an externally declared or imported capability"],
+                    files=sorted({entry.path for entry in evidence}),
+                    dependencies=[],
+                    dependents=[],
+                    estimated_complexity="low",
+                    estimated_lines=0,
+                    tags=["external", "dependency"],
+                    layer="external",
+                )
+            )
+        return result
+
+    def _edges_for_modules(
+        self,
+        modules: list[RepositoryModule],
+        nodes: list[ArchNode],
+        facts: ArchitectureSnapshotFacts | None,
+    ) -> tuple[list[ArchEdge], list[ArchitectureDiagnostic], set[str], set[str]]:
+        if facts is None:
+            return (
+                [],
+                [
+                    ArchitectureDiagnostic(
+                        code="ARCH-REL-NOT-EXTRACTED",
+                        category="relationship extraction",
+                        severity="info",
+                        message="No sealed repository-intelligence snapshot is available for relationship analysis.",
+                    )
+                ],
+                set(),
+                set(),
+            )
+
+        module_by_id = {module.id: module for module in modules}
+        modules_by_file: dict[str, list[str]] = {}
+        for module in modules:
+            for path in module.files:
+                modules_by_file.setdefault(self._normalize_path(path), []).append(module.id)
+        snapshot_node_by_key = {item.stable_key: item for item in facts.nodes}
         node_ids = {node.id for node in nodes}
-        module_by_role = {module.role: module.id for module in modules}
-        candidates = [
-            ("entrypoint", "route"),
-            ("entrypoint", "controller"),
-            ("route", "service"),
-            ("controller", "service"),
-            ("service", "repository"),
-            ("service", "model"),
-            ("repository", "model"),
-            ("test", "service"),
-        ]
+        diagnostics = [self._architecture_diagnostic(item) for item in facts.diagnostics]
+        unresolved_node_ids: set[str] = set()
+        # Inventory-only file nodes prove that a path exists, not that a
+        # relationship-capable extractor ran. Count only evidence emitted by a
+        # syntax/manifest producer so unsupported files cannot look isolated.
+        covered_paths = {
+            item.path
+            for evidence_by_fact in (facts.node_evidence, facts.observation_evidence)
+            for evidence in evidence_by_fact.values()
+            for item in evidence
+            if item.extractor != "repository-inventory"
+        }
+
+        for item in facts.diagnostics:
+            if item.code not in {"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS"}:
+                continue
+            if item.path:
+                unresolved_node_ids.update(modules_by_file.get(self._normalize_path(item.path), []))
+            for key in (item.subject_key, item.object_key):
+                if key in node_ids:
+                    unresolved_node_ids.add(key)
+
         edges: list[ArchEdge] = []
-        for source_role, target_role in candidates:
-            source = module_by_role.get(source_role)
-            target = module_by_role.get(target_role)
-            if source in node_ids and target in node_ids and source != target:
-                edges.append(ArchEdge(id=f"{source}->{target}", source=source, target=target, type="dependency", label="uses"))
+        for fact in facts.edges:
+            if fact.predicate not in RELATIONSHIP_EDGE_TYPES:
+                continue
+            evidence_rows = facts.edge_evidence.get(fact.id, [])
+            source_ids = self._architecture_endpoint_ids(
+                fact.subject_kind,
+                fact.subject_key,
+                evidence_rows,
+                modules_by_file,
+                module_by_id,
+                snapshot_node_by_key,
+                facts,
+                is_subject=True,
+            )
+            target_ids = self._architecture_endpoint_ids(
+                fact.object_kind,
+                fact.object_key,
+                evidence_rows,
+                modules_by_file,
+                module_by_id,
+                snapshot_node_by_key,
+                facts,
+                is_subject=False,
+            )
+            pairs = sorted(
+                (source, target)
+                for source in source_ids
+                for target in target_ids
+                if source in node_ids and target in node_ids
+            )
+            if not pairs:
+                diagnostics.append(
+                    ArchitectureDiagnostic(
+                        code="ARCH-REL-ENDPOINT-UNMAPPED",
+                        category="relationship mapping",
+                        severity="warning",
+                        message="A resolved relationship could not be mapped to architecture nodes without guessing.",
+                        path=evidence_rows[0].path if evidence_rows else None,
+                        start_line=evidence_rows[0].start_line if evidence_rows else None,
+                        end_line=evidence_rows[0].end_line if evidence_rows else None,
+                        subject_key=fact.subject_key,
+                        object_key=fact.object_key,
+                        details={"factId": fact.edge_id, "predicate": fact.predicate},
+                    )
+                )
+                unresolved_node_ids.update(source_ids | target_ids)
+                continue
+            citations = [
+                ArchEvidence(
+                    snapshot_id=facts.snapshot.snapshot_id,
+                    fact_id=fact.edge_id,
+                    path=item.path,
+                    start_line=item.start_line,
+                    end_line=item.end_line,
+                )
+                for item in evidence_rows
+            ]
+            for index, (source, target) in enumerate(pairs, start=1):
+                edge_id = fact.edge_id if len(pairs) == 1 else f"{fact.edge_id}:{index}"
+                edges.append(
+                    ArchEdge(
+                        id=edge_id,
+                        source=source,
+                        target=target,
+                        type=RELATIONSHIP_EDGE_TYPES[fact.predicate],  # type: ignore[arg-type]
+                        label=fact.predicate.replace("_", " "),
+                        predicate=fact.predicate,
+                        truth_class="inferred",
+                        evidence=citations,
+                    )
+                )
+
+        node_by_id = {node.id: node for node in nodes}
         for edge in edges:
-            source = next(node for node in nodes if node.id == edge.source)
-            target = next(node for node in nodes if node.id == edge.target)
-            source.dependencies.append(target.id)
-            target.dependents.append(source.id)
-        return edges
+            source = node_by_id[edge.source]
+            target = node_by_id[edge.target]
+            if target.id not in source.dependencies:
+                source.dependencies.append(target.id)
+            if source.id not in target.dependents:
+                target.dependents.append(source.id)
+        for node in nodes:
+            node.dependencies.sort()
+            node.dependents.sort()
+        return edges, diagnostics, unresolved_node_ids, covered_paths
+
+    def _architecture_endpoint_ids(
+        self,
+        node_kind: str,
+        stable_key: str,
+        edge_evidence,
+        modules_by_file: dict[str, list[str]],
+        module_by_id: dict[str, RepositoryModule],
+        snapshot_node_by_key,
+        facts: ArchitectureSnapshotFacts,
+        *,
+        is_subject: bool,
+    ) -> set[str]:
+        if node_kind == "dependency":
+            return {stable_key}
+        if node_kind == "repository":
+            return self._modules_for_evidence_scope(edge_evidence, module_by_id)
+
+        path = self._path_for_stable_key(node_kind, stable_key)
+        if path is not None and node_kind != "module":
+            return set(modules_by_file.get(path, []))
+
+        evidence = edge_evidence if is_subject else []
+        node = snapshot_node_by_key.get(stable_key)
+        if node is not None and not evidence:
+            evidence = facts.node_evidence.get(node.id, [])
+        exact = {
+            module_id
+            for item in evidence
+            for module_id in modules_by_file.get(self._normalize_path(item.path), [])
+        }
+        if exact:
+            return exact
+        if path is not None:
+            return {
+                module.id
+                for module in module_by_id.values()
+                if any(self._path_is_within(self._normalize_path(file_path), path) for file_path in module.files)
+            }
+        return set()
+
+    def _modules_for_evidence_scope(self, evidence, module_by_id: dict[str, RepositoryModule]) -> set[str]:
+        result: set[str] = set()
+        for item in evidence:
+            path = self._normalize_path(item.path)
+            directory = posixpath.dirname(path)
+            for module in module_by_id.values():
+                if any(
+                    self._path_is_within(self._normalize_path(file_path), directory)
+                    for file_path in module.files
+                ):
+                    result.add(module.id)
+        return result
+
+    def _set_relationship_states(
+        self,
+        modules: list[RepositoryModule],
+        nodes: list[ArchNode],
+        edges: list[ArchEdge],
+        unresolved_node_ids: set[str],
+        covered_paths: set[str],
+        snapshot_available: bool,
+    ) -> None:
+        connected = {node_id for edge in edges for node_id in (edge.source, edge.target)}
+        module_by_id = {module.id: module for module in modules}
+        for node in nodes:
+            if node.id in connected:
+                node.relationship_state = "connected"
+            elif node.id in unresolved_node_ids:
+                node.relationship_state = "unresolved"
+            elif node.id in module_by_id and snapshot_available and module_by_id[node.id].files and all(
+                self._normalize_path(path) in covered_paths for path in module_by_id[node.id].files
+            ):
+                node.relationship_state = "no-observed-relationships"
+            else:
+                node.relationship_state = "not-extracted"
+
+    def _architecture_diagnostic(self, item) -> ArchitectureDiagnostic:
+        return ArchitectureDiagnostic(
+            code=item.code,
+            category=item.category,
+            severity=item.severity,
+            message=item.message,
+            path=item.path,
+            start_line=item.span_start_line,
+            end_line=item.span_end_line,
+            subject_key=item.subject_key,
+            object_key=item.object_key,
+            details=dict(item.details) if item.details is not None else None,
+        )
+
+    @staticmethod
+    def _normalize_path(path: str) -> str:
+        return path.replace("\\", "/").lstrip("/")
+
+    @classmethod
+    def _path_for_stable_key(cls, node_kind: str, stable_key: str) -> str | None:
+        if node_kind == "file" and stable_key.startswith("file:"):
+            return cls._normalize_path(stable_key.removeprefix("file:"))
+        if node_kind == "symbol" and "::" in stable_key:
+            return cls._normalize_path(stable_key.split("::", 1)[0])
+        if node_kind == "module" and stable_key.startswith("mod:"):
+            return cls._normalize_path(stable_key.removeprefix("mod:"))
+        return None
+
+    @staticmethod
+    def _path_is_within(path: str, directory: str) -> bool:
+        return not directory or path == directory or path.startswith(f"{directory}/")
 
     def _layers_for_nodes(self, nodes: list[ArchNode]) -> list[ArchLayer]:
-        order = {"presentation": 0, "business-logic": 1, "domain": 2, "infrastructure": 3, "shared": 4}
+        order = {"presentation": 0, "business-logic": 1, "domain": 2, "infrastructure": 3, "shared": 4, "external": 5}
         layers: dict[str, list[str]] = {}
         for node in nodes:
             layers.setdefault(node.layer, []).append(node.id)

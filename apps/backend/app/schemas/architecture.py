@@ -1,5 +1,7 @@
 from typing import Literal
 
+from pydantic import Field
+
 from app.schemas.base import CamelModel
 
 ArchNodeType = Literal[
@@ -22,6 +24,29 @@ ArchNodeType = Literal[
     "cache",
 ]
 ArchEdgeType = Literal["dependency", "import", "api-call", "data-flow", "event", "reads", "writes", "calls", "config-usage"]
+RelationshipState = Literal["connected", "no-observed-relationships", "unresolved", "not-extracted"]
+TruthClass = Literal["resolved", "inferred"]
+
+
+class ArchEvidence(CamelModel):
+    snapshot_id: str
+    fact_id: str
+    path: str
+    start_line: int
+    end_line: int
+
+
+class ArchitectureDiagnostic(CamelModel):
+    code: str
+    category: str
+    severity: Literal["fatal", "error", "warning", "info"]
+    message: str
+    path: str | None = None
+    start_line: int | None = None
+    end_line: int | None = None
+    subject_key: str | None = None
+    object_key: str | None = None
+    details: dict[str, object] | None = None
 
 
 class ArchNode(CamelModel):
@@ -38,6 +63,7 @@ class ArchNode(CamelModel):
     tags: list[str]
     layer: str
     parent_module: str | None = None
+    relationship_state: RelationshipState = "not-extracted"
 
 
 class ArchEdge(CamelModel):
@@ -46,6 +72,9 @@ class ArchEdge(CamelModel):
     target: str
     label: str | None = None
     type: ArchEdgeType
+    predicate: str
+    truth_class: TruthClass
+    evidence: list[ArchEvidence]
 
 
 class ArchLayer(CamelModel):
@@ -91,3 +120,5 @@ class ArchitectureResponse(CamelModel):
     modules: list[ArchModule]
     request_flow: list[RequestFlowStep]
     summary: ArchitectureSummary
+    relationship_snapshot_id: str | None = None
+    diagnostics: list[ArchitectureDiagnostic] = Field(default_factory=list)
