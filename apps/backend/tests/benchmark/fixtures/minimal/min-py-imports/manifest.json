@@ -26,6 +26,8 @@
       {"observedKind": "import", "subjectKind": "module", "subjectKey": "mod:src", "referentText": "json", "ordinal": 1, "constructs": ["py.import_alias"],
        "evidence": {"path": "src/wiring.py", "startLine": 2, "endLine": 2, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}},
       {"observedKind": "import", "subjectKind": "module", "subjectKey": "mod:src", "referentText": "typing.List", "ordinal": 1, "constructs": ["py.from_import"],
+       "evidence": {"path": "src/wiring.py", "startLine": 3, "endLine": 3, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}},
+      {"observedKind": "import_binding", "subjectKind": "module", "subjectKey": "mod:src", "referentText": "typing|List|List", "ordinal": 1, "constructs": ["py.from_import"],
        "evidence": {"path": "src/wiring.py", "startLine": 3, "endLine": 3, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}}
     ],
     "assertions": [], "diagnostics": []

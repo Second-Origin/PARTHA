@@ -63,4 +63,8 @@ def test_fastapi_route_decorator_yields_literal_path_observation():
     assert len(routes) == 1
     # literal decorator string only; no /auth prefix joined (that is #91)
     assert routes[0].referent_text == "/login"
-    assert routes[0].subject_key == "app/api/auth.py::login"
+    assert routes[0].subject_key == "app/api/auth.py::(anonymous:route#1)"
+    handlers = [o for o in result.observations if o.observed_kind == "route_handler"]
+    assert [(o.subject_key, o.referent_text) for o in handlers] == [
+        ("app/api/auth.py::(anonymous:route#1)", "app/api/auth.py::login")
+    ]

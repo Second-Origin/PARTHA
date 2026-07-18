@@ -49,3 +49,56 @@ def test_relative_imports_preserve_level_in_referent_text():
     assert ".foo" in imports
     assert ".config.X" in imports
     assert "os" in imports
+
+
+def test_from_import_aliases_are_preserved_for_the_resolver():
+    result = _extract("from .tokens import issue_token as mint\nmint()\n")
+    bindings = [
+        observation.referent_text
+        for observation in result.observations
+        if observation.observed_kind == "import_binding"
+    ]
+    assert bindings == [".tokens|issue_token|mint"]
+
+
+def test_direct_named_calls_become_resolver_observations():
+    result = _extract("def caller():\n    return target()\n")
+    calls = [
+        (observation.subject_key, observation.referent_text)
+        for observation in result.observations
+        if observation.observed_kind == "call"
+    ]
+    assert calls == [("mod:app/api", "target")]
+
+
+def test_parameter_shadowing_is_recorded_at_the_call_site():
+    result = _extract(
+        "def target():\n    return 1\n"
+        "def caller(target):\n    return target()\n"
+    )
+    shadowed = [
+        observation.referent_text
+        for observation in result.observations
+        if observation.observed_kind == "call_shadowed"
+    ]
+    assert shadowed == ["target"]
+
+
+def test_function_local_import_is_not_exposed_as_a_file_wide_binding():
+    result = _extract(
+        "def first():\n"
+        "    from .tokens import issue_token\n"
+        "    return issue_token()\n"
+        "def second():\n"
+        "    return issue_token()\n"
+    )
+    assert [
+        observation
+        for observation in result.observations
+        if observation.observed_kind == "import_binding"
+    ] == []
+    assert [
+        observation.referent_text
+        for observation in result.observations
+        if observation.observed_kind == "call_shadowed"
+    ] == ["issue_token"]

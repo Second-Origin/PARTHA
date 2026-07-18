@@ -11,6 +11,7 @@ from app.extraction.pipeline import (
     ExtractionPipeline,
     ProducedExtraction,
 )
+from app.extraction.manifests import DependencyManifestExtractor
 
 __all__ = [
     "ExtractedDiagnostic",
@@ -20,6 +21,7 @@ __all__ = [
     "ExtractionResult",
     "Extractor",
     "DEFAULT_MAX_SOURCE_BYTES",
+    "DependencyManifestExtractor",
     "ExtractionPipeline",
     "ProducedExtraction",
 ]

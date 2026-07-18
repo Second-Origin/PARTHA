@@ -210,6 +210,7 @@ class PythonExtractor:
         self._collect_symbols(
             tree, path, line_count, nodes, observations, diagnostics
         )
+        self._collect_calls(tree, path, line_count, module_key, observations, diagnostics)
         self._collect_blind_spots(tree, path, line_count, diagnostics)
 
         return ExtractionResult(
@@ -221,18 +222,34 @@ class PythonExtractor:
     def _collect_imports(
         self, tree, path, line_count, module_key, observations, diagnostics
     ) -> None:
+        # Only direct module-level imports can safely act as file-wide name
+        # bindings. A function- or block-local binding must not leak into an
+        # unrelated call site during downstream resolution.
+        module_binding_statements = {
+            id(statement)
+            for statement in tree.body
+            if isinstance(statement, (ast.Import, ast.ImportFrom))
+        }
         for node in ast.walk(tree):
             names: list[str] = []
+            bindings: list[tuple[str, str, str]] = []
             if isinstance(node, ast.Import):
                 names = [alias.name for alias in node.names]
             elif isinstance(node, ast.ImportFrom):
                 level_prefix = "." * node.level
                 base = node.module or ""
+                module_specifier = f"{level_prefix}{base}"
                 names = [
                     f"{level_prefix}{base}.{alias.name}" if base else f"{level_prefix}{alias.name}"
                     for alias in node.names
                     if alias.name != "*"
                 ]
+                if id(node) in module_binding_statements:
+                    bindings = [
+                        (module_specifier, alias.name, alias.asname or alias.name)
+                        for alias in node.names
+                        if alias.name != "*" and module_specifier
+                    ]
             else:
                 continue
             for name in names:
@@ -254,6 +271,25 @@ class PythonExtractor:
                         evidence=ev,
                     )
                 )
+            for specifier, imported, local in bindings:
+                ev, diag = build_evidence(
+                    path, node.lineno, node.end_lineno or node.lineno, line_count,
+                    producer=self.producer,
+                )
+                if ev is None:
+                    if diag is not None:
+                        diagnostics.append(diag)
+                    continue
+                observations.append(
+                    ExtractedObservation(
+                        observed_kind="import_binding",
+                        subject_kind="module",
+                        subject_key=module_key,
+                        referent_text=f"{specifier}|{imported}|{local}",
+                        ordinal=_UNASSIGNED_ORDINAL,
+                        evidence=ev,
+                    )
+                )
 
     _DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
@@ -261,8 +297,10 @@ class PythonExtractor:
         self, tree, path, line_count, nodes, observations, diagnostics
     ) -> None:
         assigner = DiscriminatorAssigner()
+        route_ordinal = 0
 
         def visit(scope: list[str], body) -> None:
+            nonlocal route_ordinal
             for child in body:
                 if not isinstance(child, self._DEF_TYPES):
                     continue
@@ -335,12 +373,41 @@ class PythonExtractor:
                             if route_diag is not None:
                                 diagnostics.append(route_diag)
                             continue
+                        # A route is a source-level declaration with an identity
+                        # distinct from its handler.  The anonymous-key form is
+                        # explicitly revision-local and source ordered (RFC §4.3),
+                        # while the resolver later connects it to this function.
+                        route_ordinal += 1
+                        route_key = canonical.normalize_stable_key(
+                            "symbol",
+                            symbol_stable_key(path, [], f"(anonymous:route#{route_ordinal})"),
+                        )
+                        nodes.append(
+                            ExtractedNode(
+                                node_kind="symbol",
+                                stable_key=route_key,
+                                name="route",
+                                language="python",
+                                evidence=(route_ev,),
+                                properties={"route_path": route_path},
+                            )
+                        )
                         observations.append(
                             ExtractedObservation(
                                 observed_kind="route",
                                 subject_kind="symbol",
-                                subject_key=canonical.normalize_stable_key("symbol", final_key),
+                                subject_key=route_key,
                                 referent_text=route_path,
+                                ordinal=_UNASSIGNED_ORDINAL,
+                                evidence=route_ev,
+                            )
+                        )
+                        observations.append(
+                            ExtractedObservation(
+                                observed_kind="route_handler",
+                                subject_kind="symbol",
+                                subject_key=route_key,
+                                referent_text=canonical.normalize_stable_key("symbol", final_key),
                                 ordinal=_UNASSIGNED_ORDINAL,
                                 evidence=route_ev,
                             )
@@ -362,6 +429,126 @@ class PythonExtractor:
                 visit([*scope, child.name], child.body)
 
         visit([], tree.body)
+
+    def _collect_calls(self, tree, path, line_count, module_key, observations, diagnostics) -> None:
+        """Record direct named call occurrences for the downstream resolver.
+
+        The extractor only records the exact call spelling and its source span.
+        Selecting a definition (including deciding whether a same-named symbol is
+        local, imported, or ambiguous) is deliberately deferred to #91.
+        """
+
+        def is_lexically_local(name: str, scope: _BindingScope) -> bool:
+            if name in scope.global_names:
+                return False
+            if name in scope.nonlocal_names:
+                parent = scope._nonlocal_parent()
+                return parent is not None and is_lexically_local(name, parent)
+            if name in scope.bindings:
+                return scope.kind != "module"
+            return scope.parent is not None and is_lexically_local(name, scope.parent)
+
+        def emit(node: ast.Call, scope: _BindingScope) -> None:
+            if not isinstance(node.func, ast.Name):
+                return
+            # These direct calls are already declared unsupported by the source
+            # support matrix.  They retain their explicit diagnostic, but must
+            # not become resolver input (or an observed relationship fact).
+            if node.func.id in {"dir", "getattr", "hasattr", "setattr", "vars"}:
+                return
+            evidence, diagnostic = build_evidence(
+                path, node.lineno, node.end_lineno or node.lineno,
+                line_count, producer=self.producer,
+            )
+            if evidence is None:
+                if diagnostic is not None:
+                    diagnostics.append(diagnostic)
+                return
+            observations.append(
+                ExtractedObservation(
+                    observed_kind="call",
+                    subject_kind="module",
+                    subject_key=module_key,
+                    referent_text=node.func.id,
+                    ordinal=_UNASSIGNED_ORDINAL,
+                    evidence=evidence,
+                )
+            )
+            if is_lexically_local(node.func.id, scope):
+                observations.append(
+                    ExtractedObservation(
+                        observed_kind="call_shadowed",
+                        subject_kind="module",
+                        subject_key=module_key,
+                        referent_text=node.func.id,
+                        ordinal=_UNASSIGNED_ORDINAL,
+                        evidence=evidence,
+                    )
+                )
+
+        def scan_signature(node, scope: _BindingScope) -> None:
+            for decorator in node.decorator_list:
+                scan(decorator, scope)
+            for default in (*node.args.defaults, *node.args.kw_defaults):
+                if default is not None:
+                    scan(default, scope)
+            for argument in (
+                *node.args.posonlyargs,
+                *node.args.args,
+                *node.args.kwonlyargs,
+            ):
+                if argument.annotation is not None:
+                    scan(argument.annotation, scope)
+            if node.args.vararg is not None and node.args.vararg.annotation is not None:
+                scan(node.args.vararg.annotation, scope)
+            if node.args.kwarg is not None and node.args.kwarg.annotation is not None:
+                scan(node.args.kwarg.annotation, scope)
+            if getattr(node, "returns", None) is not None:
+                scan(node.returns, scope)
+
+        def class_scope(node: ast.ClassDef, parent: _BindingScope) -> _BindingScope:
+            declarations = _ScopeDeclarations()
+            for statement in node.body:
+                declarations.visit(statement)
+            return _BindingScope(
+                parent,
+                kind="class",
+                bindings={name: _BINDING_LOCAL for name in declarations.names},
+            )
+
+        def scan(node, scope: _BindingScope) -> None:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                scan_signature(node, scope)
+                function_scope = self._function_scope(node, self._function_parent(scope))
+                for statement in node.body:
+                    scan(statement, function_scope)
+                return
+            if isinstance(node, ast.Lambda):
+                for default in (*node.args.defaults, *node.args.kw_defaults):
+                    if default is not None:
+                        scan(default, scope)
+                lambda_scope = self._function_scope(node, self._function_parent(scope))
+                scan(node.body, lambda_scope)
+                return
+            if isinstance(node, ast.ClassDef):
+                for decorator in node.decorator_list:
+                    scan(decorator, scope)
+                for base in node.bases:
+                    scan(base, scope)
+                for keyword in node.keywords:
+                    scan(keyword.value, scope)
+                nested_scope = class_scope(node, scope)
+                for statement in node.body:
+                    scan(statement, nested_scope)
+                return
+            if isinstance(node, ast.Call):
+                emit(node, scope)
+            for child in ast.iter_child_nodes(node):
+                scan(child, scope)
+
+        module_scope = _BindingScope()
+        for statement in tree.body:
+            scan(statement, module_scope)
 
     def _attribute_root(self, node):
         """Resolve ``a.b.c`` to its root ``Name``, or None if not name-rooted."""

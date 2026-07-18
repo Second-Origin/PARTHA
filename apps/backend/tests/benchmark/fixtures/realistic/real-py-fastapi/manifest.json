@@ -25,7 +25,11 @@
       {"nodeKind": "symbol", "stableKey": "src/service.py::read_user", "name": "read_user", "language": "python", "properties": {"decorators": ["app.get"]}, "constructs": ["py.function.def", "py.decorator"],
        "evidence": [{"path": "src/service.py", "startLine": 15, "endLine": 16, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/service.py::create_user", "name": "create_user", "language": "python", "properties": {"decorators": ["app.post"]}, "constructs": ["py.function.def", "py.decorator"],
-       "evidence": [{"path": "src/service.py", "startLine": 20, "endLine": 21, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
+       "evidence": [{"path": "src/service.py", "startLine": 20, "endLine": 21, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/service.py::(anonymous:route#1)", "name": "route", "language": "python", "properties": {"route_path": "/users/{user_id}"}, "constructs": ["py.fastapi_route"],
+       "evidence": [{"path": "src/service.py", "startLine": 14, "endLine": 14, "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+      {"nodeKind": "symbol", "stableKey": "src/service.py::(anonymous:route#2)", "name": "route", "language": "python", "properties": {"route_path": "/users"}, "constructs": ["py.fastapi_route"],
+       "evidence": [{"path": "src/service.py", "startLine": 19, "endLine": 19, "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
     ],
     "edges": [
       {"subjectKind": "repository", "subjectKey": "repo:root", "predicate": "contains", "objectKind": "file", "objectKey": "file:src/service.py",
@@ -35,15 +39,23 @@
     "observations": [
       {"observedKind": "import", "subjectKind": "module", "subjectKey": "mod:src", "referentText": "fastapi.FastAPI", "ordinal": 1, "constructs": ["py.from_import"],
        "evidence": {"path": "src/service.py", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}},
+      {"observedKind": "import_binding", "subjectKind": "module", "subjectKey": "mod:src", "referentText": "fastapi|FastAPI|FastAPI", "ordinal": 1, "constructs": ["py.from_import"],
+       "evidence": {"path": "src/service.py", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}},
+      {"observedKind":"call","subjectKind":"module","subjectKey":"mod:src","referentText":"FastAPI","ordinal":1,"constructs":["py.from_import"],"evidence":{"path":"src/service.py","startLine":3,"endLine":3,"extractor":"python-ast","extractorVersion":"1.0.0"}},
+      {"observedKind":"call","subjectKind":"module","subjectKey":"mod:src","referentText":"Settings","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/service.py","startLine":11,"endLine":11,"extractor":"python-ast","extractorVersion":"1.0.0"}},
       {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.py::Settings","ordinal":1,"constructs":["py.class.def"],"evidence":{"path":"src/service.py","startLine":6,"endLine":7,"extractor":"python-ast","extractorVersion":"1.0.0"}},
       {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.py::get_settings","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/service.py","startLine":10,"endLine":11,"extractor":"python-ast","extractorVersion":"1.0.0"}},
       {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.py::read_user","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/service.py","startLine":15,"endLine":16,"extractor":"python-ast","extractorVersion":"1.0.0"}},
       {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.py::create_user","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/service.py","startLine":20,"endLine":21,"extractor":"python-ast","extractorVersion":"1.0.0"}},
       {"observedKind":"decorator","subjectKind":"symbol","subjectKey":"src/service.py::read_user","referentText":"app.get","ordinal":1,"constructs":["py.decorator"],"evidence":{"path":"src/service.py","startLine":14,"endLine":14,"extractor":"python-ast","extractorVersion":"1.0.0"}},
       {"observedKind":"decorator","subjectKind":"symbol","subjectKey":"src/service.py::create_user","referentText":"app.post","ordinal":1,"constructs":["py.decorator"],"evidence":{"path":"src/service.py","startLine":19,"endLine":19,"extractor":"python-ast","extractorVersion":"1.0.0"}},
-      {"observedKind": "route", "subjectKind": "symbol", "subjectKey": "src/service.py::read_user", "referentText": "/users/{user_id}", "ordinal": 1, "constructs": ["py.fastapi_route"],
+      {"observedKind": "route", "subjectKind": "symbol", "subjectKey": "src/service.py::(anonymous:route#1)", "referentText": "/users/{user_id}", "ordinal": 1, "constructs": ["py.fastapi_route"],
        "evidence": {"path": "src/service.py", "startLine": 14, "endLine": 14, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}},
-      {"observedKind": "route", "subjectKind": "symbol", "subjectKey": "src/service.py::create_user", "referentText": "/users", "ordinal": 1, "constructs": ["py.fastapi_route"],
+      {"observedKind": "route_handler", "subjectKind": "symbol", "subjectKey": "src/service.py::(anonymous:route#1)", "referentText": "src/service.py::read_user", "ordinal": 1, "constructs": ["py.fastapi_route"],
+       "evidence": {"path": "src/service.py", "startLine": 14, "endLine": 14, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}},
+      {"observedKind": "route", "subjectKind": "symbol", "subjectKey": "src/service.py::(anonymous:route#2)", "referentText": "/users", "ordinal": 1, "constructs": ["py.fastapi_route"],
+       "evidence": {"path": "src/service.py", "startLine": 19, "endLine": 19, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}},
+      {"observedKind": "route_handler", "subjectKind": "symbol", "subjectKey": "src/service.py::(anonymous:route#2)", "referentText": "src/service.py::create_user", "ordinal": 1, "constructs": ["py.fastapi_route"],
        "evidence": {"path": "src/service.py", "startLine": 19, "endLine": 19, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}}
     ],
     "assertions": [

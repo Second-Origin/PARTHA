@@ -16,3 +16,13 @@ def test_imports_become_observations():
         o.referent_text for o in result.observations if o.observed_kind == "import"
     )
     assert specifiers == ["./session", "./tokens"]
+
+
+def test_named_import_aliases_are_preserved_for_the_resolver():
+    result = _extract("import { issueToken as mint } from './tokens';\nmint();\n")
+    bindings = [
+        observation.referent_text
+        for observation in result.observations
+        if observation.observed_kind == "import_binding"
+    ]
+    assert bindings == ["./tokens|issueToken|mint"]

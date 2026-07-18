@@ -65,3 +65,57 @@ def test_exported_function_carries_exported_property():
         n for n in result.nodes if n.stable_key == "src/auth/service.ts::issueToken"
     )
     assert token.properties is not None and token.properties.get("exported") is True
+
+
+def test_default_export_identity_is_preserved_for_declarations_and_aliases():
+    _, declaration_result = _keys("export default function Primary() {}\n")
+    _, alias_result = _keys(
+        "const Secondary = () => null;\n"
+        "export default Secondary;\n"
+    )
+    default_exports = {
+        node.stable_key
+        for result in (declaration_result, alias_result)
+        for node in result.nodes
+        if node.properties is not None and node.properties.get("default_export") is True
+    }
+    assert default_exports == {
+        "src/auth/service.ts::Primary",
+        "src/auth/service.ts::Secondary",
+    }
+
+
+def test_direct_implements_clause_becomes_a_resolver_observation():
+    _, result = _keys("interface Worker {}\nclass Runner implements Worker {}\n")
+    observations = [
+        (observation.subject_key, observation.referent_text)
+        for observation in result.observations
+        if observation.observed_kind == "implements"
+    ]
+    assert observations == [("src/auth/service.ts::Runner", "Worker")]
+
+
+def test_abstract_generic_implements_records_the_base_reference():
+    _, result = _keys(
+        "interface Worker<T> {}\n"
+        "abstract class Runner implements Worker<string> {}\n"
+    )
+    observations = [
+        (observation.subject_key, observation.referent_text)
+        for observation in result.observations
+        if observation.observed_kind == "implements"
+    ]
+    assert observations == [("src/auth/service.ts::Runner", "Worker")]
+
+
+def test_parameter_shadowing_is_recorded_at_the_call_site():
+    _, result = _keys(
+        "function target() { return 1; }\n"
+        "function caller(target: () => number) { return target(); }\n"
+    )
+    shadowed = [
+        observation.referent_text
+        for observation in result.observations
+        if observation.observed_kind == "call_shadowed"
+    ]
+    assert shadowed == ["target"]
