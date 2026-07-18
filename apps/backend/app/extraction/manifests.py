@@ -77,7 +77,7 @@ class DependencyManifestExtractor:
     """Extract direct npm/PyPI declarations as observed dependency facts."""
 
     name = "dependency-manifest"
-    version = "1.1.0"
+    version = "1.2.0"
 
     @property
     def producer(self) -> str:
@@ -248,9 +248,13 @@ class DependencyManifestExtractor:
     def _requirements_declarations(text: str) -> list[_ManifestDeclaration]:
         declarations: list[_ManifestDeclaration] = []
         for line_number, raw in enumerate(text.splitlines(), start=1):
-            value = raw.split("#", 1)[0].strip()
-            if not value or value.startswith(("-", ".")):
+            # A fragment is part of a direct-reference specifier (for example
+            # ``package @ https://host/archive.whl#sha256=...``).  Only a hash
+            # preceded by whitespace starts a requirements-file comment.
+            value = raw.strip()
+            if not value or value.startswith(("#", "-", ".")):
                 continue
+            value = re.sub(r"\s+#.*$", "", value).strip()
             name = DependencyManifestExtractor._python_requirement_name(value)
             if name:
                 declarations.append(

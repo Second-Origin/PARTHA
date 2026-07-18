@@ -61,7 +61,7 @@ describe('DependenciesPage', () => {
                 startLine: 3,
                 endLine: 3,
                 extractor: 'dependency-manifest',
-                extractorVersion: '1.1.0',
+                extractorVersion: '1.2.0',
                 ecosystem: 'npm',
                 version: '4.17.15',
                 type: 'production',

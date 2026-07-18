@@ -54,7 +54,9 @@ class ArchitectureContext:
 @dataclass(frozen=True)
 class DependencyContext:
     name: str
-    version: str
+    version: str | None
+    declared_versions: tuple[str | None, ...]
+    has_version_conflict: bool
 
 
 @dataclass(frozen=True)

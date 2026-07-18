@@ -173,7 +173,7 @@ def test_nested_workspace_manifest_inventory_preserves_all_declarations_and_grap
     assert react.declarations[0].workspace_path == "apps/frontend"
     assert react.declarations[0].start_line == 3
     assert react.declarations[0].extractor == "dependency-manifest"
-    assert react.declarations[0].extractor_version == "1.1.0"
+    assert react.declarations[0].extractor_version == "1.2.0"
 
     fastapi = dependencies["dependency:pypi:fastapi"]
     assert fastapi.declarations[0].manifest_path == "apps/backend/pyproject.toml"
@@ -223,8 +223,8 @@ def test_nested_malformed_manifests_are_diagnostic_without_erasing_valid_declara
         (diagnostic.code, diagnostic.path, diagnostic.producer)
         for diagnostic in intelligence.dependency_diagnostics
     ] == [
-        ("RI-SRC-MALFORMED", "apps/broken-json/package.json", "dependency-manifest@1.1.0"),
-        ("RI-SRC-MALFORMED", "apps/broken-toml/pyproject.toml", "dependency-manifest@1.1.0"),
+        ("RI-SRC-MALFORMED", "apps/broken-json/package.json", "dependency-manifest@1.2.0"),
+        ("RI-SRC-MALFORMED", "apps/broken-toml/pyproject.toml", "dependency-manifest@1.2.0"),
     ]
 
 
@@ -241,4 +241,45 @@ def test_empty_valid_manifest_is_distinct_from_a_malformed_manifest(tmp_path: Pa
     assert intelligence.dependencies == []
     assert [(item.code, item.path) for item in intelligence.dependency_diagnostics] == [
         ("RI-SRC-MALFORMED", "apps/broken/package.json")
+    ]
+
+
+def test_oversized_manifest_is_skipped_before_an_unbounded_read(tmp_path: Path, monkeypatch):
+    package_json = tmp_path / "apps" / "large" / "package.json"
+    package_json.parent.mkdir(parents=True)
+    package_json.write_bytes(b" " * (512 * 1024 + 1))
+
+    def unexpected_read_bytes(_: Path) -> bytes:
+        raise AssertionError("manifest candidates must not be loaded with read_bytes")
+
+    monkeypatch.setattr(Path, "read_bytes", unexpected_read_bytes)
+    tree, metadata, total_size = RepositoryParser().parse(tmp_path)
+    intelligence = RepositoryIntelligenceEngine().build("repo-large", "large", tmp_path, tree, metadata, total_size)
+
+    assert intelligence.dependency_manifest_count == 1
+    assert intelligence.dependencies == []
+    assert [(item.code, item.path, item.details) for item in intelligence.dependency_diagnostics] == [
+        (
+            "RI-LIMIT-SKIP",
+            "apps/large/package.json",
+            {"budgetBytes": 512 * 1024, "reportedBytes": 512 * 1024 + 1},
+        )
+    ]
+
+
+def test_requirements_url_fragments_remain_distinct_during_aggregation(tmp_path: Path):
+    (tmp_path / "requirements.txt").write_text(
+        "example @ https://host.example/archive.whl#sha256=first\n"
+        "example @ https://host.example/archive.whl#sha256=second\n",
+        encoding="utf-8",
+    )
+    tree, metadata, total_size = RepositoryParser().parse(tmp_path)
+    intelligence = RepositoryIntelligenceEngine().build("repo-fragments", "fragments", tmp_path, tree, metadata, total_size)
+
+    dependency = intelligence.dependencies[0]
+    assert dependency.name == "example"
+    assert dependency.version is None
+    assert [item.version for item in dependency.declarations] == [
+        "@ https://host.example/archive.whl#sha256=first",
+        "@ https://host.example/archive.whl#sha256=second",
     ]
