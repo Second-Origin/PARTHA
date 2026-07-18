@@ -170,6 +170,8 @@ Two terms with distinct meanings. PARTHA uses them precisely, and supports neith
 
 **Evidence: partial.** Graph relationships and engineering-review findings carry the **file paths** they were derived from. That is real evidence, and it is enough to point a reader at the right file.
 
+Environment-file review findings also name their evidence class: a committed template, a runtime environment file with no detected secret-like value, or a secret-like value. A `.env.example`, `.env.sample`, `.env.template`, or `.env.dist` filename is never treated as proof of an exposed secret. The review reports sensitive key names and file paths, never values; rotation advice appears only when a non-placeholder secret-like value is detected.
+
 **Product-consumed provenance: incomplete.** The new persistence schema can store complete `ri.v1` provenance and the standalone extractors can produce it, but the current product path still consumes the legacy regex engine. Specifically:
 
 - **No line spans.** `SourceSymbol` has `id`, `name`, `kind`, `file_path`, and `exported`. It has **no start or end line**. Nothing in the model records where in a file a fact was found.

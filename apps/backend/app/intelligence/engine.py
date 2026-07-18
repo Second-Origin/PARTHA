@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from app.intelligence.models import (
+    EnvironmentFileEvidence,
     KnowledgeGraph,
     KnowledgeGraphNode,
     KnowledgeGraphRelationship,
@@ -40,6 +41,15 @@ CONFIG_NAMES = {
     ".gitignore",
     "alembic.ini",
 }
+ENVIRONMENT_TEMPLATE_NAMES = {".env.example", ".env.sample", ".env.template", ".env.dist"}
+SECRET_KEY_NAME_PATTERN = re.compile(
+    r"(?:^|_)(?:api_?key|access_?key|auth_?token|client_?secret|credential|password|private_?key|secret|token)(?:$|_)",
+    flags=re.IGNORECASE,
+)
+PLACEHOLDER_VALUE_PATTERN = re.compile(
+    r"^(?:\$\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*|<[^>]+>|\[[^]]+\]|(?:example|sample|placeholder|replace|your)[\s_-].*|(?:change|replace)[\s_-]?me|not[\s_-]?a[\s_-]?real[\s_-]?.*|x+|\*+)$",
+    flags=re.IGNORECASE,
+)
 DATABASE_TECHNOLOGIES = {
     "postgres": "PostgreSQL",
     "postgresql": "PostgreSQL",
@@ -74,7 +84,7 @@ class RepositoryIntelligenceEngine:
 
     def from_record(self, record: RepositoryRecord) -> RepositoryIntelligence:
         existing = self.load(record)
-        if existing:
+        if existing and (not existing.discovery.environment_files or existing.discovery.environment_file_evidence):
             return existing
         return self.build(
             repository_id=record.id,
@@ -112,7 +122,7 @@ class RepositoryIntelligenceEngine:
         file_intelligence = [self._file_intelligence(root, node) for node in flat_files]
         symbols = [symbol for file in file_intelligence for symbol in file.symbols]
         dependencies = self._dependencies(root)
-        discovery = self._discovery(metadata, tree, file_intelligence, dependencies, total_size)
+        discovery = self._discovery(root, metadata, tree, file_intelligence, dependencies, total_size)
         modules = self._modules(file_intelligence)
         graph = self._knowledge_graph(repository_id, repository_name, modules, file_intelligence, symbols, dependencies)
         return RepositoryIntelligence(
@@ -327,6 +337,7 @@ class RepositoryIntelligenceEngine:
 
     def _discovery(
         self,
+        root: Path,
         metadata: RepositoryMeta,
         tree: list[FileTreeNode],
         files: list[SourceFileIntelligence],
@@ -341,6 +352,7 @@ class RepositoryIntelligenceEngine:
         package_managers = sorted({metadata.package_manager} - {None})  # type: ignore[arg-type]
         config_files = [path.lstrip("/") for path in paths if Path(path).name in CONFIG_NAMES or "/.github/" in path]
         env_files = [path.lstrip("/") for path in paths if Path(path).name.startswith(".env")]
+        environment_file_evidence = self._environment_file_evidence(root, env_files)
         docker_files = [path.lstrip("/") for path in paths if "docker" in path.lower()]
         ci_files = [path.lstrip("/") for path in paths if "/.github/workflows/" in path or "gitlab-ci" in path.lower()]
         build_systems = self._build_systems(paths, dep_names)
@@ -354,6 +366,7 @@ class RepositoryIntelligenceEngine:
             package_managers=package_managers,
             configuration_files=config_files,
             environment_files=env_files,
+            environment_file_evidence=environment_file_evidence,
             docker_files=docker_files,
             ci_files=ci_files,
             entry_points=[metadata.entry_point] if metadata.entry_point else [],
@@ -370,6 +383,70 @@ class RepositoryIntelligenceEngine:
                 documentation_files=len([file for file in files if file.role == "documentation"]),
             ),
         )
+
+    def _environment_file_evidence(self, root: Path, paths: list[str]) -> list[EnvironmentFileEvidence]:
+        evidence: list[EnvironmentFileEvidence] = []
+        for path in paths:
+            secret_keys = self._secret_like_keys(self._read_text(root, path))
+            if secret_keys:
+                evidence_class = "secret_like_value_detected"
+            elif Path(path).name.lower() in ENVIRONMENT_TEMPLATE_NAMES:
+                evidence_class = "template_present"
+            else:
+                evidence_class = "runtime_env_file_present"
+            evidence.append(EnvironmentFileEvidence(path=path, evidence_class=evidence_class, secret_keys=secret_keys))
+        return evidence
+
+    def _secret_like_keys(self, text: str) -> list[str]:
+        keys: set[str] = set()
+        for line in text.splitlines():
+            clean = line.strip()
+            if not clean or clean.startswith("#"):
+                continue
+            if clean.startswith("export "):
+                clean = clean.removeprefix("export ").lstrip()
+            if "=" not in clean:
+                continue
+            key, value = clean.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip("\"'")
+            if not key or self._is_placeholder_value(value):
+                continue
+            if SECRET_KEY_NAME_PATTERN.search(key) or self._has_embedded_credentials(value):
+                keys.add(key)
+        return sorted(keys)
+
+    def _is_placeholder_value(self, value: str) -> bool:
+        normalized = value.strip()
+        if not normalized or normalized.lower() in {
+            "none",
+            "null",
+            "undefined",
+            "example",
+            "sample",
+            "placeholder",
+            "replace",
+            "your",
+            "user",
+            "username",
+            "password",
+            "pass",
+            "pwd",
+            "secret",
+            "token",
+        }:
+            return True
+        return bool(PLACEHOLDER_VALUE_PATTERN.fullmatch(normalized))
+
+    def _has_embedded_credentials(self, value: str) -> bool:
+        if "-----BEGIN" in value and "PRIVATE KEY-----" in value:
+            return True
+        # A URL userinfo section only counts as an exposed credential when the
+        # password is a concrete value, not a placeholder or a ${VAR} reference
+        # (e.g. postgres://user:password@host and postgres://user:${PW}@host are
+        # template idioms, not committed secrets).
+        userinfo = re.search(r"://[^/@\s]+:([^/@\s]+)@", value)
+        return bool(userinfo) and not self._is_placeholder_value(userinfo.group(1))
 
     def _count_folders(self, nodes: list[FileTreeNode]) -> int:
         count = 0

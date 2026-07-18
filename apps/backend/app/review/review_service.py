@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from app.intelligence.engine import RepositoryIntelligenceEngine
+from app.intelligence.models import EnvironmentFileEvidence
 from app.models.repository import RepositoryRecord
 from app.schemas.review import EngineeringReviewResponse, ImprovementStep, ReviewFinding, ReviewScore, ReviewSummary
 
@@ -79,17 +80,65 @@ class EngineeringReviewBuilder:
                     affected_modules=["tests"],
                 )
             )
-        if discovery.environment_files:
+        environment_evidence: list[EnvironmentFileEvidence] = discovery.environment_file_evidence
+        if not environment_evidence and discovery.environment_files:
+            environment_evidence = [
+                EnvironmentFileEvidence(path=path, evidence_class="runtime_env_file_present")
+                for path in discovery.environment_files
+            ]
+        template_files = [item.path for item in environment_evidence if item.evidence_class == "template_present"]
+        runtime_files = [item.path for item in environment_evidence if item.evidence_class == "runtime_env_file_present"]
+        secret_evidence = [item for item in environment_evidence if item.evidence_class == "secret_like_value_detected"]
+        secret_files = [item.path for item in secret_evidence]
+        secret_keys = sorted({key for item in secret_evidence for key in item.secret_keys})
+        if secret_files:
             findings.append(
                 self._finding(
-                    "env-file-present",
-                    "Environment File Present",
+                    "env-secret-like-value-detected",
+                    "Secret-Like Environment Value Detected",
                     "security",
                     "critical",
-                    problem=f"Committed environment file(s) that may contain secrets: {', '.join(discovery.environment_files[:5])}.",
+                    problem=(
+                        "Evidence class: secret-like value detected. Committed environment file(s) contain "
+                        f"non-placeholder values for sensitive key(s): {', '.join(secret_keys[:10])}."
+                    ),
                     impact="Secrets committed to version control can be leaked and abused, and remain recoverable from history.",
                     recommendation="Remove committed secret-bearing environment files, rotate exposed secrets, and ignore them going forward.",
-                    affected_files=discovery.environment_files,
+                    affected_files=secret_files,
+                    affected_modules=["configuration"],
+                )
+            )
+        if runtime_files:
+            findings.append(
+                self._finding(
+                    "env-runtime-file-present",
+                    "Runtime Environment File Present",
+                    "security",
+                    "medium",
+                    problem=(
+                        "Evidence class: runtime env file present. These committed files had no detected secret-like value, "
+                        "so their filenames alone are not evidence of an exposed secret."
+                    ),
+                    impact="A runtime environment file can later accumulate credentials or be copied into deployments without review.",
+                    recommendation="Keep runtime environment files out of version control and review their values. No secret rotation is indicated unless a secret-like value is detected.",
+                    affected_files=runtime_files,
+                    affected_modules=["configuration"],
+                )
+            )
+        if template_files:
+            findings.append(
+                self._finding(
+                    "env-template-present",
+                    "Environment Template Present",
+                    "configuration",
+                    "low",
+                    problem=(
+                        "Evidence class: template present. These files document environment configuration and contain no detected "
+                        "secret-like value."
+                    ),
+                    impact="Templates are safe to commit when they remain placeholder-only, but they should not be used as a location for live credentials.",
+                    recommendation="Keep templates placeholder-only and document required variables; no secret rotation is indicated by this finding.",
+                    affected_files=template_files,
                     affected_modules=["configuration"],
                 )
             )
