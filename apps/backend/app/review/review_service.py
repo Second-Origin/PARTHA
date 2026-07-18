@@ -1,14 +1,110 @@
 from datetime import UTC, datetime
+from pathlib import PurePosixPath
 
-from app.intelligence.engine import RepositoryIntelligenceEngine
+from app.intelligence.engine import SOURCE_EXTENSIONS, RepositoryIntelligenceEngine
+from app.intelligence.models import SourceFileIntelligence
 from app.models.repository import RepositoryRecord
-from app.schemas.review import EngineeringReviewResponse, ImprovementStep, ReviewFinding, ReviewScore, ReviewSummary
+from app.schemas.review import (
+    EngineeringReviewResponse,
+    ImprovementStep,
+    ReviewFileEvidence,
+    ReviewFinding,
+    ReviewScore,
+    ReviewSummary,
+)
 
 LARGE_FILE_BYTES = 40_000
 LARGE_SOURCE_SURFACE = 300
 SEVERITY_PRIORITY = {"critical": 1, "high": 2, "medium": 3, "low": 4}
 SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 EFFORT_BY_SEVERITY = {"critical": "1 sprint", "high": "1 sprint", "medium": "a few days", "low": "a few hours"}
+
+# The oversized-source review is intentionally limited to refactorable authored
+# code. Lockfiles, configuration, generated/minified code, vendored code, and
+# build outputs are not design evidence, even when they are large.
+LOCKFILE_NAMES = frozenset(
+    {
+        "bun.lockb",
+        "cargo.lock",
+        "composer.lock",
+        "gemfile.lock",
+        "go.sum",
+        "mix.lock",
+        "npm-shrinkwrap.json",
+        "package-lock.json",
+        "pdm.lock",
+        "pipfile.lock",
+        "pnpm-lock.yaml",
+        "poetry.lock",
+        "uv.lock",
+        "yarn.lock",
+    }
+)
+ARTIFACT_DIRECTORY_NAMES = frozenset(
+    {
+        ".next",
+        ".nuxt",
+        "__generated__",
+        "bin",
+        "build",
+        "coverage",
+        "dist",
+        "gen",
+        "generated",
+        "node_modules",
+        "obj",
+        "out",
+        "target",
+        "third-party",
+        "third_party",
+        "vendor",
+    }
+)
+GENERATED_SOURCE_SUFFIXES = (
+    ".designer.cs",
+    ".g.cs",
+    ".g.ts",
+    ".gen.js",
+    ".gen.ts",
+    ".gen.tsx",
+    ".generated.js",
+    ".generated.py",
+    ".generated.ts",
+    ".generated.tsx",
+    ".min.cjs",
+    ".min.js",
+    ".min.mjs",
+    ".pb.go",
+    "_pb2.py",
+    "_pb2_grpc.py",
+)
+CONFIGURATION_SOURCE_SUFFIXES = (
+    ".conf.js",
+    ".conf.ts",
+    ".config.js",
+    ".config.ts",
+    ".config.tsx",
+)
+
+
+def _is_refactorable_source_file(file: SourceFileIntelligence) -> bool:
+    """Return whether a file is authored source eligible for the size review.
+
+    The rules are path- and metadata-based so the review does not infer a
+    maintainability problem from generated or dependency-managed artifacts.
+    """
+
+    path = PurePosixPath(file.path.casefold())
+    name = path.name
+    return (
+        file.size > LARGE_FILE_BYTES
+        and file.extension in SOURCE_EXTENSIONS
+        and file.role not in {"configuration", "documentation"}
+        and name not in LOCKFILE_NAMES
+        and not any(part in ARTIFACT_DIRECTORY_NAMES for part in path.parts)
+        and not name.endswith(GENERATED_SOURCE_SUFFIXES)
+        and not name.endswith(CONFIGURATION_SOURCE_SUFFIXES)
+    )
 
 
 class EngineeringReviewBuilder:
@@ -107,21 +203,34 @@ class EngineeringReviewBuilder:
                 )
             )
         large_files = sorted(
-            (file for file in files if file.role != "documentation" and file.size > LARGE_FILE_BYTES),
+            (file for file in files if _is_refactorable_source_file(file)),
             key=lambda file: file.size,
             reverse=True,
         )
         if large_files:
+            large_file_evidence = [
+                ReviewFileEvidence(path=file.path, size_bytes=file.size) for file in large_files[:10]
+            ]
             findings.append(
                 self._finding(
                     "large-files",
                     "Oversized Source Files",
                     "maintainability",
                     "medium",
-                    problem=f"{len(large_files)} file(s) exceed {LARGE_FILE_BYTES // 1000} KB, a sign of low cohesion or god-files.",
-                    impact="Oversized files are harder to review, test, and refactor safely, concentrating risk in a few places.",
-                    recommendation="Split large files along clear responsibilities and extract cohesive units.",
-                    affected_files=[file.path for file in large_files[:10]],
+                    problem=(
+                        f"{len(large_files)} authored source file(s) exceed {LARGE_FILE_BYTES // 1000} KB. "
+                        "Size is a review signal; it does not establish a design problem by itself."
+                    ),
+                    impact=(
+                        "Large authored source files can require more context to review, test, and change safely, "
+                        "so they merit a focused review before any refactoring decision."
+                    ),
+                    recommendation=(
+                        "Review the listed files with their measured sizes as context; refactor only where "
+                        "responsibilities or complexity warrant it."
+                    ),
+                    affected_files=[evidence.path for evidence in large_file_evidence],
+                    affected_file_details=large_file_evidence,
                 )
             )
         if not discovery.ci_files:
@@ -164,6 +273,7 @@ class EngineeringReviewBuilder:
         recommendation: str,
         affected_files: list[str],
         affected_modules: list[str] | None = None,
+        affected_file_details: list[ReviewFileEvidence] | None = None,
     ) -> ReviewFinding:
         return ReviewFinding(
             id=finding_id,
@@ -177,6 +287,7 @@ class EngineeringReviewBuilder:
             priority=SEVERITY_PRIORITY[severity],
             estimated_effort="small" if severity in {"low", "medium"} else "medium",
             affected_files=affected_files,
+            affected_file_details=affected_file_details or [],
             affected_modules=affected_modules or ["repository"],
             tags=[category],
         )
