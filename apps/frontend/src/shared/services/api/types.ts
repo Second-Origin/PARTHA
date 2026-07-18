@@ -196,9 +196,34 @@ export type ArchitectureResponse = ArchitectureModel;
 export interface DependencyNode {
   id: string;
   name: string;
-  version: string;
-  type: 'production' | 'development' | 'peer' | 'optional';
+  version: string | null;
+  type: 'production' | 'development' | 'peer' | 'optional' | 'multiple';
+  ecosystem: string;
+  declarations: DependencyDeclaration[];
   size: number | null;
+}
+
+export interface DependencyDeclaration {
+  name: string;
+  manifestPath: string;
+  workspacePath: string;
+  startLine: number;
+  endLine: number;
+  extractor: string;
+  extractorVersion: string;
+  ecosystem: string;
+  version: string | null;
+  type: 'production' | 'development' | 'peer' | 'optional';
+}
+
+export interface DependencyDiagnostic {
+  code: string;
+  category: string;
+  severity: 'fatal' | 'error' | 'warning' | 'info';
+  message: string;
+  path: string | null;
+  producer: string;
+  details: Record<string, unknown> | null;
 }
 
 export interface DependencyEdge {
@@ -216,6 +241,8 @@ export interface DependencyGraphResponse {
   nodes: DependencyNode[];
   edges: DependencyEdge[];
   totalDependencies: number;
+  manifestCount: number;
+  diagnostics: DependencyDiagnostic[];
   vulnerabilityAssessment: DependencyAssessment;
   outdatedAssessment: DependencyAssessment;
 }

@@ -109,3 +109,136 @@ def test_feature_consumers_read_repository_intelligence(tmp_path: Path):
     assert dependencies.vulnerability_assessment.status == "not_computed"
     assert dependencies.outdated_assessment.status == "not_computed"
     assert review.summary.total_findings >= 1
+
+
+def _nested_manifest_repository(root: Path) -> None:
+    (root / "apps" / "frontend").mkdir(parents=True)
+    (root / "apps" / "backend").mkdir(parents=True)
+    (root / "services" / "worker").mkdir(parents=True)
+    (root / "node_modules" / "hidden").mkdir(parents=True)
+    (root / ".venv" / "hidden").mkdir(parents=True)
+    (root / "dist" / "hidden").mkdir(parents=True)
+    (root / "build" / "hidden").mkdir(parents=True)
+    (root / ".next" / "hidden").mkdir(parents=True)
+    (root / ".cache" / "hidden").mkdir(parents=True)
+    (root / "vendor" / "hidden").mkdir(parents=True)
+    (root / "apps" / "frontend" / "package.json").write_text(
+        '''{
+  "dependencies": {
+    "react": "^18.3.0",
+    "shared-npm": "^1.0.0"
+  }
+}
+''',
+        encoding="utf-8",
+    )
+    (root / "apps" / "backend" / "pyproject.toml").write_text(
+        '''[project]
+dependencies = [
+  "fastapi>=0.115",
+  "requests==2.31.0",
+]
+''',
+        encoding="utf-8",
+    )
+    (root / "services" / "worker" / "requirements.txt").write_text(
+        "requests>=2.32\ncelery==5.4\n", encoding="utf-8"
+    )
+    for directory in ("node_modules", ".venv", "dist", "build", ".next", ".cache", "vendor"):
+        (root / directory / "hidden" / "package.json").write_text(
+            '{"dependencies":{"not-visible":"1"}}', encoding="utf-8"
+        )
+
+
+def test_nested_workspace_manifest_inventory_preserves_all_declarations_and_graph_evidence(tmp_path: Path):
+    _nested_manifest_repository(tmp_path)
+    tree, metadata, total_size = RepositoryParser().parse(tmp_path)
+    engine = RepositoryIntelligenceEngine()
+    intelligence = engine.build("repo-nested", "nested", tmp_path, tree, metadata, total_size)
+
+    dependencies = {dependency.id: dependency for dependency in intelligence.dependencies}
+    assert set(dependencies) == {
+        "dependency:npm:react",
+        "dependency:npm:shared-npm",
+        "dependency:pypi:celery",
+        "dependency:pypi:fastapi",
+        "dependency:pypi:requests",
+    }
+    assert intelligence.dependency_manifest_count == 3
+    assert intelligence.dependency_diagnostics == []
+
+    react = dependencies["dependency:npm:react"]
+    assert react.version == "^18.3.0"
+    assert react.declarations[0].manifest_path == "apps/frontend/package.json"
+    assert react.declarations[0].workspace_path == "apps/frontend"
+    assert react.declarations[0].start_line == 3
+    assert react.declarations[0].extractor == "dependency-manifest"
+    assert react.declarations[0].extractor_version == "1.1.0"
+
+    fastapi = dependencies["dependency:pypi:fastapi"]
+    assert fastapi.declarations[0].manifest_path == "apps/backend/pyproject.toml"
+    assert fastapi.declarations[0].start_line == 3
+    assert fastapi.declarations[0].version == ">=0.115"
+
+    requests = dependencies["dependency:pypi:requests"]
+    assert requests.version is None  # conflicting declarations are not overwritten
+    assert [
+        (item.manifest_path, item.version, item.start_line)
+        for item in requests.declarations
+    ] == [
+        ("apps/backend/pyproject.toml", "==2.31.0", 4),
+        ("services/worker/requirements.txt", ">=2.32", 1),
+    ]
+    requests_edge = next(
+        edge
+        for edge in intelligence.graph.relationships
+        if edge.type == "depends_on" and edge.target == requests.id
+    )
+    assert requests_edge.evidence == [
+        "apps/backend/pyproject.toml",
+        "services/worker/requirements.txt",
+    ]
+    assert all("not-visible" not in dependency.name for dependency in intelligence.dependencies)
+
+    flattened = engine._flatten_files(tree)
+    first = engine._dependencies(tmp_path, flattened)
+    second = engine._dependencies(tmp_path, list(reversed(flattened)))
+    assert first == second
+
+
+def test_nested_malformed_manifests_are_diagnostic_without_erasing_valid_declarations(tmp_path: Path):
+    (tmp_path / "apps" / "valid").mkdir(parents=True)
+    (tmp_path / "apps" / "broken-json").mkdir(parents=True)
+    (tmp_path / "apps" / "broken-toml").mkdir(parents=True)
+    (tmp_path / "apps" / "valid" / "requirements.txt").write_text("httpx>=0.27\n", encoding="utf-8")
+    (tmp_path / "apps" / "broken-json" / "package.json").write_text("{", encoding="utf-8")
+    (tmp_path / "apps" / "broken-toml" / "pyproject.toml").write_text("[project\ndependencies = [", encoding="utf-8")
+
+    tree, metadata, total_size = RepositoryParser().parse(tmp_path)
+    intelligence = RepositoryIntelligenceEngine().build("repo-malformed", "malformed", tmp_path, tree, metadata, total_size)
+
+    assert [dependency.name for dependency in intelligence.dependencies] == ["httpx"]
+    assert intelligence.dependency_manifest_count == 3
+    assert [
+        (diagnostic.code, diagnostic.path, diagnostic.producer)
+        for diagnostic in intelligence.dependency_diagnostics
+    ] == [
+        ("RI-SRC-MALFORMED", "apps/broken-json/package.json", "dependency-manifest@1.1.0"),
+        ("RI-SRC-MALFORMED", "apps/broken-toml/pyproject.toml", "dependency-manifest@1.1.0"),
+    ]
+
+
+def test_empty_valid_manifest_is_distinct_from_a_malformed_manifest(tmp_path: Path):
+    (tmp_path / "apps" / "empty").mkdir(parents=True)
+    (tmp_path / "apps" / "broken").mkdir(parents=True)
+    (tmp_path / "apps" / "empty" / "package.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "apps" / "broken" / "package.json").write_text("{", encoding="utf-8")
+
+    tree, metadata, total_size = RepositoryParser().parse(tmp_path)
+    intelligence = RepositoryIntelligenceEngine().build("repo-empty", "empty", tmp_path, tree, metadata, total_size)
+
+    assert intelligence.dependency_manifest_count == 2
+    assert intelligence.dependencies == []
+    assert [(item.code, item.path) for item in intelligence.dependency_diagnostics] == [
+        ("RI-SRC-MALFORMED", "apps/broken/package.json")
+    ]

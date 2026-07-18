@@ -199,3 +199,19 @@ def test_readiness_documents_its_actual_non_error_503_payload(client):
 
     assert media["schema"]["type"] == "object"
     assert media["example"]["status"] == "not_ready"
+
+
+def test_dependency_openapi_exposes_manifest_provenance_and_diagnostics(client):
+    document = client.get("/openapi.json").json()
+    schemas = document["components"]["schemas"]
+
+    node = schemas["DependencyNode"]["properties"]
+    assert node["version"]["anyOf"] == [{"type": "string"}, {"type": "null"}]
+    assert node["declarations"]["items"] == {"$ref": "#/components/schemas/DependencyDeclaration"}
+    response = schemas["DependencyGraphResponse"]["properties"]
+    assert response["manifestCount"]["type"] == "integer"
+    assert response["diagnostics"]["items"] == {"$ref": "#/components/schemas/DependencyDiagnostic"}
+    example = _response_media(
+        _operations(document)[("GET", "/analysis/{repository_id}/dependencies")], 200
+    )["example"]
+    assert example["nodes"][0]["declarations"][0]["manifestPath"] == "apps/frontend/package.json"

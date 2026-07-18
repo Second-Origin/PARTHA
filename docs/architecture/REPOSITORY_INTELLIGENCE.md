@@ -48,7 +48,7 @@ flowchart LR
 The legacy product path reads repository source from disk in exactly two places:
 
 1. **`RepositoryParser`** walks the extracted tree and produces `FileTreeNode[]` plus `RepositoryMeta` (languages, framework guess, entry point, counts, README/license presence).
-2. **`RepositoryIntelligenceEngine`** reads individual file contents during `build()` — capped at 512 KB per file — to extract imports, exports, routes, symbols, and technology hints, and reads dependency manifests from the repository root.
+2. **`RepositoryIntelligenceEngine`** reads individual file contents during `build()` — capped at 512 KB per file — to extract imports, exports, routes, and technology hints. Its dependency bridge selects supported manifests from the `RepositoryParser` file inventory and passes their bytes to the canonical `DependencyManifestExtractor`; it does not walk the repository or reimplement manifest parsing.
 
 There is one further direct read that is **not** parsing: `RepositoryService.read_file` serves the explorer's file preview. It is a path-checked read for display only and feeds no analysis.
 
@@ -77,7 +77,7 @@ that build yet.
 | `files` | Per-file: path, module, language, extension, size, role, imports, exports, API routes, symbols, technologies. | Regex over file text; role from path/filename conventions. |
 | `modules` | Grouped modules with role, layer, path prefix, files, symbols, dependencies. | Files grouped by a derived `module_id`; role is the most common file role; layer is a lookup from role. |
 | `symbols` | Functions, classes, interfaces, types, enums, constants, routes. | Regex per language. **Python and TypeScript/JavaScript only.** |
-| `dependencies` | Name, version, type, ecosystem, source file. | `package.json`, `requirements.txt`, `pyproject.toml`. |
+| `dependencies` | Logical direct dependency plus every declared version/specifier, type, ecosystem, workspace/manifest path, exact declaration span, and extractor identity. | Supported `package.json`, `requirements.txt`, and `pyproject.toml` files at accepted root or nested workspace paths. |
 | `graph` | Serializable nodes and relationships. | Assembled from the above. |
 
 ### Deterministic vs. heuristic
@@ -89,7 +89,7 @@ This distinction matters, and consumers must respect it.
 - file paths, names, extensions, sizes, and the file tree;
 - file counts and folder counts;
 - presence of README, license, Dockerfiles, CI workflow files, env files;
-- dependency names and version specifiers **as declared in** the three supported manifests;
+- dependency names and version specifiers **as declared in** the three supported manifests, including accepted nested workspaces;
 - literal import statements and route decorator strings matched by the regexes.
 
 **Heuristic** — an inference that can be wrong, and is wrong on projects that do not follow common conventions:
@@ -196,6 +196,7 @@ Do not describe PARTHA as having evidence-backed or grounded output until line s
 - **Relationships:** four of the eight declared types are never emitted. An import edge resolves to a declared dependency when the name matches and otherwise creates an `external:` node — there is no real module resolution.
 - **Revision identity:** first-class and immutable per imported repository revision. Snapshot history can be retained, but diff/query APIs and product re-analysis orchestration are not implemented.
 - **Dependencies:** three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The dependency API reports both assessments as explicit `not_computed` statuses; it emits no clean result or count without a scanner.
+- **Dependency inventory:** only direct declarations from accepted `package.json`, `pyproject.toml`, and `requirements.txt` paths are reported. The parser inventory excludes `.git`, dependency/install directories, build output, virtual environments, caches, vendor paths, and generated paths; lockfiles are not read. Multiple workspace declarations remain attached to one logical dependency, including conflicts rather than an arbitrarily selected version. A malformed supported manifest produces a safe `RI-SRC-MALFORMED` diagnostic in the dependency response while valid manifests continue to contribute declarations. No transitive resolution, vulnerability scanning, or outdated-version scanning is implemented.
 - **Languages:** meaningful extraction covers Python and TypeScript/JavaScript. Other languages get file-tree and metadata treatment only.
 - **File size cap:** files over 512 KB are read as empty during extraction, so their contents contribute nothing.
 - **Build cost:** the whole repository is re-analysed from scratch, synchronously, inside the HTTP request.

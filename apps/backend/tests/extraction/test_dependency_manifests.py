@@ -104,6 +104,29 @@ def test_requirements_declarations_stay_on_their_own_line():
     assert _lines_by_key(result) == [("dep:pypi:django", 2), ("dep:pypi:flask", 4)]
 
 
+def test_manifest_declarations_retain_exact_version_type_and_workspace_provenance():
+    result = _extract(
+        "apps/frontend/package.json",
+        '''{
+  "devDependencies": {
+    "vite": "^5"
+  }
+}
+''',
+    )
+
+    node = result.nodes[0]
+    assert node.properties == {
+        "ecosystem": "npm",
+        "version": "^5",
+        "dependency_type": "development",
+        "manifest_path": "apps/frontend/package.json",
+        "workspace_path": "apps/frontend",
+    }
+    assert node.evidence[0].start_line == node.evidence[0].end_line == 3
+    assert EXTRACTOR.producer == "dependency-manifest@1.1.0"
+
+
 # --- Finding 5: fail closed on structurally invalid manifests ---------------
 
 

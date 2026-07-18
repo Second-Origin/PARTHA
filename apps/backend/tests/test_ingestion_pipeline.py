@@ -160,6 +160,73 @@ def test_empty_dependency_endpoint_still_reports_uncomputed_assessments(auth_cli
     assert payload["outdatedAssessment"] == {"status": "not_computed"}
 
 
+def test_dependency_endpoint_returns_nested_manifest_provenance_and_malformed_diagnostics(auth_client):
+    response = _upload(
+        auth_client,
+        "nested-dependencies.zip",
+        _zip_bytes(
+            {
+                "nested/apps/frontend/package.json": '''{
+  "dependencies": {
+    "react": "^18.3.0"
+  }
+}
+''',
+                "nested/apps/backend/pyproject.toml": '[project]\ndependencies = ["fastapi>=0.115"]\n',
+                "nested/services/worker/requirements.txt": "fastapi==0.116\ncelery==5.4\n",
+                "nested/apps/broken/package.json": "{",
+                "nested/node_modules/hidden/package.json": '{"dependencies":{"ignored":"1"}}',
+            }
+        ),
+    )
+    assert response.status_code == 201
+    repository_id = response.json()["id"]
+    assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+
+    payload = auth_client.get(f"/analysis/{repository_id}/dependencies").json()
+    assert payload["manifestCount"] == 4
+    nodes = {node["id"]: node for node in payload["nodes"]}
+    assert set(nodes) == {"dependency:npm:react", "dependency:pypi:celery", "dependency:pypi:fastapi"}
+    assert nodes["dependency:pypi:fastapi"]["version"] is None
+    assert nodes["dependency:pypi:fastapi"]["declarations"] == [
+        {
+            "name": "fastapi",
+            "manifestPath": "apps/backend/pyproject.toml",
+            "workspacePath": "apps/backend",
+            "startLine": 2,
+            "endLine": 2,
+            "extractor": "dependency-manifest",
+            "extractorVersion": "1.1.0",
+            "ecosystem": "pypi",
+            "version": ">=0.115",
+            "type": "production",
+        },
+        {
+            "name": "fastapi",
+            "manifestPath": "services/worker/requirements.txt",
+            "workspacePath": "services/worker",
+            "startLine": 1,
+            "endLine": 1,
+            "extractor": "dependency-manifest",
+            "extractorVersion": "1.1.0",
+            "ecosystem": "pypi",
+            "version": "==0.116",
+            "type": "production",
+        },
+    ]
+    assert payload["diagnostics"] == [
+        {
+            "code": "RI-SRC-MALFORMED",
+            "category": "malformed source",
+            "severity": "error",
+            "message": "dependency manifest could not be parsed or has an unsupported structure",
+            "path": "apps/broken/package.json",
+            "producer": "dependency-manifest@1.1.0",
+            "details": None,
+        }
+    ]
+
+
 def _walk_json(value):
     yield value
     if isinstance(value, dict):

@@ -102,9 +102,34 @@ def get_architecture(
         "Dependency inventory and declared relationships.",
         {
             "repositoryId": _REPOSITORY_ID,
-            "nodes": [],
+            "nodes": [
+                {
+                    "id": "dependency:npm:react",
+                    "name": "react",
+                    "version": "^18.3.0",
+                    "type": "production",
+                    "ecosystem": "npm",
+                    "declarations": [
+                        {
+                            "name": "react",
+                            "manifestPath": "apps/frontend/package.json",
+                            "workspacePath": "apps/frontend",
+                            "startLine": 3,
+                            "endLine": 3,
+                            "extractor": "dependency-manifest",
+                            "extractorVersion": "1.1.0",
+                            "ecosystem": "npm",
+                            "version": "^18.3.0",
+                            "type": "production",
+                        }
+                    ],
+                    "size": None,
+                }
+            ],
             "edges": [],
-            "totalDependencies": 0,
+            "totalDependencies": 1,
+            "manifestCount": 1,
+            "diagnostics": [],
             "vulnerabilityAssessment": {"status": "not_computed"},
             "outdatedAssessment": {"status": "not_computed"},
         },
