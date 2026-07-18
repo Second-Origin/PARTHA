@@ -11,6 +11,9 @@ interface FindingDetailProps {
 }
 
 export function FindingDetail({ finding, onClose }: FindingDetailProps) {
+  const fileSizes = new Map(
+    (finding.affectedFileDetails ?? []).map((file) => [file.path, file.sizeBytes]),
+  );
   const severityColor = {
     critical: 'text-red-400',
     high: 'text-orange-400',
@@ -68,7 +71,9 @@ export function FindingDetail({ finding, onClose }: FindingDetailProps) {
           <Section title="Affected Files" icon={FileCode}>
             <ul className="space-y-1">
               {finding.affectedFiles.map((file) => (
-                <li key={file} className="text-xs text-muted-foreground font-mono">{file}</li>
+                <li key={file} className="text-xs text-muted-foreground font-mono">
+                  {file}{fileSizes.has(file) ? ` (${fileSizes.get(file)} bytes)` : ''}
+                </li>
               ))}
             </ul>
           </Section>
