@@ -187,6 +187,10 @@ class EngineeringReviewBuilder:
         secret_files = [item.path for item in secret_evidence]
         secret_keys = sorted({key for item in secret_evidence for key in item.secret_keys})
         if secret_files:
+            secret_key_summary = ", ".join(secret_keys[:10])
+            omitted_secret_key_count = len(secret_keys) - 10
+            if omitted_secret_key_count > 0:
+                secret_key_summary += f", and {omitted_secret_key_count} more"
             findings.append(
                 self._finding(
                     "env-secret-like-value-detected",
@@ -195,7 +199,7 @@ class EngineeringReviewBuilder:
                     "critical",
                     problem=(
                         "Evidence class: secret-like value detected. Committed environment file(s) contain "
-                        f"non-placeholder values for sensitive key(s): {', '.join(secret_keys[:10])}."
+                        f"non-placeholder values for sensitive key(s): {secret_key_summary}."
                     ),
                     impact="Secrets committed to version control can be leaked and abused, and remain recoverable from history.",
                     recommendation="Remove committed secret-bearing environment files, rotate exposed secrets, and ignore them going forward.",

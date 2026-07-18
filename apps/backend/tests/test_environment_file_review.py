@@ -82,6 +82,8 @@ def test_template_with_a_secret_like_value_is_not_trusted_by_filename(tmp_path: 
         "CLIENT_SECRET_REQUIRED=true\n",
         "API_KEY_ENABLED=false\n",
         "PRIVATE_KEY_PATH=/run/keys/service.pem\n",
+        "GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/sa.json\n",
+        "CLIENT_ID=client-Prod-12345678\n",
     ],
 )
 def test_security_related_configuration_is_not_credible_secret_evidence(tmp_path: Path, content: str):
@@ -118,6 +120,22 @@ def test_secret_key_names_with_credible_values_remain_secret_evidence(tmp_path: 
     assert evidence.evidence_class == "secret_like_value_detected"
     assert evidence.secret_keys == [key]
     assert findings["env-secret-like-value-detected"].severity == "critical"
+
+
+def test_secret_key_finding_reports_omitted_key_count(tmp_path: Path):
+    content = "\n".join(
+        f"SERVICE_{index:02d}_API_KEY=synthetic-secret-{index:02d}" for index in range(12)
+    )
+    (tmp_path / ".env").write_text(f"{content}\n", encoding="utf-8")
+
+    intelligence, review = _review(tmp_path)
+    evidence = intelligence.discovery.environment_file_evidence[0]
+    critical = {finding.id: finding for finding in review.findings}["env-secret-like-value-detected"]
+
+    assert len(evidence.secret_keys) == 12
+    assert "SERVICE_09_API_KEY" in critical.problem
+    assert "SERVICE_10_API_KEY" not in critical.problem
+    assert "and 2 more" in critical.problem
 
 
 @pytest.mark.parametrize(
