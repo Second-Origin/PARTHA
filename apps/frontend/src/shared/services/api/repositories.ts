@@ -5,6 +5,14 @@ import type {
   RepositoryListResponse,
   RepositoryFileResponse,
   ImportGithubRequest,
+  RiCollectionResponse,
+  RiAssertion,
+  RiEdge,
+  RiEvidence,
+  RiNeighboursResponse,
+  RiNode,
+  RiPath,
+  RiSnapshotMetadata,
 } from './types';
 
 export const repositoryService = {
@@ -26,5 +34,35 @@ export const repositoryService = {
 
   importFromGithub(request: ImportGithubRequest, config?: RequestConfig): Promise<RepositoryResponse> {
     return api.post('/repositories/github', request, config);
+  },
+};
+
+export const repositoryIntelligenceService = {
+  getSnapshot(snapshotId: string, config?: RequestConfig): Promise<RiSnapshotMetadata> {
+    return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}`, config);
+  },
+
+  listSymbols(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<RiCollectionResponse<RiNode>> {
+    return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}/symbols?offset=${offset}&limit=${limit}`, config);
+  },
+
+  listNeighbours(snapshotId: string, nodeKey: string, offset = 0, limit = 50, config?: RequestConfig): Promise<RiNeighboursResponse> {
+    return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}/neighbours?nodeKey=${encodeURIComponent(nodeKey)}&offset=${offset}&limit=${limit}`, config);
+  },
+
+  listReferences(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<RiCollectionResponse<RiEdge>> {
+    return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}/references?offset=${offset}&limit=${limit}`, config);
+  },
+
+  listAssertions(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<RiCollectionResponse<RiAssertion>> {
+    return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}/assertions?offset=${offset}&limit=${limit}`, config);
+  },
+
+  listPaths(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<RiCollectionResponse<RiPath>> {
+    return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}/paths?offset=${offset}&limit=${limit}`, config);
+  },
+
+  listEvidence(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<RiCollectionResponse<RiEvidence>> {
+    return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}/evidence?offset=${offset}&limit=${limit}`, config);
   },
 };
