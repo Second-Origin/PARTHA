@@ -13,13 +13,17 @@ export function DependenciesPage() {
   const dependencies = useDependencies();
   const activeRepository = dependencies.activeRepository;
   const [query, setQuery] = useState('');
+  const graph = dependencies.graph;
+  const hasSearchQuery = query.trim().length > 0;
+  const hasDependencies = (graph?.nodes.length ?? 0) > 0;
+  const hasExtractionDiagnostics = (graph?.diagnostics.length ?? 0) > 0;
 
   const filteredNodes = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const nodes = dependencies.graph?.nodes || [];
+    const nodes = graph?.nodes || [];
     if (!q) return nodes;
     return nodes.filter((node) => node.name.toLowerCase().includes(q) || node.type.toLowerCase().includes(q));
-  }, [dependencies.graph?.nodes, query]);
+  }, [graph?.nodes, query]);
 
 
   if (dependencies.emptyReason === 'no-completed-repositories') {
@@ -74,21 +78,36 @@ export function DependenciesPage() {
     );
   }
 
+  if (!graph) {
+    return (
+      <div>
+        <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
+          <DataSourceBadge source={dependencies.source} />
+        </PageHeader>
+        <EmptyState
+          icon={GitBranch}
+          title="Dependency inventory unavailable"
+          description="No dependency inventory is available for this repository yet. Analyse the repository again to generate dependency data."
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
         <DataSourceBadge source={dependencies.source} />
       </PageHeader>
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-        <Stat label="Dependencies" value={dependencies.graph?.totalDependencies ?? 0} />
-        <Stat label="Relations" value={dependencies.graph?.edges.length ?? 0} />
+        <Stat label="Dependencies" value={graph.totalDependencies} />
+        <Stat label="Relations" value={graph.edges.length} />
         <Stat
           label="Vulnerability assessment"
-          value={assessmentLabel(dependencies.graph?.vulnerabilityAssessment)}
+          value={assessmentLabel(graph.vulnerabilityAssessment)}
         />
         <Stat
           label="Outdated-version assessment"
-          value={assessmentLabel(dependencies.graph?.outdatedAssessment)}
+          value={assessmentLabel(graph.outdatedAssessment)}
         />
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
@@ -106,12 +125,31 @@ export function DependenciesPage() {
               className="w-full rounded-md border border-border bg-background pl-8 pr-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
-          <ExportMenu repositoryId={activeRepository.id} target="dependencies" disabled={!dependencies.graph} />
+          <ExportMenu repositoryId={activeRepository.id} target="dependencies" />
         </div>
-        {filteredNodes.length === 0 ? (
+        {!hasDependencies && hasExtractionDiagnostics ? (
           <div className="p-8 text-center">
             <GitBranch className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No dependencies matched your search.</p>
+            <p className="text-sm text-muted-foreground">Dependency inventory could not be computed completely.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {graph.diagnostics.length} dependency-manifest {graph.diagnostics.length === 1 ? 'issue was' : 'issues were'} reported. Review the affected manifests and analyse the repository again.
+            </p>
+            {dependencies.packageManager && (
+              <p className="mt-1 text-xs text-muted-foreground">Detected package manager: {dependencies.packageManager}.</p>
+            )}
+          </div>
+        ) : !hasDependencies ? (
+          <div className="p-8 text-center">
+            <GitBranch className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No dependencies were discovered.</p>
+            {dependencies.packageManager && (
+              <p className="mt-1 text-xs text-muted-foreground">Detected package manager: {dependencies.packageManager}.</p>
+            )}
+          </div>
+        ) : hasSearchQuery && filteredNodes.length === 0 ? (
+          <div className="p-8 text-center">
+            <GitBranch className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No dependencies match your search.</p>
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -134,7 +172,10 @@ export function DependenciesPage() {
           </div>
         )}
         <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          {dependencies.packageManager} detected. Dependency relationships are generated from backend package manifests.
+          {dependencies.packageManager
+            ? `Detected package manager: ${dependencies.packageManager}. `
+            : 'Package-manager information is unavailable for this repository. '}
+          Dependency data, when available, comes from backend package manifests.
         </div>
       </div>
     </div>
