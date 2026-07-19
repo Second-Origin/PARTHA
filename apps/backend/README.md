@@ -70,6 +70,23 @@ docker compose up --build
 
 Compose runs the API against PostgreSQL and Redis. It does not run the frontend.
 
+## AI provider egress
+
+AI provider traffic is centrally checked at configuration save time and again
+immediately before every outbound request. `AI_EGRESS_MODE=hosted` is the safe
+default: fixed cloud providers retain their code-owned HTTPS origins and no
+tenant-configurable endpoint is enabled. To use a trusted local or internal
+Ollama endpoint, a deployment administrator must set `AI_EGRESS_MODE=self_hosted`
+and provide both an exact `AI_EGRESS_ALLOWED_BASE_URLS` entry and matching
+`AI_EGRESS_ALLOWED_CIDRS` entry. These are not tenant settings.
+
+The sender validates every DNS answer, pins the HTTP connection to a validated
+IP while preserving the original Host/SNI name, ignores ambient proxy settings,
+and rejects redirects. Compose keeps PostgreSQL and Redis on an internal data
+network, but production still needs an independent firewall, egress proxy,
+cloud egress rule, or mesh policy. See [AI provider egress policy](../../docs/security/AI_PROVIDER_EGRESS.md)
+for configuration, rollout, and migration details.
+
 ## First import
 
 ```bash
