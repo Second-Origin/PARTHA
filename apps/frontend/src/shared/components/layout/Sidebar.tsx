@@ -6,33 +6,29 @@ import {
   Upload,
   Network,
   GitBranch,
-  Bot,
-  FileText,
-  Lightbulb,
   Settings,
   ChevronLeft,
   Hexagon,
-  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useAppStore } from '@/app/store/useAppStore';
+import { useAuthStore } from '@/app/store/useAuthStore';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Repositories', icon: FolderGit2, path: '/repositories' },
   { label: 'Upload Repository', icon: Upload, path: '/upload' },
   { label: 'Architecture', icon: Network, path: '/architecture' },
-  { label: 'Engineering Review', icon: ShieldCheck, path: '/review' },
   { label: 'Dependency Graph', icon: GitBranch, path: '/dependencies' },
-  { label: 'AI Workspace', icon: Bot, path: '/ai-workspace' },
-  { label: 'Documentation', icon: FileText, path: '/documentation' },
-  { label: 'Insights', icon: Lightbulb, path: '/insights' },
   { label: 'Settings', icon: Settings, path: '/settings' },
 ];
 
 export function Sidebar() {
   const location = useLocation();
   const { sidebarCollapsed, toggleSidebar } = useAppStore();
+  const user = useAuthStore((state) => state.user);
+  const userEmail = user?.email ?? null;
+  const avatarInitial = userEmail?.charAt(0).toUpperCase() ?? '?';
 
   return (
     <motion.aside
@@ -106,7 +102,7 @@ export function Sidebar() {
       <div className="border-t border-sidebar-border p-2">
         <div className={cn('flex items-center gap-3 rounded-md px-2.5 py-2', sidebarCollapsed && 'justify-center')}>
           <div className="h-7 w-7 shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
-            <span className="text-xs font-medium text-primary">P</span>
+            <span className="text-xs font-medium text-primary">{avatarInitial}</span>
           </div>
           <AnimatePresence>
             {!sidebarCollapsed && (
@@ -117,8 +113,9 @@ export function Sidebar() {
                 transition={{ duration: 0.15 }}
                 className="overflow-hidden"
               >
-                <p className="text-xs font-medium text-sidebar-foreground truncate">Developer</p>
-                <p className="text-2xs text-muted-foreground truncate">Free Plan</p>
+                <p className="text-xs font-medium text-sidebar-foreground truncate">
+                  {userEmail ?? 'Account identity unavailable'}
+                </p>
               </motion.div>
             )}
           </AnimatePresence>
