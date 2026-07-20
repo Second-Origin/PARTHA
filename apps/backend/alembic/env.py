@@ -9,7 +9,7 @@ from app.models.base import Base
 
 config = context.config
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_url)
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 if settings.database_url.startswith("sqlite"):
     database_path = settings.database_url.replace("sqlite:///", "")
     if database_path and database_path != ":memory:":
