@@ -608,6 +608,57 @@ def test_real_tls_handshake_uses_original_hostname_for_sni_and_verification(tmp_
     assert observed_sni == [hostname]
 
 
+def test_real_tls_handshake_rejects_certificate_for_wrong_hostname(tmp_path: Path):
+    hostname = "provider.test"
+    ca_path, certificate_path, key_path = _write_test_tls_chain(tmp_path, "other-provider.test")
+
+    async def exercise() -> list[str | None]:
+        observed_sni: list[str | None] = []
+        server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        server_context.load_cert_chain(certificate_path, key_path)
+        server_context.set_servername_callback(
+            lambda _socket, server_name, _context: observed_sni.append(server_name)
+        )
+
+        async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            try:
+                await reader.readuntil(b"\r\n\r\n")
+                writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK")
+                await writer.drain()
+            finally:
+                writer.close()
+                await writer.wait_closed()
+
+        server = await asyncio.start_server(handler, "127.0.0.1", 0, ssl=server_context)
+        port = server.sockets[0].getsockname()[1]
+        base_url = f"https://{hostname}:{port}"
+        policy = ProviderEgressPolicy(
+            mode="self_hosted",
+            allowed_base_urls=[base_url],
+            allowed_cidrs=["127.0.0.1/32"],
+            resolver=MutableResolver(["127.0.0.1"]),
+        )
+        client_context = ssl.create_default_context(cafile=str(ca_path))
+        transport = httpx.AsyncHTTPTransport(verify=client_context, retries=0)
+        sender = SecureProviderHttpSender(policy, transport=transport)
+
+        try:
+            with pytest.raises(httpx.ConnectError):
+                await sender.post(
+                    AiProviderConfig(provider="ollama", base_url=base_url),
+                    f"{base_url}/api/chat",
+                )
+        finally:
+            server.close()
+            await server.wait_closed()
+
+        return observed_sni
+
+    observed_sni = asyncio.run(exercise())
+
+    assert observed_sni == [hostname]
+
+
 def test_ipv6_host_header_uses_brackets_and_non_default_port():
     base_url = "http://[::1]:11434"
     policy = ProviderEgressPolicy(
