@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+import anyio
 import httpx
 
 from app.core.ai_egress import DestinationPolicyError, ProviderEgressPolicy
@@ -35,7 +36,9 @@ class SecureProviderHttpSender:
         self.transport = transport
 
     async def post(self, config: AiProviderConfig, url: str, **kwargs: object) -> httpx.Response:
-        pinned = self.policy.prepare_request(config, url)
+        # Policy preparation performs DNS resolution. Keep that blocking call
+        # off the event loop used by the async AI routes.
+        pinned = await anyio.to_thread.run_sync(self.policy.prepare_request, config, url)
         request_headers = httpx.Headers(kwargs.pop("headers", None))
         # The original authority, never the pinned IP, is what the provider and
         # virtual host expect.  Overwrite rather than trust a caller-provided

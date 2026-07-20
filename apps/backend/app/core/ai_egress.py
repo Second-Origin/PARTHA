@@ -255,6 +255,10 @@ def _is_permitted_address_class(
     reserved, scoped IPv6, and non-global shared address space are never valid
     provider connection targets.  Explicit self-hosted policy may additionally
     admit private or loopback unicast addresses, but only after CIDR matching.
+
+    PARTHA supports Python 3.12 and 3.13. The explicit address-class regression
+    cases pin the intended policy across those stdlib ``ipaddress`` versions;
+    review them whenever the supported Python range changes.
     """
 
     if isinstance(address, ipaddress.IPv6Address):
@@ -292,6 +296,9 @@ class ProviderEgressPolicy:
             raise _configuration_error("AI_EGRESS_MODE must be either 'hosted' or 'self_hosted'.")
         self.mode = normalized_mode
         self.resolver = resolver
+        # Settings normalizes deployment values at startup; repeat the work
+        # here so direct construction in tests and other callers is equally
+        # strict and cannot bypass canonical comparison.
         try:
             self.allowed_base_urls = frozenset(normalize_base_url(value).base_url for value in allowed_base_urls)
         except (DestinationPolicyError, TypeError) as exc:

@@ -93,6 +93,9 @@ No migration deletes or rewrites existing provider configurations. A previously
 stored endpoint that does not comply with the current deployment policy remains
 in the database but cannot be used at request time. An administrator or user
 must replace it with a policy-compliant configuration before it can run.
+Because configurable Ollama destinations are also resolved when saved, a
+transient DNS failure rejects the save without changing the existing record;
+retry after name resolution is healthy.
 
 ## Docker Compose and production network controls
 

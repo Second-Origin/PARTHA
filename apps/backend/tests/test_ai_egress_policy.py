@@ -3,12 +3,19 @@
 import asyncio
 import io
 import logging
+import ssl
+import threading
 import zipfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import uuid4
 
 import httpx
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from pydantic import ValidationError
 from sqlalchemy import select
 
@@ -51,6 +58,73 @@ def _self_hosted_policy(resolver: MutableResolver) -> ProviderEgressPolicy:
 
 def _ollama_config() -> AiProviderConfig:
     return AiProviderConfig(provider="ollama", base_url=_SELF_HOSTED_BASE)
+
+
+def _write_test_tls_chain(tmp_path: Path, hostname: str) -> tuple[Path, Path, Path]:
+    """Create a short-lived CA and server certificate for a real TLS handshake."""
+
+    now = datetime.now(UTC)
+    ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "PARTHA test CA")])
+    ca_certificate = (
+        x509.CertificateBuilder()
+        .subject_name(ca_name)
+        .issuer_name(ca_name)
+        .public_key(ca_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=1))
+        .not_valid_after(now + timedelta(days=1))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=False,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=True,
+                crl_sign=True,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
+        .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
+        .sign(ca_key, hashes.SHA256())
+    )
+
+    server_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    server_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, hostname)])
+    server_certificate = (
+        x509.CertificateBuilder()
+        .subject_name(server_name)
+        .issuer_name(ca_name)
+        .public_key(server_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=1))
+        .not_valid_after(now + timedelta(days=1))
+        .add_extension(x509.SubjectAlternativeName([x509.DNSName(hostname)]), critical=False)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(server_key.public_key()), critical=False)
+        .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+        .sign(ca_key, hashes.SHA256())
+    )
+
+    ca_path = tmp_path / "ca.pem"
+    certificate_path = tmp_path / "server.pem"
+    key_path = tmp_path / "server-key.pem"
+    ca_path.write_bytes(ca_certificate.public_bytes(serialization.Encoding.PEM))
+    certificate_path.write_bytes(server_certificate.public_bytes(serialization.Encoding.PEM))
+    key_path.write_bytes(
+        server_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    return ca_path, certificate_path, key_path
 
 
 def _zip_bytes(files: dict[str, str]) -> bytes:
@@ -454,6 +528,84 @@ def test_allowed_dns_answer_is_pinned_to_an_ip_with_original_host_and_sni(monkey
     assert client_options["verify"] is True
     assert client_options["trust_env"] is False
     assert client_options["follow_redirects"] is False
+
+
+def test_request_time_resolution_runs_off_the_event_loop_thread():
+    resolution_thread_ids: list[int] = []
+
+    def recording_resolver(_: str, __: int) -> list[str]:
+        resolution_thread_ids.append(threading.get_ident())
+        return ["8.8.8.8"]
+
+    policy = ProviderEgressPolicy(mode="hosted", resolver=recording_resolver)
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"ok": True}, request=request)
+
+    async def exercise() -> int:
+        event_loop_thread_id = threading.get_ident()
+        sender = SecureProviderHttpSender(policy, transport=httpx.MockTransport(handler))
+        await sender.post(
+            AiProviderConfig(provider="openai", api_key="key"),
+            "https://api.openai.com/v1/chat/completions",
+        )
+        return event_loop_thread_id
+
+    event_loop_thread_id = asyncio.run(exercise())
+
+    assert resolution_thread_ids
+    assert all(thread_id != event_loop_thread_id for thread_id in resolution_thread_ids)
+
+
+def test_real_tls_handshake_uses_original_hostname_for_sni_and_verification(tmp_path: Path):
+    hostname = "provider.test"
+    ca_path, certificate_path, key_path = _write_test_tls_chain(tmp_path, hostname)
+
+    async def exercise() -> tuple[int, list[str | None]]:
+        observed_sni: list[str | None] = []
+        server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        server_context.load_cert_chain(certificate_path, key_path)
+        server_context.set_servername_callback(
+            lambda _socket, server_name, _context: observed_sni.append(server_name)
+        )
+
+        async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            try:
+                await reader.readuntil(b"\r\n\r\n")
+                writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK")
+                await writer.drain()
+            finally:
+                writer.close()
+                await writer.wait_closed()
+
+        server = await asyncio.start_server(handler, "127.0.0.1", 0, ssl=server_context)
+        port = server.sockets[0].getsockname()[1]
+        base_url = f"https://{hostname}:{port}"
+        policy = ProviderEgressPolicy(
+            mode="self_hosted",
+            allowed_base_urls=[base_url],
+            allowed_cidrs=["127.0.0.1/32"],
+            resolver=MutableResolver(["127.0.0.1"]),
+        )
+        client_context = ssl.create_default_context(cafile=str(ca_path))
+        transport = httpx.AsyncHTTPTransport(verify=client_context, retries=0)
+        sender = SecureProviderHttpSender(policy, transport=transport)
+
+        try:
+            response = await sender.post(
+                AiProviderConfig(provider="ollama", base_url=base_url),
+                f"{base_url}/api/chat",
+            )
+        finally:
+            server.close()
+            await server.wait_closed()
+
+        return response.status_code, observed_sni
+
+    status_code, observed_sni = asyncio.run(exercise())
+
+    assert status_code == 200
+    assert observed_sni == [hostname]
 
 
 def test_ipv6_host_header_uses_brackets_and_non_default_port():
