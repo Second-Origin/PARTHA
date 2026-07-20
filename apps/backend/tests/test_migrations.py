@@ -79,6 +79,44 @@ def test_migrations_upgrade_and_downgrade_run_clean(tmp_path, monkeypatch):
             config.get_settings.cache_clear()
 
 
+def test_migrations_accept_percent_encoded_database_urls_online_and_offline(tmp_path, monkeypatch):
+    """Percent-encoded URLs work in both Alembic execution modes."""
+    database_url = f"sqlite:///{tmp_path / 'migration-percent-%40.db'}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("CORS_ORIGINS", "http://testserver")
+
+    from app.core import config
+
+    config.get_settings.cache_clear()
+    probe_engine = create_engine(database_url)
+    try:
+        cfg = Config(str(BACKEND_ROOT / "alembic.ini"))
+        cfg.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
+
+        command.upgrade(cfg, "head")
+        assert "repositories" in inspect(probe_engine).get_table_names()
+
+        command.downgrade(cfg, "base")
+        assert "repositories" not in inspect(probe_engine).get_table_names()
+
+        monkeypatch.setenv(
+            "DATABASE_URL",
+            "postgresql+psycopg://user:p%40ss@localhost:5432/somedb",
+        )
+        config.get_settings.cache_clear()
+        offline_cfg = Config(str(BACKEND_ROOT / "alembic.ini"))
+        offline_cfg.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
+
+        # 0005 includes a data backfill that requires a live connection, so
+        # offline SQL generation intentionally stops at the latest
+        # schema-only revision.
+        command.upgrade(offline_cfg, "0004_ai_provider_configs", sql=True)
+        command.downgrade(offline_cfg, "0004_ai_provider_configs:base", sql=True)
+    finally:
+        probe_engine.dispose()
+        config.get_settings.cache_clear()
+
+
 def test_revision_backfill_classifies_exact_legacy_values_and_downgrade_preserves_metadata(
     tmp_path, monkeypatch
 ):
