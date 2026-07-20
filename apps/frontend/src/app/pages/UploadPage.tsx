@@ -124,7 +124,7 @@ export function UploadPage() {
                     : 'Drag and drop your repository archive'}
                 </p>
                 <p className="text-xs text-muted-foreground mb-4">
-                  Supports ZIP and TAR.GZ files up to {formatFileSize(MAX_FILE_SIZE)}
+                  Supports ZIP, TAR, GZ, TAR.GZ, and TGZ files up to {formatFileSize(MAX_FILE_SIZE)}
                 </p>
                 <button
                   type="button"

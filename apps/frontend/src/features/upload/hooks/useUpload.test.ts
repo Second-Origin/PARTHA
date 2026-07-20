@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '@/app/store/useAppStore';
 import { backendService } from '@/shared/services/backend';
 import type { Repository } from '@/shared/types';
-import { MAX_FILE_SIZE, useUpload } from './useUpload';
+import { ACCEPTED_ARCHIVE_TYPES, MAX_FILE_SIZE, useUpload } from './useUpload';
 
 const repositoryState = vi.hoisted(() => ({
   repositories: [] as Repository[],
@@ -89,6 +89,10 @@ describe('useUpload', () => {
     expect(file.size).toBe(MAX_FILE_SIZE + 1);
 
     act(() => {
+      hook.result.current.selectFile([archiveFile('accepted.zip')]);
+    });
+
+    act(() => {
       hook.result.current.selectFile([file]);
     });
 
@@ -122,6 +126,10 @@ describe('useUpload', () => {
     const hook = renderHook(() => useUpload());
 
     act(() => {
+      hook.result.current.selectFile([archiveFile('new-project.zip')]);
+    });
+
+    act(() => {
       hook.result.current.selectFile([archiveFile('existing-project.TAR.GZ', 'application/gzip')]);
     });
 
@@ -135,6 +143,7 @@ describe('useUpload', () => {
   it.each([
     ['repository.zip', 'application/zip'],
     ['repository.tar.gz', 'application/gzip'],
+    ['repository.tgz', 'application/gzip'],
   ])('selects an accepted archive and exposes its upload state: %s', (name, type) => {
     const uploadRepository = mockUpload();
     const file = archiveFile(name, type);
@@ -158,16 +167,66 @@ describe('useUpload', () => {
     expect(uploadRepository).not.toHaveBeenCalled();
   });
 
-  it('reports a rejected archive type without selecting a file', () => {
+  it('accepts .tgz for every supported gzip archive MIME type', () => {
+    expect(ACCEPTED_ARCHIVE_TYPES['application/gzip']).toContain('.tgz');
+    expect(ACCEPTED_ARCHIVE_TYPES['application/x-gzip']).toContain('.tgz');
+    expect(ACCEPTED_ARCHIVE_TYPES['application/x-compressed-tar']).toContain('.tgz');
+  });
+
+  it('reports a rejected archive type without retaining a previous selection', () => {
     const uploadRepository = mockUpload();
     const hook = renderHook(() => useUpload());
+
+    act(() => {
+      hook.result.current.selectFile([archiveFile('accepted.zip')]);
+    });
 
     act(() => {
       hook.result.current.rejectFile();
     });
 
     expect(hook.result.current.uploadFile).toBeNull();
-    expect(hook.result.current.error).toBe('Invalid file type. Please upload a ZIP or TAR.GZ file.');
+    expect(hook.result.current.error).toBe('Invalid file type. Please upload a ZIP, TAR, GZ, TAR.GZ, or TGZ file.');
+    expect(hook.result.current.empty).toBe(true);
+    expect(hook.result.current.success).toBe(false);
+    expect(uploadRepository).not.toHaveBeenCalled();
+  });
+
+  it('selects only the first file from a multi-file selection', () => {
+    const uploadRepository = mockUpload();
+    const firstFile = archiveFile('first.zip');
+    const secondFile = archiveFile('second.zip');
+    const hook = renderHook(() => useUpload());
+
+    act(() => {
+      hook.result.current.selectFile([firstFile, secondFile]);
+    });
+
+    expect(hook.result.current.uploadFile?.file).toBe(firstFile);
+    expect(hook.result.current.uploadFile?.name).toBe('first.zip');
+    expect(hook.result.current.error).toBeNull();
+    expect(hook.result.current.success).toBe(true);
+    expect(uploadRepository).not.toHaveBeenCalled();
+  });
+
+  it.each(['retry', 'refresh'] as const)('%s clears a validation error without restoring a selection', (action) => {
+    const uploadRepository = mockUpload();
+    const hook = renderHook(() => useUpload());
+
+    act(() => {
+      hook.result.current.selectFile([archiveFile('accepted.zip')]);
+    });
+
+    act(() => {
+      hook.result.current.rejectFile();
+    });
+
+    act(() => {
+      hook.result.current[action]();
+    });
+
+    expect(hook.result.current.uploadFile).toBeNull();
+    expect(hook.result.current.error).toBeNull();
     expect(hook.result.current.empty).toBe(true);
     expect(hook.result.current.success).toBe(false);
     expect(uploadRepository).not.toHaveBeenCalled();
