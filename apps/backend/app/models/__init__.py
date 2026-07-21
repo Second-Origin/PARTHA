@@ -1,4 +1,5 @@
 from app.models.ai_provider_config import AiProviderConfigRecord
+from app.models.analysis_job import AnalysisJob
 from app.models.refresh_token import RefreshToken
 from app.models.repository import RepositoryRecord
 from app.models.snapshot import (
@@ -15,6 +16,7 @@ from app.models.user import User
 
 __all__ = [
     "AiProviderConfigRecord",
+    "AnalysisJob",
     "RefreshToken",
     "RepositoryRecord",
     "RiAssertion",
