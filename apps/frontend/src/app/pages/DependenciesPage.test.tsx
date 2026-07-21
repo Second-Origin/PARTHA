@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDependencies } from '@/features/dependencies/hooks/useDependencies';
-import type { DependencyGraphResponse } from '@/shared/services/api/types';
+import type { DependencyDiagnostic, DependencyGraphResponse } from '@/shared/services/api/types';
 import { DependenciesPage } from './DependenciesPage';
 
 vi.mock('@/features/dependencies/hooks/useDependencies', () => ({
@@ -95,6 +95,18 @@ function mockDependencies(overrides: Partial<typeof dependencies> = {}) {
   vi.mocked(useDependencies).mockReturnValue({ ...dependencies, ...overrides });
 }
 
+function diagnostic(severity: DependencyDiagnostic['severity']): DependencyDiagnostic {
+  return {
+    code: 'RI-SRC-MALFORMED',
+    category: 'malformed source',
+    severity,
+    message: 'dependency manifest could not be parsed or has an unsupported structure',
+    path: 'apps/broken/package.json',
+    producer: 'dependency-manifest@1.2.0',
+    details: null,
+  };
+}
+
 describe('DependenciesPage', () => {
   beforeEach(() => {
     mockDependencies();
@@ -132,32 +144,57 @@ describe('DependenciesPage', () => {
     expect(screen.queryByText('No dependencies match your search.')).not.toBeInTheDocument();
   });
 
-  it('does not present extraction diagnostics as an empty inventory', () => {
+  it.each(['error', 'fatal'] as const)('does not present a %s extraction diagnostic as an empty inventory', (severity) => {
     mockDependencies({
       graph: {
         ...graph,
         nodes: [],
         totalDependencies: 0,
-        diagnostics: [
-          {
-            code: 'RI-SRC-MALFORMED',
-            category: 'malformed source',
-            severity: 'error',
-            message: 'dependency manifest could not be parsed or has an unsupported structure',
-            path: 'apps/broken/package.json',
-            producer: 'dependency-manifest@1.2.0',
-            details: null,
-          },
-        ],
+        diagnostics: [diagnostic(severity)],
       },
     });
 
     renderPage();
 
-    expect(screen.getByText('Dependency inventory could not be computed completely.')).toBeInTheDocument();
-    expect(screen.getByText('1 dependency-manifest issue was reported. Review the affected manifests and analyse the repository again.')).toBeInTheDocument();
+    expect(screen.getByText('Dependency inventory may be incomplete.')).toBeInTheDocument();
+    expect(screen.getByText('1 blocking extraction issue was reported. Review the affected source files and analyse the repository again.')).toBeInTheDocument();
     expect(screen.queryByText('No dependencies were discovered.')).not.toBeInTheDocument();
     expect(screen.queryByText('No dependencies match your search.')).not.toBeInTheDocument();
+  });
+
+  it.each(['info', 'warning'] as const)('treats a %s diagnostic as a complete empty inventory', (severity) => {
+    mockDependencies({
+      graph: {
+        ...graph,
+        nodes: [],
+        totalDependencies: 0,
+        manifestCount: 0,
+        diagnostics: [diagnostic(severity)],
+      },
+      packageManager: null,
+    });
+
+    renderPage();
+
+    expect(screen.getByText('No dependencies were discovered.')).toBeInTheDocument();
+    expect(screen.queryByText('Dependency inventory may be incomplete.')).not.toBeInTheDocument();
+    expect(screen.getByText(/Package-manager information is unavailable for this repository\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Detected package manager:/)).not.toBeInTheDocument();
+  });
+
+  it('warns when a populated inventory has blocking extraction diagnostics', () => {
+    mockDependencies({
+      graph: {
+        ...graph,
+        diagnostics: [diagnostic('error')],
+      },
+    });
+
+    renderPage();
+
+    expect(screen.getByText('Dependency inventory may be incomplete.')).toBeInTheDocument();
+    expect(screen.getByText('1 blocking extraction issue was reported. Review the affected source files and analyse the repository again.')).toBeInTheDocument();
+    expect(screen.getByText('lodash')).toBeInTheDocument();
   });
 
   it('shows a search-miss message only when a populated inventory has no matches', () => {

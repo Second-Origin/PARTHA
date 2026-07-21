@@ -16,7 +16,10 @@ export function DependenciesPage() {
   const graph = dependencies.graph;
   const hasSearchQuery = query.trim().length > 0;
   const hasDependencies = (graph?.nodes.length ?? 0) > 0;
-  const hasExtractionDiagnostics = (graph?.diagnostics.length ?? 0) > 0;
+  const blockingDiagnosticCount = graph?.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === 'error' || diagnostic.severity === 'fatal',
+  ).length ?? 0;
+  const hasBlockingExtractionDiagnostics = blockingDiagnosticCount > 0;
 
   const filteredNodes = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -127,25 +130,28 @@ export function DependenciesPage() {
           </div>
           <ExportMenu repositoryId={activeRepository.id} target="dependencies" />
         </div>
-        {!hasDependencies && hasExtractionDiagnostics ? (
+        {hasBlockingExtractionDiagnostics && (
           <div className="p-8 text-center">
             <GitBranch className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">Dependency inventory could not be computed completely.</p>
+            <p className="text-sm text-muted-foreground">Dependency inventory may be incomplete.</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {graph.diagnostics.length} dependency-manifest {graph.diagnostics.length === 1 ? 'issue was' : 'issues were'} reported. Review the affected manifests and analyse the repository again.
+              {blockingDiagnosticCount} blocking extraction {blockingDiagnosticCount === 1 ? 'issue was' : 'issues were'} reported. Review the affected source files and analyse the repository again.
             </p>
-            {dependencies.packageManager && (
+            {!hasDependencies && dependencies.packageManager && (
               <p className="mt-1 text-xs text-muted-foreground">Detected package manager: {dependencies.packageManager}.</p>
             )}
           </div>
-        ) : !hasDependencies ? (
-          <div className="p-8 text-center">
-            <GitBranch className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No dependencies were discovered.</p>
-            {dependencies.packageManager && (
-              <p className="mt-1 text-xs text-muted-foreground">Detected package manager: {dependencies.packageManager}.</p>
-            )}
-          </div>
+        )}
+        {!hasDependencies ? (
+          hasBlockingExtractionDiagnostics ? null : (
+            <div className="p-8 text-center">
+              <GitBranch className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">No dependencies were discovered.</p>
+              {dependencies.packageManager && (
+                <p className="mt-1 text-xs text-muted-foreground">Detected package manager: {dependencies.packageManager}.</p>
+              )}
+            </div>
+          )
         ) : hasSearchQuery && filteredNodes.length === 0 ? (
           <div className="p-8 text-center">
             <GitBranch className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
