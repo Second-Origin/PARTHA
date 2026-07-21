@@ -15,6 +15,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.ai_egress import DestinationPolicyError, ProviderEgressPolicy
 from app.ai.types import DEFAULT_MODELS, AiProviderConfig
 from app.core.crypto import InvalidToken, ProviderKeyCipher
 from app.core.exceptions import ValidationServiceError
@@ -41,10 +42,21 @@ class ProviderConfigStore(Protocol):
 class EncryptedProviderConfigStore:
     """Persists one provider configuration per user, key encrypted at rest."""
 
-    def __init__(self, db: Session, cipher: ProviderKeyCipher, owner_id: str) -> None:
+    def __init__(
+        self,
+        db: Session,
+        cipher: ProviderKeyCipher,
+        owner_id: str,
+        egress_policy: ProviderEgressPolicy | None = None,
+    ) -> None:
         self.db = db
         self.cipher = cipher
         self.owner_id = owner_id
+        if egress_policy is None:
+            from app.core.config import get_settings
+
+            egress_policy = ProviderEgressPolicy.from_settings(get_settings())
+        self.egress_policy = egress_policy
 
     def _record(self) -> AiProviderConfigRecord | None:
         statement = select(AiProviderConfigRecord).where(AiProviderConfigRecord.owner_id == self.owner_id)
@@ -85,6 +97,13 @@ class EncryptedProviderConfigStore:
         )
 
     def save_config(self, config: AiProviderConfig) -> AiProviderPublicConfig:
+        # Validate the complete destination policy before touching a record or
+        # constructing ciphertext.  A denied save therefore cannot create or
+        # partially mutate a provider configuration.
+        try:
+            self.egress_policy.validate_config(config)
+        except DestinationPolicyError as exc:
+            raise ValidationServiceError("AI provider destination is not permitted.") from exc
         record = self._record()
         encrypted, last4 = self._resolve_key(config, record)
         model = config.model or DEFAULT_MODELS[config.provider]

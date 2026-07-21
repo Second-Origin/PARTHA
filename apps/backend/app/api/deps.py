@@ -2,12 +2,14 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.ai_egress import ProviderEgressPolicy
 from app.ai.orchestrator import AiOrchestrator
 from app.ai.prompt_builder import PromptBuilder
 from app.ai.providers.config_store import EncryptedProviderConfigStore
 from app.ai.providers.anthropic import AnthropicProvider
 from app.ai.providers.factory import ProviderFactory
 from app.ai.providers.gemini import GeminiProvider
+from app.ai.providers.http import SecureProviderHttpSender
 from app.ai.providers.ollama import OllamaProvider
 from app.ai.providers.openai import OpenAIProvider
 from app.ai.providers.openrouter import OpenRouterProvider
@@ -135,12 +137,23 @@ def get_provider_cipher(settings: Settings = Depends(get_settings)) -> ProviderK
     return build_provider_cipher(settings)
 
 
+def get_ai_egress_policy(settings: Settings = Depends(get_settings)) -> ProviderEgressPolicy:
+    return ProviderEgressPolicy.from_settings(settings)
+
+
+def get_provider_http_sender(
+    policy: ProviderEgressPolicy = Depends(get_ai_egress_policy),
+) -> SecureProviderHttpSender:
+    return SecureProviderHttpSender(policy)
+
+
 def get_ai_config_store(
     db: Session = Depends(get_db),
     cipher: ProviderKeyCipher = Depends(get_provider_cipher),
+    policy: ProviderEgressPolicy = Depends(get_ai_egress_policy),
     current_user: User = Depends(get_current_user),
 ) -> EncryptedProviderConfigStore:
-    return EncryptedProviderConfigStore(db, cipher, current_user.id)
+    return EncryptedProviderConfigStore(db, cipher, current_user.id, policy)
 
 
 def get_repository_context_builder(
@@ -153,13 +166,15 @@ def get_prompt_builder() -> PromptBuilder:
     return PromptBuilder()
 
 
-def get_provider_registry() -> ProviderRegistry:
+def get_provider_registry(
+    sender: SecureProviderHttpSender = Depends(get_provider_http_sender),
+) -> ProviderRegistry:
     registry = ProviderRegistry()
-    registry.register("openai", OpenAIProvider())
-    registry.register("anthropic", AnthropicProvider())
-    registry.register("gemini", GeminiProvider())
-    registry.register("openrouter", OpenRouterProvider())
-    registry.register("ollama", OllamaProvider())
+    registry.register("openai", OpenAIProvider(sender))
+    registry.register("anthropic", AnthropicProvider(sender))
+    registry.register("gemini", GeminiProvider(sender))
+    registry.register("openrouter", OpenRouterProvider(sender))
+    registry.register("ollama", OllamaProvider(sender))
     return registry
 
 
