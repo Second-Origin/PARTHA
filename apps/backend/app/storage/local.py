@@ -16,6 +16,11 @@ class LocalStorage:
         self.uploads_root = self.root / "uploads"
         self.repositories_root.mkdir(parents=True, exist_ok=True)
         self.uploads_root.mkdir(parents=True, exist_ok=True)
+        # Bound decompressed size and member count while iterating archive
+        # members during extraction (see _safe_extract_zip/_safe_extract_tar),
+        # so a zip/tar-bomb is rejected before it is ever written to disk.
+        self.max_extracted_size_bytes = settings.max_extracted_size_bytes
+        self.max_extracted_entries = settings.max_extracted_entries
 
     def repository_path(self, repository_id: str) -> Path:
         return self.repositories_root / repository_id
@@ -89,19 +94,48 @@ class LocalStorage:
         raise ValidationServiceError("Unsupported archive format. Upload a ZIP or TAR archive.")
 
     def _safe_extract_zip(self, archive: zipfile.ZipFile, destination: Path) -> None:
-        for member in archive.infolist():
+        total_size = 0
+        for entry_index, member in enumerate(archive.infolist(), start=1):
             target = destination / member.filename
             if not self._is_safe_child(destination, target):
                 raise ValidationServiceError("Archive contains unsafe paths.")
+            if entry_index > self.max_extracted_entries:
+                raise ValidationServiceError(
+                    "Archive contains more entries than the configured maximum.",
+                    {"maxExtractedEntries": self.max_extracted_entries},
+                )
+            # ZipInfo.file_size is the member's declared decompressed size, so
+            # this rejects an oversized member using its own metadata, before
+            # any of its bytes are written to disk.
+            total_size += member.file_size
+            if total_size > self.max_extracted_size_bytes:
+                raise ValidationServiceError(
+                    "Archive would decompress to more than the configured maximum size.",
+                    {"maxExtractedSizeBytes": self.max_extracted_size_bytes},
+                )
         archive.extractall(destination)
 
     def _safe_extract_tar(self, archive: tarfile.TarFile, destination: Path) -> None:
-        for member in archive.getmembers():
+        total_size = 0
+        for entry_index, member in enumerate(archive.getmembers(), start=1):
             if member.issym() or member.islnk() or member.isdev():
                 raise ValidationServiceError("Archive contains unsupported link or device entries.")
             target = destination / member.name
             if not self._is_safe_child(destination, target):
                 raise ValidationServiceError("Archive contains unsafe paths.")
+            if entry_index > self.max_extracted_entries:
+                raise ValidationServiceError(
+                    "Archive contains more entries than the configured maximum.",
+                    {"maxExtractedEntries": self.max_extracted_entries},
+                )
+            # TarInfo.size is the member's declared decompressed size, checked
+            # the same way as the zip path above: reject before extraction.
+            total_size += member.size
+            if total_size > self.max_extracted_size_bytes:
+                raise ValidationServiceError(
+                    "Archive would decompress to more than the configured maximum size.",
+                    {"maxExtractedSizeBytes": self.max_extracted_size_bytes},
+                )
         archive.extractall(destination)
 
     def _normalise_single_root(self, destination: Path) -> Path:

@@ -96,6 +96,7 @@ class RepositoryService:
                 )
             tree, meta, total_size = self.parser.parse(root)
             self._validate_parsed_repository(meta.total_files)
+            self._validate_file_count(meta.total_files)
             repository_intelligence = self.intelligence.build(repository_id, self.github.repository_name(url), root, tree, meta, total_size)
         except Exception:
             self.storage.delete_repository_id(repository_id)
@@ -147,6 +148,7 @@ class RepositoryService:
             root = self.storage.extract_archive(archive_path, repository_id)
             tree, meta, total_size = self.parser.parse(root)
             self._validate_parsed_repository(meta.total_files)
+            self._validate_file_count(meta.total_files)
             repository_intelligence = self.intelligence.build(repository_id, repository_name, root, tree, meta, total_size)
         except Exception:
             self.storage.delete_upload(archive_path)
@@ -296,6 +298,16 @@ class RepositoryService:
     def _validate_parsed_repository(self, total_files: int) -> None:
         if total_files == 0:
             raise ValidationServiceError("Repository archive does not contain any readable files.")
+
+    def _validate_file_count(self, total_files: int) -> None:
+        # Mirrors GitHubClient._enforce_clone_size's post-hoc check-then-raise
+        # pattern: the caller's ``except Exception`` cleans up the
+        # extracted/cloned directory (delete_repository_id) when this raises.
+        if total_files > self.settings.max_file_count:
+            raise ValidationServiceError(
+                "Repository exceeds the configured maximum file count.",
+                {"maxFileCount": self.settings.max_file_count, "fileCount": total_files},
+            )
 
     def _repository_name_from_archive(self, filename: str) -> str:
         for suffix in (".tar.gz", ".tgz", ".zip", ".tar", ".gz"):

@@ -71,6 +71,14 @@ class Settings(BaseSettings):
     clone_timeout_seconds: int = 120
     max_upload_size_bytes: int = 100 * 1024 * 1024
     max_clone_size_bytes: int = 500 * 1024 * 1024
+    # Bound decompressed archive size / member count during extraction
+    # (app/storage/local.py) and total repository-wide file count after
+    # parsing (app/services/repository_service.py) — the compressed upload
+    # and post-hoc clone size are already capped above, but nothing bounded
+    # the decompressed/extracted side, a zip/tar-bomb and hostile-input gap.
+    max_extracted_size_bytes: int = 1024 * 1024 * 1024  # 1 GiB decompressed cap
+    max_extracted_entries: int = 50_000  # archive member count cap
+    max_file_count: int = 50_000  # repository-wide file count cap
     # AI-provider egress is fail-safe by default.  Local/internal endpoints are
     # never enabled implicitly; deployments that need one must opt in with an
     # exact administrator-owned URL and CIDR in self_hosted mode.
@@ -195,6 +203,9 @@ class Settings(BaseSettings):
         "clone_timeout_seconds",
         "max_upload_size_bytes",
         "max_clone_size_bytes",
+        "max_extracted_size_bytes",
+        "max_extracted_entries",
+        "max_file_count",
         "access_token_ttl_seconds",
         "refresh_token_ttl_seconds",
         "rate_limit_default_per_minute",
