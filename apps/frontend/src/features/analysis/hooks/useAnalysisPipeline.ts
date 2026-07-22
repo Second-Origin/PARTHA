@@ -138,13 +138,14 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
       async function pollStatus() {
         if (!repositoryId || cancelled) return;
         try {
-          await ensureStarted();
-          if (cancelled) return;
-
           const response = await backendService.fetchAnalysisStatus(repositoryId);
           if (!response || cancelled) return;
+
           if (response.status === 'queued' && response.jobId === null) {
-            startedRef.current = null;
+            await ensureStarted();
+            if (cancelled) return;
+          } else if (response.jobId !== null) {
+            startedRef.current = repositoryId;
           }
 
           applyJobResponse(response);

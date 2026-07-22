@@ -38,11 +38,7 @@ describe('useAnalysisPipeline', () => {
   });
 
   it('requests server cancellation and stops in the cancelled terminal state', async () => {
-    vi.spyOn(backendService, 'startAnalysis').mockResolvedValue({
-      repositoryId: repository.id,
-      status: 'queued',
-      jobId: 'job-1',
-    });
+    const start = vi.spyOn(backendService, 'startAnalysis');
     vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
       repositoryId: repository.id,
       status: 'running',
@@ -77,6 +73,30 @@ describe('useAnalysisPipeline', () => {
     expect(hook.result.current.cancelled).toBe(true);
     expect(hook.result.current.canCancel).toBe(false);
     expect(useAppStore.getState().analysisRunning).toBe(false);
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('does not restart a cancelled durable job after remount', async () => {
+    const start = vi.spyOn(backendService, 'startAnalysis');
+    vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
+      repositoryId: repository.id,
+      status: 'cancelled',
+      jobId: 'job-1',
+      stage: 'reading-structure',
+      progress: 25,
+      startedAt: '2026-07-22T08:00:01Z',
+      completedAt: '2026-07-22T08:00:02Z',
+      error: null,
+    });
+
+    const first = renderHook(() => useAnalysisPipeline(repository.id));
+    await waitFor(() => expect(first.result.current.cancelled).toBe(true));
+    first.unmount();
+
+    const remounted = renderHook(() => useAnalysisPipeline(repository.id));
+    await waitFor(() => expect(remounted.result.current.cancelled).toBe(true));
+
+    expect(start).not.toHaveBeenCalled();
   });
 
   it('retries a failed submission and reaches a terminal state without reloading', async () => {
@@ -92,7 +112,7 @@ describe('useAnalysisPipeline', () => {
       .mockResolvedValueOnce({
         repositoryId: repository.id,
         status: 'queued',
-        jobId: 'job-1',
+        jobId: null,
         stage: null,
         progress: 0,
         startedAt: null,
@@ -101,11 +121,11 @@ describe('useAnalysisPipeline', () => {
       })
       .mockResolvedValueOnce({
         repositoryId: repository.id,
-        status: 'running',
-        jobId: 'job-1',
-        stage: 'reading-structure',
-        progress: 25,
-        startedAt: '2026-07-22T08:00:01Z',
+        status: 'queued',
+        jobId: null,
+        stage: null,
+        progress: 0,
+        startedAt: null,
         completedAt: null,
         error: null,
       })
@@ -131,46 +151,50 @@ describe('useAnalysisPipeline', () => {
     expect(fetchStatus.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('resubmits when queued status has no durable job id', async () => {
-    const start = vi
-      .spyOn(backendService, 'startAnalysis')
-      .mockResolvedValueOnce({
+  it('submits a newly imported repository only after status confirms no durable job', async () => {
+    const start = vi.spyOn(backendService, 'startAnalysis').mockResolvedValue({
+      repositoryId: repository.id,
+      status: 'queued',
+      jobId: 'job-1',
+    });
+    const fetchStatus = vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
+      repositoryId: repository.id,
+      status: 'queued',
+      jobId: null,
+      stage: null,
+      progress: 0,
+      startedAt: null,
+      completedAt: null,
+      error: null,
+    });
+
+    renderHook(() => useAnalysisPipeline(repository.id));
+
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+    expect(fetchStatus.mock.invocationCallOrder[0]).toBeLessThan(start.mock.invocationCallOrder[0]);
+  });
+
+  it.each(['queued', 'running'] as const)(
+    'polls an existing %s job without submitting another one',
+    async (durableStatus) => {
+      const start = vi.spyOn(backendService, 'startAnalysis');
+      vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
         repositoryId: repository.id,
-        status: 'queued',
-        jobId: null,
-      })
-      .mockResolvedValue({
-        repositoryId: repository.id,
-        status: 'queued',
+        status: durableStatus,
         jobId: 'job-1',
-      });
-    vi.spyOn(backendService, 'fetchAnalysisStatus')
-      .mockResolvedValueOnce({
-        repositoryId: repository.id,
-        status: 'queued',
-        jobId: null,
-        stage: null,
-        progress: 0,
-        startedAt: null,
+        stage: durableStatus === 'running' ? 'reading-structure' : null,
+        progress: durableStatus === 'running' ? 25 : 0,
+        startedAt: durableStatus === 'running' ? '2026-07-22T08:00:01Z' : null,
         completedAt: null,
         error: null,
-      })
-      .mockResolvedValue({
-        repositoryId: repository.id,
-        status: 'completed',
-        jobId: 'job-1',
-        stage: 'completed',
-        progress: 100,
-        startedAt: '2026-07-22T08:00:01Z',
-        completedAt: '2026-07-22T08:00:02Z',
-        error: null,
       });
 
-    const hook = renderHook(() => useAnalysisPipeline(repository.id));
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+      await waitFor(() => expect(hook.result.current.jobStatus).toBe(durableStatus));
 
-    await waitFor(() => expect(hook.result.current.jobStatus).toBe('completed'));
-    expect(start).toHaveBeenCalledTimes(2);
-  });
+      expect(start).not.toHaveBeenCalled();
+    },
+  );
 
   it('deduplicates overlapping start requests when the polling effect restarts', async () => {
     let resolveStart: ((response: AnalysisStartResponse) => void) | undefined;
@@ -180,11 +204,11 @@ describe('useAnalysisPipeline', () => {
     const start = vi.spyOn(backendService, 'startAnalysis').mockReturnValue(pendingStart);
     vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
       repositoryId: repository.id,
-      status: 'running',
-      jobId: 'job-1',
-      stage: 'reading-structure',
-      progress: 25,
-      startedAt: '2026-07-22T08:00:01Z',
+      status: 'queued',
+      jobId: null,
+      stage: null,
+      progress: 0,
+      startedAt: null,
       completedAt: null,
       error: null,
     });
@@ -201,7 +225,7 @@ describe('useAnalysisPipeline', () => {
       status: 'queued',
       jobId: 'job-1',
     });
-    await waitFor(() => expect(hook.result.current.jobStatus).toBe('running'));
+    await waitFor(() => expect(hook.result.current.jobStatus).toBe('queued'));
     expect(start).toHaveBeenCalledTimes(1);
   });
 });

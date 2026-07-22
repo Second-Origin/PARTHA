@@ -5,6 +5,7 @@ import logging
 import threading
 from time import perf_counter
 from typing import Any, Literal
+from uuid import uuid4
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -87,6 +88,12 @@ def check_storage_ready() -> bool:
     return True
 
 
+def _analysis_worker_id() -> str:
+    """Return a process-observable, globally unique worker ownership token."""
+
+    return f"analysis-worker-{getpid()}-{uuid4().hex}"
+
+
 def _start_analysis_worker() -> tuple[threading.Thread, threading.Event] | None:
     """Start the durable analysis worker on a daemon thread (#93).
 
@@ -105,7 +112,7 @@ def _start_analysis_worker() -> tuple[threading.Thread, threading.Event] | None:
 
     worker = AnalysisWorker(
         SessionLocal,
-        worker_id=f"analysis-worker-{getpid()}",
+        worker_id=_analysis_worker_id(),
         lease_seconds=settings.analysis_job_lease_seconds,
     )
     stop_event = threading.Event()

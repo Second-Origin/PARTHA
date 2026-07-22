@@ -64,9 +64,24 @@ CONFIG_FILES = {
 }
 
 
+class RepositoryFileLimitExceeded(Exception):
+    def __init__(self, max_file_count: int, file_count: int) -> None:
+        super().__init__(f"repository contains more than {max_file_count} files")
+        self.max_file_count = max_file_count
+        self.file_count = file_count
+
+
 class RepositoryParser:
-    def parse(self, root: Path) -> tuple[list[FileTreeNode], RepositoryMeta, int]:
-        tree = self._build_tree(root, root)
+    def parse(
+        self, root: Path, *, max_file_count: int | None = None
+    ) -> tuple[list[FileTreeNode], RepositoryMeta, int]:
+        file_count = [0]
+        tree = self._build_tree(
+            root,
+            root,
+            max_file_count=max_file_count,
+            file_count=file_count,
+        )
         flat = self._flatten(tree)
         file_nodes = [node for node in flat if node.type == "file"]
         folder_nodes = [node for node in flat if node.type == "folder"]
@@ -94,7 +109,14 @@ class RepositoryParser:
         )
         return tree, meta, total_size
 
-    def _build_tree(self, path: Path, root: Path) -> list[FileTreeNode]:
+    def _build_tree(
+        self,
+        path: Path,
+        root: Path,
+        *,
+        max_file_count: int | None,
+        file_count: list[int],
+    ) -> list[FileTreeNode]:
         nodes: list[FileTreeNode] = []
         for child in sorted(path.iterdir(), key=lambda item: (item.is_file(), item.name.lower())):
             if child.name in IGNORED_DIRS:
@@ -107,10 +129,18 @@ class RepositoryParser:
                         name=child.name,
                         type="folder",
                         path=relative,
-                        children=self._build_tree(child, root),
+                        children=self._build_tree(
+                            child,
+                            root,
+                            max_file_count=max_file_count,
+                            file_count=file_count,
+                        ),
                     )
                 )
             elif child.is_file():
+                file_count[0] += 1
+                if max_file_count is not None and file_count[0] > max_file_count:
+                    raise RepositoryFileLimitExceeded(max_file_count, file_count[0])
                 extension = child.suffix[1:].lower() if child.suffix else None
                 nodes.append(
                     FileTreeNode(

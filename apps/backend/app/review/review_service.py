@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
 
+from app.core.exceptions import ConflictServiceError
 from app.intelligence.engine import SOURCE_EXTENSIONS, RepositoryIntelligenceEngine
 from app.intelligence.models import EnvironmentFileEvidence, SourceFileIntelligence
 from app.models.repository import RepositoryRecord
@@ -114,22 +115,9 @@ class EngineeringReviewBuilder:
     def build(self, record: RepositoryRecord) -> EngineeringReviewResponse:
         repository_intelligence = self.intelligence.load(record)
         if repository_intelligence is None:
-            return EngineeringReviewResponse(
-                repository_id=record.id,
-                repository_name=record.name,
-                generated_at=datetime.now(UTC),
-                summary=ReviewSummary(
-                    overall_score=100,
-                    overall_trend="stable",
-                    critical_count=0,
-                    high_count=0,
-                    medium_count=0,
-                    low_count=0,
-                    total_findings=0,
-                ),
-                scores=[],
-                findings=[],
-                roadmap=[],
+            raise ConflictServiceError(
+                "Engineering review is unavailable until repository analysis completes.",
+                {"repositoryId": record.id, "status": record.status},
             )
         findings = self._findings(repository_intelligence)
         scores = self._scores(findings)

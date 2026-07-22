@@ -70,6 +70,13 @@ class AnalysisJob(Base):
         Index("ix_analysis_jobs_owner_id", "owner_id"),
         Index("ix_analysis_jobs_status_lease", "status", "lease_expires_at"),
         Index(
+            "uq_analysis_jobs_snapshot_id",
+            "snapshot_id",
+            unique=True,
+            sqlite_where=text("snapshot_id IS NOT NULL"),
+            postgresql_where=text("snapshot_id IS NOT NULL"),
+        ),
+        Index(
             "uq_analysis_jobs_active_identity",
             "repository_id",
             "revision_value",

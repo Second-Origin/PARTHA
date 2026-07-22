@@ -17,6 +17,7 @@ _REPOSITORY_ID = "11111111-1111-1111-1111-111111111111"
 _JOB_ID = "22222222-2222-2222-2222-222222222222"
 _COMMON_ERRORS = (401, 404, 429, 500)
 _CANCEL_ERRORS = (401, 404, 409, 429, 500)
+_REVIEW_ERRORS = (401, 404, 409, 429, 500)
 
 
 def _status_response(repository_id: str, job: AnalysisJob | None) -> AnalysisStatusResponse:
@@ -213,7 +214,7 @@ def get_dependencies(
     response_model=EngineeringReviewResponse,
     responses=documented_responses(
         200,
-        "Engineering-review findings and improvement roadmap.",
+        "Computed engineering-review findings and roadmap; pending analysis returns 409.",
         {
             "repositoryId": _REPOSITORY_ID,
             "repositoryName": "example-service",
@@ -231,7 +232,7 @@ def get_dependencies(
             "findings": [],
             "roadmap": [],
         },
-        *_COMMON_ERRORS,
+        *_REVIEW_ERRORS,
     ),
     openapi_extra=suppress_automatic_validation_error(),
 )

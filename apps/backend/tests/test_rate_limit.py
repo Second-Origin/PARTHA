@@ -265,7 +265,7 @@ def test_export_endpoint_is_charged_against_the_heavy_budget(limited_client):
     to the (looser) default class this would never hit 429."""
     repository_id = _import_sample(limited_client)  # 1st heavy hit
 
-    payload = {"repositoryId": repository_id, "target": "review", "format": "json"}
+    payload = {"repositoryId": repository_id, "target": "dependencies", "format": "json"}
     assert limited_client.post("/export", json=payload).status_code == 200  # 2nd heavy hit
 
     blocked = limited_client.post("/export", json=payload)  # 3rd heavy hit

@@ -20,7 +20,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -147,20 +147,59 @@ class AnalysisJobService:
             raise ConflictServiceError(
                 "No analysis job to cancel.", {"repositoryId": repository_id}
             )
+        return self._cancel_job(job)
+
+    def _cancel_job(self, job: AnalysisJob) -> AnalysisJob:
+        """Cancel ``job`` without overwriting a concurrent claim/terminal state."""
+
         if job.status == "queued":
-            job.status = "cancelled"
-            job.completed_at = _utcnow()
+            now = _utcnow()
+            result = self.db.execute(
+                update(AnalysisJob)
+                .where(
+                    AnalysisJob.id == job.id,
+                    AnalysisJob.owner_id == self.owner_id,
+                    AnalysisJob.status == "queued",
+                )
+                .values(
+                    status="cancelled",
+                    cancel_requested=False,
+                    worker_id=None,
+                    lease_expires_at=None,
+                    next_attempt_at=None,
+                    completed_at=now,
+                    updated_at=now,
+                )
+                .execution_options(synchronize_session=False)
+            )
             self.db.commit()
-            self.db.refresh(job)
-            return job
+            if result.rowcount != 0:
+                return self._reload_job(job.id)
+            # A worker may have claimed the queued row between the read and the
+            # guarded update. Re-read and request cooperative cancellation from
+            # the actual running owner instead of overwriting its claim.
+            job = self._reload_job(job.id)
         if job.status == "running":
-            job.cancel_requested = True
+            now = _utcnow()
+            result = self.db.execute(
+                update(AnalysisJob)
+                .where(
+                    AnalysisJob.id == job.id,
+                    AnalysisJob.owner_id == self.owner_id,
+                    AnalysisJob.status == "running",
+                )
+                .values(cancel_requested=True, updated_at=now)
+                .execution_options(synchronize_session=False)
+            )
             self.db.commit()
-            self.db.refresh(job)
-            return job
+            if result.rowcount != 0:
+                return self._reload_job(job.id)
+            # Completion/failure/cancellation may have won the race. The
+            # terminal row is authoritative and must never be overwritten.
+            job = self._reload_job(job.id)
         raise ConflictServiceError(
             "Analysis job is not in a cancellable state.",
-            {"repositoryId": repository_id, "status": job.status},
+            {"repositoryId": job.repository_id, "status": job.status},
         )
 
     # -- internals -----------------------------------------------------------
@@ -192,6 +231,13 @@ class AnalysisJobService:
             .order_by(AnalysisJob.created_at.desc())
             .limit(1)
         ).first()
+
+    def _reload_job(self, job_id: str) -> AnalysisJob:
+        self.db.expire_all()
+        job = self.db.get(AnalysisJob, job_id)
+        if job is None or job.owner_id != self.owner_id:
+            raise ConflictServiceError("No analysis job to cancel.")
+        return job
 
     def _active_job(self, repository_id: str, config_hash: str) -> AnalysisJob | None:
         return self.db.scalars(
@@ -310,7 +356,17 @@ class AnalysisJobService:
         )
         self.db.add(job)
         self._complete_repository(record, completed_at)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            # Another submit associated this sealed snapshot while both callers
+            # had no job row. The unique snapshot index makes that race safe;
+            # return the winner just like the active-job insertion path.
+            self.db.rollback()
+            existing = self._job_for_snapshot(record.id, snapshot.snapshot_id)
+            if existing is not None:
+                return existing
+            raise
         self.db.refresh(job)
         return job
 

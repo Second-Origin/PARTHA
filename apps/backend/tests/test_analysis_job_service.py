@@ -19,6 +19,7 @@ from app.services.analysis_job_service import (
     ANALYSIS_SCHEMA_VERSION,
     AnalysisJobService,
 )
+from app.workers.analysis_worker import AnalysisWorker, _StageContext
 
 UPLOAD_REVISION = "sha256:" + "b" * 64
 
@@ -190,6 +191,46 @@ def test_submit_reuses_the_synthesized_completed_job(session_factory):
         assert count == 1
 
 
+def test_concurrent_completed_snapshot_submits_reconcile_to_one_job(session_factory):
+    with session_factory() as bootstrap:
+        owner = _owner(bootstrap)
+        record = _repository(bootstrap, owner)
+        snapshot = _seal_minimal_snapshot(bootstrap, record)
+        owner_id = owner.id
+        record_id = record.id
+        snapshot_id = snapshot.snapshot_id
+
+    session_a = session_factory()
+    session_b = session_factory()
+    try:
+        service_a = AnalysisJobService(session_a, owner_id)
+        service_b = AnalysisJobService(session_b, owner_id)
+        record_a = service_a.repository.get_for_owner(record_id, owner_id)
+        record_b = service_b.repository.get_for_owner(record_id, owner_id)
+        snapshot_a = session_a.get(RiSnapshot, snapshot_id)
+        snapshot_b = session_b.get(RiSnapshot, snapshot_id)
+
+        # Both callers complete the initial lookup before either inserts.
+        assert service_a._job_for_snapshot(record_id, snapshot_id) is None
+        assert service_b._job_for_snapshot(record_id, snapshot_id) is None
+
+        winner = service_a._insert_completed_job(record_a, snapshot_a)
+        reconciled = service_b._insert_completed_job(record_b, snapshot_b)
+
+        assert reconciled.id == winner.id
+    finally:
+        session_a.close()
+        session_b.close()
+
+    with session_factory() as reader:
+        jobs = reader.scalars(
+            select(AnalysisJob).where(AnalysisJob.snapshot_id == snapshot_id)
+        ).all()
+        assert len(jobs) == 1
+        assert jobs[0].status == "completed"
+        assert reader.scalar(select(func.count()).select_from(RiSnapshot)) == 1
+
+
 def test_status_returns_none_before_any_submission(session_factory):
     with session_factory() as session:
         owner = _owner(session)
@@ -218,6 +259,8 @@ def test_cancel_queued_job_transitions_to_cancelled(session_factory):
 
         cancelled = service.cancel(record.id)
         assert cancelled.status == "cancelled"
+        assert cancelled.worker_id is None
+        assert cancelled.lease_expires_at is None
 
 
 def test_cancel_running_job_sets_cancel_requested(session_factory):
@@ -232,6 +275,90 @@ def test_cancel_running_job_sets_cancel_requested(session_factory):
         result = service.cancel(record.id)
         assert result.status == "running"
         assert result.cancel_requested is True
+
+
+def test_cancel_reconciles_a_queued_to_running_claim_race(session_factory):
+    with session_factory() as bootstrap:
+        owner = _owner(bootstrap)
+        record = _repository(bootstrap, owner)
+        owner_id = owner.id
+        record_id = record.id
+        AnalysisJobService(bootstrap, owner_id).submit(record_id)
+
+    cancel_session = session_factory()
+    worker_session = session_factory()
+    try:
+        service = AnalysisJobService(cancel_session, owner_id)
+        stale_queued = service._latest_job(record_id)
+        assert stale_queued.status == "queued"
+
+        worker = AnalysisWorker(session_factory, worker_id="worker-a", lease_seconds=60)
+        claimed = worker._claim(worker_session)
+        assert claimed is not None
+        assert claimed.worker_id == "worker-a"
+
+        cancellation = service._cancel_job(stale_queued)
+        assert cancellation.status == "running"
+        assert cancellation.cancel_requested is True
+        assert cancellation.worker_id == "worker-a"
+        assert cancellation.lease_expires_at is not None
+
+        list(worker._execute_stages(worker_session, claimed))
+    finally:
+        cancel_session.close()
+        worker_session.close()
+
+    with session_factory() as reader:
+        job = reader.scalars(
+            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
+        ).one()
+        assert job.status == "cancelled"
+        assert job.worker_id is None
+        assert job.lease_expires_at is None
+        assert reader.scalar(select(func.count()).select_from(RiSnapshot)) == 0
+
+
+def test_cancel_does_not_overwrite_a_worker_completion_race(session_factory):
+    with session_factory() as bootstrap:
+        owner = _owner(bootstrap)
+        record = _repository(bootstrap, owner)
+        owner_id = owner.id
+        record_id = record.id
+        AnalysisJobService(bootstrap, owner_id).submit(record_id)
+
+    cancel_session = session_factory()
+    worker_session = session_factory()
+    try:
+        worker = AnalysisWorker(session_factory, worker_id="worker-a", lease_seconds=60)
+        claimed = worker._claim(worker_session)
+        assert claimed is not None
+
+        service = AnalysisJobService(cancel_session, owner_id)
+        stale_running = service._latest_job(record_id)
+        assert stale_running.status == "running"
+
+        worker._complete(
+            _StageContext(
+                session=worker_session,
+                job=claimed,
+                record=worker_session.get(RepositoryRecord, record_id),
+            )
+        )
+
+        with pytest.raises(ConflictServiceError):
+            service._cancel_job(stale_running)
+    finally:
+        cancel_session.close()
+        worker_session.close()
+
+    with session_factory() as reader:
+        job = reader.scalars(
+            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
+        ).one()
+        assert job.status == "completed"
+        assert job.cancel_requested is False
+        assert job.worker_id is None
+        assert job.lease_expires_at is None
 
 
 def test_cancel_terminal_job_conflicts(session_factory):

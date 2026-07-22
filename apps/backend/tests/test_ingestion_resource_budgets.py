@@ -200,6 +200,7 @@ def test_upload_with_file_tree_over_file_count_limit_is_rejected_and_cleaned_up(
 
     error = assert_error_response(response, 422, "validation_error")
     assert error.message == "Repository exceeds the configured maximum file count."
+    assert error.details == {"maxFileCount": 5, "fileCount": 6}
     assert _repositories_dir_is_empty(file_count_limited_client.storage_path)  # type: ignore[attr-defined]
 
 
@@ -223,6 +224,7 @@ def test_github_import_with_file_tree_over_file_count_limit_is_rejected_and_clea
 
     error = assert_error_response(response, 422, "validation_error")
     assert error.message == "Repository exceeds the configured maximum file count."
+    assert error.details == {"maxFileCount": 5, "fileCount": 6}
     assert _repositories_dir_is_empty(file_count_limited_client.storage_path)  # type: ignore[attr-defined]
 
 

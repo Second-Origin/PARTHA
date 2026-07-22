@@ -7,7 +7,8 @@ Create Date: 2026-07-21
 This migration adds the analysis_jobs table to track durable job state across
 worker claims and retries. The table uses a partial unique index to prevent
 duplicate submissions (at most one queued/running job per identity), while
-allowing history accumulation for completed/failed/cancelled jobs.
+allowing history accumulation for completed/failed/cancelled jobs. A separate
+unique index prevents one sealed snapshot being associated with multiple jobs.
 """
 
 from __future__ import annotations
@@ -68,6 +69,14 @@ def upgrade() -> None:
     op.create_index("ix_analysis_jobs_repository_id", "analysis_jobs", ["repository_id"])
     op.create_index("ix_analysis_jobs_owner_id", "analysis_jobs", ["owner_id"])
     op.create_index("ix_analysis_jobs_status_lease", "analysis_jobs", ["status", "lease_expires_at"])
+    op.create_index(
+        "uq_analysis_jobs_snapshot_id",
+        "analysis_jobs",
+        ["snapshot_id"],
+        unique=True,
+        sqlite_where=sa.text("snapshot_id IS NOT NULL"),
+        postgresql_where=sa.text("snapshot_id IS NOT NULL"),
+    )
     op.create_index(
         "uq_analysis_jobs_active_identity",
         "analysis_jobs",

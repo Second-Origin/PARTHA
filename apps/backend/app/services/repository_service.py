@@ -12,12 +12,14 @@ from app.core.config import Settings
 from app.core.exceptions import ConflictServiceError, NotFoundError, ServiceError, ValidationServiceError
 from app.github.client import GitHubClient
 from app.models.repository import RepositoryRecord
-from app.parsers.repository_parser import RepositoryParser
+from app.parsers.repository_parser import RepositoryFileLimitExceeded, RepositoryParser
 from app.repositories.repository_repository import RepositoryRepository
 from app.schemas.repository import (
+    FileTreeNode,
     GitHubImportRequest,
     RepositoryFileResponse,
     RepositoryListResponse,
+    RepositoryMeta,
     RepositoryResponse,
     RepositoryRevision,
 )
@@ -91,9 +93,8 @@ class RepositoryService:
                     "Repository has already been imported.",
                     {"repositoryId": existing.id, "name": existing.name},
                 )
-            tree, meta, total_size = self.parser.parse(root)
+            tree, meta, total_size = self._parse_repository(root)
             self._validate_parsed_repository(meta.total_files)
-            self._validate_file_count(meta.total_files)
         except Exception:
             self.storage.delete_repository_id(repository_id)
             raise
@@ -142,9 +143,8 @@ class RepositoryService:
                     {"repositoryId": existing.id, "name": existing.name},
                 )
             root = self.storage.extract_archive(archive_path, repository_id)
-            tree, meta, total_size = self.parser.parse(root)
+            tree, meta, total_size = self._parse_repository(root)
             self._validate_parsed_repository(meta.total_files)
-            self._validate_file_count(meta.total_files)
         except Exception:
             self.storage.delete_upload(archive_path)
             self.storage.delete_repository_id(repository_id)
@@ -294,15 +294,16 @@ class RepositoryService:
         if total_files == 0:
             raise ValidationServiceError("Repository archive does not contain any readable files.")
 
-    def _validate_file_count(self, total_files: int) -> None:
-        # Mirrors GitHubClient._enforce_clone_size's post-hoc check-then-raise
-        # pattern: the caller's ``except Exception`` cleans up the
-        # extracted/cloned directory (delete_repository_id) when this raises.
-        if total_files > self.settings.max_file_count:
+    def _parse_repository(
+        self, root: Path
+    ) -> tuple[list[FileTreeNode], RepositoryMeta, int]:
+        try:
+            return self.parser.parse(root, max_file_count=self.settings.max_file_count)
+        except RepositoryFileLimitExceeded as exc:
             raise ValidationServiceError(
                 "Repository exceeds the configured maximum file count.",
-                {"maxFileCount": self.settings.max_file_count, "fileCount": total_files},
-            )
+                {"maxFileCount": exc.max_file_count, "fileCount": exc.file_count},
+            ) from exc
 
     def _repository_name_from_archive(self, filename: str) -> str:
         for suffix in (".tar.gz", ".tgz", ".zip", ".tar", ".gz"):

@@ -150,13 +150,9 @@ def test_analysis_read_endpoints_return_typed_defaults_before_worker_runs(auth_c
     assert dependencies["manifestCount"] == 0
 
     review_response = auth_client.get(f"/analysis/{repository_id}/review")
-    assert review_response.status_code == 200
-    review = review_response.json()
-    assert review["summary"]["overallScore"] == 100
-    assert review["summary"]["totalFindings"] == 0
-    assert review["scores"] == []
-    assert review["findings"] == []
-    assert review["roadmap"] == []
+    error = assert_error_response(review_response, 409, "conflict_error")
+    assert error.message == "Engineering review is unavailable until repository analysis completes."
+    assert error.details == {"repositoryId": repository_id, "status": "analysing"}
 
     # Read endpoints must not rebuild the missing compatibility model from disk.
     with SessionLocal() as session:
