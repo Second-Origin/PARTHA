@@ -68,6 +68,15 @@ class Settings(BaseSettings):
     rate_limit_auth_per_minute: int = 10
     rate_limit_ai_per_minute: int = 20
     rate_limit_heavy_per_minute: int = 30
+    # Durable analysis-job worker (#93). ``analysis_worker_autostart`` gates the
+    # background daemon thread started in ``app.main``'s lifespan; tests set it
+    # False so they drive ``AnalysisWorker.run_once()`` deterministically instead
+    # of racing a real thread. The poll interval bounds how long the loop sleeps
+    # between empty polls; the lease bounds how long a claimed job is owned before
+    # a future stale-job sweep may reclaim it.
+    analysis_worker_autostart: bool = True
+    analysis_job_poll_interval_seconds: int = 5
+    analysis_job_lease_seconds: int = 300
     clone_timeout_seconds: int = 120
     max_upload_size_bytes: int = 100 * 1024 * 1024
     max_clone_size_bytes: int = 500 * 1024 * 1024
@@ -200,6 +209,8 @@ class Settings(BaseSettings):
         return normalized
 
     @field_validator(
+        "analysis_job_poll_interval_seconds",
+        "analysis_job_lease_seconds",
         "clone_timeout_seconds",
         "max_upload_size_bytes",
         "max_clone_size_bytes",

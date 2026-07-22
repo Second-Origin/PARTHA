@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from os import getpid
 import logging
+import threading
 from time import perf_counter
 from typing import Any, Literal
 
@@ -84,15 +85,58 @@ def check_storage_ready() -> bool:
     return True
 
 
+def _start_analysis_worker() -> tuple[threading.Thread, threading.Event] | None:
+    """Start the durable analysis worker on a daemon thread (#93).
+
+    The loop claims and runs one queued job per iteration, sleeping only when the
+    queue is empty so a backlog drains promptly. It is gated by
+    ``analysis_worker_autostart`` so tests drive ``run_once`` deterministically
+    instead of racing this thread.
+    """
+
+    settings = get_settings()
+    if not settings.analysis_worker_autostart:
+        return None
+
+    from app.core.database import SessionLocal
+    from app.workers.analysis_worker import AnalysisWorker
+
+    worker = AnalysisWorker(
+        SessionLocal,
+        worker_id=f"analysis-worker-{getpid()}",
+        lease_seconds=settings.analysis_job_lease_seconds,
+    )
+    stop_event = threading.Event()
+
+    def _loop() -> None:
+        while not stop_event.is_set():
+            try:
+                claimed = worker.run_once()
+            except Exception:  # noqa: BLE001 - a single bad job must not kill the loop
+                logger.exception("Analysis worker iteration failed")
+                claimed = False
+            if not claimed:
+                stop_event.wait(settings.analysis_job_poll_interval_seconds)
+
+    thread = threading.Thread(target=_loop, name="analysis-worker", daemon=True)
+    thread.start()
+    return thread, stop_event
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     settings.storage_path.mkdir(parents=True, exist_ok=True)
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=database.engine)
+    worker_handle = _start_analysis_worker()
     try:
         yield
     finally:
+        if worker_handle is not None:
+            thread, stop_event = worker_handle
+            stop_event.set()
+            thread.join(timeout=10)
         aclose = getattr(app.state.rate_limit_store, "aclose", None)
         if aclose is not None:
             await aclose()

@@ -1,18 +1,23 @@
-from datetime import UTC, datetime
-
 from app.analysis.architecture import ArchitectureAnalyzer
 from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.repositories.repository_repository import RepositoryRepository
 from app.review.review_service import EngineeringReviewBuilder
-from app.schemas.analysis import AnalysisStartResponse, AnalysisStatusResponse
 from app.schemas.architecture import ArchitectureResponse
 from app.schemas.dependencies import DependencyGraphResponse
 from app.schemas.review import EngineeringReviewResponse
-from app.core.exceptions import NotFoundError, ServiceError
+from app.core.exceptions import NotFoundError
 
 
 class AnalysisService:
+    """Read-model builder for a repository's persisted analysis (#93).
+
+    Enqueue/status/cancel of the durable analysis lifecycle now live in
+    ``AnalysisJobService``; this service only builds the architecture, dependency,
+    and review read models from already-persisted intelligence, which the export
+    service also reuses.
+    """
+
     def __init__(
         self,
         repository: RepositoryRepository,
@@ -28,53 +33,6 @@ class AnalysisService:
         self.review = review
         self.intelligence = intelligence
         self.owner_id = owner_id
-
-    def start(self, repository_id: str) -> AnalysisStartResponse:
-        record = self._get_record(repository_id)
-        if record.status == "completed":
-            return AnalysisStartResponse(repository_id=record.id, status="completed")
-        if record.status == "error":
-            return AnalysisStartResponse(repository_id=record.id, status="failed")
-
-        record.status = "analysing"
-        record.analysis_stage = "preparing-architecture"
-        record.analysis_progress = 80
-        self.repository.save(record)
-        try:
-            repository_intelligence = self.intelligence.from_record(record)
-            self.intelligence.persist(record, repository_intelligence)
-            self.repository.save(record)
-            self.architecture.build_architecture(record)
-            self.dependencies.build(record)
-            self.review.build(record)
-        except Exception as exc:
-            record.status = "error"
-            record.analysis_stage = None
-            record.analysis_progress = 0
-            record.error_message = "Repository analysis failed."
-            self.repository.save(record)
-            raise ServiceError("Repository analysis failed.", {"repositoryId": record.id}) from exc
-
-        record.status = "completed"
-        record.analysis_stage = "completed"
-        record.analysis_progress = 100
-        record.error_message = None
-        record.analysed_at = datetime.now(UTC)
-        self.repository.save(record)
-        return AnalysisStartResponse(repository_id=record.id, status="completed")
-
-    def status(self, repository_id: str) -> AnalysisStatusResponse:
-        record = self._get_record(repository_id)
-        status = "failed" if record.status == "error" else "completed" if record.status == "completed" else "processing"
-        return AnalysisStatusResponse(
-            repository_id=record.id,
-            status=status,
-            stage=record.analysis_stage,
-            progress=record.analysis_progress,
-            started_at=record.uploaded_at,
-            completed_at=record.analysed_at,
-            error=record.error_message,
-        )
 
     def architecture_model(self, repository_id: str) -> ArchitectureResponse:
         return self.architecture.build_architecture(self._get_record(repository_id))

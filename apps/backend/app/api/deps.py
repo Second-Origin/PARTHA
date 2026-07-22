@@ -32,6 +32,7 @@ from app.repositories.repository_repository import RepositoryRepository
 from app.reports.export_service import ExportService
 from app.review.review_service import EngineeringReviewBuilder
 from app.services.ai_service import AiService
+from app.services.analysis_job_service import AnalysisJobService
 from app.services.analysis_service import AnalysisService
 from app.services.documentation_service import DocumentationService
 from app.services.repository_service import RepositoryService
@@ -200,6 +201,13 @@ def get_analysis_service(
         intelligence=intelligence,
         owner_id=current_user.id,
     )
+
+
+def get_analysis_job_service(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AnalysisJobService:
+    return AnalysisJobService(db, owner_id=current_user.id)
 
 
 def get_ai_service(
