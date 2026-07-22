@@ -12,7 +12,7 @@ and the output-affecting file-size budget required by RFC-0001 sections 4.3,
 from __future__ import annotations
 
 import posixpath
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from app.extraction.base import (
@@ -61,13 +61,20 @@ class ExtractionPipeline:
         self.extractors = tuple(extractors)
         self.max_source_bytes = max_source_bytes
 
-    def run(self, sources: Mapping[str, bytes]) -> tuple[ProducedExtraction, ...]:
+    def run(
+        self,
+        sources: Mapping[str, bytes],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> tuple[ProducedExtraction, ...]:
         inventory_nodes: list[ExtractedNode] = []
         inventory_diagnostics: list[ExtractedDiagnostic] = []
         produced: list[ProducedExtraction] = []
         repository_evidence: ExtractedEvidence | None = None
 
         for raw_path, source in sorted(sources.items()):
+            if check_cancelled is not None:
+                check_cancelled()
             try:
                 path = canonical.normalize_repo_path(raw_path)
             except canonical.PathEscapeError:
@@ -116,6 +123,8 @@ class ExtractionPipeline:
             if matches:
                 extractor = matches[0]
                 result = extractor.extract(path, source)
+                if check_cancelled is not None:
+                    check_cancelled()
                 produced.append(
                     ProducedExtraction(extractor.name, extractor.version, result)
                 )

@@ -3,6 +3,7 @@ import io
 import json
 import zipfile
 
+from tests.analysis_helpers import run_analysis_jobs
 from tests.api_assertions import assert_error_response
 
 
@@ -14,7 +15,7 @@ def _zip_bytes(files: dict[str, str]) -> bytes:
     return buffer.getvalue()
 
 
-def _import_sample(auth_client) -> str:
+def _import_sample(auth_client, *, analyse: bool = True) -> str:
     response = auth_client.post(
         "/repositories/upload",
         files={
@@ -32,7 +33,11 @@ def _import_sample(auth_client) -> str:
         },
     )
     assert response.status_code == 201
-    return response.json()["id"]
+    repository_id = response.json()["id"]
+    if analyse:
+        assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+        assert run_analysis_jobs() == 1
+    return repository_id
 
 
 def _export(auth_client, repository_id: str, target: str, fmt: str):
@@ -97,6 +102,15 @@ def test_export_review_pdf_starts_with_pdf_header(auth_client):
     assert body["mediaType"] == "application/pdf"
     assert body["filename"].endswith(".pdf")
     assert base64.b64decode(body["content"])[:5] == b"%PDF-"
+
+
+def test_export_review_before_analysis_cannot_report_a_clean_result(auth_client):
+    repository_id = _import_sample(auth_client, analyse=False)
+
+    for fmt in ("json", "markdown"):
+        response = _export(auth_client, repository_id, "review", fmt)
+        error = assert_error_response(response, 409, "conflict_error")
+        assert error.message == "Engineering review is unavailable until repository analysis completes."
 
 
 def test_export_json_supported_for_every_target(auth_client):

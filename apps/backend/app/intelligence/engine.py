@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -87,7 +88,13 @@ class RepositoryIntelligenceEngine:
     and Python; wiring those into this build path is #93.
     """
 
-    def from_record(self, record: RepositoryRecord) -> RepositoryIntelligence:
+    def from_record(
+        self,
+        record: RepositoryRecord,
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> RepositoryIntelligence:
+        self._check_cancelled(check_cancelled)
         existing = self.load(record)
         if existing:
             if existing.discovery.environment_files and not existing.discovery.environment_file_evidence:
@@ -95,20 +102,30 @@ class RepositoryIntelligenceEngine:
                 # them in bounded O(environment files) time without rereading or rebuilding
                 # the repository. Unknown legacy content is deliberately treated as a runtime
                 # file, which cannot produce a critical secret-exposure finding.
-                evidence = [
-                    EnvironmentFileEvidence(path=path, evidence_class="runtime_env_file_present")
-                    for path in existing.discovery.environment_files
-                ]
+                evidence: list[EnvironmentFileEvidence] = []
+                for path in existing.discovery.environment_files:
+                    self._check_cancelled(check_cancelled)
+                    evidence.append(
+                        EnvironmentFileEvidence(
+                            path=path,
+                            evidence_class="runtime_env_file_present",
+                        )
+                    )
                 discovery = existing.discovery.model_copy(update={"environment_file_evidence": evidence})
                 return existing.model_copy(update={"discovery": discovery})
             return existing
+        tree: list[FileTreeNode] = []
+        for node in record.file_tree or []:
+            self._check_cancelled(check_cancelled)
+            tree.append(FileTreeNode.model_validate(node))
         return self.build(
             repository_id=record.id,
             repository_name=record.name,
             root=Path(record.local_path),
-            tree=[FileTreeNode.model_validate(node) for node in record.file_tree or []],
+            tree=tree,
             metadata=RepositoryMeta.model_validate(record.repo_metadata or {}),
             total_size=record.size,
+            check_cancelled=check_cancelled,
         )
 
     def load(self, record: RepositoryRecord) -> RepositoryIntelligence | None:
@@ -133,14 +150,43 @@ class RepositoryIntelligenceEngine:
         tree: list[FileTreeNode],
         metadata: RepositoryMeta,
         total_size: int,
+        *,
+        check_cancelled: Callable[[], None] | None = None,
     ) -> RepositoryIntelligence:
-        flat_files = self._flatten_files(tree)
-        file_intelligence = [self._file_intelligence(root, node) for node in flat_files]
-        symbols = [symbol for file in file_intelligence for symbol in file.symbols]
-        dependencies, dependency_manifest_count, dependency_diagnostics = self._dependencies(root, flat_files)
-        discovery = self._discovery(root, metadata, tree, file_intelligence, dependencies, total_size)
-        modules = self._modules(file_intelligence)
-        graph = self._knowledge_graph(repository_id, repository_name, modules, file_intelligence, symbols, dependencies)
+        self._check_cancelled(check_cancelled)
+        flat_files = self._flatten_files(tree, check_cancelled=check_cancelled)
+        file_intelligence: list[SourceFileIntelligence] = []
+        for node in flat_files:
+            self._check_cancelled(check_cancelled)
+            file_intelligence.append(self._file_intelligence(root, node))
+        symbols: list[SourceSymbol] = []
+        for file in file_intelligence:
+            self._check_cancelled(check_cancelled)
+            symbols.extend(file.symbols)
+        dependencies, dependency_manifest_count, dependency_diagnostics = self._dependencies(
+            root,
+            flat_files,
+            check_cancelled=check_cancelled,
+        )
+        discovery = self._discovery(
+            root,
+            metadata,
+            tree,
+            file_intelligence,
+            dependencies,
+            total_size,
+            check_cancelled=check_cancelled,
+        )
+        modules = self._modules(file_intelligence, check_cancelled=check_cancelled)
+        graph = self._knowledge_graph(
+            repository_id,
+            repository_name,
+            modules,
+            file_intelligence,
+            symbols,
+            dependencies,
+            check_cancelled=check_cancelled,
+        )
         return RepositoryIntelligence(
             repository_id=repository_id,
             repository_name=repository_name,
@@ -156,14 +202,30 @@ class RepositoryIntelligenceEngine:
             graph=graph,
         )
 
-    def _flatten_files(self, nodes: list[FileTreeNode]) -> list[FileTreeNode]:
+    def _flatten_files(
+        self,
+        nodes: list[FileTreeNode],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> list[FileTreeNode]:
         result: list[FileTreeNode] = []
         for node in nodes:
+            self._check_cancelled(check_cancelled)
             if node.type == "file":
                 result.append(node)
             if node.children:
-                result.extend(self._flatten_files(node.children))
+                result.extend(
+                    self._flatten_files(
+                        node.children,
+                        check_cancelled=check_cancelled,
+                    )
+                )
         return result
+
+    @staticmethod
+    def _check_cancelled(check_cancelled: Callable[[], None] | None) -> None:
+        if check_cancelled is not None:
+            check_cancelled()
 
     def _file_intelligence(self, root: Path, node: FileTreeNode) -> SourceFileIntelligence:
         path = node.path
@@ -309,7 +371,11 @@ class RepositoryIntelligenceEngine:
         return sorted(technologies)
 
     def _dependencies(
-        self, root: Path, files: list[FileTreeNode]
+        self,
+        root: Path,
+        files: list[FileTreeNode],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
     ) -> tuple[list[RepositoryDependency], int, list[DependencyDiagnostic]]:
         """Extract declarations from parser-approved manifest inventory only.
 
@@ -330,6 +396,7 @@ class RepositoryIntelligenceEngine:
         diagnostics: list[DependencyDiagnostic] = []
         declarations_by_key: dict[str, list[DependencyDeclaration]] = defaultdict(list)
         for file in sorted(files, key=lambda item: item.path):
+            self._check_cancelled(check_cancelled)
             try:
                 path = canonical.normalize_repo_path(file.path.lstrip("/"))
             except canonical.PathEscapeError:
@@ -406,7 +473,8 @@ class RepositoryIntelligenceEngine:
                 )
                 continue
 
-            for run in pipeline.run({path: source}):
+            for run in pipeline.run({path: source}, check_cancelled=check_cancelled):
+                self._check_cancelled(check_cancelled)
                 for diagnostic in run.result.diagnostics:
                     diagnostics.append(
                         DependencyDiagnostic(
@@ -444,6 +512,7 @@ class RepositoryIntelligenceEngine:
 
         dependencies: list[RepositoryDependency] = []
         for stable_key, declarations in sorted(declarations_by_key.items()):
+            self._check_cancelled(check_cancelled)
             ordered = sorted(
                 declarations,
                 key=lambda item: (
@@ -490,16 +559,23 @@ class RepositoryIntelligenceEngine:
         files: list[SourceFileIntelligence],
         dependencies: list[RepositoryDependency],
         total_size: int,
+        *,
+        check_cancelled: Callable[[], None] | None = None,
     ) -> RepositoryDiscovery:
+        self._check_cancelled(check_cancelled)
         language_counts = Counter(file.language for file in files if file.language)
-        folders = self._count_folders(tree)
+        folders = self._count_folders(tree, check_cancelled=check_cancelled)
         paths = [file.path for file in files]
         dep_names = {dependency.name.lower() for dependency in dependencies}
         frameworks = sorted({metadata.framework, *self._frameworks_from_dependencies(dep_names)} - {"Unknown", ""})
         package_managers = sorted({metadata.package_manager} - {None})  # type: ignore[arg-type]
         config_files = [path.lstrip("/") for path in paths if Path(path).name in CONFIG_NAMES or "/.github/" in path]
         env_files = [path.lstrip("/") for path in paths if Path(path).name.startswith(".env")]
-        environment_file_evidence = self._environment_file_evidence(root, env_files)
+        environment_file_evidence = self._environment_file_evidence(
+            root,
+            env_files,
+            check_cancelled=check_cancelled,
+        )
         docker_files = [path.lstrip("/") for path in paths if "docker" in path.lower()]
         ci_files = [path.lstrip("/") for path in paths if "/.github/workflows/" in path or "gitlab-ci" in path.lower()]
         build_systems = self._build_systems(paths, dep_names)
@@ -531,9 +607,16 @@ class RepositoryIntelligenceEngine:
             ),
         )
 
-    def _environment_file_evidence(self, root: Path, paths: list[str]) -> list[EnvironmentFileEvidence]:
+    def _environment_file_evidence(
+        self,
+        root: Path,
+        paths: list[str],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> list[EnvironmentFileEvidence]:
         evidence: list[EnvironmentFileEvidence] = []
         for path in paths:
+            self._check_cancelled(check_cancelled)
             secret_keys = self._secret_like_keys(self._read_text(root, path))
             if secret_keys:
                 evidence_class = "secret_like_value_detected"
@@ -646,13 +729,22 @@ class RepositoryIntelligenceEngine:
         userinfo = re.search(r"://[^/@\s]+:([^/@\s]+)@", value)
         return bool(userinfo) and not self._is_placeholder_value(userinfo.group(1))
 
-    def _count_folders(self, nodes: list[FileTreeNode]) -> int:
+    def _count_folders(
+        self,
+        nodes: list[FileTreeNode],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> int:
         count = 0
         for node in nodes:
+            self._check_cancelled(check_cancelled)
             if node.type == "folder":
                 count += 1
             if node.children:
-                count += self._count_folders(node.children)
+                count += self._count_folders(
+                    node.children,
+                    check_cancelled=check_cancelled,
+                )
         return count
 
     def _frameworks_from_dependencies(self, dep_names: set[str]) -> set[str]:
@@ -680,12 +772,19 @@ class RepositoryIntelligenceEngine:
             systems.add("Docker")
         return sorted(systems)
 
-    def _modules(self, files: list[SourceFileIntelligence]) -> list[RepositoryModule]:
+    def _modules(
+        self,
+        files: list[SourceFileIntelligence],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> list[RepositoryModule]:
         grouped: dict[str, list[SourceFileIntelligence]] = defaultdict(list)
         for file in files:
+            self._check_cancelled(check_cancelled)
             grouped[file.module_id].append(file)
         modules: list[RepositoryModule] = []
         for module_id, module_files in grouped.items():
+            self._check_cancelled(check_cancelled)
             role = self._dominant_role(module_files)
             dependencies = sorted({import_name for file in module_files for import_name in file.imports})
             symbols = sorted({symbol.id for file in module_files for symbol in file.symbols})
@@ -760,21 +859,26 @@ class RepositoryIntelligenceEngine:
         files: list[SourceFileIntelligence],
         symbols: list[SourceSymbol],
         dependencies: list[RepositoryDependency],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
     ) -> KnowledgeGraph:
         nodes: list[KnowledgeGraphNode] = [KnowledgeGraphNode(id=f"repository:{repository_id}", type="repository", name=repository_name)]
         relationships: list[KnowledgeGraphRelationship] = []
         module_by_id = {module.id: module for module in modules}
 
         for module in modules:
+            self._check_cancelled(check_cancelled)
             nodes.append(KnowledgeGraphNode(id=module.id, type="module", name=module.name, path=module.path_prefix, metadata={"role": module.role, "layer": module.layer}))
             relationships.append(self._relationship(f"repository:{repository_id}", module.id, "contains", [module.path_prefix]))
 
         for file in files:
+            self._check_cancelled(check_cancelled)
             file_id = self._file_id(file.path)
             nodes.append(KnowledgeGraphNode(id=file_id, type="file", name=file.name, path=file.path, metadata={"role": file.role, "language": file.language or "Unknown"}))
             if file.module_id in module_by_id:
                 relationships.append(self._relationship(file.module_id, file_id, "contains", [file.path]))
             for import_name in file.imports:
+                self._check_cancelled(check_cancelled)
                 dependency = self._dependency_for_import(import_name, dependencies)
                 target = dependency.id if dependency else f"external:{import_name}"
                 if dependency is None:
@@ -783,6 +887,7 @@ class RepositoryIntelligenceEngine:
 
         seen_nodes = {node.id for node in nodes}
         for symbol in symbols:
+            self._check_cancelled(check_cancelled)
             nodes.append(KnowledgeGraphNode(id=symbol.id, type="symbol", name=symbol.name, path=symbol.file_path, metadata={"kind": symbol.kind, "exported": symbol.exported}))
             relationships.append(self._relationship(self._file_id(symbol.file_path), symbol.id, "contains", [symbol.file_path]))
             if symbol.exported:
@@ -790,6 +895,7 @@ class RepositoryIntelligenceEngine:
             seen_nodes.add(symbol.id)
 
         for dependency in dependencies:
+            self._check_cancelled(check_cancelled)
             if dependency.id not in seen_nodes:
                 nodes.append(
                     KnowledgeGraphNode(

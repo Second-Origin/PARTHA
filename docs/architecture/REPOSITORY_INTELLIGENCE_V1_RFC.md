@@ -1719,15 +1719,15 @@ rules), the three columns are explicit:
 | Concern | Current behavior (today) | Accepted `ri.v1` contract (this RFC) | Status |
 | --- | --- | --- | --- |
 | Storage | Legacy regex consumers still read the mutable JSON blob; normalized snapshot tables and the sealing store now exist | Immutable sealed snapshots with nodes, edges, assertions, observations, evidence, and diagnostics (§11) | **Persistence implemented** (#88); production producers/queries remain #89–#92 |
-| Pipeline identity | `SnapshotStore` fixes and normalizes the planned set before a build; no production job planner invokes it yet | Precomputed `producer_version_set` covers every enabled extractor/resolver/classifier (§3.3) | **Persistence implemented** (#88); enqueue/job coordination remains #93 |
-| Repository graph key | `ExtractionPipeline` emits deterministic `repo:root`; `SnapshotStore` validates exactly one before sealing; no product job invokes that pipeline yet | Deterministic snapshot-scoped `repo:root`; database `repository_id` excluded from graph keys (§4.3) | **Producer and persistence implemented** (#88–#90); job integration remains #93 |
-| Symbol spans | Python/TypeScript extractors emit required spans; legacy `SourceSymbol` remains spanless | Required line spans (§6) | **Producer implemented** (#89/#90); product consumption remains #92/#93 |
-| Extraction | Legacy product ingestion still uses regex; standalone AST/tree-sitter extractors and support matrices are implemented and benchmarked | Syntax-aware extractors with support matrices | **Producer implemented** (#89/#90); durable product integration remains #93 |
+| Pipeline identity | Durable submission and execution share a fixed planned producer set and config hash before enqueue | Precomputed `producer_version_set` covers every enabled extractor/resolver/classifier (§3.3) | **Implemented** (#88/#93) |
+| Repository graph key | Durable analysis runs `ExtractionPipeline`, which emits deterministic `repo:root`; `SnapshotStore` validates exactly one before sealing | Deterministic snapshot-scoped `repo:root`; database `repository_id` excluded from graph keys (§4.3) | **Implemented** (#88–#90/#93) |
+| Symbol spans | Python/TypeScript extractors emit and durable analysis stores required spans; legacy `SourceSymbol` remains spanless | Required line spans (§6) | **Producer and durable population implemented** (#89/#90/#93) |
+| Extraction | Durable analysis runs the AST/tree-sitter extractors and also preserves the legacy regex model for unmigrated consumers | Syntax-aware extractors with support matrices | **Durable product integration implemented** (#89/#90/#93) |
 | Revision identity | Indexed `revision_kind`/`revision_value`/`revision_ref`; `commitSha` is API compatibility only | Indexed immutable columns (§3) | **Implemented** (#87) |
-| Relationships | Deterministic resolver over stored observations, with resolved edges and explicit unresolved/ambiguous diagnostics | Resolved edges + diagnostics (§5) | **Implemented** (#91); product job wiring remains #93 |
+| Relationships | The durable job runs the deterministic resolver over stored observations, with resolved edges and explicit unresolved/ambiguous diagnostics | Resolved edges + diagnostics (§5) | **Implemented** (#91/#93) |
 | Inferred entity properties | Legacy heuristic module roles remain in the compatibility blob; the snapshot store supports separate validated assertions | Separate inferred property assertions; observed nodes remain unique (§5.6) | **Persistence implemented** (#88); production inference/querying remains #91/#92 |
-| Provenance | Extractors emit path + span + producer/version and the normalized store validates them; legacy product consumers still receive file paths only | Path + span + extractor/version (§6) | **Producer and persistence implemented** (#88–#90); product orchestration/querying remains #92/#93 |
-| Query API | Consumers read the whole blob | Versioned owner-scoped read API (§9.5) | **Implemented** (#92); durable population and consumer migration remain separate work |
+| Provenance | Durable analysis stores extractor path + span + producer/version and the normalized store validates them; legacy product consumers still receive file paths only | Path + span + extractor/version (§6) | **Producer, persistence, querying, and durable population implemented** (#88–#93) |
+| Query API | Normalized consumers use the versioned owner-scoped read API; legacy consumers still read the compatibility blob | Versioned owner-scoped read API (§9.5) | **Implemented and durably populated** (#92/#93); broader consumer migration remains #95 |
 | Evidence-backed output | AI emits empty citation lists | Every claim cites a valid span (§7.4) | **Unimplemented** (#95) |
 
 **This RFC does not claim every capability in the "Accepted contract" column is current product
@@ -1736,8 +1736,9 @@ behavior.** RFC-0001 is **Accepted** — independently ratified by
 ([§1](#1-status-and-approval)); acceptance records the governing contract, not a claim of
 implementation. The #87 revision identity and #88 immutable snapshot-persistence boundary are
 implemented against that accepted contract, as the status column records. The #89/#90 producers
-and #94 benchmark plus #91 deterministic resolution and #92 sealed-snapshot queries are implemented; durable jobs and consumer migration remain
-downstream work and are not current product behavior. No existing documentation is rewritten by
+and #94 benchmark plus #91 deterministic resolution, #92 sealed-snapshot queries,
+and #93 durable job population are implemented; broader consumer migration
+remains downstream work. No existing documentation is rewritten by
 this RFC to imply otherwise.
 
 ---

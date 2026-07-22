@@ -11,14 +11,15 @@ from fastapi import UploadFile
 from app.core.config import Settings
 from app.core.exceptions import ConflictServiceError, NotFoundError, ServiceError, ValidationServiceError
 from app.github.client import GitHubClient
-from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.models.repository import RepositoryRecord
-from app.parsers.repository_parser import RepositoryParser
+from app.parsers.repository_parser import RepositoryFileLimitExceeded, RepositoryParser
 from app.repositories.repository_repository import RepositoryRepository
 from app.schemas.repository import (
+    FileTreeNode,
     GitHubImportRequest,
     RepositoryFileResponse,
     RepositoryListResponse,
+    RepositoryMeta,
     RepositoryResponse,
     RepositoryRevision,
 )
@@ -49,7 +50,6 @@ class RepositoryService:
         storage: LocalStorage,
         github: GitHubClient,
         parser: RepositoryParser,
-        intelligence: RepositoryIntelligenceEngine,
         settings: Settings,
         owner_id: str,
     ) -> None:
@@ -57,7 +57,6 @@ class RepositoryService:
         self.storage = storage
         self.github = github
         self.parser = parser
-        self.intelligence = intelligence
         self.settings = settings
         self.owner_id = owner_id
 
@@ -94,9 +93,8 @@ class RepositoryService:
                     "Repository has already been imported.",
                     {"repositoryId": existing.id, "name": existing.name},
                 )
-            tree, meta, total_size = self.parser.parse(root)
+            tree, meta, total_size = self._parse_repository(root)
             self._validate_parsed_repository(meta.total_files)
-            repository_intelligence = self.intelligence.build(repository_id, self.github.repository_name(url), root, tree, meta, total_size)
         except Exception:
             self.storage.delete_repository_id(repository_id)
             raise
@@ -122,7 +120,7 @@ class RepositoryService:
             analysis_progress=70,
             uploaded_at=now,
             analysed_at=None,
-            repo_metadata=self._metadata_with_intelligence(meta, repository_intelligence),
+            repo_metadata=meta.model_dump(mode="json", by_alias=True),
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
         return self.to_response(self.repository.add(record))
@@ -145,9 +143,8 @@ class RepositoryService:
                     {"repositoryId": existing.id, "name": existing.name},
                 )
             root = self.storage.extract_archive(archive_path, repository_id)
-            tree, meta, total_size = self.parser.parse(root)
+            tree, meta, total_size = self._parse_repository(root)
             self._validate_parsed_repository(meta.total_files)
-            repository_intelligence = self.intelligence.build(repository_id, repository_name, root, tree, meta, total_size)
         except Exception:
             self.storage.delete_upload(archive_path)
             self.storage.delete_repository_id(repository_id)
@@ -175,7 +172,7 @@ class RepositoryService:
             analysis_progress=70,
             uploaded_at=now,
             analysed_at=None,
-            repo_metadata=self._metadata_with_intelligence(meta, repository_intelligence),
+            repo_metadata=meta.model_dump(mode="json", by_alias=True),
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
         return self.to_response(self.repository.add(record))
@@ -297,16 +294,22 @@ class RepositoryService:
         if total_files == 0:
             raise ValidationServiceError("Repository archive does not contain any readable files.")
 
+    def _parse_repository(
+        self, root: Path
+    ) -> tuple[list[FileTreeNode], RepositoryMeta, int]:
+        try:
+            return self.parser.parse(root, max_file_count=self.settings.max_file_count)
+        except RepositoryFileLimitExceeded as exc:
+            raise ValidationServiceError(
+                "Repository exceeds the configured maximum file count.",
+                {"maxFileCount": exc.max_file_count, "fileCount": exc.file_count},
+            ) from exc
+
     def _repository_name_from_archive(self, filename: str) -> str:
         for suffix in (".tar.gz", ".tgz", ".zip", ".tar", ".gz"):
             if filename.lower().endswith(suffix):
                 return filename[: -len(suffix)]
         return Path(filename).stem
-
-    def _metadata_with_intelligence(self, meta, intelligence) -> dict:
-        metadata = meta.model_dump(mode="json", by_alias=True)
-        metadata["intelligence"] = intelligence.model_dump(mode="json", by_alias=True)
-        return metadata
 
     def _git_revision(
         self,

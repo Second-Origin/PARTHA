@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from app.analysis.architecture import ArchitectureAnalyzer
 from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
@@ -78,6 +80,40 @@ def test_repository_intelligence_detects_discovery_and_source_code(tmp_path: Pat
     assert any(relationship.type == "contains" for relationship in intelligence.graph.relationships)
     assert any(relationship.type == "imports" for relationship in intelligence.graph.relationships)
     assert any(relationship.type == "depends_on" for relationship in intelligence.graph.relationships)
+
+
+def test_repository_intelligence_checks_cancellation_between_files(
+    tmp_path: Path,
+    monkeypatch,
+):
+    _sample_repository(tmp_path)
+    tree, metadata, total_size = RepositoryParser().parse(tmp_path)
+    engine = RepositoryIntelligenceEngine()
+    processed: list[str] = []
+    original_file_intelligence = engine._file_intelligence
+
+    def _file_intelligence(root, node):
+        processed.append(node.path)
+        return original_file_intelligence(root, node)
+
+    def _check_cancelled():
+        if processed:
+            raise RuntimeError("cancelled")
+
+    monkeypatch.setattr(engine, "_file_intelligence", _file_intelligence)
+
+    with pytest.raises(RuntimeError, match="cancelled"):
+        engine.build(
+            "repo-1",
+            "sample",
+            tmp_path,
+            tree,
+            metadata,
+            total_size,
+            check_cancelled=_check_cancelled,
+        )
+
+    assert len(processed) == 1
 
 
 def test_repository_intelligence_is_serializable_and_persisted(tmp_path: Path):

@@ -31,6 +31,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestCli
     monkeypatch.setenv("STORAGE_PATH", str(storage_path))
     monkeypatch.setenv("AUTO_CREATE_TABLES", "true")
     monkeypatch.setenv("CORS_ORIGINS", "http://testserver")
+    # Tests drive AnalysisWorker.run_once() deterministically; the background
+    # daemon thread would otherwise race the queue non-deterministically (#93).
+    monkeypatch.setenv("ANALYSIS_WORKER_AUTOSTART", "false")
 
     from app.core import config
 
@@ -56,6 +59,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestCli
     os.environ.pop("STORAGE_PATH", None)
     os.environ.pop("AUTO_CREATE_TABLES", None)
     os.environ.pop("CORS_ORIGINS", None)
+    os.environ.pop("ANALYSIS_WORKER_AUTOSTART", None)
     config.get_settings.cache_clear()
 
 

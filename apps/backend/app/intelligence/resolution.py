@@ -9,6 +9,7 @@ exactly one member; zero and multiple candidates become visible diagnostics.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 import posixpath
 import re
@@ -78,7 +79,12 @@ class RelationshipResolver:
     def producer(self) -> str:
         return f"{self.name}@{self.version}"
 
-    def resolve(self, snapshot: RiSnapshot) -> ResolutionResult:
+    def resolve(
+        self,
+        snapshot: RiSnapshot,
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> ResolutionResult:
         """Add every resolvable #91 edge to one *building* snapshot.
 
         Existing matching edges are consolidated by :class:`SnapshotStore`; the
@@ -87,6 +93,7 @@ class RelationshipResolver:
         different insertion order cannot change facts or diagnostics.
         """
 
+        self._check_cancelled(check_cancelled)
         if snapshot.state != "building":
             raise SnapshotStateError("relationship resolution requires a building snapshot")
         if self.producer not in set(snapshot.producer_version_set):
@@ -110,44 +117,56 @@ class RelationshipResolver:
         for evidence in self.store.db.scalars(
             select(RiEvidence).where(RiEvidence.snapshot_id == snapshot.snapshot_id)
         ):
+            self._check_cancelled(check_cancelled)
             if evidence.observation_ref is not None:
                 evidence_by_observation[evidence.observation_ref].append(evidence)
             if evidence.node_ref is not None:
                 evidence_by_node[evidence.node_ref].append(evidence)
 
-        inputs = [
-            _ObservedInput(observation, sorted(evidence_by_observation.get(observation.id, ()), key=self._evidence_key)[0])
-            for observation in observations
-            if evidence_by_observation.get(observation.id)
-        ]
+        inputs: list[_ObservedInput] = []
+        for observation in observations:
+            self._check_cancelled(check_cancelled)
+            evidence = evidence_by_observation.get(observation.id)
+            if evidence:
+                inputs.append(
+                    _ObservedInput(
+                        observation,
+                        sorted(evidence, key=self._evidence_key)[0],
+                    )
+                )
         inputs_by_kind: dict[str, list[_ObservedInput]] = defaultdict(list)
         for input_ in inputs:
+            self._check_cancelled(check_cancelled)
             inputs_by_kind[input_.observation.observed_kind].append(input_)
         bindings_by_file: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
         for input_ in inputs_by_kind["import_binding"]:
+            self._check_cancelled(check_cancelled)
             source = self._source_file(input_, nodes_by_key)
             parsed = self._parse_import_binding(input_.observation.referent_text)
             if source is not None and parsed is not None:
                 bindings_by_file[source.stable_key].append(parsed)
-        shadowed_calls = {
-            self._reference_input_key(input_)
-            for input_ in inputs_by_kind["call_shadowed"]
-        }
+        shadowed_calls: set[tuple[str, str | None, str, int, int, int]] = set()
+        for input_ in inputs_by_kind["call_shadowed"]:
+            self._check_cancelled(check_cancelled)
+            shadowed_calls.add(self._reference_input_key(input_))
 
         edges_added = 0
         diagnostics_added = 0
 
         for input_ in inputs_by_kind["definition"]:
+            self._check_cancelled(check_cancelled)
             added, diagnosed = self._resolve_definition(input_, nodes_by_key)
             edges_added += added
             diagnostics_added += diagnosed
 
         for input_ in inputs_by_kind["import"]:
+            self._check_cancelled(check_cancelled)
             added, diagnosed = self._resolve_import(input_, nodes_by_key, bindings_by_file)
             edges_added += added
             diagnostics_added += diagnosed
 
         for input_ in inputs_by_kind["call"]:
+            self._check_cancelled(check_cancelled)
             if self._reference_input_key(input_) in shadowed_calls:
                 added, diagnosed = self._unresolved(
                     input_, "calls target is shadowed by a local binding"
@@ -160,6 +179,7 @@ class RelationshipResolver:
             diagnostics_added += diagnosed
 
         for input_ in inputs_by_kind["implements"]:
+            self._check_cancelled(check_cancelled)
             added, diagnosed = self._resolve_reference(
                 input_, nodes_by_key, evidence_by_node, bindings_by_file, predicate="implements"
             )
@@ -167,14 +187,17 @@ class RelationshipResolver:
             diagnostics_added += diagnosed
 
         for input_ in inputs_by_kind["dependency"]:
+            self._check_cancelled(check_cancelled)
             added, diagnosed = self._resolve_dependency(input_, nodes_by_key)
             edges_added += added
             diagnostics_added += diagnosed
 
         route_handlers: dict[str, list[_ObservedInput]] = defaultdict(list)
         for input_ in inputs_by_kind["route_handler"]:
+            self._check_cancelled(check_cancelled)
             route_handlers[input_.observation.subject_key].append(input_)
         for input_ in inputs_by_kind["route"]:
+            self._check_cancelled(check_cancelled)
             added, diagnosed = self._resolve_route(
                 input_,
                 route_handlers.get(input_.observation.subject_key, ()),
@@ -185,6 +208,11 @@ class RelationshipResolver:
             diagnostics_added += diagnosed
 
         return ResolutionResult(edges_added=edges_added, diagnostics_added=diagnostics_added)
+
+    @staticmethod
+    def _check_cancelled(check_cancelled: Callable[[], None] | None) -> None:
+        if check_cancelled is not None:
+            check_cancelled()
 
     def _resolve_definition(
         self, input_: _ObservedInput, nodes_by_key: dict[str, RiNode]

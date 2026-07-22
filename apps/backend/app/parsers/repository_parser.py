@@ -1,4 +1,5 @@
 import json
+import os
 from collections import Counter
 from pathlib import Path
 from uuid import uuid4
@@ -64,8 +65,19 @@ CONFIG_FILES = {
 }
 
 
+class RepositoryFileLimitExceeded(Exception):
+    def __init__(self, max_file_count: int, file_count: int) -> None:
+        super().__init__(f"repository contains more than {max_file_count} files")
+        self.max_file_count = max_file_count
+        self.file_count = file_count
+
+
 class RepositoryParser:
-    def parse(self, root: Path) -> tuple[list[FileTreeNode], RepositoryMeta, int]:
+    def parse(
+        self, root: Path, *, max_file_count: int | None = None
+    ) -> tuple[list[FileTreeNode], RepositoryMeta, int]:
+        if max_file_count is not None:
+            self._enforce_file_count(root, max_file_count, [0])
         tree = self._build_tree(root, root)
         flat = self._flatten(tree)
         file_nodes = [node for node in flat if node.type == "file"]
@@ -93,6 +105,20 @@ class RepositoryParser:
             license_name=license_name,
         )
         return tree, meta, total_size
+
+    def _enforce_file_count(self, path: Path, max_file_count: int, file_count: list[int]) -> None:
+        """Stream the tree and abort before sorting or allocating file nodes."""
+
+        with os.scandir(path) as entries:
+            for entry in entries:
+                if entry.name in IGNORED_DIRS:
+                    continue
+                if entry.is_dir():
+                    self._enforce_file_count(Path(entry.path), max_file_count, file_count)
+                elif entry.is_file():
+                    file_count[0] += 1
+                    if file_count[0] > max_file_count:
+                        raise RepositoryFileLimitExceeded(max_file_count, file_count[0])
 
     def _build_tree(self, path: Path, root: Path) -> list[FileTreeNode]:
         nodes: list[FileTreeNode] = []

@@ -622,3 +622,41 @@ def test_python_relative_import_still_resolves_to_the_sibling_module(session):
     assert result.diagnostics_added == 0
     assert ("file:app/main.py", "imports", "file:app/service.py") in _edge_triples(session, snapshot)
     assert store.seal(snapshot).state == "completed"
+
+
+def test_resolver_checks_cancellation_between_observations(session, monkeypatch):
+    store, snapshot = _store(session)
+    _node(store, snapshot, "file", "file:src/source.ts")
+    first = _node(store, snapshot, "symbol", "src/source.ts::first", name="first")
+    second = _node(store, snapshot, "symbol", "src/source.ts::second", name="second", line=2)
+    for line, symbol in enumerate((first, second), start=1):
+        _observation(
+            store,
+            snapshot,
+            kind="definition",
+            subject_kind="symbol",
+            subject=symbol.stable_key,
+            referent=None,
+            path="src/source.ts",
+            line=line,
+        )
+
+    resolver = RelationshipResolver(store)
+    resolved: list[str] = []
+    original_resolve_definition = resolver._resolve_definition
+
+    def _resolve_definition(input_, nodes_by_key):
+        resolved.append(input_.observation.subject_key)
+        return original_resolve_definition(input_, nodes_by_key)
+
+    def _check_cancelled():
+        if resolved:
+            raise RuntimeError("cancelled")
+
+    monkeypatch.setattr(resolver, "_resolve_definition", _resolve_definition)
+
+    with pytest.raises(RuntimeError, match="cancelled"):
+        resolver.resolve(snapshot, check_cancelled=_check_cancelled)
+
+    assert len(resolved) == 1
+    assert resolved[0] in {first.stable_key, second.stable_key}

@@ -68,6 +68,24 @@ def test_migrations_upgrade_and_downgrade_run_clean(tmp_path, monkeypatch):
 
             command.upgrade(cfg, "head")
             assert "repositories" in inspect(probe_engine).get_table_names()
+            snapshot_index = next(
+                index
+                for index in inspect(probe_engine).get_indexes("analysis_jobs")
+                if index["name"] == "uq_analysis_jobs_snapshot_id"
+            )
+            assert bool(snapshot_index["unique"])
+            assert snapshot_index["column_names"] == ["snapshot_id"]
+            effective_index = next(
+                index
+                for index in inspect(probe_engine).get_indexes("analysis_jobs")
+                if index["name"] == "uq_analysis_jobs_effective_identity"
+            )
+            assert bool(effective_index["unique"])
+            assert effective_index["column_names"] == [
+                "repository_id",
+                "revision_value",
+                "config_hash",
+            ]
 
             command.downgrade(cfg, "base")
             assert "repositories" not in inspect(probe_engine).get_table_names()

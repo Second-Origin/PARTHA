@@ -178,6 +178,19 @@ def test_settings_rejects_invalid_log_format():
         Settings(log_format="pretty")
 
 
+def test_production_analysis_worker_ids_are_unique_with_the_same_pid(monkeypatch):
+    import app.main as main_module
+
+    monkeypatch.setattr(main_module, "getpid", lambda: 42)
+
+    first = main_module._analysis_worker_id()
+    second = main_module._analysis_worker_id()
+
+    assert first != second
+    assert first.startswith("analysis-worker-42-")
+    assert len(first) <= 64
+
+
 def test_settings_rejects_invalid_database_url():
     from pydantic import ValidationError
 

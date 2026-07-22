@@ -8,6 +8,9 @@ import pytest
 
 from app.github.client import GitHubClient
 from app.core.exceptions import TimeoutServiceError
+from app.core.database import SessionLocal
+from app.models.repository import RepositoryRecord
+from tests.analysis_helpers import run_analysis_jobs
 from tests.api_assertions import assert_error_response
 
 
@@ -66,9 +69,25 @@ def test_zip_upload_persists_repository_and_analysis_completes(auth_client):
     assert len(repository["commitSha"]) == 71
     assert "commitSha" not in repository["meta"]
 
+    # Import performs bounded archive/clone parsing only. Intelligence is not
+    # built in the request path; the durable worker owns that work.
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        assert "intelligence" not in (record.repo_metadata or {})
+
+    # /start now enqueues durably and returns immediately (never blocks on the
+    # worker); the test drives the worker synchronously to reach completion.
     start_response = auth_client.post(f"/analysis/{repository['id']}/start")
     assert start_response.status_code == 200
-    assert start_response.json() == {"repositoryId": repository["id"], "status": "completed"}
+    start_body = start_response.json()
+    assert start_body["repositoryId"] == repository["id"]
+    assert start_body["status"] == "queued"
+    assert start_body["jobId"] is not None
+    assert run_analysis_jobs() == 1
+
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        assert "intelligence" in (record.repo_metadata or {})
 
     status_response = auth_client.get(f"/analysis/{repository['id']}/status")
     assert status_response.status_code == 200
@@ -97,6 +116,50 @@ def test_zip_upload_persists_repository_and_analysis_completes(auth_client):
     assert repositories[0]["status"] == "completed"
 
 
+def test_analysis_read_endpoints_return_typed_defaults_before_worker_runs(auth_client):
+    response = _upload(
+        auth_client,
+        "pending-analysis.zip",
+        _zip_bytes(
+            {
+                "pending-analysis/package.json": '{"dependencies":{"react":"^18.0.0"}}',
+                "pending-analysis/src/main.tsx": "import React from 'react';",
+            }
+        ),
+    )
+    assert response.status_code == 201
+    repository_id = response.json()["id"]
+
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository_id)
+        assert "intelligence" not in (record.repo_metadata or {})
+
+    architecture_response = auth_client.get(f"/analysis/{repository_id}/architecture")
+    assert architecture_response.status_code == 200
+    architecture = architecture_response.json()
+    assert architecture["edges"] == []
+    assert architecture["relationshipSnapshotId"] is None
+    assert architecture["diagnostics"][0]["code"] == "ARCH-REL-NOT-EXTRACTED"
+
+    dependency_response = auth_client.get(f"/analysis/{repository_id}/dependencies")
+    assert dependency_response.status_code == 200
+    dependencies = dependency_response.json()
+    assert dependencies["nodes"] == []
+    assert dependencies["edges"] == []
+    assert dependencies["totalDependencies"] == 0
+    assert dependencies["manifestCount"] == 0
+
+    review_response = auth_client.get(f"/analysis/{repository_id}/review")
+    error = assert_error_response(review_response, 409, "conflict_error")
+    assert error.message == "Engineering review is unavailable until repository analysis completes."
+    assert error.details == {"repositoryId": repository_id, "status": "analysing"}
+
+    # Read endpoints must not rebuild the missing compatibility model from disk.
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository_id)
+        assert "intelligence" not in (record.repo_metadata or {})
+
+
 def test_dependency_endpoint_reports_uncomputed_assessments_without_clean_claims(auth_client):
     response = _upload(
         auth_client,
@@ -111,6 +174,7 @@ def test_dependency_endpoint_reports_uncomputed_assessments_without_clean_claims
     assert response.status_code == 201
     repository_id = response.json()["id"]
     assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+    assert run_analysis_jobs() == 1
 
     dependency_response = auth_client.get(f"/analysis/{repository_id}/dependencies")
 
@@ -148,6 +212,7 @@ def test_empty_dependency_endpoint_still_reports_uncomputed_assessments(auth_cli
     assert response.status_code == 201
     repository_id = response.json()["id"]
     assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+    assert run_analysis_jobs() == 1
 
     dependency_response = auth_client.get(f"/analysis/{repository_id}/dependencies")
 
@@ -182,6 +247,7 @@ def test_dependency_endpoint_returns_nested_manifest_provenance_and_malformed_di
     assert response.status_code == 201
     repository_id = response.json()["id"]
     assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+    assert run_analysis_jobs() == 1
 
     payload = auth_client.get(f"/analysis/{repository_id}/dependencies").json()
     assert payload["manifestCount"] == 4

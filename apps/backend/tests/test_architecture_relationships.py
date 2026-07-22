@@ -11,6 +11,8 @@ from app.intelligence.resolution import RelationshipResolver
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
 from app.models.repository import RepositoryRecord
 
+from tests.analysis_helpers import run_analysis_jobs
+
 
 def _archive(files: dict[str, bytes]) -> bytes:
     buffer = io.BytesIO()
@@ -20,14 +22,20 @@ def _archive(files: dict[str, bytes]) -> bytes:
     return buffer.getvalue()
 
 
-def _upload(auth_client, files: dict[str, bytes]) -> dict:
+def _upload(auth_client, files: dict[str, bytes], *, analyse: bool = True) -> dict:
     response = auth_client.post(
         "/repositories/upload",
         files={"file": ("architecture.zip", _archive(files), "application/zip")},
     )
     assert response.status_code == 201, response.text
     repository = response.json()
+    # /start enqueues durably; draining the worker persists the legacy
+    # intelligence the architecture read endpoints consume and seals a snapshot.
+    # ``analyse=False`` leaves the job queued so a test can exercise the genuine
+    # "no sealed snapshot yet" architecture response.
     assert auth_client.post(f"/analysis/{repository['id']}/start").status_code == 200
+    if analyse:
+        assert run_analysis_jobs() == 1
     return repository
 
 
@@ -246,7 +254,12 @@ def test_architecture_reports_resolved_facts_without_module_mapping(auth_client)
 
 
 def test_architecture_without_snapshot_does_not_claim_isolation(auth_client):
-    repository = _upload(auth_client, {"src/lonely/index.ts": b"export const lonely = 1;\n"})
+    # Leave the analysis job queued (worker not drained) so no snapshot is sealed:
+    # this exercises the genuine "no sealed snapshot" architecture response, which
+    # durable analysis otherwise reaches only in the window before the worker runs.
+    repository = _upload(
+        auth_client, {"src/lonely/index.ts": b"export const lonely = 1;\n"}, analyse=False
+    )
 
     response = auth_client.get(f"/analysis/{repository['id']}/architecture")
 

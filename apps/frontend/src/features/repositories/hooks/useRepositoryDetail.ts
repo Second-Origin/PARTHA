@@ -20,6 +20,9 @@ export function useRepositoryDetail(repositoryId: string | undefined) {
     activeTab,
     setActiveTab,
     notFound: !repository,
-    redirectToAnalysis: repository?.status === 'analysing' ? `/analysis/${repository.id}` : null,
+    redirectToAnalysis:
+      repository?.status === 'analysing' || repository?.status === 'cancelled'
+        ? `/analysis/${repository.id}`
+        : null,
   };
 }

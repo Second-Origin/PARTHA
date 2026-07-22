@@ -1,3 +1,5 @@
+import pytest
+
 from app.extraction.pipeline import ExtractionPipeline
 from app.extraction.manifests import DependencyManifestExtractor
 from app.extraction.python import PythonExtractor
@@ -48,3 +50,31 @@ def test_pipeline_uses_supports_and_inventory_for_unsupported_text():
     nodes = [node for run in runs for node in run.result.nodes]
     assert any(node.stable_key == "file:README.md" for node in nodes)
     assert any(node.stable_key == "src/a.py::f" for node in nodes)
+
+
+def test_pipeline_checks_cancellation_between_source_work_units(monkeypatch):
+    extractor = PythonExtractor()
+    pipeline = ExtractionPipeline((extractor,))
+    extracted: list[str] = []
+    original_extract = extractor.extract
+
+    def _extract(path, source):
+        extracted.append(path)
+        return original_extract(path, source)
+
+    def _check_cancelled():
+        if extracted:
+            raise RuntimeError("cancelled")
+
+    monkeypatch.setattr(extractor, "extract", _extract)
+
+    with pytest.raises(RuntimeError, match="cancelled"):
+        pipeline.run(
+            {
+                "src/a.py": b"def a():\n    pass\n",
+                "src/b.py": b"def b():\n    pass\n",
+            },
+            check_cancelled=_check_cancelled,
+        )
+
+    assert extracted == ["src/a.py"]
