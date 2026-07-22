@@ -1,11 +1,9 @@
-import json
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends
-from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_ai_service, get_current_user
-from app.api.openapi import documented_responses, error_responses, response_example
+from app.api.openapi import documented_responses
 from app.schemas.ai import AiProviderConfig, AiProviderPublicConfig, AiProviderTestRequest, AiProviderTestResponse, AiQueryRequest, AiQueryResponse
 from app.services.ai_service import AiService
 
@@ -41,7 +39,7 @@ _QUERY_RESPONSE_EXAMPLE = {
         "timestamp": "2026-07-17T00:00:00Z",
         "citations": [],
     },
-    "suggestions": ["Show the authentication routes"],
+    "suggestions": [],
 }
 
 
@@ -122,40 +120,3 @@ async def query_ai(
     service: AiService = Depends(get_ai_service),
 ) -> AiQueryResponse:
     return await service.query(request)
-
-
-@router.post(
-    "/stream",
-    response_class=StreamingResponse,
-    responses={
-        200: response_example(
-            "Buffered server-sent events containing a repository-aware AI response.",
-            'data: {"type":"content","content":"Authentication is handled by the auth module."}\\n\\n'
-            'data: {"type":"done"}\\n\\n',
-            media_type="text/event-stream",
-            schema={"type": "string"},
-        ),
-        **error_responses(401, 404, 422, 429, 502, 500),
-    },
-)
-async def stream_ai(
-    request: Annotated[AiQueryRequest, Body(openapi_examples={"repository-question": _QUERY_REQUEST_EXAMPLE})],
-    service: AiService = Depends(get_ai_service),
-) -> StreamingResponse:
-    # Resolve the answer BEFORE returning StreamingResponse. service.query runs
-    # ownership scoping and provider-config validation, so a cross-owner request
-    # (404) or a missing provider key (422) must surface as a normal error
-    # response here — not inside the generator, where 200 headers would already
-    # have been sent and the failure could only abort a stream that "succeeded".
-    # The provider contract is buffered, so this endpoint is an SSE transport
-    # for compatibility rather than token streaming. Emit one complete content
-    # event instead of presenting word-splitting as live provider output.
-    response = await service.query(request)
-
-    async def events():
-        yield f"data: {json.dumps({'type': 'content', 'content': response.message.content})}\n\n"
-        for citation in response.message.citations or []:
-            yield f"data: {json.dumps({'type': 'citation', 'citation': citation.model_dump(mode='json', by_alias=True)})}\n\n"
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
-
-    return StreamingResponse(events(), media_type="text/event-stream")

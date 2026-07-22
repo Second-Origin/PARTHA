@@ -36,6 +36,7 @@ def _record(root: Path) -> RepositoryRecord:
         size=total_size,
         file_count=meta.total_files,
         status="completed",
+        data_source="real",
         analysis_stage="completed",
         analysis_progress=100,
         uploaded_at=datetime.now(UTC),
@@ -135,11 +136,7 @@ def test_ai_orchestrator_preserves_query_response_shape(tmp_path: Path):
     assert response.message.content == "answer from openai"
     # No fabricated citations are returned (F4/F5); real ones await the graph (M2).
     assert response.message.citations is None
-    assert response.suggestions == [
-        "Explain the main architecture boundaries.",
-        "What files should I read first?",
-        "What are the highest-risk engineering issues?",
-    ]
+    assert response.suggestions == []
     assert provider.prompt is not None
     assert provider.prompt.user_prompt == "Explain this repo"
 

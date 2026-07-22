@@ -110,7 +110,6 @@ _CROSS_OWNER_ROUTES = [
     ("GET", "/analysis/{id}/review", None),
     ("POST", "/documentation/generate", "repositoryId"),
     ("POST", "/ai/query", "repositoryId"),
-    ("POST", "/ai/stream", "repositoryId"),
     ("POST", "/export", "repositoryId"),
 ]
 
@@ -129,7 +128,7 @@ def test_repository_scoped_routes_return_404_for_a_non_owner(client, make_auth_h
             json_body = {body_key: repository_id}
             if template == "/documentation/generate":
                 json_body["format"] = "markdown"
-            elif template in {"/ai/query", "/ai/stream"}:
+            elif template == "/ai/query":
                 json_body["query"] = "hello"
             elif template == "/export":
                 json_body.update({"target": "review", "format": "json"})
@@ -190,7 +189,7 @@ def test_body_carrying_repository_routes_are_covered_by_the_cross_owner_sweep(cl
     live_body_routes = {
         (method, route.path)
         for route in found
-        if route.path in {"/documentation/generate", "/ai/query", "/ai/stream", "/export"}
+        if route.path in {"/documentation/generate", "/ai/query", "/export"}
         for method in sorted(route.methods - {"HEAD", "OPTIONS"})
     }
     listed = {(m, t) for m, t, key in _CROSS_OWNER_ROUTES if key is not None}

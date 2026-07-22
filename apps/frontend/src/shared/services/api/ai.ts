@@ -1,9 +1,8 @@
-import { api, streamRequest } from './client';
+import { api } from './client';
 import type { RequestConfig } from './client';
 import type {
   AiQueryRequest,
   AiQueryResponse,
-  AiStreamChunk,
   AiProviderConfig,
   AiProviderPublicConfig,
   AiProviderTestRequest,
@@ -27,28 +26,4 @@ export const aiService = {
     return api.post('/ai/query', request, config);
   },
 
-  streamQuery(
-    request: AiQueryRequest,
-    onChunk: (chunk: AiStreamChunk) => void,
-    config?: RequestConfig,
-  ): Promise<void> {
-    // Compatibility transport only: the backend currently emits one complete
-    // content event because providers expose buffered completion, not tokens.
-    return streamRequest(
-      '/ai/stream',
-      request,
-      (rawChunk) => {
-        const lines = rawChunk.split('\n').filter((l) => l.startsWith('data: '));
-        for (const line of lines) {
-          try {
-            const data = JSON.parse(line.slice(6)) as AiStreamChunk;
-            onChunk(data);
-          } catch {
-            onChunk({ type: 'content', content: line.slice(6) });
-          }
-        }
-      },
-      config,
-    );
-  },
 };

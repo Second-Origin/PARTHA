@@ -1,4 +1,4 @@
-import type { FileTreeNode, RepositoryMeta, AnalysisStage } from '@/shared/types';
+import type { DataSource, FileTreeNode, RepositoryMeta, AnalysisStage } from '@/shared/types';
 import type { ArchitectureModel } from '@/shared/types/architecture';
 import type { EngineeringReview } from '@/shared/types/review';
 
@@ -43,6 +43,7 @@ export interface RepositoryResponse {
   size: number;
   fileCount: number;
   status: 'uploading' | 'analysing' | 'completed' | 'cancelled' | 'error';
+  dataSource: DataSource;
   analysisStage: AnalysisStage | null;
   analysisProgress: number;
   uploadedAt: string;
@@ -281,13 +282,6 @@ export interface AiCitation {
 export interface AiQueryResponse {
   message: AiMessage;
   suggestions?: string[];
-}
-
-export interface AiStreamChunk {
-  type: 'content' | 'citation' | 'done' | 'error';
-  content?: string;
-  citation?: AiCitation;
-  error?: string;
 }
 
 export type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'openrouter' | 'ollama';

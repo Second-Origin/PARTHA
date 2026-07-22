@@ -106,11 +106,7 @@ def test_ai_query_endpoint_preserves_public_response_contract(auth_client):
         assert response.status_code == 200
         body = response.json()
         assert set(body) == {"message", "suggestions"}
-        assert body["suggestions"] == [
-            "Explain the main architecture boundaries.",
-            "What files should I read first?",
-            "What are the highest-risk engineering issues?",
-        ]
+        assert body["suggestions"] == []
 
         message = body["message"]
         assert set(message) == {"role", "content", "timestamp", "citations"}

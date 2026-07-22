@@ -210,7 +210,7 @@ def test_revision_backfill_classifies_exact_legacy_values_and_downgrade_preserve
             connection.execute(repositories.insert(), rows)
 
         command.upgrade(cfg, "head")
-        assert "data_source" not in {column["name"] for column in inspect(engine).get_columns("repositories")}
+        assert "data_source" in {column["name"] for column in inspect(engine).get_columns("repositories")}
         upgraded = MetaData()
         upgraded_repositories = Table("repositories", upgraded, autoload_with=engine)
         with engine.connect() as connection:

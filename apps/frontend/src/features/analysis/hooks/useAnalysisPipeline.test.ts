@@ -19,6 +19,7 @@ const repository: Repository = {
   size: 10,
   fileCount: 1,
   status: 'analysing',
+  dataSource: 'real',
   analysisStage: 'reading-structure',
   analysisProgress: 25,
   uploadedAt: '2026-07-22T08:00:00Z',

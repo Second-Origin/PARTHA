@@ -320,83 +320,6 @@ async function uploadWithProgress<T>(
   });
 }
 
-export async function streamRequest(
-  endpoint: string,
-  body: unknown,
-  onChunk: (chunk: string) => void,
-  config?: RequestConfig,
-  isRetry = false,
-): Promise<void> {
-  const url = `${clientConfig.baseUrl}${endpoint}`;
-  const controller = new AbortController();
-  const signal = config?.signal;
-
-  if (signal?.aborted) throw new CancelledError(endpoint);
-  const abortListener = signal ? () => controller.abort() : null;
-  if (signal && abortListener) signal.addEventListener('abort', abortListener);
-
-  const timeout = config?.timeout ?? 60000;
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-  try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'text/event-stream',
-      ...config?.headers,
-    };
-    const token = clientConfig.getAuthToken?.();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      credentials: 'include',
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      let responseBody: unknown;
-      try { responseBody = await response.json(); } catch { responseBody = null; }
-      const error = new ApiError(response.status, response.statusText, responseBody, endpoint);
-      if (error.isUnauthorized) {
-        // A 401 here means the backend rejected the request before any
-        // event ever streamed (the SSE body only starts after auth passes),
-        // so retrying is exactly as safe as retrying any other request —
-        // same recover-once-then-give-up contract as executeRequest.
-        if (await tryRecoverFromUnauthorized(endpoint, isRetry)) {
-          clearTimeout(timeoutId);
-          if (signal && abortListener) signal.removeEventListener('abort', abortListener);
-          return streamRequest(endpoint, body, onChunk, config, true);
-        }
-      }
-      throw error;
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) throw new NetworkError(endpoint);
-
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      clearTimeout(timeoutId);
-      const text = decoder.decode(value, { stream: true });
-      onChunk(text);
-    }
-  } catch (error) {
-    if (error instanceof ApiError) throw error;
-    if (controller.signal.aborted) {
-      if (signal?.aborted) throw new CancelledError(endpoint);
-      throw new TimeoutError(endpoint, timeout);
-    }
-    throw new NetworkError(endpoint, error);
-  } finally {
-    clearTimeout(timeoutId);
-    if (signal && abortListener) signal.removeEventListener('abort', abortListener);
-  }
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -408,5 +331,4 @@ export const api = {
   patch: <T>(endpoint: string, body?: unknown, config?: RequestConfig) => request<T>('PATCH', endpoint, body, config),
   delete: <T>(endpoint: string, config?: RequestConfig) => request<T>('DELETE', endpoint, undefined, config),
   upload: uploadFile,
-  stream: streamRequest,
 };

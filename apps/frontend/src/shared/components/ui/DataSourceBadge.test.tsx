@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import type { RepositorySource } from '@/shared/types';
 import { DataSourceBadge } from './DataSourceBadge';
 
 describe('DataSourceBadge', () => {
@@ -15,6 +16,14 @@ describe('DataSourceBadge', () => {
 
   it('renders nothing when provenance is unavailable', () => {
     const { container } = render(<DataSourceBadge source={null} />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('fails closed for an origin value without a label', () => {
+    const { container } = render(
+      <DataSourceBadge source={'gitlab' as unknown as RepositorySource} />,
+    );
 
     expect(container).toBeEmptyDOMElement();
   });

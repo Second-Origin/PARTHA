@@ -13,7 +13,6 @@ vi.mock('@/shared/feature-state/useRepositoryFeatureStatus', () => ({
 vi.mock('@/shared/services/api', () => ({
   aiService: {
     query: vi.fn(),
-    streamQuery: vi.fn(),
   },
   getErrorMessage: vi.fn((error: unknown) => String(error)),
 }));
@@ -25,6 +24,7 @@ const repository: Repository = {
   size: 0,
   fileCount: 0,
   status: 'completed',
+  dataSource: 'real',
   analysisStage: 'completed',
   analysisProgress: 100,
   uploadedAt: '2026-07-22T00:00:00Z',
@@ -74,7 +74,6 @@ describe('useAIWorkspace', () => {
       query: 'Explain this repository.',
       context: { conversationHistory: [] },
     });
-    expect(aiService.streamQuery).not.toHaveBeenCalled();
     expect(result.current.messages).toHaveLength(2);
     expect(result.current.messages[1]).toEqual(response.message);
     expect(result.current.suggestions).toEqual(response.suggestions);

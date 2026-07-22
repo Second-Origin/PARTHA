@@ -38,6 +38,7 @@ def _review(root: Path):
         size=intelligence.discovery.statistics.total_size,
         file_count=intelligence.discovery.statistics.total_files,
         status="completed",
+        data_source="real",
         analysis_stage="completed",
         analysis_progress=100,
         uploaded_at=datetime.now(UTC),
