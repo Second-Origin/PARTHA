@@ -64,7 +64,7 @@ Statuses below were checked against the implementation, not against prior docume
 | Architecture output | **Implemented but limited** | Modules, layers, relationships, and an interactive graph — with heuristic module and layer assignment. |
 | Dependency inventory | **Implemented but limited** | Reads `package.json`, `requirements.txt`, and `pyproject.toml`. Other ecosystems and lockfiles are not parsed. |
 | Engineering review | **Implemented but limited** | A fixed set of heuristic checks with derived category scores. Scores are arithmetic over finding severities, not a measured quality metric. |
-| AI provider integration | **Implemented but limited** | Several providers behind one abstraction. Provider configuration is per-user, with the API key encrypted at rest and injected per request. |
+| AI provider integration | **Implemented but limited** | Several providers behind one abstraction. Provider configuration is per-user, with the API key encrypted at rest and injected per request; outbound destinations are centrally allowlisted and DNS-pinned. See [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md). |
 | Authorization and owner isolation | **Implemented** | All repository, analysis, AI, documentation, and export routes require authentication and are owner-scoped in the service layer; a non-owner request returns 404. Rate-limit budgets are keyed per authenticated user. |
 | Citations and grounded AI answers | **Not implemented** | No source content or line numbers are sent to providers, and no citations are returned. |
 | Asynchronous / incremental processing | **Not implemented** | Ingestion and analysis run synchronously in the request; there is no background job system and no incremental re-analysis. |
@@ -205,6 +205,14 @@ The app is then on `http://localhost:5173` and expects the backend on `http://lo
 
 Compose runs the API against PostgreSQL and Redis for local development. It is not deployment guidance.
 
+The API provider egress policy defaults to `hosted`, which does not enable a
+tenant-configurable local endpoint. A trusted local or internal Ollama endpoint
+requires explicit administrator-owned `AI_EGRESS_MODE=self_hosted`, exact base
+URL, and CIDR settings. Compose isolates PostgreSQL and Redis on an internal
+data network, but it cannot enforce an exact API destination allowlist; hosted
+and shared deployments still require a firewall, egress proxy, cloud rule, or
+service-mesh policy. See [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md).
+
 ```bash
 npm run docker:config     # validate the Compose file
 npm run docker:up         # start the local stack
@@ -232,7 +240,7 @@ Backend coverage is the stronger of the two. Frontend coverage is thin and there
 
 ## Limitations
 
-- **Not yet hardened for public multi-tenant use.** Authentication and owner isolation are enforced across the backend routes, and provider keys are encrypted at rest, but PARTHA has not been operated as a hardened multi-tenant deployment. It is not production-ready and should not be exposed to the public internet without further review. Outside `development`/`test`, set `AUTH_SECRET_KEY` and `AI_ENCRYPTION_KEY` (a Fernet key); the backend refuses to start without them.
+- **Not yet hardened for public multi-tenant use.** Authentication and owner isolation are enforced across the backend routes, provider keys are encrypted at rest, and AI provider egress is centrally constrained, but PARTHA has not been operated as a hardened multi-tenant deployment. It is not production-ready and should not be exposed to the public internet without further review. Outside `development`/`test`, set `AUTH_SECRET_KEY` and `AI_ENCRYPTION_KEY` (a Fernet key); the backend refuses to start without them. Production also needs an independent network egress control; application validation is not a firewall.
 - **Extraction is heuristic.** File roles, modules, and layers are inferred from paths and filenames; symbols come from regular expressions. Expect wrong answers on projects that do not follow common conventions, and do not treat heuristic output as guaranteed fact.
 - **Evidence and provenance are partial.** File-level only — no line spans, no per-fact extraction method, no revision-addressed facts.
 - **No persistent semantic graph.** Repository facts are serialized as JSON onto the repository row rather than into a queryable graph store.

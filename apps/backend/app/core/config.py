@@ -1,6 +1,7 @@
 import base64
 import binascii
 import hashlib
+import ipaddress
 import logging
 from functools import lru_cache
 from pathlib import Path
@@ -9,6 +10,8 @@ from urllib.parse import urlparse
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+from app.core.ai_egress import DestinationPolicyError, normalize_base_url
 
 SUPPORTED_LOG_FORMATS = {"text", "json"}
 
@@ -68,6 +71,12 @@ class Settings(BaseSettings):
     clone_timeout_seconds: int = 120
     max_upload_size_bytes: int = 100 * 1024 * 1024
     max_clone_size_bytes: int = 500 * 1024 * 1024
+    # AI-provider egress is fail-safe by default.  Local/internal endpoints are
+    # never enabled implicitly; deployments that need one must opt in with an
+    # exact administrator-owned URL and CIDR in self_hosted mode.
+    ai_egress_mode: str = "hosted"
+    ai_egress_allowed_base_urls: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    ai_egress_allowed_cidrs: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -80,6 +89,15 @@ class Settings(BaseSettings):
     def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
+
+    @field_validator("ai_egress_allowed_base_urls", "ai_egress_allowed_cidrs", mode="before")
+    @classmethod
+    def parse_egress_lists(cls, value: str | list[str] | None) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [entry.strip() for entry in value.split(",") if entry.strip()]
         return value
 
     @field_validator("app_env")
@@ -143,6 +161,35 @@ class Settings(BaseSettings):
             raise ValueError(f"Unsupported rate-limit backend: {value}")
         return normalized
 
+    @field_validator("ai_egress_mode")
+    @classmethod
+    def validate_ai_egress_mode(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in {"hosted", "self_hosted"}:
+            raise ValueError("AI_EGRESS_MODE must be either 'hosted' or 'self_hosted'.")
+        return normalized
+
+    @field_validator("ai_egress_allowed_base_urls")
+    @classmethod
+    def validate_ai_egress_allowed_base_urls(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for entry in value:
+            try:
+                normalized.append(normalize_base_url(entry).base_url)
+            except DestinationPolicyError as exc:
+                raise ValueError("AI_EGRESS_ALLOWED_BASE_URLS contains an invalid URL.") from exc
+        return normalized
+
+    @field_validator("ai_egress_allowed_cidrs")
+    @classmethod
+    def validate_ai_egress_allowed_cidrs(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for entry in value:
+            try:
+                normalized.append(str(ipaddress.ip_network(entry, strict=True)))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("AI_EGRESS_ALLOWED_CIDRS contains an invalid CIDR.") from exc
+        return normalized
 
     @field_validator(
         "clone_timeout_seconds",
