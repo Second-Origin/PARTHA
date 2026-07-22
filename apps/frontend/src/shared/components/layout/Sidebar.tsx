@@ -1,27 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  LayoutDashboard,
-  FolderGit2,
-  Upload,
-  Network,
-  GitBranch,
-  Settings,
-  ChevronLeft,
-  Hexagon,
-} from 'lucide-react';
+import { ChevronLeft, Hexagon } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useAppStore } from '@/app/store/useAppStore';
 import { useAuthStore } from '@/app/store/useAuthStore';
-
-const navItems = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-  { label: 'Repositories', icon: FolderGit2, path: '/repositories' },
-  { label: 'Upload Repository', icon: Upload, path: '/upload' },
-  { label: 'Architecture', icon: Network, path: '/architecture' },
-  { label: 'Dependency Graph', icon: GitBranch, path: '/dependencies' },
-  { label: 'Settings', icon: Settings, path: '/settings' },
-];
+import { primaryNavigationSurfaces } from '@/app/routes/productSurfaces';
 
 export function Sidebar() {
   const location = useLocation();
@@ -58,6 +41,7 @@ export function Sidebar() {
         </Link>
         <button
           onClick={toggleSidebar}
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
         >
           <ChevronLeft
@@ -67,12 +51,14 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 px-2 py-2 overflow-y-auto scrollbar-thin">
-        {navItems.map((item) => {
+        {primaryNavigationSurfaces.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link
               key={item.path}
               to={item.path}
+              aria-label={item.label}
+              aria-current={isActive ? 'page' : undefined}
               className={cn(
                 'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium transition-colors',
                 isActive
