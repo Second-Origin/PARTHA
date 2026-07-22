@@ -33,6 +33,7 @@ from app.intelligence.resolution import RelationshipResolver
 from app.intelligence.snapshot_store import SnapshotStore
 from app.models.analysis_job import AnalysisJob
 from app.models.repository import RepositoryRecord
+from app.models.snapshot import RiSnapshot
 from app.repositories.repository_repository import RepositoryRepository
 
 
@@ -105,8 +106,8 @@ class AnalysisJobService:
         if completed is not None:
             existing = self._job_for_snapshot(record.id, completed.snapshot_id)
             if existing is not None:
-                return existing
-            return self._insert_completed_job(record, completed.snapshot_id)
+                return self._reconcile_completed_job(record, existing, completed)
+            return self._insert_completed_job(record, completed)
 
         # 2. An active (queued/running) job for this identity already exists.
         active = self._active_job(record.id, ANALYSIS_CONFIG_HASH)
@@ -243,8 +244,55 @@ class AnalysisJobService:
         self.db.refresh(job)
         return job
 
-    def _insert_completed_job(self, record: RepositoryRecord, snapshot_id: str) -> AnalysisJob:
+    def _reconcile_completed_job(
+        self, record: RepositoryRecord, job: AnalysisJob, snapshot: RiSnapshot
+    ) -> AnalysisJob:
+        """Make a sealed snapshot authoritative over any non-completed job row."""
+
+        if (
+            job.status == "completed"
+            and job.stage == "completed"
+            and job.progress == 100
+            and job.snapshot_id == snapshot.snapshot_id
+            and not job.cancel_requested
+            and job.worker_id is None
+            and job.lease_expires_at is None
+            and job.next_attempt_at is None
+            and job.error_code is None
+            and job.error_message is None
+            and job.completed_at is not None
+            and record.status == "completed"
+            and record.analysis_stage == "completed"
+            and record.analysis_progress == 100
+            and record.error_message is None
+            and record.analysed_at is not None
+        ):
+            return job
         now = _utcnow()
+        completed_at = snapshot.sealed_at or now
+        job.status = "completed"
+        job.stage = "completed"
+        job.progress = 100
+        job.snapshot_id = snapshot.snapshot_id
+        job.cancel_requested = False
+        job.worker_id = None
+        job.lease_expires_at = None
+        job.next_attempt_at = None
+        job.error_code = None
+        job.error_message = None
+        job.started_at = job.started_at or snapshot.created_at
+        job.completed_at = completed_at
+        job.updated_at = now
+        self._complete_repository(record, completed_at)
+        self.db.commit()
+        self.db.refresh(job)
+        return job
+
+    def _insert_completed_job(
+        self, record: RepositoryRecord, snapshot: RiSnapshot
+    ) -> AnalysisJob:
+        now = _utcnow()
+        completed_at = snapshot.sealed_at or now
         job = AnalysisJob(
             id=str(uuid4()),
             repository_id=record.id,
@@ -256,11 +304,20 @@ class AnalysisJobService:
             stage="completed",
             progress=100,
             attempt=0,
-            snapshot_id=snapshot_id,
-            started_at=now,
-            completed_at=now,
+            snapshot_id=snapshot.snapshot_id,
+            started_at=snapshot.created_at,
+            completed_at=completed_at,
         )
         self.db.add(job)
+        self._complete_repository(record, completed_at)
         self.db.commit()
         self.db.refresh(job)
         return job
+
+    @staticmethod
+    def _complete_repository(record: RepositoryRecord, completed_at: datetime) -> None:
+        record.status = "completed"
+        record.analysis_stage = "completed"
+        record.analysis_progress = 100
+        record.error_message = None
+        record.analysed_at = completed_at

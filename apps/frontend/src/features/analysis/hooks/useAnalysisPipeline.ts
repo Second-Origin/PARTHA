@@ -14,6 +14,10 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
   const cancelAnalysis = useAppStore((state) => state.cancelAnalysis);
   const updateRepository = useAppStore((state) => state.updateRepository);
   const startedRef = useRef<string | null>(null);
+  const startInFlightRef = useRef<{
+    repositoryId: string;
+    promise: ReturnType<typeof backendService.startAnalysis>;
+  } | null>(null);
   const [status, setStatus] = useState<FeatureStatus>('idle');
   const [jobStatus, setJobStatus] = useState<AnalysisJobStatus | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -25,6 +29,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
 
   useEffect(() => {
     startedRef.current = null;
+    startInFlightRef.current = null;
     setJobStatus(null);
     setCancelling(false);
   }, [repositoryId]);
@@ -104,16 +109,43 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
     if (hasBackend) {
       let cancelled = false;
 
+      async function ensureStarted() {
+        if (!repositoryId || repositoryStatus !== 'analysing' || startedRef.current === repositoryId) {
+          return;
+        }
+
+        let inFlight = startInFlightRef.current;
+        if (!inFlight || inFlight.repositoryId !== repositoryId) {
+          inFlight = {
+            repositoryId,
+            promise: backendService.startAnalysis(repositoryId),
+          };
+          startInFlightRef.current = inFlight;
+        }
+
+        try {
+          const response = await inFlight.promise;
+          if (startInFlightRef.current === inFlight) {
+            startedRef.current = response?.jobId ? repositoryId : null;
+          }
+        } finally {
+          if (startInFlightRef.current === inFlight) {
+            startInFlightRef.current = null;
+          }
+        }
+      }
+
       async function pollStatus() {
         if (!repositoryId || cancelled) return;
         try {
-          if (repositoryStatus === 'analysing' && startedRef.current !== repositoryId) {
-            startedRef.current = repositoryId;
-            await backendService.startAnalysis(repositoryId);
-          }
+          await ensureStarted();
+          if (cancelled) return;
 
           const response = await backendService.fetchAnalysisStatus(repositoryId);
           if (!response || cancelled) return;
+          if (response.status === 'queued' && response.jobId === null) {
+            startedRef.current = null;
+          }
 
           applyJobResponse(response);
         } catch (caught) {

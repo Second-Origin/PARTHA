@@ -161,8 +161,8 @@ class AnalysisWorker:
                     or not self._lease_expired(job.lease_expires_at, now)
                 ):
                     continue
-                self._reconcile_stale(session, job, now)
-                reclaimed += 1
+                if self._reconcile_stale(session, job, now):
+                    reclaimed += 1
             return reclaimed
         finally:
             session.close()
@@ -248,13 +248,14 @@ class AnalysisWorker:
             self._complete(ctx)
             yield ctx
         except _LeaseLostError:
-            logger.warning(
-                "Analysis worker lost job ownership; abandoning execution",
-                extra={"job_id": job.id, "worker_id": self.worker_id},
-            )
+            self._log_lease_lost(job.id)
             return
         except Exception as exc:  # noqa: BLE001 - bounded retry is the contract
-            self._retry_or_fail(ctx, exc)
+            try:
+                self._retry_or_fail(ctx, exc)
+            except _LeaseLostError:
+                self._log_lease_lost(job.id)
+                return
             yield ctx
 
     def _stage_legacy(self, ctx: _StageContext) -> None:
@@ -324,11 +325,12 @@ class AnalysisWorker:
     def _stage_seal(self, ctx: _StageContext) -> None:
         """Seal the building snapshot (commits internally, see the module note)."""
 
-        # Known limitation: a cancel observed after this commit can leave a
-        # cancelled job with a valid snapshot; the next submit reconciles it.
         if ctx.reused:
             return
         assert ctx.store is not None and ctx.snapshot is not None
+        # ``seal`` commits internally, so acquire the guarded job row in the
+        # same transaction before allowing the snapshot transition to commit.
+        self._lock_owned_job(ctx)
         ctx.store.seal(ctx.snapshot)
 
     # -- terminal transitions ------------------------------------------------
@@ -364,14 +366,18 @@ class AnalysisWorker:
     def _cancel(self, ctx: _StageContext) -> None:
         """Honour a cooperative cancel: fail any open snapshot, cancel the job."""
 
+        self._lock_owned_job(ctx)
         self._fail_open_snapshot(ctx, code=_CANCELLED_CODE)
-        job = ctx.job
         now = self._clock()
-        job.status = "cancelled"
-        job.worker_id = None
-        job.lease_expires_at = None
-        job.completed_at = now
-        job.updated_at = now
+        self._update_owned_job(
+            ctx,
+            status="cancelled",
+            worker_id=None,
+            lease_expires_at=None,
+            next_attempt_at=None,
+            completed_at=now,
+            updated_at=now,
+        )
         ctx.session.commit()
 
     def _retry_or_fail(self, ctx: _StageContext, exc: Exception) -> None:
@@ -382,18 +388,48 @@ class AnalysisWorker:
         # Rollback expired the in-memory rows; reload from the row that the claim
         # already committed so ``attempt``/``max_attempts`` reflect the database.
         job = session.get(AnalysisJob, ctx.job.id)
+        if job is None:
+            raise _LeaseLostError(ctx.job.id)
         ctx.job = job
         ctx.record = session.get(RepositoryRecord, job.repository_id)
         now = self._clock()
+        self._lock_owned_job(ctx)
+        snapshot = session.get(RiSnapshot, job.snapshot_id) if job.snapshot_id else None
+        if snapshot is not None and snapshot.state == "completed":
+            self._update_owned_job(
+                ctx,
+                status="completed",
+                stage="completed",
+                progress=100,
+                worker_id=None,
+                lease_expires_at=None,
+                next_attempt_at=None,
+                error_code=None,
+                error_message=None,
+                completed_at=snapshot.sealed_at or now,
+                updated_at=now,
+            )
+            if ctx.record is not None:
+                ctx.record.status = "completed"
+                ctx.record.analysis_stage = "completed"
+                ctx.record.analysis_progress = 100
+                ctx.record.error_message = None
+                ctx.record.analysed_at = snapshot.sealed_at or now
+            session.commit()
+            return
+        self._fail_open_snapshot(ctx, code=_ERROR_CODE)
         if job.attempt >= job.max_attempts:
-            self._fail_open_snapshot(ctx, code=_ERROR_CODE)
-            job.status = "failed"
-            job.worker_id = None
-            job.lease_expires_at = None
-            job.error_code = _ERROR_CODE
-            job.error_message = self._error_message(exc)
-            job.completed_at = now
-            job.updated_at = now
+            self._update_owned_job(
+                ctx,
+                status="failed",
+                worker_id=None,
+                lease_expires_at=None,
+                next_attempt_at=None,
+                error_code=_ERROR_CODE,
+                error_message=self._error_message(exc),
+                completed_at=now,
+                updated_at=now,
+            )
             if ctx.record is not None:
                 ctx.record.status = "error"
                 ctx.record.analysis_stage = None
@@ -401,32 +437,61 @@ class AnalysisWorker:
                 ctx.record.error_message = "Repository analysis failed."
             session.commit()
             return
-        job.status = "queued"
-        job.worker_id = None
-        job.lease_expires_at = None
-        job.next_attempt_at = now + timedelta(seconds=self._backoff(job.attempt))
-        job.error_code = _ERROR_CODE
-        job.error_message = self._error_message(exc)
-        job.updated_at = now
+        self._update_owned_job(
+            ctx,
+            status="queued",
+            worker_id=None,
+            lease_expires_at=None,
+            next_attempt_at=now + timedelta(seconds=self._backoff(job.attempt)),
+            error_code=_ERROR_CODE,
+            error_message=self._error_message(exc),
+            updated_at=now,
+        )
         session.commit()
 
-    def _reconcile_stale(self, session: Session, job: AnalysisJob, now: datetime) -> None:
-        """Reconcile one expired running job and commit its new state."""
+    def _reconcile_stale(self, session: Session, job: AnalysisJob, now: datetime) -> bool:
+        """Atomically claim and reconcile one expired running job."""
+
+        stale_worker_id = job.worker_id
+        stale_lease_expires_at = job.lease_expires_at
+        result = session.execute(
+            update(AnalysisJob)
+            .where(
+                AnalysisJob.id == job.id,
+                AnalysisJob.status == "running",
+                AnalysisJob.worker_id == stale_worker_id,
+                AnalysisJob.lease_expires_at == stale_lease_expires_at,
+                AnalysisJob.lease_expires_at < now,
+            )
+            .values(
+                worker_id=self.worker_id,
+                lease_expires_at=now + timedelta(seconds=self.lease_seconds),
+                updated_at=now,
+            )
+            .execution_options(synchronize_session="fetch")
+        )
+        if result.rowcount == 0:
+            session.rollback()
+            return False
 
         record = session.get(RepositoryRecord, job.repository_id)
         snapshot = session.get(RiSnapshot, job.snapshot_id) if job.snapshot_id else None
+        ctx = _StageContext(session=session, job=job, record=record)
 
         if snapshot is not None and snapshot.state == "completed":
-            job.status = "completed"
-            job.stage = "completed"
-            job.progress = 100
-            job.worker_id = None
-            job.lease_expires_at = None
-            job.next_attempt_at = None
-            job.error_code = None
-            job.error_message = None
-            job.completed_at = snapshot.sealed_at or now
-            job.updated_at = now
+            self._update_owned_job(
+                ctx,
+                status="completed",
+                stage="completed",
+                progress=100,
+                worker_id=None,
+                lease_expires_at=None,
+                next_attempt_at=None,
+                error_code=None,
+                error_message=None,
+                completed_at=snapshot.sealed_at or now,
+                updated_at=now,
+            )
             if record is not None:
                 record.status = "completed"
                 record.analysis_stage = "completed"
@@ -434,36 +499,48 @@ class AnalysisWorker:
                 record.error_message = None
                 record.analysed_at = snapshot.sealed_at or now
             session.commit()
-            return
+            return True
 
         if snapshot is not None and snapshot.state == "building":
             # mark_failed owns a commit boundary. Do this before changing the job
             # so its transition cannot accidentally commit a half-reconciled row.
             SnapshotStore(session).mark_failed(snapshot, code=_STALE_CODE)
 
-        job.worker_id = None
-        job.lease_expires_at = None
-        job.error_code = _STALE_CODE
-        job.error_message = _STALE_MESSAGE
-        job.updated_at = now
         if job.attempt < job.max_attempts:
-            job.status = "queued"
-            job.next_attempt_at = now + timedelta(seconds=self._backoff(job.attempt))
+            self._update_owned_job(
+                ctx,
+                status="queued",
+                worker_id=None,
+                lease_expires_at=None,
+                next_attempt_at=now + timedelta(seconds=self._backoff(job.attempt)),
+                error_code=_STALE_CODE,
+                error_message=_STALE_MESSAGE,
+                updated_at=now,
+            )
             if record is not None:
                 record.status = "analysing"
                 record.analysis_stage = None
                 record.analysis_progress = 0
                 record.error_message = None
         else:
-            job.status = "failed"
-            job.next_attempt_at = None
-            job.completed_at = now
+            self._update_owned_job(
+                ctx,
+                status="failed",
+                worker_id=None,
+                lease_expires_at=None,
+                next_attempt_at=None,
+                error_code=_STALE_CODE,
+                error_message=_STALE_MESSAGE,
+                completed_at=now,
+                updated_at=now,
+            )
             if record is not None:
                 record.status = "error"
                 record.analysis_stage = None
                 record.analysis_progress = 0
                 record.error_message = "Repository analysis failed after its worker lease expired."
         session.commit()
+        return True
 
     # -- helpers -------------------------------------------------------------
 
@@ -499,6 +576,11 @@ class AnalysisWorker:
             ctx.session.rollback()
             raise _LeaseLostError(job_id)
 
+    def _lock_owned_job(self, ctx: _StageContext) -> None:
+        """Lock the running row after atomically confirming this worker owns it."""
+
+        self._update_owned_job(ctx, updated_at=AnalysisJob.updated_at)
+
     def _cancel_requested(self, ctx: _StageContext) -> bool:
         return bool(
             ctx.session.scalar(
@@ -509,11 +591,17 @@ class AnalysisWorker:
     def _fail_open_snapshot(self, ctx: _StageContext, *, code: str) -> None:
         """Mark an opened-but-unsealed snapshot ``failed`` (no-op if reused/sealed)."""
 
-        if ctx.store is None or ctx.snapshot is None or ctx.reused:
+        if ctx.reused or ctx.job.snapshot_id is None:
             return
-        snapshot = ctx.session.get(RiSnapshot, ctx.snapshot.snapshot_id)
+        snapshot = ctx.session.get(RiSnapshot, ctx.job.snapshot_id)
         if snapshot is not None and snapshot.state == "building":
-            ctx.store.mark_failed(snapshot, code=code)
+            SnapshotStore(ctx.session).mark_failed(snapshot, code=code)
+
+    def _log_lease_lost(self, job_id: str) -> None:
+        logger.warning(
+            "Analysis worker lost job ownership; abandoning execution",
+            extra={"job_id": job_id, "worker_id": self.worker_id},
+        )
 
     def _read_sources(self, record: RepositoryRecord) -> Mapping[str, bytes]:
         """Read repository source bytes keyed by normalized repo-relative path.

@@ -311,6 +311,66 @@ def test_bounded_retry_requeues_with_backoff_then_fails(session_factory, tmp_pat
     assert worker.run_once() is False
 
 
+def test_retry_fails_the_first_snapshot_before_the_next_attempt_succeeds(
+    session_factory, tmp_path, monkeypatch
+):
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "repo")
+        record_id = record.id
+        AnalysisJobService(session, owner.id).submit(record_id)
+
+    now = [datetime(2026, 1, 1, tzinfo=UTC)]
+    worker = AnalysisWorker(
+        session_factory,
+        worker_id="retry-worker",
+        lease_seconds=60,
+        clock=lambda: now[0],
+    )
+    original_extract = worker._stage_extract
+    failed_once = False
+
+    def _fail_first_extraction(ctx):
+        nonlocal failed_once
+        if not failed_once:
+            failed_once = True
+            raise RuntimeError("extraction failed after snapshot open")
+        original_extract(ctx)
+
+    monkeypatch.setattr(worker, "_stage_extract", _fail_first_extraction)
+
+    assert worker.run_once() is True
+    with session_factory() as session:
+        job = session.scalars(
+            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
+        ).one()
+        first_snapshot_id = job.snapshot_id
+        assert job.status == "queued"
+        assert job.attempt == 1
+        assert first_snapshot_id is not None
+        assert session.get(RiSnapshot, first_snapshot_id).state == "failed"
+
+    now[0] += timedelta(seconds=3)
+    assert worker.run_once() is True
+
+    with session_factory() as session:
+        job = session.scalars(
+            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
+        ).one()
+        assert job.status == "completed"
+        assert job.attempt == 2
+        assert job.snapshot_id is not None
+        assert job.snapshot_id != first_snapshot_id
+        assert session.get(RiSnapshot, first_snapshot_id).state == "failed"
+        assert session.get(RiSnapshot, job.snapshot_id).state == "completed"
+        assert session.scalar(
+            select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "building")
+        ) == 0
+        assert session.scalar(
+            select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")
+        ) == 1
+
+
 def test_cooperative_cancellation_fails_open_snapshot_and_cancels_job(session_factory, tmp_path):
     session = session_factory()
     try:
@@ -342,6 +402,62 @@ def test_cooperative_cancellation_fails_open_snapshot_and_cancels_job(session_fa
         assert cancelled.completed_at is not None
         # The opened snapshot was failed, never sealed to completed.
         assert session.get(RiSnapshot, snapshot_id).state == "failed"
+    finally:
+        session.close()
+
+
+def test_submit_reconciles_cancellation_after_snapshot_seal(session_factory, tmp_path):
+    session = session_factory()
+    try:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "repo")
+        service = AnalysisJobService(session, owner.id)
+        submitted = service.submit(record.id)
+
+        worker = AnalysisWorker(session_factory, worker_id="w", lease_seconds=60)
+        job = worker._claim(session)
+        assert job is not None
+        assert job.id == submitted.id
+
+        stages = worker._execute_stages(session, job)
+        next(stages)  # legacy
+        next(stages)  # snapshot opened
+        next(stages)  # extraction
+        next(stages)  # snapshot sealed, job still running
+        snapshot_id = job.snapshot_id
+        assert snapshot_id is not None
+        assert session.get(RiSnapshot, snapshot_id).state == "completed"
+        assert session.get(AnalysisJob, job.id).status == "running"
+
+        service.cancel(record.id)
+        list(stages)
+        session.expire_all()
+        assert session.get(AnalysisJob, job.id).status == "cancelled"
+        assert session.get(RiSnapshot, snapshot_id).state == "completed"
+
+        reconciled = service.submit(record.id)
+        repeated = service.submit(record.id)
+
+        assert reconciled.id == repeated.id == job.id
+        assert reconciled.status == "completed"
+        assert reconciled.stage == "completed"
+        assert reconciled.progress == 100
+        assert reconciled.snapshot_id == snapshot_id
+        assert reconciled.worker_id is None
+        assert reconciled.lease_expires_at is None
+        assert reconciled.next_attempt_at is None
+        assert reconciled.error_code is None
+        assert reconciled.error_message is None
+        assert reconciled.completed_at is not None
+        assert session.scalar(
+            select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")
+        ) == 1
+        assert session.scalar(select(func.count()).select_from(AnalysisJob)) == 1
+        session.refresh(record)
+        assert record.status == "completed"
+        assert record.analysis_stage == "completed"
+        assert record.analysis_progress == 100
+        assert record.analysed_at is not None
     finally:
         session.close()
 
@@ -479,6 +595,78 @@ def test_reclaimed_job_is_not_overwritten_by_the_worker_that_lost_its_lease(
 
     with session_factory() as session:
         job = session.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
+        assert job.status == "completed"
+        assert job.attempt == 2
+        assert job.snapshot_id is not None
+        assert session.scalar(select(func.count()).select_from(RiSnapshot)) == 1
+        assert session.get(RiSnapshot, job.snapshot_id).state == "completed"
+
+
+def test_exception_from_reclaimed_attempt_does_not_overwrite_replacement(
+    session_factory, tmp_path, monkeypatch
+):
+    now = [datetime(2026, 1, 1, tzinfo=UTC)]
+    session_a = session_factory()
+    session_b = session_factory()
+    try:
+        owner = _owner(session_a)
+        record = _repository_with_sources(session_a, owner, tmp_path / "repo")
+        AnalysisJobService(session_a, owner.id).submit(record.id)
+        record_id = record.id
+
+        worker_a = AnalysisWorker(
+            session_factory,
+            worker_id="worker-a",
+            lease_seconds=60,
+            clock=lambda: now[0],
+        )
+        job_a = worker_a._claim(session_a)
+        assert job_a is not None
+
+        now[0] += timedelta(seconds=61)
+        sweeper = AnalysisWorker(
+            session_factory,
+            worker_id="sweeper",
+            lease_seconds=60,
+            clock=lambda: now[0],
+        )
+        assert sweeper.sweep_stale() == 1
+
+        now[0] += timedelta(seconds=3)
+        worker_b = AnalysisWorker(
+            session_factory,
+            worker_id="worker-b",
+            lease_seconds=60,
+            clock=lambda: now[0],
+        )
+        job_b = worker_b._claim(session_b)
+        assert job_b is not None
+        assert job_b.id == job_a.id
+
+        def _boom(_ctx):
+            raise RuntimeError("old attempt failed locally")
+
+        monkeypatch.setattr(worker_a, "_stage_legacy", _boom)
+        assert list(worker_a._execute_stages(session_a, job_a)) == []
+
+        with session_factory() as verification:
+            replacement = verification.get(AnalysisJob, job_b.id)
+            assert replacement.status == "running"
+            assert replacement.worker_id == "worker-b"
+            assert replacement.attempt == 2
+            assert replacement.error_code == "RI-JOB-STALE"
+            assert replacement.error_message == "Analysis worker lease expired before the job completed."
+            assert verification.scalar(select(func.count()).select_from(RiSnapshot)) == 0
+
+        list(worker_b._execute_stages(session_b, job_b))
+    finally:
+        session_a.close()
+        session_b.close()
+
+    with session_factory() as session:
+        job = session.scalars(
+            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
+        ).one()
         assert job.status == "completed"
         assert job.attempt == 2
         assert job.snapshot_id is not None
