@@ -148,6 +148,13 @@ export function AnalysisPipelinePage() {
             <p className="text-xs text-muted-foreground mt-0.5">
               No further analysis work will run for this job.
             </p>
+            <button
+              type="button"
+              onClick={() => void analysis.restart()}
+              className="mt-2 text-xs text-primary hover:underline"
+            >
+              Restart analysis
+            </button>
           </div>
         </motion.div>
       )}

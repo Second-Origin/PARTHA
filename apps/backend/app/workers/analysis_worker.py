@@ -28,7 +28,9 @@ than redoing the work. Do not collapse these two commits into one.
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -70,6 +72,21 @@ class _LeaseLostError(RuntimeError):
     """Internal control flow for a job reclaimed by another worker."""
 
 
+class _CancellationObserved(RuntimeError):
+    """Internal control flow for cancellation observed by a heartbeat."""
+
+
+@dataclass
+class _HeartbeatState:
+    """Thread-safe signals returned by one stage heartbeat."""
+
+    stop: threading.Event = field(default_factory=threading.Event)
+    ownership_lost: threading.Event = field(default_factory=threading.Event)
+    cancel_requested: threading.Event = field(default_factory=threading.Event)
+    failure: Exception | None = None
+    thread: threading.Thread | None = None
+
+
 @dataclass
 class _StageContext:
     """Mutable state threaded through one job's stage pipeline."""
@@ -81,6 +98,7 @@ class _StageContext:
     snapshot: RiSnapshot | None = None
     reused: bool = False
     produced: tuple[ProducedExtraction, ...] = field(default_factory=tuple)
+    heartbeat: _HeartbeatState | None = None
 
 
 class AnalysisWorker:
@@ -94,12 +112,17 @@ class AnalysisWorker:
         lease_seconds: int,
         max_source_bytes: int = DEFAULT_MAX_SOURCE_BYTES,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        heartbeat_interval_seconds: float | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.worker_id = worker_id
         self.lease_seconds = lease_seconds
         self.max_source_bytes = max_source_bytes
         self._clock = clock
+        self._heartbeat_interval_seconds = heartbeat_interval_seconds or min(
+            max(lease_seconds / 3, 0.1), 5.0
+        )
+        self._shutdown = threading.Event()
         self.intelligence = RepositoryIntelligenceEngine()
 
     # -- public API ----------------------------------------------------------
@@ -123,6 +146,11 @@ class AnalysisWorker:
             return True
         finally:
             session.close()
+
+    def shutdown(self) -> None:
+        """Stop stage heartbeat loops during application shutdown."""
+
+        self._shutdown.set()
 
     def sweep_stale(self) -> int:
         """Reconcile running jobs whose worker lease has expired.
@@ -238,7 +266,10 @@ class AnalysisWorker:
                     self._cancel(ctx)
                     yield ctx
                     return
-                stage(ctx)
+                with self._heartbeat(ctx):
+                    self._check_heartbeat(ctx)
+                    stage(ctx)
+                    self._check_heartbeat(ctx)
                 self._checkpoint(ctx, stage_name, progress)
                 yield ctx
             if self._cancel_requested(ctx):
@@ -247,7 +278,23 @@ class AnalysisWorker:
                 return
             self._complete(ctx)
             yield ctx
+        except _CancellationObserved:
+            session.rollback()
+            current = session.get(AnalysisJob, job.id)
+            if current is None:
+                self._log_lease_lost(job.id)
+                return
+            ctx.job = current
+            ctx.record = session.get(RepositoryRecord, current.repository_id)
+            try:
+                self._cancel(ctx)
+            except _LeaseLostError:
+                self._log_lease_lost(job.id)
+                return
+            yield ctx
+            return
         except _LeaseLostError:
+            session.rollback()
             self._log_lease_lost(job.id)
             return
         except Exception as exc:  # noqa: BLE001 - bounded retry is the contract
@@ -273,6 +320,7 @@ class AnalysisWorker:
         record.analysis_stage = "preparing-architecture"
         record.analysis_progress = 80
         repository_intelligence = self.intelligence.from_record(record)
+        self._check_heartbeat(ctx)
         self.intelligence.persist(record, repository_intelligence)
 
     def _stage_open_snapshot(self, ctx: _StageContext) -> None:
@@ -312,15 +360,18 @@ class AnalysisWorker:
         store = ctx.store
         snapshot = ctx.snapshot
         assert store is not None and snapshot is not None
-        sources = self._read_sources(record)
+        sources = self._read_sources(record, ctx)
         pipeline = ExtractionPipeline(
             (PythonExtractor(), TypeScriptExtractor()),
             max_source_bytes=self.max_source_bytes,
         )
         ctx.produced = pipeline.run(sources)
+        self._check_heartbeat(ctx)
         for produced in ctx.produced:
-            self._persist_produced(store, snapshot, produced)
+            self._persist_produced(store, snapshot, produced, ctx)
+        self._check_heartbeat(ctx)
         RelationshipResolver(store).resolve(snapshot)
+        self._check_heartbeat(ctx)
 
     def _stage_seal(self, ctx: _StageContext) -> None:
         """Seal the building snapshot (commits internally, see the module note)."""
@@ -328,9 +379,10 @@ class AnalysisWorker:
         if ctx.reused:
             return
         assert ctx.store is not None and ctx.snapshot is not None
+        self._check_heartbeat(ctx)
         # ``seal`` commits internally, so acquire the guarded job row in the
         # same transaction before allowing the snapshot transition to commit.
-        self._lock_owned_job(ctx)
+        self._lock_owned_job(ctx, require_cancel_not_requested=True)
         ctx.store.seal(ctx.snapshot)
 
     # -- terminal transitions ------------------------------------------------
@@ -351,6 +403,7 @@ class AnalysisWorker:
                 status="completed",
                 stage="completed",
                 progress=100,
+                cancel_requested=False,
                 worker_id=None,
                 lease_expires_at=None,
                 error_code=None,
@@ -386,6 +439,14 @@ class AnalysisWorker:
         """Honour a cooperative cancel: fail any open snapshot, cancel the job."""
 
         self._lock_owned_job(ctx)
+        snapshot = (
+            ctx.session.get(RiSnapshot, ctx.job.snapshot_id)
+            if ctx.job.snapshot_id is not None
+            else None
+        )
+        if snapshot is not None and snapshot.state == "completed":
+            self._complete_sealed_snapshot(ctx, snapshot)
+            return
         self._fail_open_snapshot(ctx, code=_CANCELLED_CODE)
         now = self._clock()
         self._update_owned_job(
@@ -397,6 +458,12 @@ class AnalysisWorker:
             completed_at=now,
             updated_at=now,
         )
+        if ctx.record is not None:
+            ctx.record.status = "cancelled"
+            ctx.record.analysis_stage = None
+            ctx.record.analysis_progress = 0
+            ctx.record.error_message = None
+            ctx.record.analysed_at = None
         ctx.session.commit()
 
     def _retry_or_fail(self, ctx: _StageContext, exc: Exception) -> None:
@@ -412,7 +479,11 @@ class AnalysisWorker:
         ctx.job = job
         ctx.record = session.get(RepositoryRecord, job.repository_id)
         now = self._clock()
-        self._lock_owned_job(ctx)
+        try:
+            self._lock_owned_job(ctx, require_cancel_not_requested=True)
+        except _CancellationObserved:
+            self._cancel(ctx)
+            return
         snapshot = session.get(RiSnapshot, job.snapshot_id) if job.snapshot_id else None
         if snapshot is not None and snapshot.state == "completed":
             self._update_owned_job(
@@ -420,6 +491,7 @@ class AnalysisWorker:
                 status="completed",
                 stage="completed",
                 progress=100,
+                cancel_requested=False,
                 worker_id=None,
                 lease_expires_at=None,
                 next_attempt_at=None,
@@ -497,12 +569,17 @@ class AnalysisWorker:
         snapshot = session.get(RiSnapshot, job.snapshot_id) if job.snapshot_id else None
         ctx = _StageContext(session=session, job=job, record=record)
 
+        if job.cancel_requested:
+            self._cancel(ctx)
+            return True
+
         if snapshot is not None and snapshot.state == "completed":
             self._update_owned_job(
                 ctx,
                 status="completed",
                 stage="completed",
                 progress=100,
+                cancel_requested=False,
                 worker_id=None,
                 lease_expires_at=None,
                 next_attempt_at=None,
@@ -604,10 +681,29 @@ class AnalysisWorker:
             ctx.session.rollback()
             raise _LeaseLostError(job_id)
 
-    def _lock_owned_job(self, ctx: _StageContext) -> None:
+    def _lock_owned_job(
+        self, ctx: _StageContext, *, require_cancel_not_requested: bool = False
+    ) -> None:
         """Lock the running row after atomically confirming this worker owns it."""
 
-        self._update_owned_job(ctx, updated_at=AnalysisJob.updated_at)
+        try:
+            self._update_owned_job(
+                ctx,
+                require_cancel_not_requested=require_cancel_not_requested,
+                updated_at=AnalysisJob.updated_at,
+            )
+        except _LeaseLostError:
+            if require_cancel_not_requested:
+                current = ctx.session.get(AnalysisJob, ctx.job.id)
+                if (
+                    current is not None
+                    and current.status == "running"
+                    and current.worker_id == self.worker_id
+                    and current.cancel_requested
+                ):
+                    ctx.job = current
+                    raise _CancellationObserved(current.id) from None
+            raise
 
     def _cancel_requested(self, ctx: _StageContext) -> bool:
         return bool(
@@ -631,7 +727,127 @@ class AnalysisWorker:
             extra={"job_id": job_id, "worker_id": self.worker_id},
         )
 
-    def _read_sources(self, record: RepositoryRecord) -> Mapping[str, bytes]:
+    @contextmanager
+    def _heartbeat(self, ctx: _StageContext) -> Iterator[_HeartbeatState]:
+        """Renew one running job from an independent session during a stage."""
+
+        state = _HeartbeatState()
+        self._heartbeat_once(ctx.job.id, state)
+
+        def _run() -> None:
+            while not state.stop.wait(self._heartbeat_interval_seconds):
+                if self._shutdown.is_set():
+                    return
+                self._heartbeat_once(ctx.job.id, state)
+                if state.ownership_lost.is_set() or state.cancel_requested.is_set() or state.failure:
+                    return
+
+        if not state.ownership_lost.is_set() and not state.cancel_requested.is_set() and not state.failure:
+            state.thread = threading.Thread(
+                target=_run,
+                name=f"analysis-heartbeat-{ctx.job.id}",
+                daemon=True,
+            )
+            state.thread.start()
+        ctx.heartbeat = state
+        try:
+            yield state
+        finally:
+            ctx.heartbeat = None
+            state.stop.set()
+            if state.thread is not None:
+                state.thread.join(timeout=max(self._heartbeat_interval_seconds * 2, 1.0))
+                if state.thread.is_alive():
+                    logger.warning(
+                        "Analysis heartbeat did not stop promptly",
+                        extra={"job_id": ctx.job.id, "worker_id": self.worker_id},
+                    )
+
+    def _heartbeat_once(self, job_id: str, state: _HeartbeatState) -> None:
+        """Atomically renew ownership and return the cancellation flag."""
+
+        session = self.session_factory()
+        try:
+            now = self._clock()
+            row = session.execute(
+                update(AnalysisJob)
+                .where(
+                    AnalysisJob.id == job_id,
+                    AnalysisJob.status == "running",
+                    AnalysisJob.worker_id == self.worker_id,
+                )
+                .values(
+                    lease_expires_at=now + timedelta(seconds=self.lease_seconds),
+                    updated_at=now,
+                )
+                .returning(AnalysisJob.cancel_requested)
+                .execution_options(synchronize_session=False)
+            ).first()
+            if row is None:
+                session.rollback()
+                state.ownership_lost.set()
+                return
+            session.commit()
+            if row[0]:
+                state.cancel_requested.set()
+        except Exception as exc:  # noqa: BLE001 - surfaced to the owning worker
+            session.rollback()
+            # A SQLite writer prevents every other SQLite writer, including a
+            # stale sweeper. Skipping that transient pulse avoids a false retry;
+            # PostgreSQL heartbeats remain fully independent and guarded.
+            if (
+                session.bind is not None
+                and session.bind.dialect.name == "sqlite"
+                and "locked" in str(exc).lower()
+            ):
+                logger.debug("SQLite analysis heartbeat skipped while the stage held the write lock")
+            else:
+                state.failure = exc
+        finally:
+            session.close()
+
+    @staticmethod
+    def _check_heartbeat(ctx: _StageContext) -> None:
+        state = ctx.heartbeat
+        if state is None:
+            return
+        if state.ownership_lost.is_set():
+            raise _LeaseLostError(ctx.job.id)
+        if state.cancel_requested.is_set():
+            raise _CancellationObserved(ctx.job.id)
+        if state.failure is not None:
+            raise state.failure
+
+    def _complete_sealed_snapshot(self, ctx: _StageContext, snapshot: RiSnapshot) -> None:
+        """Make an already-sealed snapshot authoritative over cancellation."""
+
+        now = self._clock()
+        completed_at = snapshot.sealed_at or now
+        self._update_owned_job(
+            ctx,
+            status="completed",
+            stage="completed",
+            progress=100,
+            cancel_requested=False,
+            worker_id=None,
+            lease_expires_at=None,
+            next_attempt_at=None,
+            error_code=None,
+            error_message=None,
+            completed_at=completed_at,
+            updated_at=now,
+        )
+        if ctx.record is not None:
+            ctx.record.status = "completed"
+            ctx.record.analysis_stage = "completed"
+            ctx.record.analysis_progress = 100
+            ctx.record.error_message = None
+            ctx.record.analysed_at = completed_at
+        ctx.session.commit()
+
+    def _read_sources(
+        self, record: RepositoryRecord, ctx: _StageContext | None = None
+    ) -> Mapping[str, bytes]:
         """Read repository source bytes keyed by normalized repo-relative path.
 
         Paths come from ``record.file_tree`` (already computed at ingestion) rather
@@ -643,6 +859,8 @@ class AnalysisWorker:
         root = Path(record.local_path)
         sources: dict[str, bytes] = {}
         for raw_path in self._iter_file_paths(record.file_tree or []):
+            if ctx is not None:
+                self._check_heartbeat(ctx)
             try:
                 path = canonical.normalize_repo_path(raw_path.lstrip("/"))
             except canonical.PathEscapeError:
@@ -668,7 +886,11 @@ class AnalysisWorker:
                 yield from cls._iter_file_paths(children)
 
     def _persist_produced(
-        self, store: SnapshotStore, snapshot: RiSnapshot, produced: ProducedExtraction
+        self,
+        store: SnapshotStore,
+        snapshot: RiSnapshot,
+        produced: ProducedExtraction,
+        ctx: _StageContext | None = None,
     ) -> None:
         """Convert one ``ExtractionResult`` into snapshot writes.
 
@@ -680,6 +902,8 @@ class AnalysisWorker:
 
         result = produced.result
         for node in result.nodes:
+            if ctx is not None:
+                self._check_heartbeat(ctx)
             set_array_keys = (
                 frozenset({"decorators"})
                 if node.properties and "decorators" in node.properties
@@ -696,6 +920,8 @@ class AnalysisWorker:
                 evidence=[self._evidence(item, produced) for item in node.evidence],
             )
         for observation in result.observations:
+            if ctx is not None:
+                self._check_heartbeat(ctx)
             store.add_observation(
                 snapshot,
                 observed_kind=observation.observed_kind,
@@ -706,6 +932,8 @@ class AnalysisWorker:
                 evidence=self._evidence(observation.evidence, produced),
             )
         for diagnostic in result.diagnostics:
+            if ctx is not None:
+                self._check_heartbeat(ctx)
             store.add_diagnostic(
                 snapshot,
                 code=diagnostic.code,

@@ -77,12 +77,12 @@ class AnalysisJob(Base):
             postgresql_where=text("snapshot_id IS NOT NULL"),
         ),
         Index(
-            "uq_analysis_jobs_active_identity",
+            "uq_analysis_jobs_effective_identity",
             "repository_id",
             "revision_value",
             "config_hash",
             unique=True,
-            sqlite_where=text("status IN ('queued','running')"),
-            postgresql_where=text("status IN ('queued','running')"),
+            sqlite_where=text("status IN ('queued','running','completed')"),
+            postgresql_where=text("status IN ('queued','running','completed')"),
         ),
     )

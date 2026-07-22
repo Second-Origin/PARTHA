@@ -87,22 +87,15 @@ class AnalysisJobService:
 
         Duplicate submissions never create duplicate work: an already-completed
         snapshot short-circuits to a ``completed`` job, and a still-active job
-        for the same identity is returned unchanged (the partial unique index
-        also enforces this at the database level for concurrent submits).
+        for the same identity is returned unchanged. The effective-identity
+        index also serializes a concurrent worker completion with job insertion.
         """
 
         record = self._get_record(repository_id)
         revision_value = self._require_revision(record)
 
         # 1. Already-sealed snapshot for this exact identity ⇒ idempotent-complete.
-        completed = self.snapshots.find_completed_for_owner(
-            owner_id=self.owner_id,
-            repository_id=record.id,
-            revision_value=revision_value,
-            schema_version=ANALYSIS_SCHEMA_VERSION,
-            producer_version_set=ANALYSIS_PRODUCER_VERSION_SET,
-            config_hash=ANALYSIS_CONFIG_HASH,
-        )
+        completed = self._completed_snapshot(record, revision_value)
         if completed is not None:
             existing = self._job_for_snapshot(record.id, completed.snapshot_id)
             if existing is not None:
@@ -120,13 +113,22 @@ class AnalysisJobService:
     # -- status --------------------------------------------------------------
 
     def status(self, repository_id: str) -> AnalysisJob | None:
-        """Return the most recent job for a repository, or ``None`` if none.
+        """Return the authoritative job for a repository, or ``None`` if none.
 
         ``None`` means no analysis job has ever been submitted; the route layer
         treats that as "not started" (surfaced as ``queued``).
         """
 
-        self._get_record(repository_id)
+        record = self._get_record(repository_id)
+        completed = self._completed_snapshot(record, self._require_revision(record))
+        if completed is not None:
+            job = self._job_for_snapshot(record.id, completed.snapshot_id)
+            if job is not None:
+                return self._reconcile_completed_job(record, job, completed)
+            effective = self._effective_job(record.id, ANALYSIS_CONFIG_HASH)
+            if effective is not None:
+                return self._reconcile_completed_job(record, effective, completed)
+            return self._insert_completed_job(record, completed)
         return self._latest_job(repository_id)
 
     # -- cancel --------------------------------------------------------------
@@ -136,9 +138,9 @@ class AnalysisJobService:
 
         A ``queued`` job (never claimed) transitions straight to ``cancelled``.
         A ``running`` job is flagged ``cancel_requested`` and left running; the
-        worker observes the flag at its next stage boundary and performs the
-        actual transition once it stops. A terminal job — or no job at all —
-        has nothing to cancel and raises ``ConflictServiceError`` (409).
+        worker heartbeat observes the flag and performs the actual transition
+        once stage work stops. A terminal job — or no job at all — has nothing
+        to cancel and raises ``ConflictServiceError`` (409).
         """
 
         self._get_record(repository_id)
@@ -172,9 +174,11 @@ class AnalysisJobService:
                 )
                 .execution_options(synchronize_session=False)
             )
-            self.db.commit()
             if result.rowcount != 0:
+                self._cancel_repository(job.repository_id, now)
+                self.db.commit()
                 return self._reload_job(job.id)
+            self.db.commit()
             # A worker may have claimed the queued row between the read and the
             # guarded update. Re-read and request cooperative cancellation from
             # the actual running owner instead of overwriting its claim.
@@ -252,6 +256,19 @@ class AnalysisJobService:
             .limit(1)
         ).first()
 
+    def _effective_job(self, repository_id: str, config_hash: str) -> AnalysisJob | None:
+        return self.db.scalars(
+            select(AnalysisJob)
+            .where(
+                AnalysisJob.repository_id == repository_id,
+                AnalysisJob.owner_id == self.owner_id,
+                AnalysisJob.config_hash == config_hash,
+                AnalysisJob.status.in_(("queued", "running", "completed")),
+            )
+            .order_by(AnalysisJob.created_at.desc())
+            .limit(1)
+        ).first()
+
     def _job_for_snapshot(self, repository_id: str, snapshot_id: str) -> AnalysisJob | None:
         return self.db.scalars(
             select(AnalysisJob)
@@ -276,16 +293,21 @@ class AnalysisJobService:
             attempt=0,
         )
         self.db.add(job)
+        self._prepare_repository_for_analysis(record)
         try:
             self.db.commit()
         except IntegrityError:
-            # A concurrent submit won the partial unique index on the active
-            # identity. Reconcile by returning the winner's row rather than
-            # erroring the caller — duplicate submissions never fail.
+            # A concurrent submit or worker completion won the effective
+            # identity constraint. The failed INSERT cannot return until the
+            # winning transaction commits, so this post-rollback read is a
+            # transactionally ordered reconciliation, not a timing check.
             self.db.rollback()
-            active = self._active_job(record.id, config_hash)
-            if active is not None:
-                return active
+            completed = self._completed_snapshot(record, self._require_revision(record))
+            effective = self._effective_job(record.id, config_hash)
+            if completed is not None and effective is not None:
+                return self._reconcile_completed_job(record, effective, completed)
+            if effective is not None:
+                return effective
             raise
         self.db.refresh(job)
         return job
@@ -365,7 +387,10 @@ class AnalysisJobService:
             self.db.rollback()
             existing = self._job_for_snapshot(record.id, snapshot.snapshot_id)
             if existing is not None:
-                return existing
+                return self._reconcile_completed_job(record, existing, snapshot)
+            effective = self._effective_job(record.id, ANALYSIS_CONFIG_HASH)
+            if effective is not None:
+                return self._reconcile_completed_job(record, effective, snapshot)
             raise
         self.db.refresh(job)
         return job
@@ -377,3 +402,41 @@ class AnalysisJobService:
         record.analysis_progress = 100
         record.error_message = None
         record.analysed_at = completed_at
+
+    def _completed_snapshot(
+        self, record: RepositoryRecord, revision_value: str
+    ) -> RiSnapshot | None:
+        return self.snapshots.find_completed_for_owner(
+            owner_id=self.owner_id,
+            repository_id=record.id,
+            revision_value=revision_value,
+            schema_version=ANALYSIS_SCHEMA_VERSION,
+            producer_version_set=ANALYSIS_PRODUCER_VERSION_SET,
+            config_hash=ANALYSIS_CONFIG_HASH,
+        )
+
+    @staticmethod
+    def _prepare_repository_for_analysis(record: RepositoryRecord) -> None:
+        record.status = "analysing"
+        record.analysis_stage = None
+        record.analysis_progress = 0
+        record.error_message = None
+        record.analysed_at = None
+
+    def _cancel_repository(self, repository_id: str, cancelled_at: datetime) -> None:
+        self.db.execute(
+            update(RepositoryRecord)
+            .where(
+                RepositoryRecord.id == repository_id,
+                RepositoryRecord.owner_id == self.owner_id,
+            )
+            .values(
+                status="cancelled",
+                analysis_stage=None,
+                analysis_progress=0,
+                error_message=None,
+                analysed_at=None,
+                updated_at=cancelled_at,
+            )
+            .execution_options(synchronize_session=False)
+        )

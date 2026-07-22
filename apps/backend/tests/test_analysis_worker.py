@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import threading
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import register_sqlite_foreign_key_enforcement
@@ -179,6 +181,15 @@ def _claim_with_snapshot(
     with session_factory() as session:
         assert worker._claim(session) is not None
     return worker, record_id, snapshot_id
+
+
+def _wait_for(predicate, *, timeout: float = 3.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return
+        time.sleep(0.01)
+    raise AssertionError("condition was not met before timeout")
 
 
 def test_run_once_returns_false_when_queue_is_empty(session_factory):
@@ -402,11 +413,15 @@ def test_cooperative_cancellation_fails_open_snapshot_and_cancels_job(session_fa
         assert cancelled.completed_at is not None
         # The opened snapshot was failed, never sealed to completed.
         assert session.get(RiSnapshot, snapshot_id).state == "failed"
+        session.refresh(record)
+        assert record.status == "cancelled"
+        assert record.analysis_stage is None
+        assert record.analysis_progress == 0
     finally:
         session.close()
 
 
-def test_submit_reconciles_cancellation_after_snapshot_seal(session_factory, tmp_path):
+def test_cancellation_after_snapshot_seal_is_immediately_completed(session_factory, tmp_path):
     session = session_factory()
     try:
         owner = _owner(session)
@@ -432,23 +447,17 @@ def test_submit_reconciles_cancellation_after_snapshot_seal(session_factory, tmp
         service.cancel(record.id)
         list(stages)
         session.expire_all()
-        assert session.get(AnalysisJob, job.id).status == "cancelled"
+        completed = session.get(AnalysisJob, job.id)
+        assert completed.status == "completed"
+        assert completed.cancel_requested is False
         assert session.get(RiSnapshot, snapshot_id).state == "completed"
-
-        reconciled = service.submit(record.id)
-        repeated = service.submit(record.id)
-
-        assert reconciled.id == repeated.id == job.id
-        assert reconciled.status == "completed"
-        assert reconciled.stage == "completed"
-        assert reconciled.progress == 100
-        assert reconciled.snapshot_id == snapshot_id
-        assert reconciled.worker_id is None
-        assert reconciled.lease_expires_at is None
-        assert reconciled.next_attempt_at is None
-        assert reconciled.error_code is None
-        assert reconciled.error_message is None
-        assert reconciled.completed_at is not None
+        assert service.status(record.id).status == "completed"
+        assert completed.stage == "completed"
+        assert completed.progress == 100
+        assert completed.snapshot_id == snapshot_id
+        assert completed.worker_id is None
+        assert completed.lease_expires_at is None
+        assert completed.completed_at is not None
         assert session.scalar(
             select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")
         ) == 1
@@ -460,6 +469,185 @@ def test_submit_reconciles_cancellation_after_snapshot_seal(session_factory, tmp
         assert record.analysed_at is not None
     finally:
         session.close()
+
+
+def test_heartbeat_keeps_a_long_stage_from_being_reclaimed(
+    session_factory, tmp_path, monkeypatch
+):
+    now = [datetime(2026, 1, 1, tzinfo=UTC)]
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "repo")
+        record_id = record.id
+        AnalysisJobService(session, owner.id).submit(record_id)
+
+    entered = threading.Event()
+    release = threading.Event()
+    worker = AnalysisWorker(
+        session_factory,
+        worker_id="healthy-worker",
+        lease_seconds=1,
+        clock=lambda: now[0],
+        heartbeat_interval_seconds=0.02,
+    )
+
+    def _long_stage(_ctx):
+        entered.set()
+        assert release.wait(timeout=3)
+
+    monkeypatch.setattr(worker, "_stage_legacy", _long_stage)
+    thread = threading.Thread(target=worker.run_once)
+    thread.start()
+    assert entered.wait(timeout=3)
+
+    with session_factory() as reader:
+        original_lease = reader.scalars(
+            select(AnalysisJob.lease_expires_at).where(AnalysisJob.repository_id == record_id)
+        ).one()
+
+    now[0] += timedelta(seconds=2)
+
+    def _lease_was_renewed() -> bool:
+        with session_factory() as reader:
+            lease = reader.scalars(
+                select(AnalysisJob.lease_expires_at).where(AnalysisJob.repository_id == record_id)
+            ).one()
+            return lease is not None and lease > original_lease and lease > now[0].replace(tzinfo=None)
+
+    _wait_for(_lease_was_renewed)
+    sweeper = AnalysisWorker(
+        session_factory,
+        worker_id="sweeper",
+        lease_seconds=1,
+        clock=lambda: now[0],
+    )
+    assert sweeper.sweep_stale() == 0
+
+    release.set()
+    thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert not any(
+        candidate.name.startswith("analysis-heartbeat-") and candidate.is_alive()
+        for candidate in threading.enumerate()
+    )
+
+    with session_factory() as reader:
+        job = reader.scalars(
+            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
+        ).one()
+        assert job.status == "completed"
+        assert job.attempt == 1
+
+
+def test_heartbeat_ownership_loss_abandons_stage_writes(
+    session_factory, tmp_path, monkeypatch
+):
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "repo")
+        record_id = record.id
+        AnalysisJobService(session, owner.id).submit(record_id)
+
+    entered = threading.Event()
+    release = threading.Event()
+    ownership_lost = threading.Event()
+    worker = AnalysisWorker(
+        session_factory,
+        worker_id="worker-a",
+        lease_seconds=60,
+        heartbeat_interval_seconds=0.02,
+    )
+    original_heartbeat = worker._heartbeat_once
+
+    def _observe_heartbeat(job_id, state):
+        original_heartbeat(job_id, state)
+        if state.ownership_lost.is_set():
+            ownership_lost.set()
+
+    def _long_stage(_ctx):
+        entered.set()
+        assert release.wait(timeout=3)
+
+    monkeypatch.setattr(worker, "_heartbeat_once", _observe_heartbeat)
+    monkeypatch.setattr(worker, "_stage_legacy", _long_stage)
+    thread = threading.Thread(target=worker.run_once)
+    thread.start()
+    assert entered.wait(timeout=3)
+
+    with session_factory() as replacement:
+        replacement.execute(
+            update(AnalysisJob)
+            .where(AnalysisJob.repository_id == record_id, AnalysisJob.status == "running")
+            .values(worker_id="worker-b")
+        )
+        replacement.commit()
+
+    assert ownership_lost.wait(timeout=3)
+    release.set()
+    thread.join(timeout=5)
+    assert not thread.is_alive()
+
+    with session_factory() as reader:
+        job = reader.scalars(
+            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
+        ).one()
+        assert job.status == "running"
+        assert job.worker_id == "worker-b"
+        assert reader.scalar(select(func.count()).select_from(RiSnapshot)) == 0
+
+
+def test_heartbeat_observes_cancellation_before_the_long_stage_finishes(
+    session_factory, tmp_path, monkeypatch
+):
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "repo")
+        owner_id = owner.id
+        record_id = record.id
+        AnalysisJobService(session, owner_id).submit(record_id)
+
+    entered = threading.Event()
+    release = threading.Event()
+    cancellation_seen = threading.Event()
+    worker = AnalysisWorker(
+        session_factory,
+        worker_id="worker-a",
+        lease_seconds=60,
+        heartbeat_interval_seconds=0.02,
+    )
+    original_heartbeat = worker._heartbeat_once
+
+    def _observe_heartbeat(job_id, state):
+        original_heartbeat(job_id, state)
+        if state.cancel_requested.is_set():
+            cancellation_seen.set()
+
+    def _long_stage(_ctx):
+        entered.set()
+        assert release.wait(timeout=3)
+
+    monkeypatch.setattr(worker, "_heartbeat_once", _observe_heartbeat)
+    monkeypatch.setattr(worker, "_stage_legacy", _long_stage)
+    thread = threading.Thread(target=worker.run_once)
+    thread.start()
+    assert entered.wait(timeout=3)
+
+    with session_factory() as cancel_session:
+        accepted = AnalysisJobService(cancel_session, owner_id).cancel(record_id)
+        assert accepted.cancel_requested is True
+
+    assert cancellation_seen.wait(timeout=3)
+    release.set()
+    thread.join(timeout=5)
+    assert not thread.is_alive()
+
+    with session_factory() as reader:
+        job = reader.scalars(
+            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
+        ).one()
+        assert job.status == "cancelled"
+        assert reader.get(RepositoryRecord, record_id).status == "cancelled"
+        assert reader.scalar(select(func.count()).select_from(RiSnapshot)) == 0
 
 
 def test_sweep_stale_requeues_and_fails_orphaned_building_snapshot(session_factory, tmp_path):

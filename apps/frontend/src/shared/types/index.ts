@@ -1,4 +1,4 @@
-export type AppStatus = 'empty' | 'repository-selected' | 'uploading' | 'analysing' | 'completed' | 'error';
+export type AppStatus = 'empty' | 'repository-selected' | 'uploading' | 'analysing' | 'completed' | 'cancelled' | 'error';
 
 export type RepositorySource = 'upload' | 'github';
 export type DataSource = 'real';
@@ -67,7 +67,7 @@ export interface Repository {
   sourceUrl?: string;
   size: number;
   fileCount: number;
-  status: 'uploading' | 'analysing' | 'completed' | 'error';
+  status: 'uploading' | 'analysing' | 'completed' | 'cancelled' | 'error';
   dataSource: DataSource;
   analysisStage: AnalysisStage | null;
   analysisProgress: number;

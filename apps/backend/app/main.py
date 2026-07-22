@@ -94,7 +94,7 @@ def _analysis_worker_id() -> str:
     return f"analysis-worker-{getpid()}-{uuid4().hex}"
 
 
-def _start_analysis_worker() -> tuple[threading.Thread, threading.Event] | None:
+def _start_analysis_worker() -> tuple[threading.Thread, threading.Event, Any] | None:
     """Start the durable analysis worker on a daemon thread (#93).
 
     The loop claims and runs one queued job per iteration, sleeping only when the
@@ -141,7 +141,7 @@ def _start_analysis_worker() -> tuple[threading.Thread, threading.Event] | None:
 
     thread = threading.Thread(target=_loop, name="analysis-worker", daemon=True)
     thread.start()
-    return thread, stop_event
+    return thread, stop_event, worker
 
 
 @asynccontextmanager
@@ -155,8 +155,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         if worker_handle is not None:
-            thread, stop_event = worker_handle
+            thread, stop_event, worker = worker_handle
             stop_event.set()
+            worker.shutdown()
             thread.join(timeout=10)
         aclose = getattr(app.state.rate_limit_store, "aclose", None)
         if aclose is not None:

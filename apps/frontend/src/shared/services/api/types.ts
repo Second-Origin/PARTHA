@@ -42,7 +42,7 @@ export interface RepositoryResponse {
   branch?: string | null;
   size: number;
   fileCount: number;
-  status: 'uploading' | 'analysing' | 'completed' | 'error';
+  status: 'uploading' | 'analysing' | 'completed' | 'cancelled' | 'error';
   dataSource: DataSource;
   analysisStage: AnalysisStage | null;
   analysisProgress: number;

@@ -178,8 +178,8 @@ def test_analysis_job_partial_unique_index_queued_duplicate_rejected(db):
         session.commit()
 
 
-def test_analysis_job_partial_unique_index_completed_allowed(db):
-    """Verify partial unique index allows second completed job for same identity."""
+def test_analysis_job_effective_identity_rejects_duplicate_completed_job(db):
+    """A semantic identity has at most one authoritative completed job."""
     session, _ = db
     owner = _owner(session)
     repo = _repository(session, owner)
@@ -201,7 +201,7 @@ def test_analysis_job_partial_unique_index_completed_allowed(db):
     session.add(job1)
     session.commit()
 
-    # Insert second completed job with same identity - should succeed
+    # A second completed row would make public status ambiguous.
     job2 = AnalysisJob(
         id=str(uuid4()),
         repository_id=repo.id,
@@ -213,19 +213,12 @@ def test_analysis_job_partial_unique_index_completed_allowed(db):
         completed_at=now,
     )
     session.add(job2)
-    session.commit()
-
-    # Verify both were inserted
-    results = session.execute(
-        select(AnalysisJob)
-        .where(AnalysisJob.config_hash == config_hash)
-        .where(AnalysisJob.status == "completed")
-    ).scalars().all()
-    assert len(results) == 2
+    with pytest.raises(IntegrityError):
+        session.commit()
 
 
-def test_analysis_job_partial_unique_index_mixed_states_allowed(db):
-    """Verify partial unique index allows queued + completed for same identity."""
+def test_analysis_job_effective_identity_rejects_queued_plus_completed(db):
+    """Queued work cannot coexist with a completed result for one identity."""
     session, _ = db
     owner = _owner(session)
     repo = _repository(session, owner)
@@ -246,8 +239,7 @@ def test_analysis_job_partial_unique_index_mixed_states_allowed(db):
     session.add(job1)
     session.commit()
 
-    # Insert completed job with same identity - should succeed
-    # (only queued/running are constrained)
+    # A worker completion racing this queued row must collide atomically.
     job2 = AnalysisJob(
         id=str(uuid4()),
         repository_id=repo.id,
@@ -259,12 +251,44 @@ def test_analysis_job_partial_unique_index_mixed_states_allowed(db):
         completed_at=now,
     )
     session.add(job2)
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+@pytest.mark.parametrize("terminal_status", ["failed", "cancelled"])
+def test_analysis_job_effective_identity_allows_retry_after_unsuccessful_terminal(db, terminal_status):
+    """Failed and cancelled history remains retryable when no result exists."""
+
+    session, _ = db
+    owner = _owner(session)
+    repo = _repository(session, owner)
+    config_hash = "sha256:" + "b" * 64
+    session.add(
+        AnalysisJob(
+            id=str(uuid4()),
+            repository_id=repo.id,
+            owner_id=owner.id,
+            revision_kind="upload",
+            revision_value=repo.revision_value,
+            config_hash=config_hash,
+            status=terminal_status,
+        )
+    )
+    session.commit()
+    session.add(
+        AnalysisJob(
+            id=str(uuid4()),
+            repository_id=repo.id,
+            owner_id=owner.id,
+            revision_kind="upload",
+            revision_value=repo.revision_value,
+            config_hash=config_hash,
+            status="queued",
+        )
+    )
     session.commit()
 
-    # Verify both were inserted
-    results = session.execute(
-        select(AnalysisJob).where(AnalysisJob.config_hash == config_hash)
-    ).scalars().all()
-    assert len(results) == 2
-    assert any(j.status == "queued" for j in results)
-    assert any(j.status == "completed" for j in results)
+    statuses = session.scalars(
+        select(AnalysisJob.status).where(AnalysisJob.repository_id == repo.id)
+    ).all()
+    assert set(statuses) == {terminal_status, "queued"}

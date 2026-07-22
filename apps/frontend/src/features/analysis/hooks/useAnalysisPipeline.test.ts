@@ -73,7 +73,47 @@ describe('useAnalysisPipeline', () => {
     expect(hook.result.current.cancelled).toBe(true);
     expect(hook.result.current.canCancel).toBe(false);
     expect(useAppStore.getState().analysisRunning).toBe(false);
+    expect(useAppStore.getState().repositories[0].status).toBe('cancelled');
     expect(start).not.toHaveBeenCalled();
+  });
+
+  it('restarts a cancelled repository without another upload', async () => {
+    vi.spyOn(backendService, 'fetchAnalysisStatus')
+      .mockResolvedValueOnce({
+        repositoryId: repository.id,
+        status: 'cancelled',
+        jobId: 'job-1',
+        stage: 'reading-structure',
+        progress: 25,
+        startedAt: '2026-07-22T08:00:01Z',
+        completedAt: '2026-07-22T08:00:02Z',
+        error: null,
+      })
+      .mockResolvedValue({
+        repositoryId: repository.id,
+        status: 'queued',
+        jobId: 'job-2',
+        stage: null,
+        progress: 0,
+        startedAt: null,
+        completedAt: null,
+        error: null,
+      });
+    const start = vi.spyOn(backendService, 'startAnalysis').mockResolvedValue({
+      repositoryId: repository.id,
+      status: 'queued',
+      jobId: 'job-2',
+    });
+    const hook = renderHook(() => useAnalysisPipeline(repository.id));
+    await waitFor(() => expect(hook.result.current.cancelled).toBe(true));
+
+    await act(async () => {
+      await hook.result.current.restart();
+    });
+
+    expect(start).toHaveBeenCalledWith(repository.id);
+    expect(hook.result.current.jobStatus).toBe('queued');
+    expect(useAppStore.getState().repositories[0].status).toBe('analysing');
   });
 
   it('does not restart a cancelled durable job after remount', async () => {

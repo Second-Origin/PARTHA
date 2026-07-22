@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from uuid import uuid4
 
 import pytest
@@ -22,6 +23,7 @@ from app.services.analysis_job_service import (
 from app.workers.analysis_worker import AnalysisWorker, _StageContext
 
 UPLOAD_REVISION = "sha256:" + "b" * 64
+PG_URL = os.environ.get("PARTHA_TEST_PG_URL")
 
 
 @pytest.fixture()
@@ -156,6 +158,79 @@ def test_concurrent_submit_race_reconciles_to_one_job(session_factory):
     assert count == 1
 
 
+def _assert_submit_reconciles_worker_completion(factory) -> None:
+    with factory() as bootstrap:
+        owner = _owner(bootstrap)
+        record = _repository(bootstrap, owner)
+        owner_id = owner.id
+        record_id = record.id
+        original = AnalysisJobService(bootstrap, owner_id).submit(record_id)
+
+    submit_session = factory()
+    worker_session = factory()
+    try:
+        submitting = AnalysisJobService(submit_session, owner_id)
+        submit_record = submitting.repository.get_for_owner(record_id, owner_id)
+
+        # 1. The submission's first completed-snapshot observation misses.
+        assert submitting._completed_snapshot(submit_record, UPLOAD_REVISION) is None
+
+        # 2. The existing worker seals and completes in a separate transaction.
+        worker = AnalysisWorker(factory, worker_id="worker-a", lease_seconds=60)
+        claimed = worker._claim(worker_session)
+        assert claimed is not None and claimed.id == original.id
+        worker_record = worker_session.get(RepositoryRecord, record_id)
+        snapshot = _seal_minimal_snapshot(worker_session, worker_record)
+        claimed.snapshot_id = snapshot.snapshot_id
+        ctx = _StageContext(session=worker_session, job=claimed, record=worker_record)
+        worker._checkpoint(ctx, "preparing-architecture", 90)
+        worker._complete(ctx)
+
+        # 3. The stale submission misses active work and attempts its INSERT.
+        assert submitting._active_job(record_id, ANALYSIS_CONFIG_HASH) is None
+        reconciled = submitting._insert_queued_job(submit_record, ANALYSIS_CONFIG_HASH)
+
+        # 4. The effective-identity constraint returns the committed winner.
+        assert reconciled.id == original.id
+        assert reconciled.status == "completed"
+        assert submitting.status(record_id).id == original.id
+        assert submitting.status(record_id).status == "completed"
+    finally:
+        submit_session.close()
+        worker_session.close()
+
+    with factory() as reader:
+        jobs = reader.scalars(
+            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
+        ).all()
+        assert len(jobs) == 1
+        assert jobs[0].status == "completed"
+        assert jobs[0].snapshot_id is not None
+        assert reader.scalar(
+            select(func.count())
+            .select_from(RiSnapshot)
+            .where(
+                RiSnapshot.repository_id == record_id,
+                RiSnapshot.state == "completed",
+            )
+        ) == 1
+
+
+def test_submit_is_atomic_against_worker_completion(session_factory):
+    _assert_submit_reconciles_worker_completion(session_factory)
+
+
+@pytest.mark.skipif(not PG_URL, reason="set PARTHA_TEST_PG_URL to run the Postgres concurrency test")
+def test_submit_is_atomic_against_worker_completion_on_postgres():
+    engine = create_engine(PG_URL)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    try:
+        _assert_submit_reconciles_worker_completion(factory)
+    finally:
+        engine.dispose()
+
+
 def test_submit_short_circuits_when_a_completed_snapshot_exists(session_factory):
     with session_factory() as session:
         owner = _owner(session)
@@ -250,6 +325,33 @@ def test_status_returns_the_most_recent_job(session_factory):
         assert service.status(record.id).id == job.id
 
 
+def test_status_prefers_the_completed_snapshot_over_a_newer_failed_attempt(session_factory):
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository(session, owner)
+        _seal_minimal_snapshot(session, record)
+        service = AnalysisJobService(session, owner.id)
+        completed = service.submit(record.id)
+        session.add(
+            AnalysisJob(
+                id=str(uuid4()),
+                repository_id=record.id,
+                owner_id=owner.id,
+                revision_kind=record.revision_kind,
+                revision_value=record.revision_value,
+                config_hash=ANALYSIS_CONFIG_HASH,
+                status="failed",
+                completed_at=completed.completed_at,
+            )
+        )
+        session.commit()
+
+        authoritative = service.status(record.id)
+
+        assert authoritative.id == completed.id
+        assert authoritative.status == "completed"
+
+
 def test_cancel_queued_job_transitions_to_cancelled(session_factory):
     with session_factory() as session:
         owner = _owner(session)
@@ -261,6 +363,28 @@ def test_cancel_queued_job_transitions_to_cancelled(session_factory):
         assert cancelled.status == "cancelled"
         assert cancelled.worker_id is None
         assert cancelled.lease_expires_at is None
+        session.refresh(record)
+        assert record.status == "cancelled"
+        assert record.analysis_stage is None
+        assert record.analysis_progress == 0
+
+
+def test_cancelled_job_can_be_restarted_without_reupload(session_factory):
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository(session, owner)
+        service = AnalysisJobService(session, owner.id)
+        service.submit(record.id)
+        cancelled = service.cancel(record.id)
+
+        restarted = service.submit(record.id)
+
+        assert cancelled.status == "cancelled"
+        assert restarted.status == "queued"
+        assert restarted.id != cancelled.id
+        session.refresh(record)
+        assert record.status == "analysing"
+        assert record.analysis_progress == 0
 
 
 def test_cancel_running_job_sets_cancel_requested(session_factory):

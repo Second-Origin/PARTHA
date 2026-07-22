@@ -113,9 +113,11 @@ at completed pipeline stages. Failed work retries with bounded exponential
 backoff up to the job's attempt limit, then becomes `failed`.
 
 `POST /analysis/{repository_id}/cancel` cancels queued work immediately and
-requests cooperative cancellation of running work at the next stage boundary.
-Workers renew a database lease at stage boundaries. Startup and periodic stale
-job sweeps reclaim expired leases, fail orphaned building snapshots, and either
+requests cooperative cancellation of running work. Workers renew a guarded
+database lease periodically during stages as well as at stage boundaries, so
+long-running analysis remains owned and cancellation is noticed promptly.
+Startup and periodic stale job sweeps reclaim expired leases, fail orphaned
+building snapshots, and either
 requeue or fail the job within its attempt budget. If a process dies after a
 snapshot was sealed but before the job completion commit, the sweep reconciles
 the job to `completed` without producing a duplicate snapshot.

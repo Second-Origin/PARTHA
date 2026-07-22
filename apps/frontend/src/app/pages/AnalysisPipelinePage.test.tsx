@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAnalysisPipeline } from '@/features/analysis/hooks/useAnalysisPipeline';
@@ -36,6 +36,7 @@ const baseAnalysis = {
   retry: vi.fn(),
   refresh: vi.fn(),
   cancel: vi.fn().mockResolvedValue(undefined),
+  restart: vi.fn().mockResolvedValue(undefined),
   cancelling: false,
   canCancel: true,
   cancelled: false,
@@ -74,5 +75,7 @@ describe('AnalysisPipelinePage', () => {
     renderPage();
     expect(screen.getByText('Analysis cancelled')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancel analysis' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Restart analysis' }));
+    expect(baseAnalysis.restart).toHaveBeenCalled();
   });
 });

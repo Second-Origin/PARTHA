@@ -14,6 +14,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
   const cancelAnalysis = useAppStore((state) => state.cancelAnalysis);
   const updateRepository = useAppStore((state) => state.updateRepository);
   const startedRef = useRef<string | null>(null);
+  const pollingGenerationRef = useRef(0);
   const startInFlightRef = useRef<{
     repositoryId: string;
     promise: ReturnType<typeof backendService.startAnalysis>;
@@ -28,6 +29,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
   const repositoryStatus = repository?.status;
 
   useEffect(() => {
+    pollingGenerationRef.current += 1;
     startedRef.current = null;
     startInFlightRef.current = null;
     setJobStatus(null);
@@ -64,7 +66,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
         cancelAnalysis();
         setCancelling(false);
         setStatus('idle');
-        updateRepository(repositoryId, repositoryUpdates);
+        updateRepository(repositoryId, { ...repositoryUpdates, status: 'cancelled' });
         return;
       }
 
@@ -108,6 +110,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
 
     if (hasBackend) {
       let cancelled = false;
+      const pollingGeneration = pollingGenerationRef.current;
 
       async function ensureStarted() {
         if (!repositoryId || repositoryStatus !== 'analysing' || startedRef.current === repositoryId) {
@@ -139,7 +142,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
         if (!repositoryId || cancelled) return;
         try {
           const response = await backendService.fetchAnalysisStatus(repositoryId);
-          if (!response || cancelled) return;
+          if (!response || cancelled || pollingGeneration !== pollingGenerationRef.current) return;
 
           if (response.status === 'queued' && response.jobId === null) {
             await ensureStarted();
@@ -189,6 +192,29 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
     }
   }, [applyJobResponse, cancelling, repositoryId]);
 
+  const restart = useCallback(async () => {
+    if (!repositoryId || !hasBackend) return;
+    pollingGenerationRef.current += 1;
+    setError(null);
+    try {
+      const response = await backendService.startAnalysis(repositoryId);
+      if (response) {
+        startedRef.current = repositoryId;
+        updateRepository(repositoryId, {
+          status: 'analysing',
+          analysisStage: null,
+          analysisProgress: 0,
+          errorMessage: undefined,
+          analysedAt: undefined,
+        });
+        setJobStatus(response.status);
+      }
+    } catch (caught) {
+      setStatus('error');
+      setError(getErrorMessage(caught));
+    }
+  }, [repositoryId, updateRepository]);
+
   const currentStageIndex = ANALYSIS_STAGES.findIndex(
     (stage) => stage.key === repository?.analysisStage,
   );
@@ -207,6 +233,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
     retry: refresh,
     refresh,
     cancel,
+    restart,
     cancelling,
     canCancel: jobStatus === 'queued' || jobStatus === 'running',
     cancelled: jobStatus === 'cancelled',
