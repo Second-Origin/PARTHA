@@ -32,6 +32,8 @@ export const aiService = {
     onChunk: (chunk: AiStreamChunk) => void,
     config?: RequestConfig,
   ): Promise<void> {
+    // Compatibility transport only: the backend currently emits one complete
+    // content event because providers expose buffered completion, not tokens.
     return streamRequest(
       '/ai/stream',
       request,

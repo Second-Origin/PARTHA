@@ -18,7 +18,6 @@ describe('DependenciesPage', () => {
         size: 100,
         fileCount: 2,
         status: 'completed',
-        dataSource: 'real',
         analysisStage: 'completed',
         analysisProgress: 100,
         uploadedAt: '2026-07-15T00:00:00Z',
@@ -42,7 +41,7 @@ describe('DependenciesPage', () => {
       error: null,
       empty: false,
       success: true,
-      source: 'real',
+      source: 'upload',
       emptyReason: null,
       graph: {
         repositoryId: 'repo-1',

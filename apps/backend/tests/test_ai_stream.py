@@ -1,4 +1,4 @@
-"""Authorization and error-ordering for POST /ai/stream (#63, #65).
+"""Authorization and buffered-SSE behavior for POST /ai/stream (#63, #65, #96).
 
 Regression cover for the defect where ``service.query`` ran inside the SSE
 generator, after ``StreamingResponse`` had already emitted 200 headers: a
@@ -81,8 +81,8 @@ def test_stream_succeeds_for_owner_with_valid_prerequisites(client):
         assert _is_event_stream(response)
         events = _parse_events(response.text)
         assert events[-1] == {"type": "done"}
-        content = "".join(event["content"] for event in events if event["type"] == "content")
-        assert "Two" in content and "words" in content
+        content_events = [event for event in events if event["type"] == "content"]
+        assert content_events == [{"type": "content", "content": "Two words"}]
     finally:
         client.app.dependency_overrides.pop(get_provider_registry, None)
 

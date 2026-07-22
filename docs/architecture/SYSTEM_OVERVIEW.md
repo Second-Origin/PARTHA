@@ -63,7 +63,7 @@ flowchart LR
 | `api/` | HTTP boundary. Routes stay thin; `deps.py` wires every dependency. | Contain business logic. |
 | `services/` | Application services: repository import, analysis orchestration, documentation, AI. | Parse repository files directly. |
 | `intelligence/` | **The Repository Intelligence engine.** Builds, persists, and reloads reusable repository facts. | Render API response shapes. |
-| `parsers/` | `RepositoryParser` walks the extracted tree and produces the file tree plus basic metadata. `TreeSitterParser` is a **placeholder** — it maps extensions to language names and always returns zero symbols. | Produce feature-specific output. |
+| `parsers/` | `RepositoryParser` walks the extracted tree and produces the file tree plus basic metadata. Syntax-aware `PythonExtractor` and `TypeScriptExtractor` live under `extraction/`; legacy ingestion still uses the parser's heuristic symbol path. | Produce feature-specific output. |
 | `analysis/` | Architecture model — modules, layers, edges, request-flow hints. **Consumer.** | Read the filesystem. |
 | `graph/` | Dependency graph response model. **Consumer.** | Re-read dependency manifests. |
 | `review/` | Engineering review findings, scores, roadmap. **Consumer.** | Re-read the filesystem. |
@@ -230,7 +230,7 @@ flowchart TB
 
 These are properties of the system as built, not a wish list.
 
-1. **Extraction is heuristic, not language-aware.** File roles, modules, and layers are inferred from path segments and filenames. Symbols come from regular expressions. `TreeSitterParser` returns nothing, even though `tree-sitter` is a declared dependency.
+1. **Production ingestion remains partly heuristic.** File roles, modules, and layers are inferred from path segments and filenames, and legacy ingestion symbols come from regular expressions. Standalone syntax-aware Python and TypeScript extractors exist, but durable product integration remains a separate workflow.
 2. **No line-level provenance in production output.** The snapshot schema can store validated spans and derivations, but the current regex engine emits neither and is deliberately not promoted into `ri.v1`.
 3. **The graph store has no production producers or consumers yet.** Immutable normalized tables exist, but product surfaces still read the legacy JSON blob. Four of the eight legacy relationship types are never emitted; syntax-aware extraction/resolution and snapshot queries remain later issues.
 4. **Processing is synchronous and whole-repository.** No background jobs, no incremental re-analysis, no cancellation.

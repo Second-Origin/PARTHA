@@ -13,6 +13,6 @@ export function useRepositoryTree(repository: Repository | null) {
     success: hasTree,
     retry: () => undefined,
     refresh: () => undefined,
-    source: repository?.dataSource || null,
+    source: repository?.source || null,
   };
 }

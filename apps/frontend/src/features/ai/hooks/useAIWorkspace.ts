@@ -28,47 +28,13 @@ export function useAIWorkspace() {
     setError(null);
 
     try {
-      const assistantTimestamp = new Date().toISOString();
-      const assistantMessage: AiMessage = {
-        role: 'assistant',
-        content: '',
-        timestamp: assistantTimestamp,
-        citations: [],
-      };
-      setMessages((current) => [...current, assistantMessage]);
-
-      await aiService.streamQuery({
+      const response = await aiService.query({
         repositoryId: activeRepository.id,
         query: trimmed,
         context: { conversationHistory: messages.slice(-8) },
-      }, (chunk) => {
-        if (chunk.type === 'content' && chunk.content) {
-          setMessages((current) =>
-            current.map((message) =>
-              message.timestamp === assistantTimestamp
-                ? { ...message, content: `${message.content}${chunk.content}` }
-                : message,
-            ),
-          );
-        }
-        if (chunk.type === 'citation' && chunk.citation) {
-          setMessages((current) =>
-            current.map((message) =>
-              message.timestamp === assistantTimestamp
-                ? { ...message, citations: [...(message.citations || []), chunk.citation!] }
-                : message,
-            ),
-          );
-        }
-        if (chunk.type === 'error' && chunk.error) {
-          setError(chunk.error);
-        }
       });
-      setSuggestions([
-        'Explain the main architecture boundaries.',
-        'What files should I read first?',
-        'What are the highest-risk engineering issues?',
-      ]);
+      setMessages((current) => [...current, response.message]);
+      setSuggestions(response.suggestions || []);
     } catch (caught) {
       setError(getErrorMessage(caught));
     } finally {

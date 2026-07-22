@@ -129,8 +129,8 @@ async def query_ai(
     response_class=StreamingResponse,
     responses={
         200: response_example(
-            "Server-sent events containing a repository-aware AI response.",
-            'data: {"type":"content","content":"Authentication "}\\n\\n'
+            "Buffered server-sent events containing a repository-aware AI response.",
+            'data: {"type":"content","content":"Authentication is handled by the auth module."}\\n\\n'
             'data: {"type":"done"}\\n\\n',
             media_type="text/event-stream",
             schema={"type": "string"},
@@ -147,13 +147,13 @@ async def stream_ai(
     # (404) or a missing provider key (422) must surface as a normal error
     # response here — not inside the generator, where 200 headers would already
     # have been sent and the failure could only abort a stream that "succeeded".
-    # query already computes the full response before any word is emitted, so
-    # awaiting it here changes nothing on the success path.
+    # The provider contract is buffered, so this endpoint is an SSE transport
+    # for compatibility rather than token streaming. Emit one complete content
+    # event instead of presenting word-splitting as live provider output.
     response = await service.query(request)
 
     async def events():
-        for word in response.message.content.split(" "):
-            yield f"data: {json.dumps({'type': 'content', 'content': word + ' '})}\n\n"
+        yield f"data: {json.dumps({'type': 'content', 'content': response.message.content})}\n\n"
         for citation in response.message.citations or []:
             yield f"data: {json.dumps({'type': 'citation', 'citation': citation.model_dump(mode='json', by_alias=True)})}\n\n"
         yield f"data: {json.dumps({'type': 'done'})}\n\n"

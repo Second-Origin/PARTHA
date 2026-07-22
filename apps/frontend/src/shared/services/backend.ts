@@ -90,7 +90,6 @@ function mapRepositoryResponse(response: RepositoryResponse): Repository {
     size: response.size,
     fileCount: response.fileCount,
     status: response.status,
-    dataSource: response.dataSource,
     analysisStage: response.analysisStage,
     analysisProgress: response.analysisProgress,
     uploadedAt: response.uploadedAt,

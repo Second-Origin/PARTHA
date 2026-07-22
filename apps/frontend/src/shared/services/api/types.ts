@@ -1,4 +1,4 @@
-import type { DataSource, FileTreeNode, RepositoryMeta, AnalysisStage } from '@/shared/types';
+import type { FileTreeNode, RepositoryMeta, AnalysisStage } from '@/shared/types';
 import type { ArchitectureModel } from '@/shared/types/architecture';
 import type { EngineeringReview } from '@/shared/types/review';
 
@@ -43,7 +43,6 @@ export interface RepositoryResponse {
   size: number;
   fileCount: number;
   status: 'uploading' | 'analysing' | 'completed' | 'error';
-  dataSource: DataSource;
   analysisStage: AnalysisStage | null;
   analysisProgress: number;
   uploadedAt: string;

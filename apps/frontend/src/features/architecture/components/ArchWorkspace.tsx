@@ -26,14 +26,14 @@ import { RelationshipPanel } from './RelationshipPanel';
 import { getLayoutedElements } from '../layout';
 import { useArchitectureStore } from '../store';
 import { cn } from '@/shared/utils/cn';
-import type { DataSource } from '@/shared/types';
+import type { RepositorySource } from '@/shared/types';
 import type { ArchitectureModel } from '@/shared/types/architecture';
 
 const nodeTypes = { architectureNode: ArchitectureNode };
 
 interface ArchWorkspaceInnerProps {
   model: ArchitectureModel;
-  source?: DataSource | null;
+  source?: RepositorySource | null;
 }
 
 function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
@@ -346,7 +346,7 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
   );
 }
 
-export function ArchWorkspace({ model, source }: { model: ArchitectureModel; source?: DataSource | null }) {
+export function ArchWorkspace({ model, source }: { model: ArchitectureModel; source?: RepositorySource | null }) {
   return (
     <ReactFlowProvider>
       <ArchWorkspaceInner model={model} source={source} />

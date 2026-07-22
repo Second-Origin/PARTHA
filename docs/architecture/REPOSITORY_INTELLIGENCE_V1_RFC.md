@@ -1792,7 +1792,7 @@ this RFC to imply otherwise.
 
 - [`apps/backend/app/intelligence/models.py`](../../apps/backend/app/intelligence/models.py) — current serialized model; `SourceSymbol` has no span.
 - [`apps/backend/app/intelligence/engine.py`](../../apps/backend/app/intelligence/engine.py) — current regex extraction.
-- [`apps/backend/app/parsers/tree_sitter_parser.py`](../../apps/backend/app/parsers/tree_sitter_parser.py) — placeholder parser (returns no symbols).
+- [`apps/backend/app/extraction/typescript.py`](../../apps/backend/app/extraction/typescript.py) — syntax-aware TypeScript producer; production ingestion integration remains downstream work.
 - [`apps/backend/app/services/repository_service.py`](../../apps/backend/app/services/repository_service.py) — `_metadata_with_intelligence`, `_content_hash_for_upload`, and service use of the owner-scoped repository accessor.
 - [`apps/backend/app/repositories/repository_repository.py`](../../apps/backend/app/repositories/repository_repository.py) — owner-scoped `RepositoryRepository.get_for_owner`.
 - [`apps/backend/app/github/client.py`](../../apps/backend/app/github/client.py) — `read_head_commit` (`git rev-parse HEAD`).

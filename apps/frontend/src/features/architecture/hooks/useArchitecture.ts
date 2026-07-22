@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { DataSource, FeatureStatus } from '@/shared/types';
+import type { RepositorySource, FeatureStatus } from '@/shared/types';
 import type { ArchitectureModel } from '@/shared/types/architecture';
 import { backendService } from '@/shared/services/backend';
 import { getErrorMessage } from '@/shared/services/api';
@@ -13,7 +13,7 @@ export function useArchitecture() {
   const setStoreModel = useArchitectureStore((state) => state.setModel);
   const storeModel = useArchitectureStore((state) => state.model);
   const [model, setModel] = useState<ArchitectureModel | null>(storeModel);
-  const [source, setSource] = useState<DataSource | null>(null);
+  const [source, setSource] = useState<RepositorySource | null>(null);
   const [status, setStatus] = useState<FeatureStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -50,7 +50,7 @@ export function useArchitecture() {
 
         setModel(nextModel);
         setStoreModel(nextModel);
-        setSource('real');
+        setSource(activeRepository.source);
         setStatus('success');
       } catch (caught) {
         if (cancelled) return;
