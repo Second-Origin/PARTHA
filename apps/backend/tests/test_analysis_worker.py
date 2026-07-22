@@ -23,7 +23,7 @@ from app.services.analysis_job_service import (
     ANALYSIS_PRODUCER_VERSION_SET,
     AnalysisJobService,
 )
-from app.workers.analysis_worker import AnalysisWorker
+from app.workers.analysis_worker import AnalysisWorker, _HeartbeatState
 
 UPLOAD_REVISION = "sha256:" + "d" * 64
 
@@ -537,6 +537,47 @@ def test_heartbeat_keeps_a_long_stage_from_being_reclaimed(
         ).one()
         assert job.status == "completed"
         assert job.attempt == 1
+
+
+def test_sqlite_write_lock_does_not_leave_a_heartbeat_thread_running(
+    session_factory, tmp_path
+):
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "repo")
+        record_id = record.id
+        AnalysisJobService(session, owner.id).submit(record_id)
+
+    worker = AnalysisWorker(
+        session_factory,
+        worker_id="worker-a",
+        lease_seconds=60,
+        heartbeat_interval_seconds=0.02,
+    )
+    with session_factory() as claim_session:
+        job = worker._claim(claim_session)
+        assert job is not None
+        job_id = job.id
+
+    blocker = session_factory()
+    try:
+        blocker.execute(
+            update(RepositoryRecord)
+            .where(RepositoryRecord.id == record_id)
+            .values(updated_at=datetime.now(UTC))
+        )
+        state = _HeartbeatState()
+        thread = threading.Thread(target=worker._heartbeat_once, args=(job_id, state))
+        thread.start()
+        thread.join(timeout=1)
+
+        assert not thread.is_alive()
+        assert not state.ownership_lost.is_set()
+        assert not state.cancel_requested.is_set()
+        assert state.failure is None
+    finally:
+        blocker.rollback()
+        blocker.close()
 
 
 def test_heartbeat_ownership_loss_abandons_stage_writes(

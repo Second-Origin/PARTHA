@@ -767,7 +767,33 @@ class AnalysisWorker:
         """Atomically renew ownership and return the cancellation flag."""
 
         session = self.session_factory()
+        sqlite_connection = None
+        sqlite_busy_timeout = None
+
+        def _restore_sqlite_timeout() -> None:
+            nonlocal sqlite_connection
+            if sqlite_connection is None or sqlite_busy_timeout is None:
+                return
+            try:
+                cursor = sqlite_connection.cursor()
+                cursor.execute(f"PRAGMA busy_timeout = {sqlite_busy_timeout}")
+                cursor.close()
+            except Exception:  # noqa: BLE001 - discard a modified connection
+                session.invalidate()
+            finally:
+                sqlite_connection = None
+
         try:
+            if session.bind is not None and session.bind.dialect.name == "sqlite":
+                connection = session.connection()
+                sqlite_connection = connection.connection.driver_connection
+                cursor = sqlite_connection.cursor()
+                sqlite_busy_timeout = int(cursor.execute("PRAGMA busy_timeout").fetchone()[0])
+                # SQLite serializes all writers. If the stage already owns the
+                # database write lock, a sweeper cannot reclaim the job either,
+                # so the heartbeat must not block stage cleanup behind that lock.
+                cursor.execute("PRAGMA busy_timeout = 0")
+                cursor.close()
             now = self._clock()
             row = session.execute(
                 update(AnalysisJob)
@@ -784,13 +810,16 @@ class AnalysisWorker:
                 .execution_options(synchronize_session=False)
             ).first()
             if row is None:
+                _restore_sqlite_timeout()
                 session.rollback()
                 state.ownership_lost.set()
                 return
+            _restore_sqlite_timeout()
             session.commit()
             if row[0]:
                 state.cancel_requested.set()
         except Exception as exc:  # noqa: BLE001 - surfaced to the owning worker
+            _restore_sqlite_timeout()
             session.rollback()
             # A SQLite writer prevents every other SQLite writer, including a
             # stale sweeper. Skipping that transient pulse avoids a false retry;
@@ -804,6 +833,7 @@ class AnalysisWorker:
             else:
                 state.failure = exc
         finally:
+            _restore_sqlite_timeout()
             session.close()
 
     @staticmethod
