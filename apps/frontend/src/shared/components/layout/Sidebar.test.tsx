@@ -73,4 +73,17 @@ describe('Sidebar', () => {
     expect(architecture).toHaveFocus();
     expect(architecture).toHaveAttribute('href', '/architecture');
   });
+
+  it('marks only the active route with aria-current', () => {
+    render(
+      <MemoryRouter initialEntries={['/architecture']}>
+        <Sidebar />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Architecture' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Repositories' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Settings' })).not.toHaveAttribute('aria-current');
+  });
 });

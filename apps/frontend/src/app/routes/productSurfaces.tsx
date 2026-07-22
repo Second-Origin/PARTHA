@@ -28,7 +28,10 @@ interface ReadyProductSurface extends ProductSurfaceBase {
 export interface DeferredProductSurface extends ProductSurfaceBase {
   readiness: 'deferred';
   primaryNavigation: false;
+  /** Internal roadmap metadata. Must never be rendered to product users. */
   blockingIssues: readonly number[];
+  /** Plain-language, user-facing explanation of what is unavailable and why. */
+  unavailableMessage: string;
 }
 
 export type ProductSurface = ReadyProductSurface | DeferredProductSurface;
@@ -120,6 +123,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     readiness: 'deferred',
     primaryNavigation: false,
     blockingIssues: [95, 113],
+    unavailableMessage: 'Evidence-backed repository answers are not available yet.',
   },
   {
     id: 'engineering-review',
@@ -129,6 +133,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     readiness: 'deferred',
     primaryNavigation: false,
     blockingIssues: [95, 113],
+    unavailableMessage: 'Evidence-based engineering review is not available yet.',
   },
   {
     id: 'documentation',
@@ -138,6 +143,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     readiness: 'deferred',
     primaryNavigation: false,
     blockingIssues: [95, 113],
+    unavailableMessage: 'Graph-backed repository documentation is not available yet.',
   },
   {
     id: 'insights',
@@ -147,6 +153,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     readiness: 'deferred',
     primaryNavigation: false,
     blockingIssues: [117],
+    unavailableMessage: 'Repository insights are not available yet.',
   },
 ];
 
