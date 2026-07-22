@@ -99,7 +99,7 @@ export function RepositoriesPage() {
                   <button
                     onClick={() => {
                       selectRepository(repo);
-                      if (repo.status === 'analysing') navigate(`/analysis/${repo.id}`);
+                      if (repo.status === 'analysing' || repo.status === 'cancelled') navigate(`/analysis/${repo.id}`);
                       else navigate(`/repositories/${repo.id}`);
                     }}
                     className="text-sm font-medium text-foreground hover:text-primary transition-colors"
@@ -133,7 +133,7 @@ export function RepositoriesPage() {
                     <button
                       onClick={() => {
                         selectRepository(repo);
-                        if (repo.status === 'analysing') navigate(`/analysis/${repo.id}`);
+                        if (repo.status === 'analysing' || repo.status === 'cancelled') navigate(`/analysis/${repo.id}`);
                         else navigate(`/repositories/${repo.id}`);
                       }}
                       className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"

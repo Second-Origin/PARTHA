@@ -10,6 +10,7 @@ import {
   Settings,
   Check,
   Loader2,
+  Ban,
 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useAppStore } from '@/app/store/useAppStore';
@@ -85,6 +86,7 @@ export function TopBar() {
   const statusIcon = (status: string) => {
     if (status === 'completed') return <Check className="h-3 w-3 text-success" />;
     if (status === 'analysing') return <Loader2 className="h-3 w-3 text-primary animate-spin" />;
+    if (status === 'cancelled') return <Ban className="h-3 w-3 text-muted-foreground" />;
     return null;
   };
 

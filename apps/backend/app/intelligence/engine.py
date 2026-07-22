@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-import json
 import re
-import tomllib
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from app.intelligence.models import (
+    EnvironmentFileEvidence,
+    DependencyDeclaration,
+    DependencyDiagnostic,
     KnowledgeGraph,
     KnowledgeGraphNode,
     KnowledgeGraphRelationship,
@@ -21,6 +23,7 @@ from app.intelligence.models import (
     SourceRole,
     SourceSymbol,
 )
+from app.intelligence import canonical
 from app.models.repository import RepositoryRecord
 from app.schemas.repository import FileTreeNode, RepositoryMeta
 
@@ -40,6 +43,19 @@ CONFIG_NAMES = {
     ".gitignore",
     "alembic.ini",
 }
+ENVIRONMENT_TEMPLATE_NAMES = {".env.example", ".env.sample", ".env.template", ".env.dist"}
+SECRET_KEY_NAME_PATTERN = re.compile(
+    r"(?:^|_)(?:api_?key|access_?key(?:_?id)?|auth_?token|client_?secret|"
+    r"credentials?|passw(?:or)?d|pwd|private_?key|secret_?key|secret|token)$",
+    flags=re.IGNORECASE,
+)
+PLACEHOLDER_VALUE_PATTERN = re.compile(
+    r"^(?:\$\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*|<[^>]+>|\[[^]]+\]|(?:example|sample|placeholder|replace|your)[\s_-].*|(?:change|replace)[\s_-]?me|not[\s_-]?a[\s_-]?real[\s_-]?.*|x+|\*+)$",
+    flags=re.IGNORECASE,
+)
+NUMBER_VALUE_PATTERN = re.compile(r"[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?", flags=re.IGNORECASE)
+PATH_VALUE_PATTERN = re.compile(r"^(?:[A-Za-z]:[\\/]|[/~]|\.{1,2}[\\/]|file://)", flags=re.IGNORECASE)
+URL_VALUE_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 DATABASE_TECHNOLOGIES = {
     "postgres": "PostgreSQL",
     "postgresql": "PostgreSQL",
@@ -72,17 +88,44 @@ class RepositoryIntelligenceEngine:
     and Python; wiring those into this build path is #93.
     """
 
-    def from_record(self, record: RepositoryRecord) -> RepositoryIntelligence:
+    def from_record(
+        self,
+        record: RepositoryRecord,
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> RepositoryIntelligence:
+        self._check_cancelled(check_cancelled)
         existing = self.load(record)
         if existing:
+            if existing.discovery.environment_files and not existing.discovery.environment_file_evidence:
+                # Legacy cache entries predate content-derived environment evidence. Upgrade
+                # them in bounded O(environment files) time without rereading or rebuilding
+                # the repository. Unknown legacy content is deliberately treated as a runtime
+                # file, which cannot produce a critical secret-exposure finding.
+                evidence: list[EnvironmentFileEvidence] = []
+                for path in existing.discovery.environment_files:
+                    self._check_cancelled(check_cancelled)
+                    evidence.append(
+                        EnvironmentFileEvidence(
+                            path=path,
+                            evidence_class="runtime_env_file_present",
+                        )
+                    )
+                discovery = existing.discovery.model_copy(update={"environment_file_evidence": evidence})
+                return existing.model_copy(update={"discovery": discovery})
             return existing
+        tree: list[FileTreeNode] = []
+        for node in record.file_tree or []:
+            self._check_cancelled(check_cancelled)
+            tree.append(FileTreeNode.model_validate(node))
         return self.build(
             repository_id=record.id,
             repository_name=record.name,
             root=Path(record.local_path),
-            tree=[FileTreeNode.model_validate(node) for node in record.file_tree or []],
+            tree=tree,
             metadata=RepositoryMeta.model_validate(record.repo_metadata or {}),
             total_size=record.size,
+            check_cancelled=check_cancelled,
         )
 
     def load(self, record: RepositoryRecord) -> RepositoryIntelligence | None:
@@ -107,14 +150,43 @@ class RepositoryIntelligenceEngine:
         tree: list[FileTreeNode],
         metadata: RepositoryMeta,
         total_size: int,
+        *,
+        check_cancelled: Callable[[], None] | None = None,
     ) -> RepositoryIntelligence:
-        flat_files = self._flatten_files(tree)
-        file_intelligence = [self._file_intelligence(root, node) for node in flat_files]
-        symbols = [symbol for file in file_intelligence for symbol in file.symbols]
-        dependencies = self._dependencies(root)
-        discovery = self._discovery(metadata, tree, file_intelligence, dependencies, total_size)
-        modules = self._modules(file_intelligence)
-        graph = self._knowledge_graph(repository_id, repository_name, modules, file_intelligence, symbols, dependencies)
+        self._check_cancelled(check_cancelled)
+        flat_files = self._flatten_files(tree, check_cancelled=check_cancelled)
+        file_intelligence: list[SourceFileIntelligence] = []
+        for node in flat_files:
+            self._check_cancelled(check_cancelled)
+            file_intelligence.append(self._file_intelligence(root, node))
+        symbols: list[SourceSymbol] = []
+        for file in file_intelligence:
+            self._check_cancelled(check_cancelled)
+            symbols.extend(file.symbols)
+        dependencies, dependency_manifest_count, dependency_diagnostics = self._dependencies(
+            root,
+            flat_files,
+            check_cancelled=check_cancelled,
+        )
+        discovery = self._discovery(
+            root,
+            metadata,
+            tree,
+            file_intelligence,
+            dependencies,
+            total_size,
+            check_cancelled=check_cancelled,
+        )
+        modules = self._modules(file_intelligence, check_cancelled=check_cancelled)
+        graph = self._knowledge_graph(
+            repository_id,
+            repository_name,
+            modules,
+            file_intelligence,
+            symbols,
+            dependencies,
+            check_cancelled=check_cancelled,
+        )
         return RepositoryIntelligence(
             repository_id=repository_id,
             repository_name=repository_name,
@@ -125,17 +197,35 @@ class RepositoryIntelligenceEngine:
             files=file_intelligence,
             symbols=symbols,
             dependencies=dependencies,
+            dependency_manifest_count=dependency_manifest_count,
+            dependency_diagnostics=dependency_diagnostics,
             graph=graph,
         )
 
-    def _flatten_files(self, nodes: list[FileTreeNode]) -> list[FileTreeNode]:
+    def _flatten_files(
+        self,
+        nodes: list[FileTreeNode],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> list[FileTreeNode]:
         result: list[FileTreeNode] = []
         for node in nodes:
+            self._check_cancelled(check_cancelled)
             if node.type == "file":
                 result.append(node)
             if node.children:
-                result.extend(self._flatten_files(node.children))
+                result.extend(
+                    self._flatten_files(
+                        node.children,
+                        check_cancelled=check_cancelled,
+                    )
+                )
         return result
+
+    @staticmethod
+    def _check_cancelled(check_cancelled: Callable[[], None] | None) -> None:
+        if check_cancelled is not None:
+            check_cancelled()
 
     def _file_intelligence(self, root: Path, node: FileTreeNode) -> SourceFileIntelligence:
         path = node.path
@@ -280,67 +370,212 @@ class RepositoryIntelligenceEngine:
             technologies.add("GitHub Actions")
         return sorted(technologies)
 
-    def _dependencies(self, root: Path) -> list[RepositoryDependency]:
-        dependencies: list[RepositoryDependency] = []
-        package_json = root / "package.json"
-        if package_json.exists():
-            try:
-                data = json.loads(package_json.read_text(encoding="utf-8"))
-            except json.JSONDecodeError:
-                data = {}
-            for section, dep_type in (("dependencies", "production"), ("devDependencies", "development"), ("peerDependencies", "peer"), ("optionalDependencies", "optional")):
-                for name, version in data.get(section, {}).items():
-                    dependencies.append(self._dependency(name, str(version), dep_type, "npm", "package.json"))
+    def _dependencies(
+        self,
+        root: Path,
+        files: list[FileTreeNode],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> tuple[list[RepositoryDependency], int, list[DependencyDiagnostic]]:
+        """Extract declarations from parser-approved manifest inventory only.
 
-        requirements = root / "requirements.txt"
-        if requirements.exists():
-            for line in requirements.read_text(encoding="utf-8", errors="ignore").splitlines():
-                clean = line.strip()
-                if not clean or clean.startswith("#"):
+        ``RepositoryParser`` has already applied the repository's ignored-path
+        policy to ``files``.  This bridge deliberately never walks ``root`` or
+        guesses manifest locations; it forwards the selected bytes to the
+        canonical manifest extractor and retains all returned provenance.
+        """
+
+        # Extraction modules import canonical path helpers from this package,
+        # so load them only after the intelligence package has initialized.
+        from app.extraction.manifests import DependencyManifestExtractor
+        from app.extraction.pipeline import ExtractionPipeline
+
+        extractor = DependencyManifestExtractor()
+        pipeline = ExtractionPipeline((extractor,))
+        manifest_count = 0
+        diagnostics: list[DependencyDiagnostic] = []
+        declarations_by_key: dict[str, list[DependencyDeclaration]] = defaultdict(list)
+        for file in sorted(files, key=lambda item: item.path):
+            self._check_cancelled(check_cancelled)
+            try:
+                path = canonical.normalize_repo_path(file.path.lstrip("/"))
+            except canonical.PathEscapeError:
+                continue
+            if not extractor.supports(path):
+                continue
+            manifest_count += 1
+            source_path = root / path
+            try:
+                reported_bytes = source_path.stat().st_size
+            except OSError:
+                # The parser inventory is the source of truth. A file that
+                # disappears between inventory and analysis cannot become a
+                # fabricated zero-dependency success state.
+                diagnostics.append(
+                    DependencyDiagnostic(
+                        code="RI-SRC-MALFORMED",
+                        category="malformed source",
+                        severity="error",
+                        message="dependency manifest could not be read from the parser-approved inventory",
+                        path=path,
+                        producer=extractor.producer,
+                    )
+                )
+                continue
+            if reported_bytes > pipeline.max_source_bytes:
+                diagnostics.append(
+                    DependencyDiagnostic(
+                        code="RI-LIMIT-SKIP",
+                        category="resource-limit skip",
+                        severity="info",
+                        message="file exceeds the configured source-size budget",
+                        path=path,
+                        producer=f"{pipeline.inventory_name}@{pipeline.inventory_version}",
+                        details={
+                            "budgetBytes": pipeline.max_source_bytes,
+                            "reportedBytes": reported_bytes,
+                        },
+                    )
+                )
+                continue
+            try:
+                # Read at most one byte past the configured budget. This is a
+                # second guard against a file growing after ``stat()`` and keeps
+                # each candidate bounded rather than retaining all manifests.
+                with source_path.open("rb") as source_file:
+                    source = source_file.read(pipeline.max_source_bytes + 1)
+            except OSError:
+                diagnostics.append(
+                    DependencyDiagnostic(
+                        code="RI-SRC-MALFORMED",
+                        category="malformed source",
+                        severity="error",
+                        message="dependency manifest could not be read from the parser-approved inventory",
+                        path=path,
+                        producer=extractor.producer,
+                    )
+                )
+                continue
+            if len(source) > pipeline.max_source_bytes:
+                diagnostics.append(
+                    DependencyDiagnostic(
+                        code="RI-LIMIT-SKIP",
+                        category="resource-limit skip",
+                        severity="info",
+                        message="file exceeds the configured source-size budget",
+                        path=path,
+                        producer=f"{pipeline.inventory_name}@{pipeline.inventory_version}",
+                        details={
+                            "budgetBytes": pipeline.max_source_bytes,
+                            "reportedBytes": len(source),
+                        },
+                    )
+                )
+                continue
+
+            for run in pipeline.run({path: source}, check_cancelled=check_cancelled):
+                self._check_cancelled(check_cancelled)
+                for diagnostic in run.result.diagnostics:
+                    diagnostics.append(
+                        DependencyDiagnostic(
+                            code=diagnostic.code,
+                            category=diagnostic.category,
+                            severity=diagnostic.severity,
+                            message=diagnostic.message,
+                            path=diagnostic.path,
+                            producer=run.producer,
+                            details=dict(diagnostic.details) if diagnostic.details is not None else None,
+                        )
+                    )
+                if run.producer != extractor.producer:
                     continue
-                name = re.split(r"==|>=|<=|~=|>|<", clean)[0].strip()
-                version = clean.replace(name, "", 1) or "unknown"
-                dependencies.append(self._dependency(name, version, "production", "python", "requirements.txt"))
+                for node in run.result.nodes:
+                    if node.node_kind != "dependency" or node.properties is None or not node.evidence:
+                        continue
+                    properties = node.properties
+                    evidence = node.evidence[0]
+                    ecosystem = str(properties["ecosystem"])
+                    version = properties.get("version")
+                    declaration = DependencyDeclaration(
+                        name=node.name or node.stable_key.rsplit(":", 1)[-1],
+                        manifest_path=str(properties["manifest_path"]),
+                        workspace_path=str(properties["workspace_path"]),
+                        start_line=evidence.start_line,
+                        end_line=evidence.end_line,
+                        extractor=run.producer_name,
+                        extractor_version=run.producer_version,
+                        ecosystem=ecosystem,
+                        version=str(version) if version is not None else None,
+                        type=properties["dependency_type"],  # type: ignore[arg-type]
+                    )
+                    declarations_by_key[node.stable_key].append(declaration)
 
-        pyproject = root / "pyproject.toml"
-        if pyproject.exists():
-            try:
-                data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-            except tomllib.TOMLDecodeError:
-                data = {}
-            for item in data.get("project", {}).get("dependencies", []):
-                name = re.split(r"==|>=|<=|~=|>|<", str(item))[0].strip()
-                version = str(item).replace(name, "", 1) or "unknown"
-                dependencies.append(self._dependency(name, version, "production", "python", "pyproject.toml"))
-        return sorted({dependency.id: dependency for dependency in dependencies}.values(), key=lambda dependency: dependency.name.lower())
-
-    def _dependency(self, name: str, version: str, dep_type: str, ecosystem: str, source_file: str) -> RepositoryDependency:
-        safe_id = re.sub(r"[^A-Za-z0-9_.@/-]", "-", name)
-        return RepositoryDependency(
-            id=f"dependency:{ecosystem}:{safe_id}",
-            name=name,
-            version=version,
-            type=dep_type,  # type: ignore[arg-type]
-            ecosystem=ecosystem,
-            source_file=source_file,
+        dependencies: list[RepositoryDependency] = []
+        for stable_key, declarations in sorted(declarations_by_key.items()):
+            self._check_cancelled(check_cancelled)
+            ordered = sorted(
+                declarations,
+                key=lambda item: (
+                    item.manifest_path,
+                    item.start_line,
+                    item.end_line,
+                    item.type,
+                    item.version or "",
+                ),
+            )
+            first = ordered[0]
+            versions = {declaration.version for declaration in ordered}
+            types = {declaration.type for declaration in ordered}
+            dependencies.append(
+                RepositoryDependency(
+                    id=f"dependency:{stable_key.removeprefix('dep:')}",
+                    name=first.name,
+                    version=next(iter(versions)) if len(versions) == 1 else None,
+                    type=next(iter(types)) if len(types) == 1 else "multiple",
+                    ecosystem=first.ecosystem,
+                    source_file=first.manifest_path,
+                    declarations=ordered,
+                )
+            )
+        return (
+            sorted(dependencies, key=lambda dependency: (dependency.ecosystem, dependency.name.lower(), dependency.id)),
+            manifest_count,
+            sorted(
+                diagnostics,
+                key=lambda diagnostic: (
+                    diagnostic.path or "",
+                    diagnostic.code,
+                    diagnostic.producer,
+                    diagnostic.message,
+                ),
+            ),
         )
 
     def _discovery(
         self,
+        root: Path,
         metadata: RepositoryMeta,
         tree: list[FileTreeNode],
         files: list[SourceFileIntelligence],
         dependencies: list[RepositoryDependency],
         total_size: int,
+        *,
+        check_cancelled: Callable[[], None] | None = None,
     ) -> RepositoryDiscovery:
+        self._check_cancelled(check_cancelled)
         language_counts = Counter(file.language for file in files if file.language)
-        folders = self._count_folders(tree)
+        folders = self._count_folders(tree, check_cancelled=check_cancelled)
         paths = [file.path for file in files]
         dep_names = {dependency.name.lower() for dependency in dependencies}
         frameworks = sorted({metadata.framework, *self._frameworks_from_dependencies(dep_names)} - {"Unknown", ""})
         package_managers = sorted({metadata.package_manager} - {None})  # type: ignore[arg-type]
         config_files = [path.lstrip("/") for path in paths if Path(path).name in CONFIG_NAMES or "/.github/" in path]
         env_files = [path.lstrip("/") for path in paths if Path(path).name.startswith(".env")]
+        environment_file_evidence = self._environment_file_evidence(
+            root,
+            env_files,
+            check_cancelled=check_cancelled,
+        )
         docker_files = [path.lstrip("/") for path in paths if "docker" in path.lower()]
         ci_files = [path.lstrip("/") for path in paths if "/.github/workflows/" in path or "gitlab-ci" in path.lower()]
         build_systems = self._build_systems(paths, dep_names)
@@ -354,6 +589,7 @@ class RepositoryIntelligenceEngine:
             package_managers=package_managers,
             configuration_files=config_files,
             environment_files=env_files,
+            environment_file_evidence=environment_file_evidence,
             docker_files=docker_files,
             ci_files=ci_files,
             entry_points=[metadata.entry_point] if metadata.entry_point else [],
@@ -371,13 +607,144 @@ class RepositoryIntelligenceEngine:
             ),
         )
 
-    def _count_folders(self, nodes: list[FileTreeNode]) -> int:
+    def _environment_file_evidence(
+        self,
+        root: Path,
+        paths: list[str],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> list[EnvironmentFileEvidence]:
+        evidence: list[EnvironmentFileEvidence] = []
+        for path in paths:
+            self._check_cancelled(check_cancelled)
+            secret_keys = self._secret_like_keys(self._read_text(root, path))
+            if secret_keys:
+                evidence_class = "secret_like_value_detected"
+            elif Path(path).name.lower() in ENVIRONMENT_TEMPLATE_NAMES:
+                evidence_class = "template_present"
+            else:
+                evidence_class = "runtime_env_file_present"
+            evidence.append(EnvironmentFileEvidence(path=path, evidence_class=evidence_class, secret_keys=secret_keys))
+        return evidence
+
+    def _secret_like_keys(self, text: str) -> list[str]:
+        keys: set[str] = set()
+        for line in text.splitlines():
+            clean = line.strip()
+            if not clean or clean.startswith("#"):
+                continue
+            if clean.startswith("export "):
+                clean = clean.removeprefix("export ").lstrip()
+            if "=" not in clean:
+                continue
+            key, value = clean.split("=", 1)
+            key = key.strip()
+            value = self._parse_dotenv_value(value)
+            if not key or self._is_placeholder_value(value):
+                continue
+            if self._has_embedded_credentials(value) or (
+                SECRET_KEY_NAME_PATTERN.search(key) and self._is_credible_secret_value(value)
+            ):
+                keys.add(key)
+        return sorted(keys)
+
+    def _parse_dotenv_value(self, value: str) -> str:
+        """Remove dotenv quoting and an unquoted, whitespace-delimited comment."""
+        normalized = value.strip()
+        quote: str | None = None
+        escaped = False
+        for index, character in enumerate(normalized):
+            if escaped:
+                escaped = False
+                continue
+            if quote:
+                if character == "\\" and quote == '"':
+                    escaped = True
+                elif character == quote:
+                    quote = None
+                continue
+            if character in {'"', "'"}:
+                quote = character
+            elif character == "#" and (index == 0 or normalized[index - 1].isspace()):
+                normalized = normalized[:index].rstrip()
+                break
+        if len(normalized) >= 2 and normalized[0] == normalized[-1] and normalized[0] in {'"', "'"}:
+            normalized = normalized[1:-1]
+        return normalized
+
+    def _is_placeholder_value(self, value: str) -> bool:
+        normalized = value.strip()
+        if not normalized or normalized.lower() in {
+            "none",
+            "null",
+            "undefined",
+            "example",
+            "sample",
+            "placeholder",
+            "replace",
+            "your",
+            "user",
+            "username",
+            "password",
+            "pass",
+            "pwd",
+            "secret",
+            "token",
+        }:
+            return True
+        return bool(PLACEHOLDER_VALUE_PATTERN.fullmatch(normalized))
+
+    def _is_credible_secret_value(self, value: str) -> bool:
+        """Require value-shaped evidence in addition to a sensitive key name."""
+        normalized = value.strip()
+        if self._is_placeholder_value(normalized):
+            return False
+        if normalized.lower() in {"true", "false", "yes", "no", "on", "off", "enabled", "disabled"}:
+            return False
+        if NUMBER_VALUE_PATTERN.fullmatch(normalized):
+            return False
+        if PATH_VALUE_PATTERN.match(normalized):
+            return False
+        if URL_VALUE_PATTERN.match(normalized):
+            return self._has_embedded_credentials(normalized)
+        if len(normalized) < 8:
+            return False
+        character_classes = sum(
+            (
+                any(character.islower() for character in normalized),
+                any(character.isupper() for character in normalized),
+                any(character.isdigit() for character in normalized),
+                any(not character.isalnum() for character in normalized),
+            )
+        )
+        return character_classes >= 2 or len(normalized) >= 16
+
+    def _has_embedded_credentials(self, value: str) -> bool:
+        if "-----BEGIN" in value and "PRIVATE KEY-----" in value:
+            return True
+        # A URL userinfo section only counts as an exposed credential when the
+        # password is a concrete value, not a placeholder or a ${VAR} reference
+        # (e.g. postgres://user:password@host and postgres://user:${PW}@host are
+        # template idioms, not committed secrets).
+        userinfo = re.search(r"://[^/@\s]+:([^/@\s]+)@", value)
+        return bool(userinfo) and not self._is_placeholder_value(userinfo.group(1))
+
+    def _count_folders(
+        self,
+        nodes: list[FileTreeNode],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> int:
         count = 0
         for node in nodes:
+            self._check_cancelled(check_cancelled)
             if node.type == "folder":
                 count += 1
             if node.children:
-                count += self._count_folders(node.children)
+                count += self._count_folders(
+                    node.children,
+                    check_cancelled=check_cancelled,
+                )
         return count
 
     def _frameworks_from_dependencies(self, dep_names: set[str]) -> set[str]:
@@ -405,12 +772,19 @@ class RepositoryIntelligenceEngine:
             systems.add("Docker")
         return sorted(systems)
 
-    def _modules(self, files: list[SourceFileIntelligence]) -> list[RepositoryModule]:
+    def _modules(
+        self,
+        files: list[SourceFileIntelligence],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> list[RepositoryModule]:
         grouped: dict[str, list[SourceFileIntelligence]] = defaultdict(list)
         for file in files:
+            self._check_cancelled(check_cancelled)
             grouped[file.module_id].append(file)
         modules: list[RepositoryModule] = []
         for module_id, module_files in grouped.items():
+            self._check_cancelled(check_cancelled)
             role = self._dominant_role(module_files)
             dependencies = sorted({import_name for file in module_files for import_name in file.imports})
             symbols = sorted({symbol.id for file in module_files for symbol in file.symbols})
@@ -485,21 +859,26 @@ class RepositoryIntelligenceEngine:
         files: list[SourceFileIntelligence],
         symbols: list[SourceSymbol],
         dependencies: list[RepositoryDependency],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
     ) -> KnowledgeGraph:
         nodes: list[KnowledgeGraphNode] = [KnowledgeGraphNode(id=f"repository:{repository_id}", type="repository", name=repository_name)]
         relationships: list[KnowledgeGraphRelationship] = []
         module_by_id = {module.id: module for module in modules}
 
         for module in modules:
+            self._check_cancelled(check_cancelled)
             nodes.append(KnowledgeGraphNode(id=module.id, type="module", name=module.name, path=module.path_prefix, metadata={"role": module.role, "layer": module.layer}))
             relationships.append(self._relationship(f"repository:{repository_id}", module.id, "contains", [module.path_prefix]))
 
         for file in files:
+            self._check_cancelled(check_cancelled)
             file_id = self._file_id(file.path)
             nodes.append(KnowledgeGraphNode(id=file_id, type="file", name=file.name, path=file.path, metadata={"role": file.role, "language": file.language or "Unknown"}))
             if file.module_id in module_by_id:
                 relationships.append(self._relationship(file.module_id, file_id, "contains", [file.path]))
             for import_name in file.imports:
+                self._check_cancelled(check_cancelled)
                 dependency = self._dependency_for_import(import_name, dependencies)
                 target = dependency.id if dependency else f"external:{import_name}"
                 if dependency is None:
@@ -508,6 +887,7 @@ class RepositoryIntelligenceEngine:
 
         seen_nodes = {node.id for node in nodes}
         for symbol in symbols:
+            self._check_cancelled(check_cancelled)
             nodes.append(KnowledgeGraphNode(id=symbol.id, type="symbol", name=symbol.name, path=symbol.file_path, metadata={"kind": symbol.kind, "exported": symbol.exported}))
             relationships.append(self._relationship(self._file_id(symbol.file_path), symbol.id, "contains", [symbol.file_path]))
             if symbol.exported:
@@ -515,10 +895,34 @@ class RepositoryIntelligenceEngine:
             seen_nodes.add(symbol.id)
 
         for dependency in dependencies:
+            self._check_cancelled(check_cancelled)
             if dependency.id not in seen_nodes:
-                nodes.append(KnowledgeGraphNode(id=dependency.id, type="dependency", name=dependency.name, path=dependency.source_file, metadata={"version": dependency.version, "ecosystem": dependency.ecosystem, "type": dependency.type}))
+                nodes.append(
+                    KnowledgeGraphNode(
+                        id=dependency.id,
+                        type="dependency",
+                        name=dependency.name,
+                        path=dependency.source_file,
+                        metadata={
+                            "version": dependency.version,
+                            "ecosystem": dependency.ecosystem,
+                            "type": dependency.type,
+                            "declarations": [
+                                declaration.model_dump(mode="json", by_alias=True)
+                                for declaration in dependency.declarations
+                            ],
+                        },
+                    )
+                )
                 seen_nodes.add(dependency.id)
-            relationships.append(self._relationship(f"repository:{repository_id}", dependency.id, "depends_on", [dependency.source_file]))
+            relationships.append(
+                self._relationship(
+                    f"repository:{repository_id}",
+                    dependency.id,
+                    "depends_on",
+                    [declaration.manifest_path for declaration in dependency.declarations],
+                )
+            )
 
         deduped_nodes = list({node.id: node for node in nodes}.values())
         deduped_relationships = list({relationship.id: relationship for relationship in relationships}.values())

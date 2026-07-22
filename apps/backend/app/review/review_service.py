@@ -1,8 +1,18 @@
 from datetime import UTC, datetime
+from pathlib import PurePosixPath
 
-from app.intelligence.engine import RepositoryIntelligenceEngine
+from app.core.exceptions import ConflictServiceError
+from app.intelligence.engine import SOURCE_EXTENSIONS, RepositoryIntelligenceEngine
+from app.intelligence.models import EnvironmentFileEvidence, SourceFileIntelligence
 from app.models.repository import RepositoryRecord
-from app.schemas.review import EngineeringReviewResponse, ImprovementStep, ReviewFinding, ReviewScore, ReviewSummary
+from app.schemas.review import (
+    EngineeringReviewResponse,
+    ImprovementStep,
+    ReviewFileEvidence,
+    ReviewFinding,
+    ReviewScore,
+    ReviewSummary,
+)
 
 LARGE_FILE_BYTES = 40_000
 LARGE_SOURCE_SURFACE = 300
@@ -10,13 +20,105 @@ SEVERITY_PRIORITY = {"critical": 1, "high": 2, "medium": 3, "low": 4}
 SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 EFFORT_BY_SEVERITY = {"critical": "1 sprint", "high": "1 sprint", "medium": "a few days", "low": "a few hours"}
 
+# The oversized-source review is intentionally limited to refactorable authored
+# code. Lockfiles, configuration, generated/minified code, vendored code, and
+# build outputs are not design evidence, even when they are large.
+LOCKFILE_NAMES = frozenset(
+    {
+        "bun.lockb",
+        "cargo.lock",
+        "composer.lock",
+        "gemfile.lock",
+        "go.sum",
+        "mix.lock",
+        "npm-shrinkwrap.json",
+        "package-lock.json",
+        "pdm.lock",
+        "pipfile.lock",
+        "pnpm-lock.yaml",
+        "poetry.lock",
+        "uv.lock",
+        "yarn.lock",
+    }
+)
+ARTIFACT_DIRECTORY_NAMES = frozenset(
+    {
+        ".next",
+        ".nuxt",
+        "__generated__",
+        "bin",
+        "build",
+        "coverage",
+        "dist",
+        "gen",
+        "generated",
+        "node_modules",
+        "obj",
+        "out",
+        "target",
+        "third-party",
+        "third_party",
+        "vendor",
+    }
+)
+GENERATED_SOURCE_SUFFIXES = (
+    ".designer.cs",
+    ".g.cs",
+    ".g.ts",
+    ".gen.js",
+    ".gen.ts",
+    ".gen.tsx",
+    ".generated.js",
+    ".generated.py",
+    ".generated.ts",
+    ".generated.tsx",
+    ".min.cjs",
+    ".min.js",
+    ".min.mjs",
+    ".pb.go",
+    "_pb2.py",
+    "_pb2_grpc.py",
+)
+CONFIGURATION_SOURCE_SUFFIXES = (
+    ".conf.js",
+    ".conf.ts",
+    ".config.js",
+    ".config.ts",
+    ".config.tsx",
+)
+
+
+def _is_refactorable_source_file(file: SourceFileIntelligence) -> bool:
+    """Return whether a file is authored source eligible for the size review.
+
+    The rules are path- and metadata-based so the review does not infer a
+    maintainability problem from generated or dependency-managed artifacts.
+    """
+
+    path = PurePosixPath(file.path.casefold())
+    name = path.name
+    return (
+        file.size > LARGE_FILE_BYTES
+        and file.extension in SOURCE_EXTENSIONS
+        and file.role not in {"configuration", "documentation"}
+        and name not in LOCKFILE_NAMES
+        and not any(part in ARTIFACT_DIRECTORY_NAMES for part in path.parts)
+        and not name.endswith(GENERATED_SOURCE_SUFFIXES)
+        and not name.endswith(CONFIGURATION_SOURCE_SUFFIXES)
+    )
+
 
 class EngineeringReviewBuilder:
     def __init__(self, intelligence: RepositoryIntelligenceEngine | None = None) -> None:
         self.intelligence = intelligence or RepositoryIntelligenceEngine()
 
     def build(self, record: RepositoryRecord) -> EngineeringReviewResponse:
-        repository_intelligence = self.intelligence.from_record(record)
+        repository_intelligence = self.intelligence.load(record)
+        if repository_intelligence is None:
+            raise ConflictServiceError(
+                "Engineering review is unavailable until repository analysis completes.",
+                {"repositoryId": record.id, "status": record.status},
+            )
         findings = self._findings(repository_intelligence)
         scores = self._scores(findings)
         summary = self._summary(findings, scores)
@@ -79,17 +181,69 @@ class EngineeringReviewBuilder:
                     affected_modules=["tests"],
                 )
             )
-        if discovery.environment_files:
+        environment_evidence: list[EnvironmentFileEvidence] = discovery.environment_file_evidence
+        if not environment_evidence and discovery.environment_files:
+            environment_evidence = [
+                EnvironmentFileEvidence(path=path, evidence_class="runtime_env_file_present")
+                for path in discovery.environment_files
+            ]
+        template_files = [item.path for item in environment_evidence if item.evidence_class == "template_present"]
+        runtime_files = [item.path for item in environment_evidence if item.evidence_class == "runtime_env_file_present"]
+        secret_evidence = [item for item in environment_evidence if item.evidence_class == "secret_like_value_detected"]
+        secret_files = [item.path for item in secret_evidence]
+        secret_keys = sorted({key for item in secret_evidence for key in item.secret_keys})
+        if secret_files:
+            secret_key_summary = ", ".join(secret_keys[:10])
+            omitted_secret_key_count = len(secret_keys) - 10
+            if omitted_secret_key_count > 0:
+                secret_key_summary += f", and {omitted_secret_key_count} more"
             findings.append(
                 self._finding(
-                    "env-file-present",
-                    "Environment File Present",
+                    "env-secret-like-value-detected",
+                    "Secret-Like Environment Value Detected",
                     "security",
                     "critical",
-                    problem=f"Committed environment file(s) that may contain secrets: {', '.join(discovery.environment_files[:5])}.",
+                    problem=(
+                        "Evidence class: secret-like value detected. Committed environment file(s) contain "
+                        f"non-placeholder values for sensitive key(s): {secret_key_summary}."
+                    ),
                     impact="Secrets committed to version control can be leaked and abused, and remain recoverable from history.",
                     recommendation="Remove committed secret-bearing environment files, rotate exposed secrets, and ignore them going forward.",
-                    affected_files=discovery.environment_files,
+                    affected_files=secret_files,
+                    affected_modules=["configuration"],
+                )
+            )
+        if runtime_files:
+            findings.append(
+                self._finding(
+                    "env-runtime-file-present",
+                    "Runtime Environment File Present",
+                    "security",
+                    "medium",
+                    problem=(
+                        "Evidence class: runtime env file present. These committed files had no detected secret-like value, "
+                        "so their filenames alone are not evidence of an exposed secret."
+                    ),
+                    impact="A runtime environment file can later accumulate credentials or be copied into deployments without review.",
+                    recommendation="Keep runtime environment files out of version control and review their values. No secret rotation is indicated unless a secret-like value is detected.",
+                    affected_files=runtime_files,
+                    affected_modules=["configuration"],
+                )
+            )
+        if template_files:
+            findings.append(
+                self._finding(
+                    "env-template-present",
+                    "Environment Template Present",
+                    "configuration",
+                    "low",
+                    problem=(
+                        "Evidence class: template present. These files document environment configuration and contain no detected "
+                        "secret-like value."
+                    ),
+                    impact="Templates are safe to commit when they remain placeholder-only, but they should not be used as a location for live credentials.",
+                    recommendation="Keep templates placeholder-only and document required variables; no secret rotation is indicated by this finding.",
+                    affected_files=template_files,
                     affected_modules=["configuration"],
                 )
             )
@@ -107,21 +261,34 @@ class EngineeringReviewBuilder:
                 )
             )
         large_files = sorted(
-            (file for file in files if file.role != "documentation" and file.size > LARGE_FILE_BYTES),
+            (file for file in files if _is_refactorable_source_file(file)),
             key=lambda file: file.size,
             reverse=True,
         )
         if large_files:
+            large_file_evidence = [
+                ReviewFileEvidence(path=file.path, size_bytes=file.size) for file in large_files[:10]
+            ]
             findings.append(
                 self._finding(
                     "large-files",
                     "Oversized Source Files",
                     "maintainability",
                     "medium",
-                    problem=f"{len(large_files)} file(s) exceed {LARGE_FILE_BYTES // 1000} KB, a sign of low cohesion or god-files.",
-                    impact="Oversized files are harder to review, test, and refactor safely, concentrating risk in a few places.",
-                    recommendation="Split large files along clear responsibilities and extract cohesive units.",
-                    affected_files=[file.path for file in large_files[:10]],
+                    problem=(
+                        f"{len(large_files)} authored source file(s) exceed {LARGE_FILE_BYTES // 1000} KB. "
+                        "Size is a review signal; it does not establish a design problem by itself."
+                    ),
+                    impact=(
+                        "Large authored source files can require more context to review, test, and change safely, "
+                        "so they merit a focused review before any refactoring decision."
+                    ),
+                    recommendation=(
+                        "Review the listed files with their measured sizes as context; refactor only where "
+                        "responsibilities or complexity warrant it."
+                    ),
+                    affected_files=[evidence.path for evidence in large_file_evidence],
+                    affected_file_details=large_file_evidence,
                 )
             )
         if not discovery.ci_files:
@@ -164,6 +331,7 @@ class EngineeringReviewBuilder:
         recommendation: str,
         affected_files: list[str],
         affected_modules: list[str] | None = None,
+        affected_file_details: list[ReviewFileEvidence] | None = None,
     ) -> ReviewFinding:
         return ReviewFinding(
             id=finding_id,
@@ -177,6 +345,7 @@ class EngineeringReviewBuilder:
             priority=SEVERITY_PRIORITY[severity],
             estimated_effort="small" if severity in {"low", "medium"} else "medium",
             affected_files=affected_files,
+            affected_file_details=affected_file_details or [],
             affected_modules=affected_modules or ["repository"],
             tags=[category],
         )

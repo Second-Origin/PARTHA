@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Literal
 
+from pydantic import Field
+
 from app.schemas.base import CamelModel
 from app.schemas.repository import RepositoryMeta
 
@@ -23,7 +25,7 @@ SourceRole = Literal[
 SymbolKind = Literal["function", "class", "interface", "type", "enum", "constant", "route"]
 GraphNodeType = Literal["repository", "module", "file", "symbol", "dependency"]
 RelationshipType = Literal["imports", "calls", "extends", "implements", "depends_on", "contains", "references", "exports"]
-DependencyType = Literal["production", "development", "peer", "optional"]
+DependencyType = Literal["production", "development", "peer", "optional", "multiple"]
 
 
 class RepositoryStatistics(CamelModel):
@@ -36,6 +38,15 @@ class RepositoryStatistics(CamelModel):
     documentation_files: int
 
 
+EnvironmentFileEvidenceClass = Literal["template_present", "runtime_env_file_present", "secret_like_value_detected"]
+
+
+class EnvironmentFileEvidence(CamelModel):
+    path: str
+    evidence_class: EnvironmentFileEvidenceClass
+    secret_keys: list[str] = Field(default_factory=list)
+
+
 class RepositoryDiscovery(CamelModel):
     primary_language: str
     languages: dict[str, int]
@@ -43,6 +54,7 @@ class RepositoryDiscovery(CamelModel):
     package_managers: list[str]
     configuration_files: list[str]
     environment_files: list[str]
+    environment_file_evidence: list[EnvironmentFileEvidence] = Field(default_factory=list)
     docker_files: list[str]
     ci_files: list[str]
     entry_points: list[str]
@@ -86,13 +98,37 @@ class RepositoryModule(CamelModel):
     dependencies: list[str]
 
 
+class DependencyDeclaration(CamelModel):
+    name: str
+    manifest_path: str
+    workspace_path: str
+    start_line: int
+    end_line: int
+    extractor: str
+    extractor_version: str
+    ecosystem: str
+    version: str | None
+    type: Literal["production", "development", "peer", "optional"]
+
+
+class DependencyDiagnostic(CamelModel):
+    code: str
+    category: str
+    severity: Literal["fatal", "error", "warning", "info"]
+    message: str
+    path: str | None = None
+    producer: str
+    details: dict[str, object] | None = None
+
+
 class RepositoryDependency(CamelModel):
     id: str
     name: str
-    version: str
+    version: str | None
     type: DependencyType
     ecosystem: str
     source_file: str
+    declarations: list[DependencyDeclaration]
 
 
 class KnowledgeGraphNode(CamelModel):
@@ -126,4 +162,6 @@ class RepositoryIntelligence(CamelModel):
     files: list[SourceFileIntelligence]
     symbols: list[SourceSymbol]
     dependencies: list[RepositoryDependency]
+    dependency_manifest_count: int = 0
+    dependency_diagnostics: list[DependencyDiagnostic] = []
     graph: KnowledgeGraph

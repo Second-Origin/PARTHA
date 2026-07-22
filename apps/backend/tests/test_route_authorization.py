@@ -14,6 +14,8 @@ import uuid
 
 from fastapi.routing import APIRoute
 
+from tests.api_assertions import assert_error_response
+
 # The routers guarded by get_current_user at the router level.
 PROTECTED_PREFIXES = ("/repositories", "/analysis", "/ai", "/documentation", "/export")
 
@@ -63,10 +65,12 @@ def test_every_protected_route_requires_authentication(client):
         # missing-param 422 can never mask the 401 we are asserting; auth is
         # enforced ahead of the handler regardless.
         response = client.request(method, url, params={"path": "README.md"})
-        if response.status_code != 401:
-            failures.append((method, path, response.status_code))
+        try:
+            assert_error_response(response, 401, "unauthorized")
+        except AssertionError as exc:
+            failures.append((method, path, str(exc)))
 
-    assert not failures, f"routes reachable without authentication: {failures}"
+    assert not failures, f"routes missing the standard unauthenticated response: {failures}"
 
 
 def _seed_repository(owner_id: str) -> str:

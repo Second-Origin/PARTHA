@@ -2,12 +2,14 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.ai_egress import ProviderEgressPolicy
 from app.ai.orchestrator import AiOrchestrator
 from app.ai.prompt_builder import PromptBuilder
 from app.ai.providers.config_store import EncryptedProviderConfigStore
 from app.ai.providers.anthropic import AnthropicProvider
 from app.ai.providers.factory import ProviderFactory
 from app.ai.providers.gemini import GeminiProvider
+from app.ai.providers.http import SecureProviderHttpSender
 from app.ai.providers.ollama import OllamaProvider
 from app.ai.providers.openai import OpenAIProvider
 from app.ai.providers.openrouter import OpenRouterProvider
@@ -23,12 +25,14 @@ from app.core.exceptions import UnauthorizedError
 from app.github.client import GitHubClient
 from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
+from app.intelligence.query_service import SnapshotQueryService
 from app.models.user import User
 from app.parsers.repository_parser import RepositoryParser
 from app.repositories.repository_repository import RepositoryRepository
 from app.reports.export_service import ExportService
 from app.review.review_service import EngineeringReviewBuilder
 from app.services.ai_service import AiService
+from app.services.analysis_job_service import AnalysisJobService
 from app.services.analysis_service import AnalysisService
 from app.services.documentation_service import DocumentationService
 from app.services.repository_service import RepositoryService
@@ -84,12 +88,18 @@ def get_repository_intelligence_engine() -> RepositoryIntelligenceEngine:
     return RepositoryIntelligenceEngine()
 
 
+def get_snapshot_query_service(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SnapshotQueryService:
+    return SnapshotQueryService(db, current_user.id)
+
+
 def get_repository_service(
     repository: RepositoryRepository = Depends(get_repository_repository),
     storage: LocalStorage = Depends(get_local_storage),
     github: GitHubClient = Depends(get_github_client),
     parser: RepositoryParser = Depends(get_repository_parser),
-    intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
     settings: Settings = Depends(get_settings),
     current_user: User = Depends(get_current_user),
 ) -> RepositoryService:
@@ -98,7 +108,6 @@ def get_repository_service(
         storage=storage,
         github=github,
         parser=parser,
-        intelligence=intelligence,
         settings=settings,
         owner_id=current_user.id,
     )
@@ -106,8 +115,9 @@ def get_repository_service(
 
 def get_architecture_analyzer(
     intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
+    snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
 ) -> ArchitectureAnalyzer:
-    return ArchitectureAnalyzer(intelligence)
+    return ArchitectureAnalyzer(intelligence, snapshots)
 
 
 def get_dependency_graph_builder(
@@ -126,12 +136,23 @@ def get_provider_cipher(settings: Settings = Depends(get_settings)) -> ProviderK
     return build_provider_cipher(settings)
 
 
+def get_ai_egress_policy(settings: Settings = Depends(get_settings)) -> ProviderEgressPolicy:
+    return ProviderEgressPolicy.from_settings(settings)
+
+
+def get_provider_http_sender(
+    policy: ProviderEgressPolicy = Depends(get_ai_egress_policy),
+) -> SecureProviderHttpSender:
+    return SecureProviderHttpSender(policy)
+
+
 def get_ai_config_store(
     db: Session = Depends(get_db),
     cipher: ProviderKeyCipher = Depends(get_provider_cipher),
+    policy: ProviderEgressPolicy = Depends(get_ai_egress_policy),
     current_user: User = Depends(get_current_user),
 ) -> EncryptedProviderConfigStore:
-    return EncryptedProviderConfigStore(db, cipher, current_user.id)
+    return EncryptedProviderConfigStore(db, cipher, current_user.id, policy)
 
 
 def get_repository_context_builder(
@@ -144,13 +165,15 @@ def get_prompt_builder() -> PromptBuilder:
     return PromptBuilder()
 
 
-def get_provider_registry() -> ProviderRegistry:
+def get_provider_registry(
+    sender: SecureProviderHttpSender = Depends(get_provider_http_sender),
+) -> ProviderRegistry:
     registry = ProviderRegistry()
-    registry.register("openai", OpenAIProvider())
-    registry.register("anthropic", AnthropicProvider())
-    registry.register("gemini", GeminiProvider())
-    registry.register("openrouter", OpenRouterProvider())
-    registry.register("ollama", OllamaProvider())
+    registry.register("openai", OpenAIProvider(sender))
+    registry.register("anthropic", AnthropicProvider(sender))
+    registry.register("gemini", GeminiProvider(sender))
+    registry.register("openrouter", OpenRouterProvider(sender))
+    registry.register("ollama", OllamaProvider(sender))
     return registry
 
 
@@ -176,6 +199,13 @@ def get_analysis_service(
         intelligence=intelligence,
         owner_id=current_user.id,
     )
+
+
+def get_analysis_job_service(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AnalysisJobService:
+    return AnalysisJobService(db, owner_id=current_user.id)
 
 
 def get_ai_service(

@@ -22,6 +22,11 @@ services:
       RATE_LIMIT_AUTH_PER_MINUTE: ${RATE_LIMIT_AUTH_PER_MINUTE:-10}
       RATE_LIMIT_AI_PER_MINUTE: ${RATE_LIMIT_AI_PER_MINUTE:-20}
       RATE_LIMIT_HEAVY_PER_MINUTE: ${RATE_LIMIT_HEAVY_PER_MINUTE:-30}
+      # Hosted is the fail-safe default. Exact custom endpoint and CIDR
+      # approval belongs to the deployment administrator, never a tenant.
+      AI_EGRESS_MODE: ${AI_EGRESS_MODE:-hosted}
+      AI_EGRESS_ALLOWED_BASE_URLS: ${AI_EGRESS_ALLOWED_BASE_URLS:-}
+      AI_EGRESS_ALLOWED_CIDRS: ${AI_EGRESS_ALLOWED_CIDRS:-}
     volumes:
       - partha_storage:/data/partha
     depends_on:
@@ -41,6 +46,9 @@ services:
       timeout: 5s
       retries: 6
       start_period: 10s
+    networks:
+      - data
+      - egress
 
   postgres:
     image: postgres:16-alpine
@@ -57,12 +65,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - data
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    networks:
+      - data
 
 volumes:
   postgres_data:
   partha_storage:
+
+networks:
+  # Database and cache are isolated from outbound networks. The API joins this
+  # network solely to reach its data dependencies.
+  data:
+    internal: true
+  # Compose cannot express an exact provider destination allowlist. Production
+  # deployments must apply their own firewall, egress proxy, or mesh policy.
+  egress:

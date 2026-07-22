@@ -42,7 +42,7 @@ export interface RepositoryResponse {
   branch?: string | null;
   size: number;
   fileCount: number;
-  status: 'uploading' | 'analysing' | 'completed' | 'error';
+  status: 'uploading' | 'analysing' | 'completed' | 'cancelled' | 'error';
   analysisStage: AnalysisStage | null;
   analysisProgress: number;
   uploadedAt: string;
@@ -82,15 +82,109 @@ export interface RepositoryFileResponse {
   mediaType: string | null;
 }
 
+// Repository Intelligence snapshot queries (`/intelligence/v1`). These are
+// read-only views of sealed, owner-scoped normalized facts, not legacy metadata.
+export type RiSchemaVersion = 'ri.v1';
+
+export interface RiPagination {
+  offset: number;
+  limit: number;
+  total: number;
+}
+
+export interface RiEvidence {
+  schemaVersion: RiSchemaVersion;
+  factKind: 'node' | 'edge' | 'observation';
+  factId: string;
+  path: string;
+  startLine: number;
+  endLine: number;
+  granularity: 'span' | 'file';
+  extractor: string;
+  extractorVersion: string;
+}
+
+export interface RiNode {
+  stableKey: string;
+  nodeKind: string;
+  name: string | null;
+  language: string | null;
+  truthClass: 'observed';
+  properties: Record<string, unknown> | null;
+  evidence: RiEvidence[];
+}
+
+export interface RiEdge {
+  edgeId: string;
+  subjectKind: string;
+  subjectKey: string;
+  predicate: string;
+  objectKind: string;
+  objectKey: string;
+  truthClass: 'resolved';
+  producer: string;
+  producerVersion: string;
+  evidence: RiEvidence[];
+  derivedFrom: Array<{ kind: string; identity: string }>;
+}
+
+export interface RiAssertion {
+  assertionId: string;
+  subjectKind: string;
+  subjectKey: string;
+  predicate: string;
+  value: Record<string, unknown>;
+  truthClass: 'inferred';
+  producer: string;
+  producerVersion: string;
+  derivedFrom: Array<{ kind: string; identity: string }>;
+}
+
+export interface RiSnapshotMetadata {
+  schemaVersion: RiSchemaVersion;
+  snapshotId: string;
+  repositoryId: string;
+  revisionKind: 'git' | 'upload';
+  revisionValue: string;
+  revisionRef: string | null;
+  state: 'completed';
+  producerVersionSet: string[];
+  producerSetHash: string;
+  configHash: string;
+  canonicalGraphHash: string;
+  createdAt: string;
+  updatedAt: string;
+  sealedAt: string;
+}
+
+export interface RiCollectionResponse<T> {
+  schemaVersion: RiSchemaVersion;
+  data: T[];
+  pagination: RiPagination;
+}
+
+export interface RiPath {
+  path: string;
+  node: RiNode;
+}
+
+export interface RiNeighboursResponse extends RiCollectionResponse<RiEdge> {
+  nodeKey: string;
+}
+
 // Analysis
+export type AnalysisJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+
 export interface AnalysisStartResponse {
   repositoryId: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: AnalysisJobStatus;
+  jobId: string | null;
 }
 
 export interface AnalysisStatusResponse {
   repositoryId: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: AnalysisJobStatus;
+  jobId: string | null;
   stage: AnalysisStage | null;
   progress: number;
   startedAt: string | null;
@@ -105,9 +199,34 @@ export type ArchitectureResponse = ArchitectureModel;
 export interface DependencyNode {
   id: string;
   name: string;
-  version: string;
-  type: 'production' | 'development' | 'peer' | 'optional';
+  version: string | null;
+  type: 'production' | 'development' | 'peer' | 'optional' | 'multiple';
+  ecosystem: string;
+  declarations: DependencyDeclaration[];
   size: number | null;
+}
+
+export interface DependencyDeclaration {
+  name: string;
+  manifestPath: string;
+  workspacePath: string;
+  startLine: number;
+  endLine: number;
+  extractor: string;
+  extractorVersion: string;
+  ecosystem: string;
+  version: string | null;
+  type: 'production' | 'development' | 'peer' | 'optional';
+}
+
+export interface DependencyDiagnostic {
+  code: string;
+  category: string;
+  severity: 'fatal' | 'error' | 'warning' | 'info';
+  message: string;
+  path: string | null;
+  producer: string;
+  details: Record<string, unknown> | null;
 }
 
 export interface DependencyEdge {
@@ -125,6 +244,8 @@ export interface DependencyGraphResponse {
   nodes: DependencyNode[];
   edges: DependencyEdge[];
   totalDependencies: number;
+  manifestCount: number;
+  diagnostics: DependencyDiagnostic[];
   vulnerabilityAssessment: DependencyAssessment;
   outdatedAssessment: DependencyAssessment;
 }

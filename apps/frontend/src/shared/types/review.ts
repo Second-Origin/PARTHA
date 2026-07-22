@@ -13,6 +13,11 @@ export type ReviewCategory =
   | 'dependency-health'
   | 'configuration';
 
+export interface ReviewFileEvidence {
+  path: string;
+  sizeBytes: number;
+}
+
 export interface ReviewFinding {
   id: string;
   title: string;
@@ -25,6 +30,7 @@ export interface ReviewFinding {
   priority: number;
   estimatedEffort: 'trivial' | 'small' | 'medium' | 'large' | 'major';
   affectedFiles: string[];
+  affectedFileDetails: ReviewFileEvidence[];
   affectedModules: string[];
   tags: string[];
 }

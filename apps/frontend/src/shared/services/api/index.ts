@@ -4,7 +4,7 @@ export type { RequestConfig, ApiClientConfig, HttpMethod } from './client';
 export { ApiError, NetworkError, TimeoutError, CancelledError, isApiError, isNetworkError, isTimeoutError, isCancelledError, getErrorMessage } from './errors';
 
 export { authService } from './auth';
-export { repositoryService } from './repositories';
+export { repositoryService, repositoryIntelligenceService } from './repositories';
 export { uploadService } from './upload';
 export { analysisService } from './analysis';
 export { architectureService } from './architecture';

@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from app.analysis.architecture import ArchitectureAnalyzer
 from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
@@ -79,6 +81,40 @@ def test_repository_intelligence_detects_discovery_and_source_code(tmp_path: Pat
     assert any(relationship.type == "depends_on" for relationship in intelligence.graph.relationships)
 
 
+def test_repository_intelligence_checks_cancellation_between_files(
+    tmp_path: Path,
+    monkeypatch,
+):
+    _sample_repository(tmp_path)
+    tree, metadata, total_size = RepositoryParser().parse(tmp_path)
+    engine = RepositoryIntelligenceEngine()
+    processed: list[str] = []
+    original_file_intelligence = engine._file_intelligence
+
+    def _file_intelligence(root, node):
+        processed.append(node.path)
+        return original_file_intelligence(root, node)
+
+    def _check_cancelled():
+        if processed:
+            raise RuntimeError("cancelled")
+
+    monkeypatch.setattr(engine, "_file_intelligence", _file_intelligence)
+
+    with pytest.raises(RuntimeError, match="cancelled"):
+        engine.build(
+            "repo-1",
+            "sample",
+            tmp_path,
+            tree,
+            metadata,
+            total_size,
+            check_cancelled=_check_cancelled,
+        )
+
+    assert len(processed) == 1
+
+
 def test_repository_intelligence_is_serializable_and_persisted(tmp_path: Path):
     _sample_repository(tmp_path)
     _, _, _, intelligence = _build_intelligence(tmp_path)
@@ -108,3 +144,177 @@ def test_feature_consumers_read_repository_intelligence(tmp_path: Path):
     assert dependencies.vulnerability_assessment.status == "not_computed"
     assert dependencies.outdated_assessment.status == "not_computed"
     assert review.summary.total_findings >= 1
+
+
+def _nested_manifest_repository(root: Path) -> None:
+    (root / "apps" / "frontend").mkdir(parents=True)
+    (root / "apps" / "backend").mkdir(parents=True)
+    (root / "services" / "worker").mkdir(parents=True)
+    (root / "node_modules" / "hidden").mkdir(parents=True)
+    (root / ".venv" / "hidden").mkdir(parents=True)
+    (root / "dist" / "hidden").mkdir(parents=True)
+    (root / "build" / "hidden").mkdir(parents=True)
+    (root / ".next" / "hidden").mkdir(parents=True)
+    (root / ".cache" / "hidden").mkdir(parents=True)
+    (root / "vendor" / "hidden").mkdir(parents=True)
+    (root / "apps" / "frontend" / "package.json").write_text(
+        '''{
+  "dependencies": {
+    "react": "^18.3.0",
+    "shared-npm": "^1.0.0"
+  }
+}
+''',
+        encoding="utf-8",
+    )
+    (root / "apps" / "backend" / "pyproject.toml").write_text(
+        '''[project]
+dependencies = [
+  "fastapi>=0.115",
+  "requests==2.31.0",
+]
+''',
+        encoding="utf-8",
+    )
+    (root / "services" / "worker" / "requirements.txt").write_text(
+        "requests>=2.32\ncelery==5.4\n", encoding="utf-8"
+    )
+    for directory in ("node_modules", ".venv", "dist", "build", ".next", ".cache", "vendor"):
+        (root / directory / "hidden" / "package.json").write_text(
+            '{"dependencies":{"not-visible":"1"}}', encoding="utf-8"
+        )
+
+
+def test_nested_workspace_manifest_inventory_preserves_all_declarations_and_graph_evidence(tmp_path: Path):
+    _nested_manifest_repository(tmp_path)
+    tree, metadata, total_size = RepositoryParser().parse(tmp_path)
+    engine = RepositoryIntelligenceEngine()
+    intelligence = engine.build("repo-nested", "nested", tmp_path, tree, metadata, total_size)
+
+    dependencies = {dependency.id: dependency for dependency in intelligence.dependencies}
+    assert set(dependencies) == {
+        "dependency:npm:react",
+        "dependency:npm:shared-npm",
+        "dependency:pypi:celery",
+        "dependency:pypi:fastapi",
+        "dependency:pypi:requests",
+    }
+    assert intelligence.dependency_manifest_count == 3
+    assert intelligence.dependency_diagnostics == []
+
+    react = dependencies["dependency:npm:react"]
+    assert react.version == "^18.3.0"
+    assert react.declarations[0].manifest_path == "apps/frontend/package.json"
+    assert react.declarations[0].workspace_path == "apps/frontend"
+    assert react.declarations[0].start_line == 3
+    assert react.declarations[0].extractor == "dependency-manifest"
+    assert react.declarations[0].extractor_version == "1.2.0"
+
+    fastapi = dependencies["dependency:pypi:fastapi"]
+    assert fastapi.declarations[0].manifest_path == "apps/backend/pyproject.toml"
+    assert fastapi.declarations[0].start_line == 3
+    assert fastapi.declarations[0].version == ">=0.115"
+
+    requests = dependencies["dependency:pypi:requests"]
+    assert requests.version is None  # conflicting declarations are not overwritten
+    assert [
+        (item.manifest_path, item.version, item.start_line)
+        for item in requests.declarations
+    ] == [
+        ("apps/backend/pyproject.toml", "==2.31.0", 4),
+        ("services/worker/requirements.txt", ">=2.32", 1),
+    ]
+    requests_edge = next(
+        edge
+        for edge in intelligence.graph.relationships
+        if edge.type == "depends_on" and edge.target == requests.id
+    )
+    assert requests_edge.evidence == [
+        "apps/backend/pyproject.toml",
+        "services/worker/requirements.txt",
+    ]
+    assert all("not-visible" not in dependency.name for dependency in intelligence.dependencies)
+
+    flattened = engine._flatten_files(tree)
+    first = engine._dependencies(tmp_path, flattened)
+    second = engine._dependencies(tmp_path, list(reversed(flattened)))
+    assert first == second
+
+
+def test_nested_malformed_manifests_are_diagnostic_without_erasing_valid_declarations(tmp_path: Path):
+    (tmp_path / "apps" / "valid").mkdir(parents=True)
+    (tmp_path / "apps" / "broken-json").mkdir(parents=True)
+    (tmp_path / "apps" / "broken-toml").mkdir(parents=True)
+    (tmp_path / "apps" / "valid" / "requirements.txt").write_text("httpx>=0.27\n", encoding="utf-8")
+    (tmp_path / "apps" / "broken-json" / "package.json").write_text("{", encoding="utf-8")
+    (tmp_path / "apps" / "broken-toml" / "pyproject.toml").write_text("[project\ndependencies = [", encoding="utf-8")
+
+    tree, metadata, total_size = RepositoryParser().parse(tmp_path)
+    intelligence = RepositoryIntelligenceEngine().build("repo-malformed", "malformed", tmp_path, tree, metadata, total_size)
+
+    assert [dependency.name for dependency in intelligence.dependencies] == ["httpx"]
+    assert intelligence.dependency_manifest_count == 3
+    assert [
+        (diagnostic.code, diagnostic.path, diagnostic.producer)
+        for diagnostic in intelligence.dependency_diagnostics
+    ] == [
+        ("RI-SRC-MALFORMED", "apps/broken-json/package.json", "dependency-manifest@1.2.0"),
+        ("RI-SRC-MALFORMED", "apps/broken-toml/pyproject.toml", "dependency-manifest@1.2.0"),
+    ]
+
+
+def test_empty_valid_manifest_is_distinct_from_a_malformed_manifest(tmp_path: Path):
+    (tmp_path / "apps" / "empty").mkdir(parents=True)
+    (tmp_path / "apps" / "broken").mkdir(parents=True)
+    (tmp_path / "apps" / "empty" / "package.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "apps" / "broken" / "package.json").write_text("{", encoding="utf-8")
+
+    tree, metadata, total_size = RepositoryParser().parse(tmp_path)
+    intelligence = RepositoryIntelligenceEngine().build("repo-empty", "empty", tmp_path, tree, metadata, total_size)
+
+    assert intelligence.dependency_manifest_count == 2
+    assert intelligence.dependencies == []
+    assert [(item.code, item.path) for item in intelligence.dependency_diagnostics] == [
+        ("RI-SRC-MALFORMED", "apps/broken/package.json")
+    ]
+
+
+def test_oversized_manifest_is_skipped_before_an_unbounded_read(tmp_path: Path, monkeypatch):
+    package_json = tmp_path / "apps" / "large" / "package.json"
+    package_json.parent.mkdir(parents=True)
+    package_json.write_bytes(b" " * (512 * 1024 + 1))
+
+    def unexpected_read_bytes(_: Path) -> bytes:
+        raise AssertionError("manifest candidates must not be loaded with read_bytes")
+
+    monkeypatch.setattr(Path, "read_bytes", unexpected_read_bytes)
+    tree, metadata, total_size = RepositoryParser().parse(tmp_path)
+    intelligence = RepositoryIntelligenceEngine().build("repo-large", "large", tmp_path, tree, metadata, total_size)
+
+    assert intelligence.dependency_manifest_count == 1
+    assert intelligence.dependencies == []
+    assert [(item.code, item.path, item.details) for item in intelligence.dependency_diagnostics] == [
+        (
+            "RI-LIMIT-SKIP",
+            "apps/large/package.json",
+            {"budgetBytes": 512 * 1024, "reportedBytes": 512 * 1024 + 1},
+        )
+    ]
+
+
+def test_requirements_url_fragments_remain_distinct_during_aggregation(tmp_path: Path):
+    (tmp_path / "requirements.txt").write_text(
+        "example @ https://host.example/archive.whl#sha256=first\n"
+        "example @ https://host.example/archive.whl#sha256=second\n",
+        encoding="utf-8",
+    )
+    tree, metadata, total_size = RepositoryParser().parse(tmp_path)
+    intelligence = RepositoryIntelligenceEngine().build("repo-fragments", "fragments", tmp_path, tree, metadata, total_size)
+
+    dependency = intelligence.dependencies[0]
+    assert dependency.name == "example"
+    assert dependency.version is None
+    assert [item.version for item in dependency.declarations] == [
+        "@ https://host.example/archive.whl#sha256=first",
+        "@ https://host.example/archive.whl#sha256=second",
+    ]

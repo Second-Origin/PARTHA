@@ -32,10 +32,11 @@ _RESPONSE_EXAMPLE = {
     response_model=ExportResponse,
     responses=documented_responses(
         200,
-        "Repository report rendered in the requested format.",
+        "Repository report rendered in the requested format; an uncomputed review returns 409.",
         _RESPONSE_EXAMPLE,
         401,
         404,
+        409,
         422,
         429,
         500,

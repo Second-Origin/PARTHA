@@ -30,7 +30,15 @@ class RepositoryContextBuilder:
             for module in repository_intelligence.modules[:10]
         )
         dependencies = tuple(
-            DependencyContext(name=dependency.name, version=dependency.version)
+            DependencyContext(
+                name=dependency.name,
+                version=dependency.version,
+                declared_versions=tuple(
+                    dict.fromkeys(declaration.version for declaration in dependency.declarations)
+                ),
+                has_version_conflict=dependency.version is None
+                and len({declaration.version for declaration in dependency.declarations}) > 1,
+            )
             for dependency in repository_intelligence.dependencies[:20]
         )
         # No citations are emitted today: the context is built from repository

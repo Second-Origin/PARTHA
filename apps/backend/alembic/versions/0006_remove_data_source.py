@@ -1,7 +1,7 @@
 """remove the meaningless repository data-source field
 
 Revision ID: 0006_remove_data_source
-Revises: 0005_revision_snapshots
+Revises: 0006_analysis_jobs
 Create Date: 2026-07-22
 
 ``repositories.source`` already records the actual repository provenance
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 
 revision = "0006_remove_data_source"
-down_revision = "0005_revision_snapshots"
+down_revision = "0006_analysis_jobs"
 branch_labels = None
 depends_on = None
 

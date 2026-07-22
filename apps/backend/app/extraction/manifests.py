@@ -7,6 +7,7 @@ so its dependency observations are safe inputs to ``RelationshipResolver``.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 import posixpath
 import re
@@ -28,6 +29,21 @@ from app.intelligence import canonical
 
 
 _NPM_SECTIONS = ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies")
+_NPM_DEPENDENCY_TYPES = {
+    "dependencies": "production",
+    "devDependencies": "development",
+    "peerDependencies": "peer",
+    "optionalDependencies": "optional",
+}
+
+
+@dataclass(frozen=True)
+class _ManifestDeclaration:
+    ecosystem: str
+    name: str
+    version: str | None
+    dependency_type: str
+    line: int
 
 
 class _ManifestStructureError(Exception):
@@ -61,7 +77,7 @@ class DependencyManifestExtractor:
     """Extract direct npm/PyPI declarations as observed dependency facts."""
 
     name = "dependency-manifest"
-    version = "1.0.0"
+    version = "1.2.0"
 
     @property
     def producer(self) -> str:
@@ -113,10 +129,10 @@ class DependencyManifestExtractor:
         nodes: list[ExtractedNode] = []
         observations: list[ExtractedObservation] = []
         diagnostics: list[ExtractedDiagnostic] = []
-        for ecosystem, name, line in declarations:
-            stable_key = self._dependency_key(ecosystem, name)
+        for declaration in declarations:
+            stable_key = self._dependency_key(declaration.ecosystem, declaration.name)
             evidence, diagnostic = build_evidence(
-                normalized_path, line, line, line_count, producer=self.producer
+                normalized_path, declaration.line, declaration.line, line_count, producer=self.producer
             )
             if evidence is None:
                 if diagnostic is not None:
@@ -126,9 +142,16 @@ class DependencyManifestExtractor:
                 ExtractedNode(
                     node_kind="dependency",
                     stable_key=stable_key,
-                    name=name,
+                    name=declaration.name,
                     language=None,
                     evidence=(evidence,),
+                    properties={
+                        "ecosystem": declaration.ecosystem,
+                        "version": declaration.version,
+                        "dependency_type": declaration.dependency_type,
+                        "manifest_path": normalized_path,
+                        "workspace_path": posixpath.dirname(normalized_path) or ".",
+                    },
                 )
             )
             observations.append(
@@ -136,7 +159,7 @@ class DependencyManifestExtractor:
                     observed_kind="dependency",
                     subject_kind="dependency",
                     subject_key=stable_key,
-                    referent_text=name,
+                    referent_text=declaration.name,
                     ordinal=0,
                     evidence=evidence,
                 )
@@ -154,12 +177,12 @@ class DependencyManifestExtractor:
         return canonical.normalize_stable_key("dependency", f"dep:{ecosystem}:{name}")
 
     @staticmethod
-    def _npm_declarations(text: str) -> list[tuple[str, str, int]]:
+    def _npm_declarations(text: str) -> list[_ManifestDeclaration]:
         parsed = json.loads(text)
         if not isinstance(parsed, dict):
             raise _ManifestStructureError("package.json root is not an object")
         member_lines = DependencyManifestExtractor._json_object_member_lines(text)
-        declarations: list[tuple[str, str, int]] = []
+        declarations: list[_ManifestDeclaration] = []
         for section in _NPM_SECTIONS:
             if section not in parsed:
                 continue
@@ -176,11 +199,19 @@ class DependencyManifestExtractor:
                 line = section_lines.get(name)
                 if line is None:
                     raise _ManifestStructureError(f"npm {section} declaration line could not be located")
-                declarations.append(("npm", str(name), line))
+                declarations.append(
+                    _ManifestDeclaration(
+                        ecosystem="npm",
+                        name=str(name),
+                        version=dependencies[name],
+                        dependency_type=_NPM_DEPENDENCY_TYPES[section],
+                        line=line,
+                    )
+                )
         return declarations
 
     @staticmethod
-    def _pyproject_declarations(text: str) -> list[tuple[str, str, int]]:
+    def _pyproject_declarations(text: str) -> list[_ManifestDeclaration]:
         parsed = tomllib.loads(text)
         project = parsed.get("project", {})
         if not isinstance(project, dict):
@@ -198,23 +229,43 @@ class DependencyManifestExtractor:
         # source order, so the i-th string value pairs with the i-th line span.
         if element_lines is None or len(element_lines) != len(values):
             raise _ManifestStructureError("pyproject project.dependencies lines could not be located")
-        declarations: list[tuple[str, str, int]] = []
+        declarations: list[_ManifestDeclaration] = []
         for value, line in zip(values, element_lines):
             name = DependencyManifestExtractor._python_requirement_name(value)
             if name:
-                declarations.append(("pypi", name, line))
+                declarations.append(
+                    _ManifestDeclaration(
+                        ecosystem="pypi",
+                        name=name,
+                        version=value[len(name) :].strip() or None,
+                        dependency_type="production",
+                        line=line,
+                    )
+                )
         return declarations
 
     @staticmethod
-    def _requirements_declarations(text: str) -> list[tuple[str, str, int]]:
-        declarations: list[tuple[str, str, int]] = []
+    def _requirements_declarations(text: str) -> list[_ManifestDeclaration]:
+        declarations: list[_ManifestDeclaration] = []
         for line_number, raw in enumerate(text.splitlines(), start=1):
-            value = raw.split("#", 1)[0].strip()
-            if not value or value.startswith(("-", ".")):
+            # A fragment is part of a direct-reference specifier (for example
+            # ``package @ https://host/archive.whl#sha256=...``).  Only a hash
+            # preceded by whitespace starts a requirements-file comment.
+            value = raw.strip()
+            if not value or value.startswith(("#", "-", ".")):
                 continue
+            value = re.sub(r"\s+#.*$", "", value).strip()
             name = DependencyManifestExtractor._python_requirement_name(value)
             if name:
-                declarations.append(("pypi", name, line_number))
+                declarations.append(
+                    _ManifestDeclaration(
+                        ecosystem="pypi",
+                        name=name,
+                        version=value[len(name) :].strip() or None,
+                        dependency_type="production",
+                        line=line_number,
+                    )
+                )
         return declarations
 
     @staticmethod

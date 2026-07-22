@@ -32,11 +32,22 @@ class PromptBuilder:
                 for module in architecture.modules
             ],
             "Dependencies:",
-            *[
-                f"- {dependency.name} {dependency.version}"
-                for dependency in repository_context.dependencies
-            ],
+            *[self._render_dependency(dependency.name, dependency.version, dependency.declared_versions, dependency.has_version_conflict) for dependency in repository_context.dependencies],
             "Files:",
             *[f"- {file.path}" for file in repository_context.selected_files],
         ]
         return "\n".join(context_lines)
+
+    @staticmethod
+    def _render_dependency(
+        name: str,
+        version: str | None,
+        declared_versions: tuple[str | None, ...],
+        has_version_conflict: bool,
+    ) -> str:
+        if has_version_conflict:
+            versions = ", ".join(item if item is not None else "no specifier" for item in declared_versions)
+            return f"- {name} (conflicting declared versions: {versions})"
+        if version is None:
+            return f"- {name} (no version/specifier declared)"
+        return f"- {name} {version}"

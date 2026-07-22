@@ -60,7 +60,7 @@ export function DashboardPage() {
               transition={{ delay: index * 0.05 }}
               onClick={() => {
                 selectRepository(repo);
-                if (repo.status === 'analysing') navigate(`/analysis/${repo.id}`);
+                if (repo.status === 'analysing' || repo.status === 'cancelled') navigate(`/analysis/${repo.id}`);
                 else navigate(`/repositories/${repo.id}`);
               }}
               className="flex items-center justify-between px-5 py-3.5 hover:bg-accent/30 cursor-pointer transition-colors"

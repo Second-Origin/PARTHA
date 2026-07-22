@@ -1,6 +1,8 @@
 import io
 import zipfile
 
+from tests.api_assertions import assert_error_response
+
 
 def _zip_bytes(files: dict[str, str]) -> bytes:
     buffer = io.BytesIO()
@@ -56,3 +58,9 @@ def test_documentation_html_renders_real_elements(auth_client):
     assert content.startswith("<!DOCTYPE html>")
     assert "<h2>Overview</h2>" in content
     assert "</html>" in content
+
+
+def test_documentation_returns_the_standard_error_for_a_missing_repository(auth_client):
+    response = _generate(auth_client, "00000000-0000-0000-0000-000000000000", "markdown")
+
+    assert_error_response(response, 404, "not_found")

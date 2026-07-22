@@ -53,8 +53,22 @@ def _dependencies() -> DependencyGraphResponse:
     return DependencyGraphResponse(
         repository_id="repo-1",
         nodes=[
-            DependencyNode(id="dependency:npm:react", name="react", version="^18.0.0", type="production"),
-            DependencyNode(id="dependency:npm:vite", name="vite", version="^5.0.0", type="development"),
+            DependencyNode(
+                id="dependency:npm:react",
+                name="react",
+                version="^18.0.0",
+                type="production",
+                ecosystem="npm",
+                declarations=[],
+            ),
+            DependencyNode(
+                id="dependency:npm:vite",
+                name="vite",
+                version="^5.0.0",
+                type="development",
+                ecosystem="npm",
+                declarations=[],
+            ),
         ],
         edges=[],
         total_dependencies=2,

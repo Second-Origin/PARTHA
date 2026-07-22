@@ -13,13 +13,26 @@ class DependencyGraphBuilder:
         self.intelligence = intelligence or RepositoryIntelligenceEngine()
 
     def build(self, record: RepositoryRecord) -> DependencyGraphResponse:
-        repository_intelligence = self.intelligence.from_record(record)
+        repository_intelligence = self.intelligence.load(record)
+        if repository_intelligence is None:
+            return DependencyGraphResponse(
+                repository_id=record.id,
+                nodes=[],
+                edges=[],
+                total_dependencies=0,
+                manifest_count=0,
+                diagnostics=[],
+                vulnerability_assessment=DependencyAssessment(status="not_computed"),
+                outdated_assessment=DependencyAssessment(status="not_computed"),
+            )
         nodes = [
             DependencyNode(
                 id=dependency.id,
                 name=dependency.name,
                 version=dependency.version,
                 type=dependency.type,
+                ecosystem=dependency.ecosystem,
+                declarations=dependency.declarations,
                 size=None,
             )
             for dependency in repository_intelligence.dependencies
@@ -35,6 +48,8 @@ class DependencyGraphBuilder:
             nodes=nodes,
             edges=edges,
             total_dependencies=len(nodes),
+            manifest_count=repository_intelligence.dependency_manifest_count,
+            diagnostics=repository_intelligence.dependency_diagnostics,
             vulnerability_assessment=DependencyAssessment(status="not_computed"),
             outdated_assessment=DependencyAssessment(status="not_computed"),
         )

@@ -33,7 +33,7 @@ python -m pytest          # from apps/backend
 npm run test:backend      # from the repository root
 ```
 
-Tests run against per-test SQLite and the in-memory rate limiter. Three tests are gated on real services — refresh-token concurrency (PostgreSQL) and the Redis rate-limit backend — and skip unless `PARTHA_TEST_PG_URL` and `PARTHA_TEST_REDIS_URL` are set. CI provides both.
+Tests use per-test SQLite and the in-memory rate limiter by default. When `PARTHA_TEST_PG_URL` is set, the migration round trip runs against a fresh temporary PostgreSQL database and the PostgreSQL refresh-token concurrency test is enabled; without it, migrations fall back to SQLite and the concurrency test skips. Redis integration tests skip unless `PARTHA_TEST_REDIS_URL` is set. CI provides both services.
 
 ## Migrations
 
@@ -70,6 +70,23 @@ docker compose up --build
 
 Compose runs the API against PostgreSQL and Redis. It does not run the frontend.
 
+## AI provider egress
+
+AI provider traffic is centrally checked at configuration save time and again
+immediately before every outbound request. `AI_EGRESS_MODE=hosted` is the safe
+default: fixed cloud providers retain their code-owned HTTPS origins and no
+tenant-configurable endpoint is enabled. To use a trusted local or internal
+Ollama endpoint, a deployment administrator must set `AI_EGRESS_MODE=self_hosted`
+and provide both an exact `AI_EGRESS_ALLOWED_BASE_URLS` entry and matching
+`AI_EGRESS_ALLOWED_CIDRS` entry. These are not tenant settings.
+
+The sender validates every DNS answer, pins the HTTP connection to a validated
+IP while preserving the original Host/SNI name, ignores ambient proxy settings,
+and rejects redirects. Compose keeps PostgreSQL and Redis on an internal data
+network, but production still needs an independent firewall, egress proxy,
+cloud egress rule, or mesh policy. See [AI provider egress policy](../../docs/security/AI_PROVIDER_EGRESS.md)
+for configuration, rollout, and migration details.
+
 ## First import
 
 ```bash
@@ -78,7 +95,35 @@ curl -X POST http://localhost:8000/repositories/github \
   -d '{"url":"https://github.com/octocat/Hello-World"}'
 ```
 
-Only public GitHub HTTPS URLs are accepted. Ingestion and analysis run **synchronously** inside the request — a large repository will block until the clone, parse, and analysis finish.
+Only public GitHub HTTPS URLs are accepted. Clone/archive extraction and initial
+file-tree parsing finish before the import response. Submit analysis separately;
+the start endpoint returns immediately after durably enqueueing the work:
+
+```bash
+curl -X POST http://localhost:8000/analysis/<repository-id>/start \
+  -H "Authorization: Bearer <access-token>"
+```
+
+### Analysis job lifecycle
+
+Analysis jobs have exactly five observable states: `queued`, `running`,
+`completed`, `failed`, and `cancelled`. The API-process lifespan starts a daemon
+worker thread; no separate worker deployment is required. Progress advances only
+at completed pipeline stages. Failed work retries with bounded exponential
+backoff up to the job's attempt limit, then becomes `failed`.
+
+`POST /analysis/{repository_id}/cancel` cancels queued work immediately and
+requests cooperative cancellation of running work. Workers renew a guarded
+database lease periodically during stages as well as at stage boundaries, so
+long-running analysis remains owned and cancellation is noticed promptly.
+Startup and periodic stale job sweeps reclaim expired leases, fail orphaned
+building snapshots, and either
+requeue or fail the job within its attempt budget. If a process dies after a
+snapshot was sealed but before the job completion commit, the sweep reconciles
+the job to `completed` without producing a duplicate snapshot.
+
+Operational settings are `ANALYSIS_WORKER_AUTOSTART`,
+`ANALYSIS_JOB_POLL_INTERVAL_SECONDS`, and `ANALYSIS_JOB_LEASE_SECONDS`.
 
 Repository responses include first-class source identity:
 

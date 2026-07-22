@@ -104,6 +104,45 @@ def test_requirements_declarations_stay_on_their_own_line():
     assert _lines_by_key(result) == [("dep:pypi:django", 2), ("dep:pypi:flask", 4)]
 
 
+def test_manifest_declarations_retain_exact_version_type_and_workspace_provenance():
+    result = _extract(
+        "apps/frontend/package.json",
+        '''{
+  "devDependencies": {
+    "vite": "^5"
+  }
+}
+''',
+    )
+
+    node = result.nodes[0]
+    assert node.properties == {
+        "ecosystem": "npm",
+        "version": "^5",
+        "dependency_type": "development",
+        "manifest_path": "apps/frontend/package.json",
+        "workspace_path": "apps/frontend",
+    }
+    assert node.evidence[0].start_line == node.evidence[0].end_line == 3
+    assert EXTRACTOR.producer == "dependency-manifest@1.2.0"
+
+
+def test_requirements_url_fragments_are_retained_in_direct_reference_specifiers():
+    result = _extract(
+        "requirements.txt",
+        "example @ https://host.example/archive.whl#sha256=first\n"
+        "example @ https://host.example/archive.whl#sha256=second\n"
+        "other>=1 # an ordinary comment\n",
+    )
+
+    declarations = [node.properties["version"] for node in result.nodes if node.name == "example"]
+    assert declarations == [
+        "@ https://host.example/archive.whl#sha256=first",
+        "@ https://host.example/archive.whl#sha256=second",
+    ]
+    assert next(node for node in result.nodes if node.name == "other").properties["version"] == ">=1"
+
+
 # --- Finding 5: fail closed on structurally invalid manifests ---------------
 
 

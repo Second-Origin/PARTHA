@@ -100,6 +100,24 @@ def test_prompt_builder_preserves_existing_system_prompt_shape(tmp_path: Path):
     assert "Files:" in prompt.system_prompt
 
 
+def test_prompt_builder_renders_conflicting_declared_versions_without_none(tmp_path: Path):
+    _sample_repository(tmp_path)
+    (tmp_path / "requirements.txt").write_text(
+        "requests==2.31.0\nrequests>=2.32.0\n", encoding="utf-8"
+    )
+    record = _record(tmp_path)
+
+    context = RepositoryContextBuilder(RepositoryIntelligenceEngine()).build(record)
+    dependency = next(item for item in context.dependencies if item.name == "requests")
+    prompt = PromptBuilder().build(context, "What dependencies conflict?")
+
+    assert dependency.version is None
+    assert dependency.declared_versions == ("==2.31.0", ">=2.32.0")
+    assert dependency.has_version_conflict is True
+    assert "- requests (conflicting declared versions: ==2.31.0, >=2.32.0)" in prompt.system_prompt
+    assert "requests None" not in prompt.system_prompt
+
+
 def test_provider_factory_resolves_registered_provider():
     provider = FakeProvider()
     registry = ProviderRegistry()

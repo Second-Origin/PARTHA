@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Literal
 
+from pydantic import Field
+
 from app.schemas.base import CamelModel
 
 ReviewSeverity = Literal["critical", "high", "medium", "low"]
@@ -19,6 +21,11 @@ ReviewCategory = Literal[
 ]
 
 
+class ReviewFileEvidence(CamelModel):
+    path: str
+    size_bytes: int
+
+
 class ReviewFinding(CamelModel):
     id: str
     title: str
@@ -31,6 +38,7 @@ class ReviewFinding(CamelModel):
     priority: int
     estimated_effort: Literal["trivial", "small", "medium", "large", "major"]
     affected_files: list[str]
+    affected_file_details: list[ReviewFileEvidence] = Field(default_factory=list)
     affected_modules: list[str]
     tags: list[str]
 

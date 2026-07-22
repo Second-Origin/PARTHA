@@ -6,7 +6,7 @@ from pydantic import Field, HttpUrl
 from app.schemas.base import CamelModel
 
 RepositorySource = Literal["upload", "github"]
-RepositoryStatus = Literal["uploading", "analysing", "completed", "error"]
+RepositoryStatus = Literal["uploading", "analysing", "completed", "cancelled", "error"]
 AnalysisStage = Literal[
     "uploading",
     "extracting",

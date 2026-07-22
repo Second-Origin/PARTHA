@@ -37,18 +37,26 @@ EXPECTED_RESPONSES = {
     ("GET", "/repositories/{repository_id}"): {200, 401, 404, 429, 500},
     ("GET", "/repositories/{repository_id}/file"): {200, 401, 404, 422, 429, 500},
     ("DELETE", "/repositories/{repository_id}"): {204, 401, 404, 429, 500},
+    ("GET", "/intelligence/v1/snapshots/{snapshot_id}"): {200, 401, 404, 422, 429, 500},
+    ("GET", "/intelligence/v1/snapshots/{snapshot_id}/symbols"): {200, 401, 404, 422, 429, 500},
+    ("GET", "/intelligence/v1/snapshots/{snapshot_id}/neighbours"): {200, 401, 404, 422, 429, 500},
+    ("GET", "/intelligence/v1/snapshots/{snapshot_id}/references"): {200, 401, 404, 422, 429, 500},
+    ("GET", "/intelligence/v1/snapshots/{snapshot_id}/assertions"): {200, 401, 404, 422, 429, 500},
+    ("GET", "/intelligence/v1/snapshots/{snapshot_id}/paths"): {200, 401, 404, 422, 429, 500},
+    ("GET", "/intelligence/v1/snapshots/{snapshot_id}/evidence"): {200, 401, 404, 422, 429, 500},
     ("POST", "/analysis/{repository_id}/start"): {200, 401, 404, 429, 500},
     ("GET", "/analysis/{repository_id}/status"): {200, 401, 404, 429, 500},
+    ("POST", "/analysis/{repository_id}/cancel"): {200, 401, 404, 409, 429, 500},
     ("GET", "/analysis/{repository_id}/architecture"): {200, 401, 404, 429, 500},
     ("GET", "/analysis/{repository_id}/dependencies"): {200, 401, 404, 429, 500},
-    ("GET", "/analysis/{repository_id}/review"): {200, 401, 404, 429, 500},
+    ("GET", "/analysis/{repository_id}/review"): {200, 401, 404, 409, 429, 500},
     ("GET", "/ai/config"): {200, 401, 429, 500},
     ("PUT", "/ai/config"): {200, 401, 422, 429, 500},
     ("POST", "/ai/test"): {200, 401, 422, 429, 502, 500},
     ("POST", "/ai/query"): {200, 401, 404, 422, 429, 502, 500},
     ("POST", "/ai/stream"): {200, 401, 404, 422, 429, 502, 500},
     ("POST", "/documentation/generate"): {200, 401, 404, 422, 429, 500},
-    ("POST", "/export"): {200, 401, 404, 422, 429, 500},
+    ("POST", "/export"): {200, 401, 404, 409, 422, 429, 500},
     ("GET", "/health"): {200, 500},
     ("GET", "/ready"): {200, 503, 500},
     ("GET", "/metrics"): {200, 500},
@@ -192,3 +200,19 @@ def test_readiness_documents_its_actual_non_error_503_payload(client):
 
     assert media["schema"]["type"] == "object"
     assert media["example"]["status"] == "not_ready"
+
+
+def test_dependency_openapi_exposes_manifest_provenance_and_diagnostics(client):
+    document = client.get("/openapi.json").json()
+    schemas = document["components"]["schemas"]
+
+    node = schemas["DependencyNode"]["properties"]
+    assert node["version"]["anyOf"] == [{"type": "string"}, {"type": "null"}]
+    assert node["declarations"]["items"] == {"$ref": "#/components/schemas/DependencyDeclaration"}
+    response = schemas["DependencyGraphResponse"]["properties"]
+    assert response["manifestCount"]["type"] == "integer"
+    assert response["diagnostics"]["items"] == {"$ref": "#/components/schemas/DependencyDiagnostic"}
+    example = _response_media(
+        _operations(document)[("GET", "/analysis/{repository_id}/dependencies")], 200
+    )["example"]
+    assert example["nodes"][0]["declarations"][0]["manifestPath"] == "apps/frontend/package.json"

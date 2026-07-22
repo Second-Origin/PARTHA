@@ -127,6 +127,10 @@ def test_unhandled_errors_use_standard_shape():
         "details": None,
         "request_id": response.headers["X-Request-ID"],
     }
+    body = response.text.lower()
+    assert "boom" not in body
+    assert "runtimeerror" not in body
+    assert "traceback" not in body
 
 
 def test_json_logging_includes_structured_fields(capsys):
@@ -172,6 +176,19 @@ def test_settings_rejects_invalid_log_format():
 
     with pytest.raises(ValidationError):
         Settings(log_format="pretty")
+
+
+def test_production_analysis_worker_ids_are_unique_with_the_same_pid(monkeypatch):
+    import app.main as main_module
+
+    monkeypatch.setattr(main_module, "getpid", lambda: 42)
+
+    first = main_module._analysis_worker_id()
+    second = main_module._analysis_worker_id()
+
+    assert first != second
+    assert first.startswith("analysis-worker-42-")
+    assert len(first) <= 64
 
 
 def test_settings_rejects_invalid_database_url():
