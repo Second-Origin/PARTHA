@@ -12,13 +12,13 @@ export const ACCEPTED_ARCHIVE_TYPES: Record<string, string[]> = {
   'application/zip': ['.zip'],
   'application/x-zip-compressed': ['.zip'],
   'application/x-tar': ['.tar'],
-  'application/gzip': ['.gz', '.tar.gz', '.tgz'],
-  'application/x-gzip': ['.gz', '.tar.gz', '.tgz'],
+  'application/gzip': ['.tar.gz', '.tgz'],
+  'application/x-gzip': ['.tar.gz', '.tgz'],
   'application/x-compressed-tar': ['.tar.gz', '.tgz'],
 };
 
 function getRepositoryNameFromArchive(fileName: string): string {
-  return fileName.replace(/\.(zip|tar\.gz|tar|tgz|gz)$/i, '');
+  return fileName.replace(/\.(zip|tar\.gz|tar|tgz)$/i, '');
 }
 
 export function useUpload() {
@@ -67,7 +67,7 @@ export function useUpload() {
 
   const rejectFile = useCallback(() => {
     setUploadFile(null);
-    setError('Invalid file type. Please upload a ZIP, TAR, GZ, TAR.GZ, or TGZ file.');
+    setError('Invalid file type. Please upload a ZIP, TAR, TAR.GZ, or TGZ file.');
   }, []);
 
   const removeFile = useCallback(() => {

@@ -142,6 +142,7 @@ describe('useUpload', () => {
 
   it.each([
     ['repository.zip', 'application/zip'],
+    ['repository.tar', 'application/x-tar'],
     ['repository.tar.gz', 'application/gzip'],
     ['repository.tgz', 'application/gzip'],
   ])('selects an accepted archive and exposes its upload state: %s', (name, type) => {
@@ -167,10 +168,14 @@ describe('useUpload', () => {
     expect(uploadRepository).not.toHaveBeenCalled();
   });
 
-  it('accepts .tgz for every supported gzip archive MIME type', () => {
+  it('accepts TAR-based gzip archives but not standalone gzip files', () => {
     expect(ACCEPTED_ARCHIVE_TYPES['application/gzip']).toContain('.tgz');
     expect(ACCEPTED_ARCHIVE_TYPES['application/x-gzip']).toContain('.tgz');
     expect(ACCEPTED_ARCHIVE_TYPES['application/x-compressed-tar']).toContain('.tgz');
+    expect(ACCEPTED_ARCHIVE_TYPES['application/gzip']).toContain('.tar.gz');
+    expect(ACCEPTED_ARCHIVE_TYPES['application/x-gzip']).toContain('.tar.gz');
+    expect(ACCEPTED_ARCHIVE_TYPES['application/x-compressed-tar']).toContain('.tar.gz');
+    expect(Object.values(ACCEPTED_ARCHIVE_TYPES).flat()).not.toContain('.gz');
   });
 
   it('reports a rejected archive type without retaining a previous selection', () => {
@@ -186,7 +191,7 @@ describe('useUpload', () => {
     });
 
     expect(hook.result.current.uploadFile).toBeNull();
-    expect(hook.result.current.error).toBe('Invalid file type. Please upload a ZIP, TAR, GZ, TAR.GZ, or TGZ file.');
+    expect(hook.result.current.error).toBe('Invalid file type. Please upload a ZIP, TAR, TAR.GZ, or TGZ file.');
     expect(hook.result.current.empty).toBe(true);
     expect(hook.result.current.success).toBe(false);
     expect(uploadRepository).not.toHaveBeenCalled();
