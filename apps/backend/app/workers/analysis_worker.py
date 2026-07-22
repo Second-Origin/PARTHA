@@ -27,6 +27,7 @@ than redoing the work. Do not collapse these two commits into one.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -61,6 +62,12 @@ _ERROR_CODE = "RI-JOB-FAILED"
 _CANCELLED_CODE = "RI-JOB-CANCELLED"
 _STALE_CODE = "RI-JOB-STALE"
 _STALE_MESSAGE = "Analysis worker lease expired before the job completed."
+
+logger = logging.getLogger(__name__)
+
+
+class _LeaseLostError(RuntimeError):
+    """Internal control flow for a job reclaimed by another worker."""
 
 
 @dataclass
@@ -240,6 +247,12 @@ class AnalysisWorker:
                 return
             self._complete(ctx)
             yield ctx
+        except _LeaseLostError:
+            logger.warning(
+                "Analysis worker lost job ownership; abandoning execution",
+                extra={"job_id": job.id, "worker_id": self.worker_id},
+            )
+            return
         except Exception as exc:  # noqa: BLE001 - bounded retry is the contract
             self._retry_or_fail(ctx, exc)
             yield ctx
@@ -253,6 +266,8 @@ class AnalysisWorker:
         """
 
         record = self._require_record(ctx)
+        # Known limitation: these legacy repository fields use their historical
+        # ladder and can briefly diverge from the durable job stage/progress.
         record.status = "analysing"
         record.analysis_stage = "preparing-architecture"
         record.analysis_progress = 80
@@ -309,6 +324,8 @@ class AnalysisWorker:
     def _stage_seal(self, ctx: _StageContext) -> None:
         """Seal the building snapshot (commits internally, see the module note)."""
 
+        # Known limitation: a cancel observed after this commit can leave a
+        # cancelled job with a valid snapshot; the next submit reconciles it.
         if ctx.reused:
             return
         assert ctx.store is not None and ctx.snapshot is not None
@@ -323,17 +340,19 @@ class AnalysisWorker:
         module note); do not merge them.
         """
 
-        job = ctx.job
         now = self._clock()
-        job.status = "completed"
-        job.stage = "completed"
-        job.progress = 100
-        job.worker_id = None
-        job.lease_expires_at = None
-        job.error_code = None
-        job.error_message = None
-        job.completed_at = now
-        job.updated_at = now
+        self._update_owned_job(
+            ctx,
+            status="completed",
+            stage="completed",
+            progress=100,
+            worker_id=None,
+            lease_expires_at=None,
+            error_code=None,
+            error_message=None,
+            completed_at=now,
+            updated_at=now,
+        )
         if ctx.record is not None:
             ctx.record.status = "completed"
             ctx.record.analysis_stage = "completed"
@@ -451,13 +470,34 @@ class AnalysisWorker:
     def _checkpoint(self, ctx: _StageContext, stage: str, progress: int) -> None:
         """Persist stage/progress and renew the lease at a stage boundary."""
 
-        job = ctx.job
         now = self._clock()
-        job.stage = stage
-        job.progress = progress
-        job.lease_expires_at = now + timedelta(seconds=self.lease_seconds)
-        job.updated_at = now
+        self._update_owned_job(
+            ctx,
+            stage=stage,
+            progress=progress,
+            lease_expires_at=now + timedelta(seconds=self.lease_seconds),
+            updated_at=now,
+        )
         ctx.session.commit()
+
+    def _update_owned_job(self, ctx: _StageContext, **values: object) -> None:
+        """Update a running job only while this worker still owns it."""
+
+        job_id = ctx.job.id
+        with ctx.session.no_autoflush:
+            result = ctx.session.execute(
+                update(AnalysisJob)
+                .where(
+                    AnalysisJob.id == job_id,
+                    AnalysisJob.worker_id == self.worker_id,
+                    AnalysisJob.status == "running",
+                )
+                .values(**values)
+                .execution_options(synchronize_session="fetch")
+            )
+        if result.rowcount == 0:
+            ctx.session.rollback()
+            raise _LeaseLostError(job_id)
 
     def _cancel_requested(self, ctx: _StageContext) -> bool:
         return bool(

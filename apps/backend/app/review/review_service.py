@@ -112,7 +112,25 @@ class EngineeringReviewBuilder:
         self.intelligence = intelligence or RepositoryIntelligenceEngine()
 
     def build(self, record: RepositoryRecord) -> EngineeringReviewResponse:
-        repository_intelligence = self.intelligence.from_record(record)
+        repository_intelligence = self.intelligence.load(record)
+        if repository_intelligence is None:
+            return EngineeringReviewResponse(
+                repository_id=record.id,
+                repository_name=record.name,
+                generated_at=datetime.now(UTC),
+                summary=ReviewSummary(
+                    overall_score=100,
+                    overall_trend="stable",
+                    critical_count=0,
+                    high_count=0,
+                    medium_count=0,
+                    low_count=0,
+                    total_findings=0,
+                ),
+                scores=[],
+                findings=[],
+                roadmap=[],
+            )
         findings = self._findings(repository_intelligence)
         scores = self._scores(findings)
         summary = self._summary(findings, scores)

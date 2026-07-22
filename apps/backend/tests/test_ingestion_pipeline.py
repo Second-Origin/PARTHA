@@ -116,6 +116,54 @@ def test_zip_upload_persists_repository_and_analysis_completes(auth_client):
     assert repositories[0]["status"] == "completed"
 
 
+def test_analysis_read_endpoints_return_typed_defaults_before_worker_runs(auth_client):
+    response = _upload(
+        auth_client,
+        "pending-analysis.zip",
+        _zip_bytes(
+            {
+                "pending-analysis/package.json": '{"dependencies":{"react":"^18.0.0"}}',
+                "pending-analysis/src/main.tsx": "import React from 'react';",
+            }
+        ),
+    )
+    assert response.status_code == 201
+    repository_id = response.json()["id"]
+
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository_id)
+        assert "intelligence" not in (record.repo_metadata or {})
+
+    architecture_response = auth_client.get(f"/analysis/{repository_id}/architecture")
+    assert architecture_response.status_code == 200
+    architecture = architecture_response.json()
+    assert architecture["edges"] == []
+    assert architecture["relationshipSnapshotId"] is None
+    assert architecture["diagnostics"][0]["code"] == "ARCH-REL-NOT-EXTRACTED"
+
+    dependency_response = auth_client.get(f"/analysis/{repository_id}/dependencies")
+    assert dependency_response.status_code == 200
+    dependencies = dependency_response.json()
+    assert dependencies["nodes"] == []
+    assert dependencies["edges"] == []
+    assert dependencies["totalDependencies"] == 0
+    assert dependencies["manifestCount"] == 0
+
+    review_response = auth_client.get(f"/analysis/{repository_id}/review")
+    assert review_response.status_code == 200
+    review = review_response.json()
+    assert review["summary"]["overallScore"] == 100
+    assert review["summary"]["totalFindings"] == 0
+    assert review["scores"] == []
+    assert review["findings"] == []
+    assert review["roadmap"] == []
+
+    # Read endpoints must not rebuild the missing compatibility model from disk.
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository_id)
+        assert "intelligence" not in (record.repo_metadata or {})
+
+
 def test_dependency_endpoint_reports_uncomputed_assessments_without_clean_claims(auth_client):
     response = _upload(
         auth_client,

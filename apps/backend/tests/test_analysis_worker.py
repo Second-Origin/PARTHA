@@ -419,3 +419,68 @@ def test_sweep_stale_leaves_unexpired_job_untouched(session_factory, tmp_path):
         assert job.status == "running"
         assert job.worker_id == "stale-worker"
         assert session.get(RiSnapshot, snapshot_id).state == "building"
+
+
+def test_reclaimed_job_is_not_overwritten_by_the_worker_that_lost_its_lease(
+    session_factory, tmp_path
+):
+    now = [datetime(2026, 1, 1, tzinfo=UTC)]
+    session_a = session_factory()
+    session_b = session_factory()
+    try:
+        owner = _owner(session_a)
+        record = _repository_with_sources(session_a, owner, tmp_path / "repo")
+        AnalysisJobService(session_a, owner.id).submit(record.id)
+        record_id = record.id
+
+        worker_a = AnalysisWorker(
+            session_factory,
+            worker_id="worker-a",
+            lease_seconds=60,
+            clock=lambda: now[0],
+        )
+        job_a = worker_a._claim(session_a)
+        assert job_a is not None
+
+        now[0] += timedelta(seconds=61)
+        sweeper = AnalysisWorker(
+            session_factory,
+            worker_id="sweeper",
+            lease_seconds=60,
+            clock=lambda: now[0],
+        )
+        assert sweeper.sweep_stale() == 1
+
+        now[0] += timedelta(seconds=3)
+        worker_b = AnalysisWorker(
+            session_factory,
+            worker_id="worker-b",
+            lease_seconds=60,
+            clock=lambda: now[0],
+        )
+        job_b = worker_b._claim(session_b)
+        assert job_b is not None
+        assert job_b.id == job_a.id
+
+        # Worker A completes local stage work, but its guarded checkpoint sees
+        # worker B's ownership and abandons without retrying or mutating the row.
+        assert list(worker_a._execute_stages(session_a, job_a)) == []
+        with session_factory() as verification:
+            claimed = verification.get(AnalysisJob, job_b.id)
+            assert claimed.status == "running"
+            assert claimed.worker_id == "worker-b"
+            assert claimed.attempt == 2
+            assert verification.scalar(select(func.count()).select_from(RiSnapshot)) == 0
+
+        list(worker_b._execute_stages(session_b, job_b))
+    finally:
+        session_a.close()
+        session_b.close()
+
+    with session_factory() as session:
+        job = session.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
+        assert job.status == "completed"
+        assert job.attempt == 2
+        assert job.snapshot_id is not None
+        assert session.scalar(select(func.count()).select_from(RiSnapshot)) == 1
+        assert session.get(RiSnapshot, job.snapshot_id).state == "completed"

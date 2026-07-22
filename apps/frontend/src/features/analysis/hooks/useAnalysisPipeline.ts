@@ -76,6 +76,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
     setRefreshKey((key) => key + 1);
   }, []);
 
+  // Known limitation: repository identity changes on each poll, so the interval is recreated.
   useEffect(() => {
     if (!repositoryId || !repository) {
       setStatus('empty');
