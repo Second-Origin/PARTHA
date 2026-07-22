@@ -95,7 +95,33 @@ curl -X POST http://localhost:8000/repositories/github \
   -d '{"url":"https://github.com/octocat/Hello-World"}'
 ```
 
-Only public GitHub HTTPS URLs are accepted. Ingestion and analysis run **synchronously** inside the request — a large repository will block until the clone, parse, and analysis finish.
+Only public GitHub HTTPS URLs are accepted. Clone/archive extraction and initial
+file-tree parsing finish before the import response. Submit analysis separately;
+the start endpoint returns immediately after durably enqueueing the work:
+
+```bash
+curl -X POST http://localhost:8000/analysis/<repository-id>/start \
+  -H "Authorization: Bearer <access-token>"
+```
+
+### Analysis job lifecycle
+
+Analysis jobs have exactly five observable states: `queued`, `running`,
+`completed`, `failed`, and `cancelled`. The API-process lifespan starts a daemon
+worker thread; no separate worker deployment is required. Progress advances only
+at completed pipeline stages. Failed work retries with bounded exponential
+backoff up to the job's attempt limit, then becomes `failed`.
+
+`POST /analysis/{repository_id}/cancel` cancels queued work immediately and
+requests cooperative cancellation of running work at the next stage boundary.
+Workers renew a database lease at stage boundaries. Startup and periodic stale
+job sweeps reclaim expired leases, fail orphaned building snapshots, and either
+requeue or fail the job within its attempt budget. If a process dies after a
+snapshot was sealed but before the job completion commit, the sweep reconciles
+the job to `completed` without producing a duplicate snapshot.
+
+Operational settings are `ANALYSIS_WORKER_AUTOSTART`,
+`ANALYSIS_JOB_POLL_INTERVAL_SECONDS`, and `ANALYSIS_JOB_LEASE_SECONDS`.
 
 Repository responses include first-class source identity:
 

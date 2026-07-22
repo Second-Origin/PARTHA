@@ -8,7 +8,10 @@ Audience: contributors and maintainers who need to know what runs, where the bou
 
 ## Shape of the system
 
-PARTHA is a monorepo: a React frontend, a FastAPI backend, and a local filesystem plus relational database for persistence. There is no message queue, no background worker, and no external analysis service.
+PARTHA is a monorepo: a React frontend, a FastAPI backend, and a local
+filesystem plus relational database for persistence. Durable analysis uses the
+database as its queue and a daemon worker thread inside the API process; there
+is no external message queue or separate analysis service.
 
 ```mermaid
 flowchart LR
@@ -72,13 +75,16 @@ flowchart LR
 | `auth/` | Argon2 password hashing, HS256 access tokens, rotating refresh tokens with reuse detection. | — |
 | `core/` | Settings and validation, database engine, structured logging with redaction, request IDs, metrics, rate limiting, security headers. | — |
 | `storage/` | Local filesystem storage for uploads and extracted/cloned repositories. Enforces path safety on extraction. | — |
-| `workers/` | **Empty placeholder package.** No background jobs exist. | — |
+| `workers/` | Database-backed durable analysis execution, lease renewal, bounded retry, cancellation, and stale-job reconciliation. | Serve request-specific data or bypass owner-scoped API services. |
 
 ---
 
 ## Ingestion flow
 
-Both entry points converge on the same production path: land the source on disk, compute immutable revision identity, parse it, build the legacy Repository Intelligence model, and persist the repository revision. The normalized `ri.v1` snapshot boundary exists alongside this path but is not populated by the legacy regex engine.
+Both entry points converge on the same import path: land the source on disk,
+compute immutable revision identity, parse the bounded file tree, and persist the
+repository revision. A separate durable job then builds the legacy compatibility
+model and the normalized `ri.v1` snapshot off the request path.
 
 ```mermaid
 sequenceDiagram
@@ -88,6 +94,7 @@ sequenceDiagram
     participant Store as LocalStorage
     participant Parser as RepositoryParser
     participant RI as RepositoryIntelligenceEngine
+    participant Worker as AnalysisWorker
     participant DB as Database
 
     UI->>API: POST /repositories/upload (archive)<br/>or POST /repositories/github (URL)
@@ -97,15 +104,21 @@ sequenceDiagram
     Store-->>Repo: repository root on disk
     Repo->>Parser: parse(root)
     Parser-->>Repo: FileTreeNode[] + RepositoryMeta + size
-    Repo->>RI: build(...)
-    RI-->>Repo: RepositoryIntelligence
-    Repo->>DB: insert row (revision kind/value/ref + metadata + file_tree + legacy intelligence)
+    Repo->>DB: insert row (revision kind/value/ref + metadata + file_tree)
     DB-->>UI: RepositoryResponse
+    UI->>API: POST /analysis/{id}/start
+    API->>DB: insert queued analysis_jobs row
+    API-->>UI: queued + job id
+    Worker->>DB: claim job + renew lease by stage
+    Worker->>RI: build legacy compatibility model
+    Worker->>DB: persist legacy model + seal normalized ri.v1 snapshot
 ```
 
-This runs **synchronously inside the HTTP request**. A large repository blocks a worker for the whole clone-parse-analyse duration. There is no job queue and no progress streaming; the `analysisStage` and `analysisProgress` fields on the row are set at fixed points, not driven by a real background pipeline.
-
-`POST /analysis/{id}/start` then re-runs the consumers (architecture, dependencies, review) and marks the row complete — also synchronously.
+Clone/archive extraction and initial file-tree parsing run synchronously during
+import. `POST /analysis/{id}/start` durably enqueues the analysis and returns
+immediately. A daemon worker thread in the API process claims jobs from the
+database, reports progress at completed stage boundaries, seals the normalized
+snapshot, and preserves the legacy compatibility model for unmigrated consumers.
 
 ---
 
@@ -113,10 +126,10 @@ This runs **synchronously inside the HTTP request**. A large repository blocks a
 
 | Store | Holds | Notes |
 | --- | --- | --- |
-| Relational DB | `users`, `refresh_tokens`, `repositories`, `ai_provider_configs`, and normalized `ri_*` snapshot tables | SQLite by default for local development; PostgreSQL under Docker Compose. The current migration head adds revision identity plus immutable snapshot persistence. |
+| Relational DB | `users`, `refresh_tokens`, `repositories`, `analysis_jobs`, `ai_provider_configs`, and normalized `ri_*` snapshot tables | SQLite by default for local development; PostgreSQL under Docker Compose. Analysis jobs and their worker leases are durable database state. |
 | `repositories.revision_kind`, `revision_value`, `revision_ref` | Exact imported source identity: Git commit + resolved ref, or upload archive hash. | `revision_value` is indexed and immutable; a moving branch name is metadata, never identity. |
 | `repositories.repo_metadata` (JSON column) | Parser metadata and the **legacy/unverified** serialized Repository Intelligence under the `intelligence` key. | New imports no longer stash `commitSha` here. Existing legacy facts are retained for compatibility and are not copied into `ri.v1` observed facts. |
-| `ri_snapshots`, `ri_nodes`, `ri_edges`, `ri_assertions`, `ri_observations`, `ri_evidence`, `ri_derivations`, `ri_diagnostics` | Revision-addressed normalized `ri.v1` artifacts, provenance, lifecycle state, and canonical hash. | The persistence boundary, sealing rules, syntax-aware producers, query APIs, and golden benchmark are implemented. Architecture relationships consume a sealed snapshot when present; durable product jobs do not populate one yet. |
+| `ri_snapshots`, `ri_nodes`, `ri_edges`, `ri_assertions`, `ri_observations`, `ri_evidence`, `ri_derivations`, `ri_diagnostics` | Revision-addressed normalized `ri.v1` artifacts, provenance, lifecycle state, and canonical hash. | Durable analysis runs the Python/TypeScript producers and resolver, then seals a snapshot. Architecture relationships consume it; other consumers remain on the legacy model. |
 | `repositories.file_tree` (JSON column) | The parsed file tree. | Serves the explorer. |
 | `ai_provider_configs` | One row per user: provider, model, base URL, and the **Fernet-encrypted** API key plus its last four characters. | Owner-scoped; the plaintext key is never stored or returned. A stored endpoint remains unusable unless it satisfies the current deployment egress policy. |
 | Filesystem (`STORAGE_PATH`) | Extracted archives and cloned repositories; uploaded archives (deleted after extraction). | Repository source is read from here on demand for file preview. |
@@ -232,8 +245,8 @@ These are properties of the system as built, not a wish list.
 
 1. **Extraction is heuristic, not language-aware.** File roles, modules, and layers are inferred from path segments and filenames. Symbols come from regular expressions. `TreeSitterParser` returns nothing, even though `tree-sitter` is a declared dependency.
 2. **No line-level provenance in production output.** The snapshot schema can store validated spans and derivations, but the current regex engine emits neither and is deliberately not promoted into `ri.v1`.
-3. **The graph store has no production producer yet.** Immutable normalized tables, syntax-aware extraction/resolution, and snapshot queries exist. Architecture relationships consume a sealed snapshot when one is present and expose honest unavailable/diagnostic states otherwise; normal ingestion still creates only the legacy JSON blob.
-4. **Processing is synchronous and whole-repository.** No background jobs, no incremental re-analysis, no cancellation.
+3. **The graph store is not the only product read model.** Durable analysis populates immutable normalized snapshots and Architecture relationships consume them, but several module, review, documentation, export, and AI paths still use the legacy JSON model.
+4. **Analysis is whole-repository.** It runs in a durable, cancellable background job with bounded retry and stale-worker recovery, but incremental re-analysis is not implemented. Import extraction and file-tree parsing remain synchronous.
 5. **The rate limiter trusts only the direct socket peer for unauthenticated requests.** `X-Forwarded-For` is deliberately ignored, so behind a reverse proxy every unauthenticated client shares one IP budget until a trusted-proxy allowlist is designed. Authenticated requests are keyed per user and unaffected.
 6. **Dependency coverage is narrow.** Three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The API exposes explicit `not_computed` assessment statuses and does not emit a clean result or count without a scanner.
 7. **Frontend assurance is thin.** Coverage is limited and there is no end-to-end suite.
