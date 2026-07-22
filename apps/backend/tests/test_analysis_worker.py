@@ -637,9 +637,7 @@ def test_heartbeat_ownership_loss_abandons_stage_writes(
         assert reader.scalar(select(func.count()).select_from(RiSnapshot)) == 0
 
 
-def test_heartbeat_observes_cancellation_before_the_long_stage_finishes(
-    session_factory, tmp_path, monkeypatch
-):
+def test_cancellation_interrupts_in_flight_legacy_analysis(session_factory, tmp_path):
     with session_factory() as session:
         owner = _owner(session)
         record = _repository_with_sources(session, owner, tmp_path / "repo")
@@ -648,27 +646,25 @@ def test_heartbeat_observes_cancellation_before_the_long_stage_finishes(
         AnalysisJobService(session, owner_id).submit(record_id)
 
     entered = threading.Event()
-    release = threading.Event()
-    cancellation_seen = threading.Event()
+    persisted = threading.Event()
     worker = AnalysisWorker(
         session_factory,
         worker_id="worker-a",
         lease_seconds=60,
         heartbeat_interval_seconds=0.02,
     )
-    original_heartbeat = worker._heartbeat_once
 
-    def _observe_heartbeat(job_id, state):
-        original_heartbeat(job_id, state)
-        if state.cancel_requested.is_set():
-            cancellation_seen.set()
+    class _InterruptibleIntelligence:
+        def from_record(self, _record, *, check_cancelled):
+            entered.set()
+            while True:
+                check_cancelled()
+                time.sleep(0.005)
 
-    def _long_stage(_ctx):
-        entered.set()
-        assert release.wait(timeout=3)
+        def persist(self, _record, _intelligence):
+            persisted.set()
 
-    monkeypatch.setattr(worker, "_heartbeat_once", _observe_heartbeat)
-    monkeypatch.setattr(worker, "_stage_legacy", _long_stage)
+    worker.intelligence = _InterruptibleIntelligence()
     thread = threading.Thread(target=worker.run_once)
     thread.start()
     assert entered.wait(timeout=3)
@@ -677,10 +673,9 @@ def test_heartbeat_observes_cancellation_before_the_long_stage_finishes(
         accepted = AnalysisJobService(cancel_session, owner_id).cancel(record_id)
         assert accepted.cancel_requested is True
 
-    assert cancellation_seen.wait(timeout=3)
-    release.set()
     thread.join(timeout=5)
     assert not thread.is_alive()
+    assert not persisted.is_set()
 
     with session_factory() as reader:
         job = reader.scalars(

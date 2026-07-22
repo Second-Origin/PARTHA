@@ -9,7 +9,7 @@ Intelligence snapshot.
 ``run_once`` is the primary unit both the background loop in ``app.main`` and the
 test-suite drive; it is synchronous and deterministic. It claims at most one job
 with a portable compare-and-swap (no ``SELECT ... FOR UPDATE SKIP LOCKED``), runs
-the stages with a cooperative cancellation check between each, and applies a
+the stages with cooperative cancellation checks within and between them, and applies a
 bounded exponential backoff on failure before finally marking the job ``failed``.
 
 Transactional note (deliberate design, not a gap to "fix"): ``SnapshotStore.seal``
@@ -319,7 +319,10 @@ class AnalysisWorker:
         record.status = "analysing"
         record.analysis_stage = "preparing-architecture"
         record.analysis_progress = 80
-        repository_intelligence = self.intelligence.from_record(record)
+        repository_intelligence = self.intelligence.from_record(
+            record,
+            check_cancelled=lambda: self._check_heartbeat(ctx),
+        )
         self._check_heartbeat(ctx)
         self.intelligence.persist(record, repository_intelligence)
 
@@ -365,12 +368,18 @@ class AnalysisWorker:
             (PythonExtractor(), TypeScriptExtractor()),
             max_source_bytes=self.max_source_bytes,
         )
-        ctx.produced = pipeline.run(sources)
+        ctx.produced = pipeline.run(
+            sources,
+            check_cancelled=lambda: self._check_heartbeat(ctx),
+        )
         self._check_heartbeat(ctx)
         for produced in ctx.produced:
             self._persist_produced(store, snapshot, produced, ctx)
         self._check_heartbeat(ctx)
-        RelationshipResolver(store).resolve(snapshot)
+        RelationshipResolver(store).resolve(
+            snapshot,
+            check_cancelled=lambda: self._check_heartbeat(ctx),
+        )
         self._check_heartbeat(ctx)
 
     def _stage_seal(self, ctx: _StageContext) -> None:
