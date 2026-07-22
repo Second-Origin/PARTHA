@@ -55,7 +55,7 @@ Statuses below were checked against the implementation, not against prior docume
 
 | Capability | Status | Notes |
 | --- | --- | --- |
-| Archive upload (`.zip`, `.tar.gz`) | **Implemented** | Size caps; path-traversal and symlink escape rejected; empty and invalid archives rejected. |
+| Archive upload (`.zip`, `.tar.gz`, `.tgz`) | **Implemented** | Size caps; path-traversal and symlink escape rejected; empty and invalid archives rejected. |
 | Public GitHub import | **Implemented** | Shallow clone of public HTTPS GitHub URLs, with clone timeout and size cap. Records the HEAD commit. Private repositories and other hosts are not supported. |
 | Repository explorer and file preview | **Implemented** | File tree, text and image preview, binary detection, truncation of large files. |
 | Documentation and report export | **Implemented** | JSON, Markdown, HTML, and PDF through a shared report pipeline. |
