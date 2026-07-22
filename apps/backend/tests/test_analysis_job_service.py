@@ -361,6 +361,49 @@ def test_cancel_does_not_overwrite_a_worker_completion_race(session_factory):
         assert job.lease_expires_at is None
 
 
+def test_accepted_cancel_wins_after_the_workers_final_cancel_check(session_factory):
+    with session_factory() as bootstrap:
+        owner = _owner(bootstrap)
+        record = _repository(bootstrap, owner)
+        owner_id = owner.id
+        record_id = record.id
+        AnalysisJobService(bootstrap, owner_id).submit(record_id)
+
+    worker_session = session_factory()
+    cancel_session = session_factory()
+    try:
+        worker = AnalysisWorker(session_factory, worker_id="worker-a", lease_seconds=60)
+        claimed = worker._claim(worker_session)
+        assert claimed is not None
+        ctx = _StageContext(
+            session=worker_session,
+            job=claimed,
+            record=worker_session.get(RepositoryRecord, record_id),
+        )
+
+        # Exact ordering: the worker's final cooperative read sees false, then
+        # cancellation commits before the completion CAS executes.
+        assert worker._cancel_requested(ctx) is False
+        cancellation = AnalysisJobService(cancel_session, owner_id).cancel(record_id)
+        assert cancellation.status == "running"
+        assert cancellation.cancel_requested is True
+
+        worker._complete(ctx)
+    finally:
+        worker_session.close()
+        cancel_session.close()
+
+    with session_factory() as reader:
+        job = reader.scalars(
+            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
+        ).one()
+        assert job.status == "cancelled"
+        assert job.completed_at is not None
+        assert job.worker_id is None
+        assert job.lease_expires_at is None
+        assert reader.scalar(select(func.count()).select_from(RiSnapshot)) == 0
+
+
 def test_cancel_terminal_job_conflicts(session_factory):
     with session_factory() as session:
         owner = _owner(session)

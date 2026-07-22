@@ -21,31 +21,35 @@ def test_repository_parser_detects_basic_typescript_project(tmp_path: Path):
     assert total_size > 0
 
 
-def test_repository_parser_stops_traversal_as_soon_as_file_limit_is_exceeded(
+def test_repository_parser_preflight_stops_before_materializing_the_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    first = tmp_path / "a-first"
-    first.mkdir()
-    (first / "one.py").write_text("one", encoding="utf-8")
-    (first / "two.py").write_text("two", encoding="utf-8")
-    untouched = tmp_path / "z-untouched"
-    untouched.mkdir()
-    (untouched / "three.py").write_text("three", encoding="utf-8")
+    files = []
+    for index in range(7):
+        path = tmp_path / f"file-{index}.py"
+        path.write_text("tiny", encoding="utf-8")
+        files.append(path)
 
     original_iterdir = Path.iterdir
 
+    def bounded_entries():
+        for index, child in enumerate(files):
+            if index == 6:
+                raise AssertionError("parser consumed the entire directory")
+            yield child
+
     def tracked_iterdir(path: Path):
-        if path == untouched:
-            raise AssertionError("parser traversed beyond the exceeded budget")
+        if path == tmp_path:
+            return bounded_entries()
         return original_iterdir(path)
 
     monkeypatch.setattr(Path, "iterdir", tracked_iterdir)
 
     with pytest.raises(RepositoryFileLimitExceeded) as caught:
-        RepositoryParser().parse(tmp_path, max_file_count=1)
+        RepositoryParser().parse(tmp_path, max_file_count=5)
 
-    assert caught.value.file_count == 2
-    assert caught.value.max_file_count == 1
+    assert caught.value.file_count == 6
+    assert caught.value.max_file_count == 5
 
 
 def test_repository_parser_does_not_count_ignored_directories(tmp_path: Path):

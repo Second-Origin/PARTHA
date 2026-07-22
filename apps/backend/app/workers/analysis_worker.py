@@ -343,18 +343,37 @@ class AnalysisWorker:
         """
 
         now = self._clock()
-        self._update_owned_job(
-            ctx,
-            status="completed",
-            stage="completed",
-            progress=100,
-            worker_id=None,
-            lease_expires_at=None,
-            error_code=None,
-            error_message=None,
-            completed_at=now,
-            updated_at=now,
-        )
+        job_id = ctx.job.id
+        try:
+            self._update_owned_job(
+                ctx,
+                require_cancel_not_requested=True,
+                status="completed",
+                stage="completed",
+                progress=100,
+                worker_id=None,
+                lease_expires_at=None,
+                error_code=None,
+                error_message=None,
+                completed_at=now,
+                updated_at=now,
+            )
+        except _LeaseLostError:
+            # Cancellation can be accepted after the final cooperative read but
+            # before this completion CAS. If this worker still owns that running
+            # row, honour the accepted request instead of abandoning/completing.
+            job = ctx.session.get(AnalysisJob, job_id)
+            if (
+                job is not None
+                and job.status == "running"
+                and job.worker_id == self.worker_id
+                and job.cancel_requested
+            ):
+                ctx.job = job
+                ctx.record = ctx.session.get(RepositoryRecord, job.repository_id)
+                self._cancel(ctx)
+                return
+            raise
         if ctx.record is not None:
             ctx.record.status = "completed"
             ctx.record.analysis_stage = "completed"
@@ -557,18 +576,27 @@ class AnalysisWorker:
         )
         ctx.session.commit()
 
-    def _update_owned_job(self, ctx: _StageContext, **values: object) -> None:
+    def _update_owned_job(
+        self,
+        ctx: _StageContext,
+        *,
+        require_cancel_not_requested: bool = False,
+        **values: object,
+    ) -> None:
         """Update a running job only while this worker still owns it."""
 
         job_id = ctx.job.id
+        ownership = [
+            AnalysisJob.id == job_id,
+            AnalysisJob.worker_id == self.worker_id,
+            AnalysisJob.status == "running",
+        ]
+        if require_cancel_not_requested:
+            ownership.append(AnalysisJob.cancel_requested.is_(False))
         with ctx.session.no_autoflush:
             result = ctx.session.execute(
                 update(AnalysisJob)
-                .where(
-                    AnalysisJob.id == job_id,
-                    AnalysisJob.worker_id == self.worker_id,
-                    AnalysisJob.status == "running",
-                )
+                .where(*ownership)
                 .values(**values)
                 .execution_options(synchronize_session="fetch")
             )
