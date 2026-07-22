@@ -4,7 +4,16 @@ import { cn } from '@/shared/utils/cn';
 import { useArchitectureStore } from '../store';
 
 export function ModuleExplorer() {
-  const { model, expandedModules, toggleModule, selectedNodeId, setSelectedNodeId, setHighlightedNodeIds } = useArchitectureStore();
+  const {
+    model,
+    expandedModules,
+    toggleModule,
+    collapsedLayers,
+    toggleLayer,
+    selectedNodeId,
+    setSelectedNodeId,
+    setHighlightedNodeIds,
+  } = useArchitectureStore();
 
   if (!model) return null;
 
@@ -32,10 +41,18 @@ export function ModuleExplorer() {
           return (
             <div key={layer.id}>
               <button
-                onClick={() => toggleModule(layer.id)}
+                onClick={() => {
+                  toggleModule(layer.id);
+                  toggleLayer(layer.id);
+                }}
                 onMouseEnter={() => handleModuleHover(layer.nodes)}
                 onMouseLeave={handleModuleLeave}
-                className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-left hover:bg-accent/50 transition-colors"
+                aria-expanded={isExpanded}
+                aria-pressed={!collapsedLayers.has(layer.id)}
+                className={cn(
+                  'w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-left hover:bg-accent/50 transition-colors',
+                  collapsedLayers.has(layer.id) && 'opacity-70'
+                )}
               >
                 <ChevronRight
                   className={cn(

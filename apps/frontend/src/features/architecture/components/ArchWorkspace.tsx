@@ -57,36 +57,39 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
     heatmapMode,
     bookmarkedNodes,
     hiddenNodes,
+    collapsedLayers,
     showAllNodes,
+    showAllLayers,
     isolatedSubtree,
     setIsolatedSubtree,
     openContextMenu,
     closeContextMenu,
   } = useArchitectureStore();
 
-  const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => getLayoutedElements(model.nodes, model.edges, {
+  const layoutOptions = useMemo(() => ({
+      layers: model.detectedLayers,
       heatmapMode,
       bookmarks: bookmarkedNodes,
       hiddenNodes,
       isolatedSubtree,
-    }),
-    [model, heatmapMode, bookmarkedNodes, hiddenNodes, isolatedSubtree]
+      collapsedLayers,
+    }), [model.detectedLayers, heatmapMode, bookmarkedNodes, hiddenNodes, isolatedSubtree, collapsedLayers]);
+
+  const { nodes: initialNodes, edges: initialEdges } = useMemo(
+    () => getLayoutedElements(model.nodes, model.edges, layoutOptions),
+    [model.nodes, model.edges, layoutOptions]
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   useEffect(() => {
-    const { nodes: newNodes, edges: newEdges } = getLayoutedElements(model.nodes, model.edges, {
-      heatmapMode,
-      bookmarks: bookmarkedNodes,
-      hiddenNodes,
-      isolatedSubtree,
-    });
+    const { nodes: newNodes, edges: newEdges } = getLayoutedElements(model.nodes, model.edges, layoutOptions);
     setNodes(newNodes);
     setEdges(newEdges);
-  }, [heatmapMode, bookmarkedNodes, hiddenNodes, isolatedSubtree, model, setNodes, setEdges]);
+    const frame = requestAnimationFrame(() => reactFlowInstance.fitView({ padding: 0.12, duration: 300 }));
+    return () => cancelAnimationFrame(frame);
+  }, [layoutOptions, model.nodes, model.edges, reactFlowInstance, setNodes, setEdges]);
 
   useEffect(() => {
     setNodes((nds) =>
@@ -192,13 +195,15 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
     setIsolatedSubtree(null);
     showAllNodes();
     const { nodes: newNodes, edges: newEdges } = getLayoutedElements(model.nodes, model.edges, {
-      heatmapMode,
-      bookmarks: bookmarkedNodes,
+      ...layoutOptions,
+      hiddenNodes: new Set(),
+      collapsedLayers: new Set(),
     });
+    showAllLayers();
     setNodes(newNodes);
     setEdges(newEdges);
     setTimeout(() => reactFlowInstance.fitView({ padding: 0.2, duration: 300 }), 50);
-  }, [model, setNodes, setEdges, reactFlowInstance, heatmapMode, bookmarkedNodes, setIsolatedSubtree, showAllNodes]);
+  }, [model, setNodes, setEdges, reactFlowInstance, layoutOptions, setIsolatedSubtree, showAllNodes, showAllLayers]);
 
   const handleExportPng = useCallback(() => {
     const el = document.querySelector('.react-flow') as HTMLElement;
@@ -301,7 +306,7 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
                   onPaneClick={handlePaneClick}
                   nodeTypes={nodeTypes}
                   fitView
-                  fitViewOptions={{ padding: 0.2 }}
+                  fitViewOptions={{ padding: 0.12 }}
                   minZoom={0.1}
                   maxZoom={3}
                   proOptions={{ hideAttribution: true }}

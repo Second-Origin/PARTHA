@@ -1,10 +1,12 @@
 import { Graph, layout } from '@dagrejs/dagre';
 import type { Edge } from '@xyflow/react';
-import type { ArchNode, ArchEdge, HeatmapMode } from '@/shared/types/architecture';
+import type { ArchLayer, ArchNode, ArchEdge, HeatmapMode } from '@/shared/types/architecture';
 import type { ArchFlowNode } from './components/ArchitectureNode';
 
-const NODE_WIDTH = 180;
-const NODE_HEIGHT = 80;
+export const ARCH_NODE_WIDTH = 220;
+export const ARCH_NODE_HEIGHT = 104;
+const RANK_GAP = 140;
+const NODE_GAP = 60;
 
 export function getLayoutedElements(
   archNodes: ArchNode[],
@@ -15,15 +17,20 @@ export function getLayoutedElements(
     bookmarks?: Set<string>;
     hiddenNodes?: Set<string>;
     isolatedSubtree?: string | null;
+    layers?: ArchLayer[];
+    collapsedLayers?: Set<string>;
   }
 ): { nodes: ArchFlowNode[]; edges: Edge[] } {
-  const direction = options?.direction || 'TB';
+  const direction = options?.direction || 'LR';
   const heatmapMode = options?.heatmapMode || 'none';
   const bookmarks = options?.bookmarks || new Set();
   const hiddenNodes = options?.hiddenNodes || new Set();
   const isolatedSubtree = options?.isolatedSubtree || null;
+  const collapsedLayers = options?.collapsedLayers || new Set();
 
-  let filteredNodes = archNodes.filter((n) => !hiddenNodes.has(n.id));
+  let filteredNodes = archNodes.filter(
+    (node) => !hiddenNodes.has(node.id) && !collapsedLayers.has(node.layer)
+  );
   let filteredEdges = archEdges;
 
   if (isolatedSubtree) {
@@ -34,29 +41,35 @@ export function getLayoutedElements(
 
   const g = new Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: direction, ranksep: 80, nodesep: 40, marginx: 40, marginy: 40 });
+  g.setGraph({ rankdir: direction, ranksep: RANK_GAP, nodesep: NODE_GAP, marginx: 40, marginy: 40 });
 
   filteredNodes.forEach((node) => {
-    g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+    g.setNode(node.id, { width: ARCH_NODE_WIDTH, height: ARCH_NODE_HEIGHT });
   });
 
+  const filteredNodeIds = new Set(filteredNodes.map((node) => node.id));
   filteredEdges.forEach((edge) => {
-    if (filteredNodes.some((n) => n.id === edge.source) && filteredNodes.some((n) => n.id === edge.target)) {
+    if (filteredNodeIds.has(edge.source) && filteredNodeIds.has(edge.target)) {
       g.setEdge(edge.source, edge.target);
     }
   });
 
   layout(g);
 
+  const orderedLayers = getOrderedLayers(filteredNodes, options?.layers);
+  const layerPositions = getLayerPositions(filteredNodes, orderedLayers, g, direction);
+
   const nodes: ArchFlowNode[] = filteredNodes.map((node) => {
-    const pos = g.node(node.id);
+    const pos = layerPositions.get(node.id) || g.node(node.id);
     return {
       id: node.id,
       type: 'architectureNode' as const,
-      position: { x: pos.x - NODE_WIDTH / 2, y: pos.y - NODE_HEIGHT / 2 },
+      position: { x: pos.x - ARCH_NODE_WIDTH / 2, y: pos.y - ARCH_NODE_HEIGHT / 2 },
       data: {
         label: node.name,
         nodeType: node.type,
+        layer: node.layer,
+        relationshipState: node.relationshipState,
         description: node.description,
         filesCount: node.files.length,
         complexity: node.estimatedComplexity,
@@ -69,7 +82,7 @@ export function getLayoutedElements(
   });
 
   const edges: Edge[] = filteredEdges
-    .filter((e) => filteredNodes.some((n) => n.id === e.source) && filteredNodes.some((n) => n.id === e.target))
+    .filter((e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target))
     .map((edge) => ({
       id: edge.id,
       source: edge.source,
@@ -84,6 +97,64 @@ export function getLayoutedElements(
     }));
 
   return { nodes, edges };
+}
+
+function getOrderedLayers(nodes: ArchNode[], layers?: ArchLayer[]): ArchLayer[] {
+  const visibleNodeIds = new Set(nodes.map((node) => node.id));
+  const knownLayers = new Map((layers || []).map((layer) => [layer.id, layer]));
+  const layerIds = new Set(nodes.map((node) => node.layer));
+
+  return [...layerIds]
+    .sort((left, right) => {
+      const leftOrder = knownLayers.get(left)?.order ?? Number.MAX_SAFE_INTEGER;
+      const rightOrder = knownLayers.get(right)?.order ?? Number.MAX_SAFE_INTEGER;
+      return leftOrder - rightOrder || left.localeCompare(right);
+    })
+    .map((id) => ({
+      id,
+      name: knownLayers.get(id)?.name || id.replace('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      order: knownLayers.get(id)?.order ?? Number.MAX_SAFE_INTEGER,
+      nodes: (knownLayers.get(id)?.nodes || nodes.filter((node) => node.layer === id).map((node) => node.id))
+        .filter((nodeId) => visibleNodeIds.has(nodeId)),
+    }));
+}
+
+function getLayerPositions(
+  nodes: ArchNode[],
+  layers: ArchLayer[],
+  graph: Graph,
+  direction: 'TB' | 'LR',
+): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+
+  layers.forEach((layer, layerIndex) => {
+    const layerNodes = layer.nodes
+      .map((nodeId) => nodesById.get(nodeId))
+      .filter((node): node is ArchNode => node !== undefined)
+      .sort((left, right) => {
+        const leftY = graph.node(left.id)?.y ?? 0;
+        const rightY = graph.node(right.id)?.y ?? 0;
+        return leftY - rightY || left.name.localeCompare(right.name) || left.id.localeCompare(right.id);
+      });
+
+    const offset = -((layerNodes.length - 1) * (ARCH_NODE_HEIGHT + NODE_GAP)) / 2;
+    layerNodes.forEach((node, nodeIndex) => {
+      if (direction === 'LR') {
+        positions.set(node.id, {
+          x: layerIndex * (ARCH_NODE_WIDTH + RANK_GAP) + ARCH_NODE_WIDTH / 2,
+          y: offset + nodeIndex * (ARCH_NODE_HEIGHT + NODE_GAP) + ARCH_NODE_HEIGHT / 2,
+        });
+      } else {
+        positions.set(node.id, {
+          x: offset + nodeIndex * (ARCH_NODE_WIDTH + NODE_GAP) + ARCH_NODE_WIDTH / 2,
+          y: layerIndex * (ARCH_NODE_HEIGHT + RANK_GAP) + ARCH_NODE_HEIGHT / 2,
+        });
+      }
+    });
+  });
+
+  return positions;
 }
 
 function getSubtreeIds(rootId: string, nodes: ArchNode[], edges: ArchEdge[]): Set<string> {

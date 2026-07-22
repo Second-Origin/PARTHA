@@ -17,6 +17,9 @@ interface ArchitectureState {
 
   expandedModules: Set<string>;
   toggleModule: (id: string) => void;
+  collapsedLayers: Set<string>;
+  toggleLayer: (id: string) => void;
+  showAllLayers: () => void;
 
   showMiniMap: boolean;
   setShowMiniMap: (show: boolean) => void;
@@ -76,6 +79,16 @@ export const useArchitectureStore = create<ArchitectureState>((set) => ({
       else next.add(id);
       return { expandedModules: next };
     }),
+
+  collapsedLayers: new Set(),
+  toggleLayer: (id) =>
+    set((state) => {
+      const next = new Set(state.collapsedLayers);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return { collapsedLayers: next };
+    }),
+  showAllLayers: () => set({ collapsedLayers: new Set() }),
 
   showMiniMap: true,
   setShowMiniMap: (show) => set({ showMiniMap: show }),
