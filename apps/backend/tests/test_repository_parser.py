@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+import app.parsers.repository_parser as repository_parser_module
 from app.parsers.repository_parser import RepositoryFileLimitExceeded, RepositoryParser
 
 
@@ -24,32 +25,57 @@ def test_repository_parser_detects_basic_typescript_project(tmp_path: Path):
 def test_repository_parser_preflight_stops_before_materializing_the_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    files = []
-    for index in range(7):
-        path = tmp_path / f"file-{index}.py"
-        path.write_text("tiny", encoding="utf-8")
-        files.append(path)
+    class FileEntry:
+        def __init__(self, index: int) -> None:
+            self.name = f"file-{index}.py"
+            self.path = str(tmp_path / self.name)
 
-    original_iterdir = Path.iterdir
+        def is_dir(self) -> bool:
+            return False
 
-    def bounded_entries():
-        for index, child in enumerate(files):
-            if index == 6:
-                raise AssertionError("parser consumed the entire directory")
-            yield child
+        def is_file(self) -> bool:
+            return True
 
-    def tracked_iterdir(path: Path):
-        if path == tmp_path:
-            return bounded_entries()
-        return original_iterdir(path)
+    class BoundedScandir:
+        def __init__(self) -> None:
+            self.index = 0
+            self.closed = False
 
-    monkeypatch.setattr(Path, "iterdir", tracked_iterdir)
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.closed = True
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            if self.index == 6:
+                raise AssertionError("parser requested an entry after the limit was exceeded")
+            entry = FileEntry(self.index)
+            self.index += 1
+            return entry
+
+    entries = BoundedScandir()
+
+    def scandir(path: Path):
+        assert path == tmp_path
+        return entries
+
+    def unexpected_iterdir(_path: Path):
+        raise AssertionError("preflight used Path.iterdir instead of os.scandir")
+
+    monkeypatch.setattr(repository_parser_module.os, "scandir", scandir)
+    monkeypatch.setattr(Path, "iterdir", unexpected_iterdir)
 
     with pytest.raises(RepositoryFileLimitExceeded) as caught:
         RepositoryParser().parse(tmp_path, max_file_count=5)
 
     assert caught.value.file_count == 6
     assert caught.value.max_file_count == 5
+    assert entries.index == 6
+    assert entries.closed is True
 
 
 def test_repository_parser_does_not_count_ignored_directories(tmp_path: Path):

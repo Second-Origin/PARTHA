@@ -1,4 +1,5 @@
 import json
+import os
 from collections import Counter
 from pathlib import Path
 from uuid import uuid4
@@ -108,15 +109,16 @@ class RepositoryParser:
     def _enforce_file_count(self, path: Path, max_file_count: int, file_count: list[int]) -> None:
         """Stream the tree and abort before sorting or allocating file nodes."""
 
-        for child in path.iterdir():
-            if child.name in IGNORED_DIRS:
-                continue
-            if child.is_dir():
-                self._enforce_file_count(child, max_file_count, file_count)
-            elif child.is_file():
-                file_count[0] += 1
-                if file_count[0] > max_file_count:
-                    raise RepositoryFileLimitExceeded(max_file_count, file_count[0])
+        with os.scandir(path) as entries:
+            for entry in entries:
+                if entry.name in IGNORED_DIRS:
+                    continue
+                if entry.is_dir():
+                    self._enforce_file_count(Path(entry.path), max_file_count, file_count)
+                elif entry.is_file():
+                    file_count[0] += 1
+                    if file_count[0] > max_file_count:
+                        raise RepositoryFileLimitExceeded(max_file_count, file_count[0])
 
     def _build_tree(self, path: Path, root: Path) -> list[FileTreeNode]:
         nodes: list[FileTreeNode] = []
