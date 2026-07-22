@@ -1,6 +1,7 @@
 """Read-only, owner-scoped queries over sealed ``ri.v1`` snapshots (#92)."""
 
 from collections import defaultdict
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select
@@ -19,18 +20,27 @@ from app.models.snapshot import (
 )
 
 
+ARCHITECTURE_RELATIONSHIP_EDGE_TYPES = {
+    "imports": "import",
+    "calls": "calls",
+    "routes_to": "api-call",
+    "implements": "dependency",
+    "depends_on": "dependency",
+}
+ARCHITECTURE_EVIDENCE_PATH_BATCH_SIZE = 500
+
+
 @dataclass(frozen=True)
 class ArchitectureSnapshotFacts:
     """Persisted facts needed to build evidence-backed architecture relationships."""
 
     snapshot: RiSnapshot
     nodes: list[RiNode]
-    observations: list[RiObservation]
     edges: list[RiEdge]
     node_evidence: dict[int, list[RiEvidence]]
-    observation_evidence: dict[int, list[RiEvidence]]
     edge_evidence: dict[int, list[RiEvidence]]
     diagnostics: list[RiDiagnostic]
+    covered_paths: set[str]
 
 
 class SnapshotQueryService:
@@ -45,7 +55,12 @@ class SnapshotQueryService:
     def metadata(self, snapshot_id: str) -> RiSnapshot:
         return self._snapshot(snapshot_id)
 
-    def architecture_facts(self, repository_id: str) -> ArchitectureSnapshotFacts | None:
+    def architecture_facts(
+        self,
+        repository_id: str,
+        *,
+        module_paths: Collection[str],
+    ) -> ArchitectureSnapshotFacts | None:
         """Return the newest sealed snapshot facts for an owner-scoped repository.
 
         This internal consumer query uses the normalized store behind the public
@@ -56,26 +71,27 @@ class SnapshotQueryService:
         snapshot = self._latest_snapshot(repository_id)
         if snapshot is None:
             return None
-        nodes = list(
-            self.db.scalars(
-                select(RiNode)
-                .where(RiNode.snapshot_id == snapshot.snapshot_id)
-                .order_by(RiNode.stable_key, RiNode.id)
-            ).all()
-        )
         edges = list(
             self.db.scalars(
                 select(RiEdge)
-                .where(RiEdge.snapshot_id == snapshot.snapshot_id)
+                .where(
+                    RiEdge.snapshot_id == snapshot.snapshot_id,
+                    RiEdge.predicate.in_(ARCHITECTURE_RELATIONSHIP_EDGE_TYPES),
+                )
                 .order_by(RiEdge.subject_key, RiEdge.predicate, RiEdge.object_key, RiEdge.edge_id, RiEdge.id)
             ).all()
         )
-        observations = list(
-            self.db.scalars(
-                select(RiObservation)
-                .where(RiObservation.snapshot_id == snapshot.snapshot_id)
-                .order_by(RiObservation.observation_id, RiObservation.id)
-            ).all()
+        endpoint_keys = {key for edge in edges for key in (edge.subject_key, edge.object_key)}
+        nodes = (
+            list(
+                self.db.scalars(
+                    select(RiNode)
+                    .where(RiNode.snapshot_id == snapshot.snapshot_id, RiNode.stable_key.in_(endpoint_keys))
+                    .order_by(RiNode.stable_key, RiNode.id)
+                ).all()
+            )
+            if endpoint_keys
+            else []
         )
         diagnostics = list(
             self.db.scalars(
@@ -89,19 +105,15 @@ class SnapshotQueryService:
                 )
             ).all()
         )
+        covered_paths = self._architecture_covered_paths(snapshot, module_paths)
         return ArchitectureSnapshotFacts(
             snapshot=snapshot,
             nodes=nodes,
-            observations=observations,
             edges=edges,
             node_evidence=self._evidence_for(snapshot, "node_ref", [node.id for node in nodes]),
-            observation_evidence=self._evidence_for(
-                snapshot,
-                "observation_ref",
-                [observation.id for observation in observations],
-            ),
             edge_evidence=self._evidence_for(snapshot, "edge_ref", [edge.id for edge in edges]),
             diagnostics=diagnostics,
+            covered_paths=covered_paths,
         )
 
     def symbols(self, snapshot_id: str, *, offset: int, limit: int) -> tuple[RiSnapshot, list[RiNode], int]:
@@ -280,6 +292,26 @@ class SnapshotQueryService:
         total = self.db.scalar(select(func.count()).select_from(model).where(*where)) or 0
         rows = self.db.scalars(select(model).where(*where).order_by(*order_by).offset(offset).limit(limit)).all()
         return list(rows), total
+
+    def _architecture_covered_paths(self, snapshot: RiSnapshot, module_paths: Collection[str]) -> set[str]:
+        """Return only module paths with non-inventory extraction evidence."""
+
+        paths = sorted(set(module_paths))
+        covered_paths: set[str] = set()
+        for start in range(0, len(paths), ARCHITECTURE_EVIDENCE_PATH_BATCH_SIZE):
+            covered_paths.update(
+                self.db.scalars(
+                    select(RiEvidence.path)
+                    .where(
+                        RiEvidence.snapshot_id == snapshot.snapshot_id,
+                        RiEvidence.path.in_(paths[start : start + ARCHITECTURE_EVIDENCE_PATH_BATCH_SIZE]),
+                        RiEvidence.extractor != "repository-inventory",
+                        or_(RiEvidence.node_ref.is_not(None), RiEvidence.observation_ref.is_not(None)),
+                    )
+                    .distinct()
+                ).all()
+            )
+        return covered_paths
 
     def _evidence_for(self, snapshot: RiSnapshot, column: str, ids: list[int]) -> dict[int, list[RiEvidence]]:
         if not ids:

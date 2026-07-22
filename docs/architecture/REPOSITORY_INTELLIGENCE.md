@@ -148,7 +148,14 @@ the canonical graph hash, and seals the snapshot. Completed snapshots reject
 mutation. The query API exposes sealed snapshot metadata, symbols, stored
 resolved relationships, inferred assertions, file facts, and evidence spans.
 Architecture relationship construction uses its owner-scoped persisted-fact
-query; other product consumers remain on the legacy model.
+query; other product consumers remain on the legacy model. Its snapshot read is
+bounded to resolved relationship predicates rendered by Architecture, their
+endpoint nodes and evidence, all surfaced diagnostics, and distinct covered
+module paths from non-inventory node or observation evidence, queried in bounded
+path batches. It does not hydrate the full node, observation, or evidence
+inventories for a large snapshot. The Architecture response remains proportional
+to the relationships and diagnostics it exposes; this is a targeted read, not
+API pagination.
 
 ---
 

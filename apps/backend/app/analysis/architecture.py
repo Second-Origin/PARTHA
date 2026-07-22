@@ -1,7 +1,11 @@
 import posixpath
 
 from app.intelligence.engine import RepositoryIntelligenceEngine
-from app.intelligence.query_service import ArchitectureSnapshotFacts, SnapshotQueryService
+from app.intelligence.query_service import (
+    ARCHITECTURE_RELATIONSHIP_EDGE_TYPES,
+    ArchitectureSnapshotFacts,
+    SnapshotQueryService,
+)
 from app.intelligence.models import RepositoryModule
 from app.models.repository import RepositoryRecord
 from app.models.snapshot import RiDiagnostic, RiEvidence, RiNode
@@ -34,15 +38,6 @@ ROLE_TO_NODE_TYPE = {
     "documentation": "shared-library",
     "unknown": "shared-library",
 }
-
-RELATIONSHIP_EDGE_TYPES = {
-    "imports": "import",
-    "calls": "calls",
-    "routes_to": "api-call",
-    "implements": "dependency",
-    "depends_on": "dependency",
-}
-
 
 class ArchitectureAnalyzer:
     def __init__(
@@ -79,7 +74,12 @@ class ArchitectureAnalyzer:
             repository_intelligence.discovery.primary_language if repository_intelligence is not None else "Unknown"
         )
         entry_points = repository_intelligence.discovery.entry_points if repository_intelligence is not None else []
-        facts = self.snapshots.architecture_facts(record.id) if self.snapshots is not None else None
+        module_paths = {self._normalize_path(path) for module in modules for path in module.files}
+        facts = (
+            self.snapshots.architecture_facts(record.id, module_paths=module_paths)
+            if self.snapshots is not None
+            else None
+        )
         nodes = self._nodes_for_modules(modules)
         nodes.extend(self._dependency_nodes(facts))
         edges, diagnostics, unresolved_node_ids, covered_paths = self._edges_for_modules(modules, nodes, facts)
@@ -161,7 +161,7 @@ class ArchitectureAnalyzer:
         relationship_keys = {
             key
             for edge in facts.edges
-            if edge.predicate in RELATIONSHIP_EDGE_TYPES
+            if edge.predicate in ARCHITECTURE_RELATIONSHIP_EDGE_TYPES
             for key in (edge.subject_key, edge.object_key)
         }
         result: list[ArchNode] = []
@@ -220,13 +220,7 @@ class ArchitectureAnalyzer:
         # Inventory-only file nodes prove that a path exists, not that a
         # relationship-capable extractor ran. Count only evidence emitted by a
         # syntax/manifest producer so unsupported files cannot look isolated.
-        covered_paths = {
-            item.path
-            for evidence_by_fact in (facts.node_evidence, facts.observation_evidence)
-            for evidence in evidence_by_fact.values()
-            for item in evidence
-            if item.extractor != "repository-inventory"
-        }
+        covered_paths = facts.covered_paths
 
         for item in facts.diagnostics:
             if item.code not in {"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS"}:
@@ -239,7 +233,7 @@ class ArchitectureAnalyzer:
 
         edges: list[ArchEdge] = []
         for fact in facts.edges:
-            if fact.predicate not in RELATIONSHIP_EDGE_TYPES:
+            if fact.predicate not in ARCHITECTURE_RELATIONSHIP_EDGE_TYPES:
                 continue
             evidence_rows = facts.edge_evidence.get(fact.id, [])
             source_ids = self._architecture_endpoint_ids(
@@ -333,7 +327,7 @@ class ArchitectureAnalyzer:
                         id=edge_id,
                         source=source,
                         target=target,
-                        type=RELATIONSHIP_EDGE_TYPES[fact.predicate],  # type: ignore[arg-type]
+                        type=ARCHITECTURE_RELATIONSHIP_EDGE_TYPES[fact.predicate],  # type: ignore[arg-type]
                         label=fact.predicate.replace("_", " "),
                         predicate=fact.predicate,
                         truth_class="inferred",

@@ -7,6 +7,7 @@ import zipfile
 from app.extraction.manifests import DependencyManifestExtractor
 from app.extraction.pipeline import ExtractionPipeline
 from app.extraction.typescript import TypeScriptExtractor
+from app.intelligence.query_service import SnapshotQueryService
 from app.intelligence.resolution import RelationshipResolver
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
 from app.models.repository import RepositoryRecord
@@ -251,6 +252,45 @@ def test_architecture_reports_resolved_facts_without_module_mapping(auth_client)
     assert diagnostic["subjectKey"] == "file:unmapped.ts"
     assert diagnostic["objectKey"] == "file:src/beta/index.ts"
     assert diagnostic["nodeIds"] == ["module:beta"]
+
+
+def test_architecture_fact_query_excludes_irrelevant_large_snapshot_records(auth_client):
+    """Architecture reads relationship facts, not every stored snapshot record."""
+
+    sources = {
+        "src/alpha/index.ts": b"import { beta } from '../beta';\nexport const alpha = beta;\n",
+        "src/beta/index.ts": b"export function beta() { return 1; }\n",
+    }
+    snapshot_sources = {
+        **sources,
+        **{
+            f"src/generated/{index}.ts": f"export const generated{index} = {index};\n".encode()
+            for index in range(64)
+        },
+    }
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(repository["id"], sources, snapshot_sources=snapshot_sources)
+
+    from app.core.database import SessionLocal
+
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        assert record is not None
+        module_paths = set(sources) | {f"src/untracked/{index}.ts" for index in range(1_000)}
+        facts = SnapshotQueryService(session, record.owner_id).architecture_facts(
+            record.id,
+            module_paths=module_paths,
+        )
+
+    assert facts is not None
+    assert [edge.predicate for edge in facts.edges] == ["imports"]
+    assert {node.stable_key for node in facts.nodes} == {
+        "file:src/alpha/index.ts",
+        "file:src/beta/index.ts",
+    }
+    assert set(facts.node_evidence) == {node.id for node in facts.nodes}
+    assert set(facts.edge_evidence) == {edge.id for edge in facts.edges}
+    assert facts.covered_paths == set(sources)
 
 
 def test_architecture_without_snapshot_does_not_claim_isolation(auth_client):
