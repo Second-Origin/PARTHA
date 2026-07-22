@@ -50,6 +50,6 @@ export function useDependencies() {
     error: state.error || error,
     retry: refresh,
     refresh,
-    packageManager: state.activeRepository?.meta?.packageManager || 'npm',
+    packageManager: state.activeRepository?.meta?.packageManager ?? null,
   };
 }
