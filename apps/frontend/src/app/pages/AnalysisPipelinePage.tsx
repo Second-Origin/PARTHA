@@ -1,6 +1,6 @@
 import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Check, Loader2, Circle, XCircle, ArrowLeft } from 'lucide-react';
+import { Check, Loader2, Circle, XCircle, ArrowLeft, Ban } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 import { useAnalysisPipeline } from '@/features/analysis/hooks/useAnalysisPipeline';
@@ -11,11 +11,6 @@ export function AnalysisPipelinePage() {
   const navigate = useNavigate();
   const analysis = useAnalysisPipeline(id);
   const repo = analysis.repository;
-
-  const handleCancel = () => {
-    analysis.cancel();
-    navigate('/repositories');
-  };
 
   if (!repo) {
     return (
@@ -140,14 +135,46 @@ export function AnalysisPipelinePage() {
         </motion.div>
       )}
 
-      <div className="mt-6 flex justify-start">
+      {analysis.cancelled && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-4 rounded-xl border border-border bg-muted/40 p-4 flex items-start gap-3"
+          role="status"
+        >
+          <Ban className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-foreground">Analysis cancelled</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              No further analysis work will run for this job.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
+      <div className="mt-6 flex items-center justify-between gap-4">
         <button
-          onClick={handleCancel}
+          onClick={() => navigate('/repositories')}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to repositories
         </button>
+        {analysis.canCancel && (
+          <button
+            type="button"
+            onClick={() => void analysis.cancel()}
+            disabled={analysis.cancelling}
+            className="inline-flex items-center gap-2 rounded-lg border border-destructive/40 px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {analysis.cancelling ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Ban className="h-4 w-4" />
+            )}
+            {analysis.cancelling ? 'Cancelling…' : 'Cancel analysis'}
+          </button>
+        )}
       </div>
     </div>
   );

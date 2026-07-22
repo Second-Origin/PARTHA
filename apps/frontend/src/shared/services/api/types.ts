@@ -174,14 +174,18 @@ export interface RiNeighboursResponse extends RiCollectionResponse<RiEdge> {
 }
 
 // Analysis
+export type AnalysisJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+
 export interface AnalysisStartResponse {
   repositoryId: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: AnalysisJobStatus;
+  jobId: string | null;
 }
 
 export interface AnalysisStatusResponse {
   repositoryId: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: AnalysisJobStatus;
+  jobId: string | null;
   stage: AnalysisStage | null;
   progress: number;
   startedAt: string | null;

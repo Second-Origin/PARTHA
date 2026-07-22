@@ -10,4 +10,8 @@ export const analysisService = {
   start(repositoryId: string, config?: RequestConfig): Promise<AnalysisStartResponse> {
     return api.post(`/analysis/${repositoryId}/start`, undefined, config);
   },
+
+  cancel(repositoryId: string, config?: RequestConfig): Promise<AnalysisStatusResponse> {
+    return api.post(`/analysis/${repositoryId}/cancel`, undefined, config);
+  },
 };

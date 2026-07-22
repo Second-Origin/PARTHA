@@ -54,6 +54,11 @@ export const backendService = {
     return analysisService.getStatus(repositoryId);
   },
 
+  async cancelAnalysis(repositoryId: string): Promise<AnalysisStatusResponse | null> {
+    if (!USE_BACKEND) return null;
+    return analysisService.cancel(repositoryId);
+  },
+
   async fetchArchitecture(repository: Repository): Promise<ArchitectureModel> {
     if (!USE_BACKEND) {
       throw new Error('Backend API is not configured.');
