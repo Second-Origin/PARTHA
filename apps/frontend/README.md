@@ -17,6 +17,14 @@ src/
 
 Every application route is behind the `RequireAuth` guard; only `/login` and `/register` are public. All backend calls go through the shared API client in `src/shared/services/api/`, which owns access-token attachment and 401 handling — do not call `fetch` directly from a feature.
 
+## Navigation readiness
+
+Top-level product routes and primary navigation are defined together in
+`src/app/routes/productSurfaces.tsx`. A deferred surface must remain out of
+primary navigation and record its delivery phase and blocking issues there.
+Its direct route renders the shared unavailable-for-this-phase state; do not
+restore a deferred page until its readiness gate changes.
+
 ## Commands
 
 Requires Node.js 22 (CI pins 22).
