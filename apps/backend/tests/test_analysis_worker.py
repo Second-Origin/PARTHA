@@ -132,6 +132,55 @@ def _seal_analysis_snapshot(session, record: RepositoryRecord) -> RiSnapshot:
     return store.seal(snapshot)
 
 
+def _building_analysis_snapshot(session, record: RepositoryRecord) -> RiSnapshot:
+    store = SnapshotStore(session)
+    snapshot = store.begin(
+        repository_id=record.id,
+        revision=Revision(record.revision_kind, record.revision_value, record.revision_ref),
+        producer_version_set=ANALYSIS_PRODUCER_VERSION_SET,
+        config_hash=ANALYSIS_CONFIG_HASH,
+    )
+    session.commit()
+    return snapshot
+
+
+def _claim_with_snapshot(
+    session_factory,
+    tmp_path: Path,
+    now: list[datetime],
+    *,
+    max_attempts: int = 3,
+    completed_snapshot: bool = False,
+) -> tuple[AnalysisWorker, str, str]:
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / str(uuid4()))
+        snapshot = (
+            _seal_analysis_snapshot(session, record)
+            if completed_snapshot
+            else _building_analysis_snapshot(session, record)
+        )
+        job = AnalysisJobService(session, owner.id).submit(record.id)
+        # submit short-circuits to completed when the snapshot is already sealed;
+        # force the crash-window state that existed before the completion commit.
+        job.status = "queued"
+        job.snapshot_id = snapshot.snapshot_id
+        job.max_attempts = max_attempts
+        session.commit()
+        record_id = record.id
+        snapshot_id = snapshot.snapshot_id
+
+    worker = AnalysisWorker(
+        session_factory,
+        worker_id="stale-worker",
+        lease_seconds=60,
+        clock=lambda: now[0],
+    )
+    with session_factory() as session:
+        assert worker._claim(session) is not None
+    return worker, record_id, snapshot_id
+
+
 def test_run_once_returns_false_when_queue_is_empty(session_factory):
     worker = AnalysisWorker(session_factory, worker_id="w", lease_seconds=60)
     assert worker.run_once() is False
@@ -295,3 +344,78 @@ def test_cooperative_cancellation_fails_open_snapshot_and_cancels_job(session_fa
         assert session.get(RiSnapshot, snapshot_id).state == "failed"
     finally:
         session.close()
+
+
+def test_sweep_stale_requeues_and_fails_orphaned_building_snapshot(session_factory, tmp_path):
+    now = [datetime(2026, 1, 1, tzinfo=UTC)]
+    worker, record_id, snapshot_id = _claim_with_snapshot(session_factory, tmp_path, now)
+
+    assert worker.sweep_stale() == 0
+    now[0] += timedelta(seconds=61)
+    assert worker.sweep_stale() == 1
+
+    with session_factory() as session:
+        job = session.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
+        assert job.status == "queued"
+        assert job.worker_id is None
+        assert job.lease_expires_at is None
+        assert job.next_attempt_at is not None
+        assert job.error_code == "RI-JOB-STALE"
+        assert session.get(RiSnapshot, snapshot_id).state == "failed"
+        record = session.get(RepositoryRecord, record_id)
+        assert record.status == "analysing"
+        assert record.analysis_progress == 0
+
+
+def test_sweep_stale_fails_job_at_attempt_limit(session_factory, tmp_path):
+    now = [datetime(2026, 1, 1, tzinfo=UTC)]
+    worker, record_id, snapshot_id = _claim_with_snapshot(
+        session_factory, tmp_path, now, max_attempts=1
+    )
+
+    now[0] += timedelta(seconds=61)
+    assert worker.sweep_stale() == 1
+
+    with session_factory() as session:
+        job = session.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
+        assert job.status == "failed"
+        assert job.completed_at is not None
+        assert job.next_attempt_at is None
+        assert session.get(RiSnapshot, snapshot_id).state == "failed"
+        record = session.get(RepositoryRecord, record_id)
+        assert record.status == "error"
+        assert "lease expired" in record.error_message
+
+
+def test_sweep_stale_self_heals_job_after_snapshot_seal(session_factory, tmp_path):
+    now = [datetime(2026, 1, 1, tzinfo=UTC)]
+    worker, record_id, snapshot_id = _claim_with_snapshot(
+        session_factory, tmp_path, now, completed_snapshot=True
+    )
+
+    now[0] += timedelta(seconds=61)
+    assert worker.sweep_stale() == 1
+
+    with session_factory() as session:
+        job = session.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
+        assert job.status == "completed"
+        assert job.progress == 100
+        assert job.snapshot_id == snapshot_id
+        assert session.scalar(select(func.count()).select_from(RiSnapshot)) == 1
+        record = session.get(RepositoryRecord, record_id)
+        assert record.status == "completed"
+        assert record.analysis_progress == 100
+
+
+def test_sweep_stale_leaves_unexpired_job_untouched(session_factory, tmp_path):
+    now = [datetime(2026, 1, 1, tzinfo=UTC)]
+    worker, record_id, snapshot_id = _claim_with_snapshot(session_factory, tmp_path, now)
+
+    now[0] += timedelta(seconds=59)
+    assert worker.sweep_stale() == 0
+
+    with session_factory() as session:
+        job = session.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
+        assert job.status == "running"
+        assert job.worker_id == "stale-worker"
+        assert session.get(RiSnapshot, snapshot_id).state == "building"

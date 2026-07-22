@@ -100,7 +100,6 @@ def get_repository_service(
     storage: LocalStorage = Depends(get_local_storage),
     github: GitHubClient = Depends(get_github_client),
     parser: RepositoryParser = Depends(get_repository_parser),
-    intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
     settings: Settings = Depends(get_settings),
     current_user: User = Depends(get_current_user),
 ) -> RepositoryService:
@@ -109,7 +108,6 @@ def get_repository_service(
         storage=storage,
         github=github,
         parser=parser,
-        intelligence=intelligence,
         settings=settings,
         owner_id=current_user.id,
     )

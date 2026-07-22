@@ -8,6 +8,8 @@ import pytest
 
 from app.github.client import GitHubClient
 from app.core.exceptions import TimeoutServiceError
+from app.core.database import SessionLocal
+from app.models.repository import RepositoryRecord
 from tests.analysis_helpers import run_analysis_jobs
 from tests.api_assertions import assert_error_response
 
@@ -67,6 +69,12 @@ def test_zip_upload_persists_repository_and_analysis_completes(auth_client):
     assert len(repository["commitSha"]) == 71
     assert "commitSha" not in repository["meta"]
 
+    # Import performs bounded archive/clone parsing only. Intelligence is not
+    # built in the request path; the durable worker owns that work.
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        assert "intelligence" not in (record.repo_metadata or {})
+
     # /start now enqueues durably and returns immediately (never blocks on the
     # worker); the test drives the worker synchronously to reach completion.
     start_response = auth_client.post(f"/analysis/{repository['id']}/start")
@@ -76,6 +84,10 @@ def test_zip_upload_persists_repository_and_analysis_completes(auth_client):
     assert start_body["status"] == "queued"
     assert start_body["jobId"] is not None
     assert run_analysis_jobs() == 1
+
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        assert "intelligence" in (record.repo_metadata or {})
 
     status_response = auth_client.get(f"/analysis/{repository['id']}/status")
     assert status_response.status_code == 200

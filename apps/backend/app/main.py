@@ -28,6 +28,8 @@ from app.models.base import Base
 
 logger = logging.getLogger(__name__)
 
+_ANALYSIS_STALE_SWEEP_INTERVAL = 10
+
 _READINESS_SCHEMA = {
     "type": "object",
     "required": ["status", "environment", "checks"],
@@ -109,14 +111,26 @@ def _start_analysis_worker() -> tuple[threading.Thread, threading.Event] | None:
     stop_event = threading.Event()
 
     def _loop() -> None:
+        polls_since_sweep = 0
         while not stop_event.is_set():
             try:
                 claimed = worker.run_once()
+                polls_since_sweep += 1
+                if polls_since_sweep >= _ANALYSIS_STALE_SWEEP_INTERVAL:
+                    worker.sweep_stale()
+                    polls_since_sweep = 0
             except Exception:  # noqa: BLE001 - a single bad job must not kill the loop
                 logger.exception("Analysis worker iteration failed")
                 claimed = False
             if not claimed:
                 stop_event.wait(settings.analysis_job_poll_interval_seconds)
+
+    # Reclaim jobs orphaned by a previous hard process exit immediately on
+    # startup; the loop repeats the sweep periodically for later crashes.
+    try:
+        worker.sweep_stale()
+    except Exception:  # noqa: BLE001 - stale cleanup must not prevent API startup
+        logger.exception("Initial stale analysis-job sweep failed")
 
     thread = threading.Thread(target=_loop, name="analysis-worker", daemon=True)
     thread.start()

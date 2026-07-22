@@ -59,6 +59,8 @@ from app.services.analysis_job_service import (
 _MAX_ERROR_MESSAGE = 1024
 _ERROR_CODE = "RI-JOB-FAILED"
 _CANCELLED_CODE = "RI-JOB-CANCELLED"
+_STALE_CODE = "RI-JOB-STALE"
+_STALE_MESSAGE = "Analysis worker lease expired before the job completed."
 
 
 @dataclass
@@ -112,6 +114,49 @@ class AnalysisWorker:
             for _ in self._execute_stages(session, job):
                 pass
             return True
+        finally:
+            session.close()
+
+    def sweep_stale(self) -> int:
+        """Reconcile running jobs whose worker lease has expired.
+
+        A completed snapshot means the old worker died after the snapshot seal
+        commit but before the job-completion commit, so the job is healed to
+        ``completed`` without repeating analysis. Otherwise any orphaned
+        building snapshot is failed and the job is either requeued with bounded
+        backoff or terminally failed when its attempt budget is exhausted.
+        """
+
+        session = self.session_factory()
+        try:
+            now = self._clock()
+            stale_ids = tuple(
+                session.scalars(
+                    select(AnalysisJob.id)
+                    .where(
+                        AnalysisJob.status == "running",
+                        AnalysisJob.lease_expires_at.is_not(None),
+                        AnalysisJob.lease_expires_at < now,
+                    )
+                    .order_by(AnalysisJob.lease_expires_at, AnalysisJob.created_at)
+                )
+            )
+            reclaimed = 0
+            for job_id in stale_ids:
+                # Re-read each row so another sweeper that already reconciled it
+                # turns this pass into a harmless no-op.
+                session.expire_all()
+                job = session.get(AnalysisJob, job_id)
+                if (
+                    job is None
+                    or job.status != "running"
+                    or job.lease_expires_at is None
+                    or not self._lease_expired(job.lease_expires_at, now)
+                ):
+                    continue
+                self._reconcile_stale(session, job, now)
+                reclaimed += 1
+            return reclaimed
         finally:
             session.close()
 
@@ -346,6 +391,61 @@ class AnalysisWorker:
         job.updated_at = now
         session.commit()
 
+    def _reconcile_stale(self, session: Session, job: AnalysisJob, now: datetime) -> None:
+        """Reconcile one expired running job and commit its new state."""
+
+        record = session.get(RepositoryRecord, job.repository_id)
+        snapshot = session.get(RiSnapshot, job.snapshot_id) if job.snapshot_id else None
+
+        if snapshot is not None and snapshot.state == "completed":
+            job.status = "completed"
+            job.stage = "completed"
+            job.progress = 100
+            job.worker_id = None
+            job.lease_expires_at = None
+            job.next_attempt_at = None
+            job.error_code = None
+            job.error_message = None
+            job.completed_at = snapshot.sealed_at or now
+            job.updated_at = now
+            if record is not None:
+                record.status = "completed"
+                record.analysis_stage = "completed"
+                record.analysis_progress = 100
+                record.error_message = None
+                record.analysed_at = snapshot.sealed_at or now
+            session.commit()
+            return
+
+        if snapshot is not None and snapshot.state == "building":
+            # mark_failed owns a commit boundary. Do this before changing the job
+            # so its transition cannot accidentally commit a half-reconciled row.
+            SnapshotStore(session).mark_failed(snapshot, code=_STALE_CODE)
+
+        job.worker_id = None
+        job.lease_expires_at = None
+        job.error_code = _STALE_CODE
+        job.error_message = _STALE_MESSAGE
+        job.updated_at = now
+        if job.attempt < job.max_attempts:
+            job.status = "queued"
+            job.next_attempt_at = now + timedelta(seconds=self._backoff(job.attempt))
+            if record is not None:
+                record.status = "analysing"
+                record.analysis_stage = None
+                record.analysis_progress = 0
+                record.error_message = None
+        else:
+            job.status = "failed"
+            job.next_attempt_at = None
+            job.completed_at = now
+            if record is not None:
+                record.status = "error"
+                record.analysis_stage = None
+                record.analysis_progress = 0
+                record.error_message = "Repository analysis failed after its worker lease expired."
+        session.commit()
+
     # -- helpers -------------------------------------------------------------
 
     def _checkpoint(self, ctx: _StageContext, stage: str, progress: int) -> None:
@@ -492,6 +592,16 @@ class AnalysisWorker:
         """Bounded exponential backoff in seconds (capped at 60)."""
 
         return min(2**attempt, 60)
+
+    @staticmethod
+    def _lease_expired(lease_expires_at: datetime, now: datetime) -> bool:
+        """Compare SQLite-naive and timezone-aware persisted timestamps safely."""
+
+        if lease_expires_at.tzinfo is None and now.tzinfo is not None:
+            lease_expires_at = lease_expires_at.replace(tzinfo=UTC)
+        elif lease_expires_at.tzinfo is not None and now.tzinfo is None:
+            now = now.replace(tzinfo=UTC)
+        return lease_expires_at < now
 
     @staticmethod
     def _error_message(exc: Exception) -> str:
