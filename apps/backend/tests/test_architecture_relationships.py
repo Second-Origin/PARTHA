@@ -4,10 +4,12 @@ import io
 import shutil
 import zipfile
 
+from sqlalchemy import event
+
 from app.extraction.manifests import DependencyManifestExtractor
 from app.extraction.pipeline import ExtractionPipeline
 from app.extraction.typescript import TypeScriptExtractor
-from app.intelligence.query_service import SnapshotQueryService
+from app.intelligence.query_service import ARCHITECTURE_EVIDENCE_BATCH_SIZE, SnapshotQueryService
 from app.intelligence.resolution import RelationshipResolver
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
 from app.models.repository import RepositoryRecord
@@ -45,6 +47,7 @@ def _persist_snapshot(
     sources: dict[str, bytes],
     *,
     snapshot_sources: dict[str, bytes] | None = None,
+    extra_unrendered_diagnostics: int = 0,
 ) -> str:
     from app.core.database import SessionLocal
 
@@ -101,6 +104,17 @@ def _persist_snapshot(
                     details=diagnostic.details,
                 )
         RelationshipResolver(store).resolve(snapshot)
+        for index in range(extra_unrendered_diagnostics):
+            store.add_diagnostic(
+                snapshot,
+                code="RI-TS-PARSE",
+                category="syntax extraction",
+                severity="info",
+                message=f"Irrelevant parser diagnostic {index}.",
+                producer="relationship-resolver@1.0.0",
+                path=f"src/generated/{index}.ts",
+                span=(1, 1),
+            )
         return store.seal(snapshot).snapshot_id
 
 
@@ -269,7 +283,12 @@ def test_architecture_fact_query_excludes_irrelevant_large_snapshot_records(auth
         },
     }
     repository = _upload(auth_client, sources)
-    _persist_snapshot(repository["id"], sources, snapshot_sources=snapshot_sources)
+    _persist_snapshot(
+        repository["id"],
+        sources,
+        snapshot_sources=snapshot_sources,
+        extra_unrendered_diagnostics=64,
+    )
 
     from app.core.database import SessionLocal
 
@@ -290,7 +309,65 @@ def test_architecture_fact_query_excludes_irrelevant_large_snapshot_records(auth
     }
     assert set(facts.node_evidence) == {node.id for node in facts.nodes}
     assert set(facts.edge_evidence) == {edge.id for edge in facts.edges}
+    assert facts.diagnostics == []
     assert facts.covered_paths == set(sources)
+
+    response = auth_client.get(f"/analysis/{repository['id']}/architecture")
+    assert response.status_code == 200, response.text
+    assert not any(item["code"] == "RI-TS-PARSE" for item in response.json()["diagnostics"])
+
+
+def test_architecture_fact_query_batches_relevant_evidence_ids(auth_client):
+    """Architecture evidence reads stay below the configured SQL parameter bound."""
+
+    sources = {
+        "src/target.ts": b"export const target = 1;\n",
+        **{
+            f"src/importers/{index}.ts": (
+                b"import { target } from '../target';\n"
+                + f"export const importer{index} = target;\n".encode()
+            )
+            for index in range(ARCHITECTURE_EVIDENCE_BATCH_SIZE + 1)
+        },
+    }
+    repository = _upload(auth_client, sources, analyse=False)
+    _persist_snapshot(repository["id"], sources)
+
+    from app.core.database import SessionLocal
+
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        assert record is not None
+        evidence_query_parameter_counts: list[int] = []
+
+        def record_evidence_batch(_conn, _cursor, statement, parameters, _context, _executemany):
+            if "FROM ri_evidence" not in statement:
+                return
+            if "ri_evidence.node_ref IN" not in statement and "ri_evidence.edge_ref IN" not in statement:
+                return
+            evidence_query_parameter_counts.append(len(parameters))
+
+        event.listen(session.bind, "before_cursor_execute", record_evidence_batch)
+        try:
+            facts = SnapshotQueryService(session, record.owner_id).architecture_facts(
+                record.id,
+                module_paths=sources,
+            )
+        finally:
+            event.remove(session.bind, "before_cursor_execute", record_evidence_batch)
+
+    assert facts is not None
+    assert len(facts.edges) == ARCHITECTURE_EVIDENCE_BATCH_SIZE + 1
+    assert len(facts.nodes) == ARCHITECTURE_EVIDENCE_BATCH_SIZE + 2
+    assert len(facts.node_evidence) == len(facts.nodes)
+    assert len(facts.edge_evidence) == len(facts.edges)
+    assert sorted(evidence_query_parameter_counts) == [
+        2,
+        3,
+        ARCHITECTURE_EVIDENCE_BATCH_SIZE + 1,
+        ARCHITECTURE_EVIDENCE_BATCH_SIZE + 1,
+    ]
+    assert max(evidence_query_parameter_counts) <= ARCHITECTURE_EVIDENCE_BATCH_SIZE + 1
 
 
 def test_architecture_without_snapshot_does_not_claim_isolation(auth_client):

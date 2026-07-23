@@ -2,6 +2,7 @@ import posixpath
 
 from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.intelligence.query_service import (
+    ARCHITECTURE_DIAGNOSTIC_CODES,
     ARCHITECTURE_RELATIONSHIP_EDGE_TYPES,
     ArchitectureSnapshotFacts,
     SnapshotQueryService,
@@ -215,7 +216,11 @@ class ArchitectureAnalyzer:
                 modules_by_file.setdefault(self._normalize_path(path), []).append(module.id)
         snapshot_node_by_key = {item.stable_key: item for item in facts.nodes}
         node_ids = {node.id for node in nodes}
-        diagnostics = [self._architecture_diagnostic(item, modules_by_file, node_ids) for item in facts.diagnostics]
+        diagnostics = [
+            self._architecture_diagnostic(item, modules_by_file, node_ids)
+            for item in facts.diagnostics
+            if item.code in ARCHITECTURE_DIAGNOSTIC_CODES
+        ]
         unresolved_node_ids: set[str] = set()
         # Inventory-only file nodes prove that a path exists, not that a
         # relationship-capable extractor ran. Count only evidence emitted by a
@@ -223,7 +228,7 @@ class ArchitectureAnalyzer:
         covered_paths = facts.covered_paths
 
         for item in facts.diagnostics:
-            if item.code not in {"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS"}:
+            if item.code not in ARCHITECTURE_DIAGNOSTIC_CODES:
                 continue
             if item.path:
                 unresolved_node_ids.update(modules_by_file.get(self._normalize_path(item.path), []))

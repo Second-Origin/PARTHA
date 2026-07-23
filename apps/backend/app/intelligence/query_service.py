@@ -27,7 +27,8 @@ ARCHITECTURE_RELATIONSHIP_EDGE_TYPES = {
     "implements": "dependency",
     "depends_on": "dependency",
 }
-ARCHITECTURE_EVIDENCE_PATH_BATCH_SIZE = 500
+ARCHITECTURE_DIAGNOSTIC_CODES = frozenset({"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS"})
+ARCHITECTURE_EVIDENCE_BATCH_SIZE = 500
 
 
 @dataclass(frozen=True)
@@ -96,7 +97,10 @@ class SnapshotQueryService:
         diagnostics = list(
             self.db.scalars(
                 select(RiDiagnostic)
-                .where(RiDiagnostic.snapshot_id == snapshot.snapshot_id)
+                .where(
+                    RiDiagnostic.snapshot_id == snapshot.snapshot_id,
+                    RiDiagnostic.code.in_(ARCHITECTURE_DIAGNOSTIC_CODES),
+                )
                 .order_by(
                     RiDiagnostic.path,
                     RiDiagnostic.span_start_line,
@@ -298,13 +302,13 @@ class SnapshotQueryService:
 
         paths = sorted(set(module_paths))
         covered_paths: set[str] = set()
-        for start in range(0, len(paths), ARCHITECTURE_EVIDENCE_PATH_BATCH_SIZE):
+        for start in range(0, len(paths), ARCHITECTURE_EVIDENCE_BATCH_SIZE):
             covered_paths.update(
                 self.db.scalars(
                     select(RiEvidence.path)
                     .where(
                         RiEvidence.snapshot_id == snapshot.snapshot_id,
-                        RiEvidence.path.in_(paths[start : start + ARCHITECTURE_EVIDENCE_PATH_BATCH_SIZE]),
+                        RiEvidence.path.in_(paths[start : start + ARCHITECTURE_EVIDENCE_BATCH_SIZE]),
                         RiEvidence.extractor != "repository-inventory",
                         or_(RiEvidence.node_ref.is_not(None), RiEvidence.observation_ref.is_not(None)),
                     )
@@ -317,22 +321,26 @@ class SnapshotQueryService:
         if not ids:
             return {}
         field = getattr(RiEvidence, column)
-        rows = self.db.scalars(
-            select(RiEvidence)
-            .where(RiEvidence.snapshot_id == snapshot.snapshot_id, field.in_(ids))
-            .order_by(
-                RiEvidence.path,
-                RiEvidence.start_line,
-                RiEvidence.end_line,
-                RiEvidence.granularity,
-                RiEvidence.extractor,
-                RiEvidence.extractor_version,
-                RiEvidence.id,
-            )
-        ).all()
         grouped: dict[int, list[RiEvidence]] = defaultdict(list)
-        for row in rows:
-            parent = getattr(row, column)
-            if parent is not None:
-                grouped[parent].append(row)
+        for start in range(0, len(ids), ARCHITECTURE_EVIDENCE_BATCH_SIZE):
+            rows = self.db.scalars(
+                select(RiEvidence)
+                .where(
+                    RiEvidence.snapshot_id == snapshot.snapshot_id,
+                    field.in_(ids[start : start + ARCHITECTURE_EVIDENCE_BATCH_SIZE]),
+                )
+                .order_by(
+                    RiEvidence.path,
+                    RiEvidence.start_line,
+                    RiEvidence.end_line,
+                    RiEvidence.granularity,
+                    RiEvidence.extractor,
+                    RiEvidence.extractor_version,
+                    RiEvidence.id,
+                )
+            ).all()
+            for row in rows:
+                parent = getattr(row, column)
+                if parent is not None:
+                    grouped[parent].append(row)
         return grouped
