@@ -221,6 +221,52 @@ def test_authentication_explanation_includes_the_connected_path(auth_client):
     assert [hop["predicate"] for hop in chain["hops"]] == ["routes_to", "injects", "calls", "calls"]
 
 
+def test_authentication_explanation_keeps_shared_hops_in_every_chain(auth_client):
+    """Two guarded routes may converge on the same guard/service/model path.
+
+    The flat relationship list is de-duplicated, but each per-route chain must
+    still contain the complete shared path.
+    """
+
+    sources = {
+        **_AUTH_SOURCES,
+        "src/routes.py": (
+            b"from fastapi import FastAPI, Depends\n"
+            b"from src.dependencies import get_current_user\n\n"
+            b"app = FastAPI()\n\n\n"
+            b"@app.get(\"/me\")\n"
+            b"def read_me(user=Depends(get_current_user)):\n"
+            b"    return user\n\n\n"
+            b"@app.get(\"/account\")\n"
+            b"def read_account(user=Depends(get_current_user)):\n"
+            b"    return user\n"
+        ),
+    }
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(repository["id"], sources)
+
+    response = auth_client.get(f"/analysis/{repository['id']}/architecture/authentication")
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    chains_by_route = {chain["route"]: chain for chain in body["chains"]}
+    assert set(chains_by_route) == {"/me", "/account"}
+    for chain in chains_by_route.values():
+        assert [hop["predicate"] for hop in chain["hops"]] == [
+            "routes_to",
+            "injects",
+            "calls",
+            "calls",
+        ]
+
+    relationship_keys = [
+        (item["subject"], item["predicate"], item["object"])
+        for item in body["relationships"]
+    ]
+    assert relationship_keys.count(("get_current_user", "calls", "UserService")) == 1
+    assert relationship_keys.count(("UserService", "calls", "UserModel")) == 1
+
+
 def test_authentication_explanation_excludes_unrelated_route_and_dependency(auth_client):
     """`/health` and its generic `Depends(get_database)` are never authentication."""
 

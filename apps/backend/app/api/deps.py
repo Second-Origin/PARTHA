@@ -22,11 +22,12 @@ from app.auth.service import AuthService
 from app.core.config import Settings, get_settings
 from app.core.crypto import ProviderKeyCipher, build_provider_cipher
 from app.core.database import get_db
-from app.core.exceptions import UnauthorizedError
+from app.core.exceptions import NotFoundError, UnauthorizedError
 from app.github.client import GitHubClient
 from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.intelligence.query_service import SnapshotQueryService
+from app.models.repository import RepositoryRecord
 from app.models.user import User
 from app.parsers.repository_parser import RepositoryParser
 from app.repositories.repository_repository import RepositoryRepository
@@ -36,6 +37,7 @@ from app.services.ai_service import AiService
 from app.services.analysis_job_service import AnalysisJobService
 from app.services.analysis_service import AnalysisService
 from app.services.documentation_service import DocumentationService
+from app.services.evidence_service import EvidenceSourceService
 from app.services.repository_service import RepositoryService
 from app.storage.local import LocalStorage
 
@@ -114,6 +116,26 @@ def get_repository_service(
     )
 
 
+def require_repository_owner(
+    repository_id: str,
+    repository: RepositoryRepository = Depends(get_repository_repository),
+    current_user: User = Depends(get_current_user),
+) -> RepositoryRecord:
+    """Resolve URL-scoped repositories before request-body/query validation.
+
+    Routes with additional required input can use this as a route dependency
+    so a non-owner receives the standard indistinguishable 404 even when that
+    input is missing or malformed. Services must remain owner-scoped as the
+    authoritative check; this dependency preserves the API's validation-order
+    contract.
+    """
+
+    record = repository.get_for_owner(repository_id, current_user.id)
+    if record is None:
+        raise NotFoundError("Repository not found.", {"repositoryId": repository_id})
+    return record
+
+
 def get_architecture_analyzer(
     snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
 ) -> ArchitectureAnalyzer:
@@ -124,6 +146,15 @@ def get_authentication_explanation_service(
     snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
 ) -> AuthenticationExplanationService:
     return AuthenticationExplanationService(snapshots)
+
+
+def get_evidence_source_service(
+    repository: RepositoryRepository = Depends(get_repository_repository),
+    snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
+    files: RepositoryService = Depends(get_repository_service),
+    current_user: User = Depends(get_current_user),
+) -> EvidenceSourceService:
+    return EvidenceSourceService(repository, snapshots, files, current_user.id)
 
 
 def get_dependency_graph_builder(

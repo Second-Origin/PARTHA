@@ -1,15 +1,23 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
-from app.api.deps import get_analysis_job_service, get_analysis_service, get_current_user
+from app.api.deps import (
+    get_analysis_job_service,
+    get_analysis_service,
+    get_current_user,
+    get_evidence_source_service,
+    require_repository_owner,
+)
 from app.api.openapi import documented_responses, suppress_automatic_validation_error
 from app.models.analysis_job import AnalysisJob
 from app.schemas.analysis import AnalysisStartResponse, AnalysisStatusResponse
 from app.schemas.architecture import ArchitectureResponse
 from app.schemas.authentication import AuthenticationExplanationResponse
 from app.schemas.dependencies import DependencyGraphResponse
+from app.schemas.evidence import EvidenceSourceResponse
 from app.schemas.review import EngineeringReviewResponse
 from app.services.analysis_job_service import AnalysisJobService
 from app.services.analysis_service import AnalysisService
+from app.services.evidence_service import EvidenceSourceService
 
 # Every analysis route requires auth; records are owner-scoped in the services.
 router = APIRouter(prefix="/analysis", tags=["analysis"], dependencies=[Depends(get_current_user)])
@@ -207,6 +215,47 @@ def get_authentication_explanation(
     service: AnalysisService = Depends(get_analysis_service),
 ) -> AuthenticationExplanationResponse:
     return service.authentication_explanation(repository_id)
+
+
+@router.get(
+    "/{repository_id}/evidence",
+    response_model=EvidenceSourceResponse,
+    dependencies=[Depends(require_repository_owner)],
+    responses=documented_responses(
+        200,
+        "Source text for one evidence citation, verified against the exact "
+        "snapshot revision it was cited from.",
+        {
+            "schemaVersion": "evidence-source.v1",
+            "repositoryId": _REPOSITORY_ID,
+            "snapshotId": "snap_example",
+            "revisionKind": "upload",
+            "revisionValue": "sha256:" + "0" * 64,
+            "path": "src/routes.py",
+            "startLine": 10,
+            "endLine": 10,
+            "status": "ready",
+            "reason": None,
+            "content": "@app.get(\"/me\")\n",
+            "truncated": False,
+            "size": 16,
+        },
+        401,
+        404,
+        422,
+        429,
+        500,
+    ),
+)
+def get_evidence_source(
+    repository_id: str,
+    snapshot_id: str = Query(..., alias="snapshotId"),
+    path: str = Query(...),
+    start_line: int = Query(..., alias="startLine", ge=1),
+    end_line: int = Query(..., alias="endLine", ge=1),
+    service: EvidenceSourceService = Depends(get_evidence_source_service),
+) -> EvidenceSourceResponse:
+    return service.read(repository_id, snapshot_id, path, start_line, end_line)
 
 
 @router.get(

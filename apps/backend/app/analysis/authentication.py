@@ -123,7 +123,12 @@ class _AuthenticationSubgraphBuilder:
         self.claims: list[AuthClaim] = []
         self._seen_claim_keys: set[tuple[str, str]] = set()
         self.relationships: list[AuthRelationship] = []
-        self._seen_relationship_keys: set[tuple[str, str, str]] = set()
+        # Interns one AuthRelationship per (subject, predicate, object): the
+        # flat list below only ever gets one entry per key, but every chain
+        # that shares the hop still receives the same, complete object --
+        # chain completeness never depends on whether another route already
+        # claimed this hop first.
+        self._relationship_by_key: dict[tuple[str, str, str], AuthRelationship] = {}
         self.chains: list[AuthChain] = []
 
     def build(self) -> AuthenticationExplanationResponse:
@@ -316,9 +321,9 @@ class _AuthenticationSubgraphBuilder:
         if not evidence:
             return None
         key = (subject.stable_key, predicate, obj.stable_key)
-        if key in self._seen_relationship_keys:
-            return None
-        self._seen_relationship_keys.add(key)
+        existing = self._relationship_by_key.get(key)
+        if existing is not None:
+            return existing
         relationship = AuthRelationship(
             subject=_display_name(subject),
             subject_kind=subject_kind,
@@ -327,6 +332,7 @@ class _AuthenticationSubgraphBuilder:
             object_kind=object_kind,
             evidence=evidence,
         )
+        self._relationship_by_key[key] = relationship
         self.relationships.append(relationship)
         return relationship
 

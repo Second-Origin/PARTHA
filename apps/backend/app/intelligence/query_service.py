@@ -46,6 +46,32 @@ class SnapshotQueryService:
     def metadata(self, snapshot_id: str) -> RiSnapshot:
         return self._snapshot(snapshot_id)
 
+    def has_evidence_span(
+        self,
+        snapshot: RiSnapshot,
+        path: str,
+        start_line: int,
+        end_line: int,
+    ) -> bool:
+        """Whether an exact citation span exists in this snapshot's evidence.
+
+        A client-controlled deep link must not be able to keep a genuine
+        evidence path while substituting unrelated line numbers and still
+        receive a verified citation response.
+        """
+
+        count = self.db.scalar(
+            select(func.count())
+            .select_from(RiEvidence)
+            .where(
+                RiEvidence.snapshot_id == snapshot.snapshot_id,
+                RiEvidence.path == path,
+                RiEvidence.start_line == start_line,
+                RiEvidence.end_line == end_line,
+            )
+        )
+        return bool(count)
+
     def architecture_facts(self, repository_id: str) -> ArchitectureSnapshotFacts | None:
         """Return the newest sealed snapshot facts for an owner-scoped repository.
 

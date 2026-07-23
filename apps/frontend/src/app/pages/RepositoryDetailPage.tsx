@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Navigate, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { parseEvidenceCitation } from '@/features/explorer/fileUtils';
 import {
   ArrowLeft,
   FolderGit2,
@@ -34,22 +35,7 @@ export function RepositoryDetailPage() {
   const { repository: repo, tabs, activeTab, setActiveTab, redirectToAnalysis } = useRepositoryDetail(id);
   const repositoryTree = useRepositoryTree(repo);
 
-  const citationPath = searchParams.get('path');
-  const citationStartLine = searchParams.get('startLine');
-  const citationEndLine = searchParams.get('endLine');
-  const citationSnapshotId = searchParams.get('snapshotId');
-  const citation = useMemo(
-    () =>
-      citationPath
-        ? {
-            path: citationPath,
-            startLine: citationStartLine ? Number(citationStartLine) : null,
-            endLine: citationEndLine ? Number(citationEndLine) : null,
-            snapshotId: citationSnapshotId,
-          }
-        : null,
-    [citationPath, citationStartLine, citationEndLine, citationSnapshotId],
-  );
+  const citation = useMemo(() => parseEvidenceCitation(searchParams), [searchParams]);
 
   if (!repo) {
     return (

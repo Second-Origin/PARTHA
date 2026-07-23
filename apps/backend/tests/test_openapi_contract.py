@@ -49,6 +49,7 @@ EXPECTED_RESPONSES = {
     ("POST", "/analysis/{repository_id}/cancel"): {200, 401, 404, 409, 429, 500},
     ("GET", "/analysis/{repository_id}/architecture"): {200, 401, 404, 429, 500},
     ("GET", "/analysis/{repository_id}/architecture/authentication"): {200, 401, 404, 429, 500},
+    ("GET", "/analysis/{repository_id}/evidence"): {200, 401, 404, 422, 429, 500},
     ("GET", "/analysis/{repository_id}/dependencies"): {200, 401, 404, 429, 500},
     ("GET", "/analysis/{repository_id}/review"): {200, 401, 404, 409, 429, 500},
     ("GET", "/ai/config"): {200, 401, 429, 500},

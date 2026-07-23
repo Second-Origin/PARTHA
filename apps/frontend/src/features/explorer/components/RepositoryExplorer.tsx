@@ -4,19 +4,14 @@ import { cn } from '@/shared/utils/cn';
 import type { FileTreeNode } from '@/shared/types';
 import { useExplorerStore } from '../store';
 import { useResizable } from '../useResizable';
-import { deriveFileDetails, flattenTree } from '../fileUtils';
+import { deriveFileDetails, flattenTree, type ExplorerCitation } from '../fileUtils';
 import { FileTreeView } from './FileTreeView';
 import { ExplorerToolbar } from './ExplorerToolbar';
 import { FileDetailsPanel } from './FileDetailsPanel';
 import { CodePreview } from './CodePreview';
 import { Breadcrumbs } from './Breadcrumbs';
 
-export interface ExplorerCitation {
-  path: string;
-  startLine: number | null;
-  endLine: number | null;
-  snapshotId: string | null;
-}
+export type { ExplorerCitation } from '../fileUtils';
 
 interface RepositoryExplorerProps {
   fileTree: FileTreeNode[];

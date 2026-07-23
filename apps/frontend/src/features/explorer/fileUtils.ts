@@ -1,5 +1,36 @@
 import type { FileTreeNode } from '@/shared/types';
 
+export interface ExplorerCitation {
+  path: string;
+  startLine: number;
+  endLine: number;
+  snapshotId: string;
+}
+
+function parsePositiveInteger(value: string | null): number | null {
+  if (!value || !/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : null;
+}
+
+/**
+ * Parse an evidence-citation deep-link's query params defensively: any
+ * missing or malformed field (non-integer line, end before start, empty
+ * path/snapshot id) yields `null` rather than a partially valid citation
+ * that could produce an invalid Monaco range or an unverified request.
+ */
+export function parseEvidenceCitation(searchParams: URLSearchParams): ExplorerCitation | null {
+  const path = searchParams.get('path');
+  const snapshotId = searchParams.get('snapshotId');
+  const startLine = parsePositiveInteger(searchParams.get('startLine'));
+  const endLine = parsePositiveInteger(searchParams.get('endLine'));
+
+  if (!path || !snapshotId || startLine === null || endLine === null || endLine < startLine) {
+    return null;
+  }
+  return { path, startLine, endLine, snapshotId };
+}
+
 export interface FileDetails {
   name: string;
   path: string;

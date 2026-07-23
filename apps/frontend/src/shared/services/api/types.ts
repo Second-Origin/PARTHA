@@ -257,6 +257,26 @@ export interface AuthenticationExplanationResponse {
   diagnostics: AuthenticationDiagnostic[];
 }
 
+// Evidence-source navigation (snapshot-and-revision-verified, #95)
+export type EvidenceSchemaVersion = 'evidence-source.v1';
+export type EvidenceSourceStatus = 'ready' | 'unavailable';
+
+export interface EvidenceSourceResponse {
+  schemaVersion: EvidenceSchemaVersion;
+  repositoryId: string;
+  snapshotId: string;
+  revisionKind: string | null;
+  revisionValue: string | null;
+  path: string;
+  startLine: number;
+  endLine: number;
+  status: EvidenceSourceStatus;
+  reason: string | null;
+  content: string | null;
+  truncated: boolean;
+  size: number;
+}
+
 // Dependency Graph
 export interface DependencyNode {
   id: string;
