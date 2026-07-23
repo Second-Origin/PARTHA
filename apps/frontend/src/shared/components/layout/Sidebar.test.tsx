@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useAppStore } from '@/app/store/useAppStore';
@@ -41,15 +41,49 @@ describe('Sidebar', () => {
     expect(screen.queryByText('Free Plan')).not.toBeInTheDocument();
   });
 
-  it('keeps core navigation available and hides deferred surfaces from primary navigation', () => {
+  it('derives primary navigation from the current ready product surfaces', () => {
     renderSidebar();
 
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Architecture' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Dependency Graph' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /Dashboard|Repositories|Upload Repository|Architecture|Dependency Graph|Settings/ }))
+      .toHaveLength(6);
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Repositories' })).toHaveAttribute('href', '/repositories');
+    expect(screen.getByRole('link', { name: 'Upload Repository' })).toHaveAttribute('href', '/upload');
+    expect(screen.getByRole('link', { name: 'Architecture' })).toHaveAttribute('href', '/architecture');
+    expect(screen.getByRole('link', { name: 'Dependency Graph' })).toHaveAttribute('href', '/dependencies');
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
     expect(screen.queryByRole('link', { name: 'Engineering Review' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'AI Workspace' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Documentation' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Insights' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Beta')).not.toBeInTheDocument();
+    expect(screen.queryByText('Experimental')).not.toBeInTheDocument();
+    expect(screen.queryByText('Planned')).not.toBeInTheDocument();
+  });
+
+  it('keeps navigation links named and keyboard-focusable when collapsed', () => {
+    renderSidebar();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+
+    const architecture = screen.getByRole('link', { name: 'Architecture' });
+    architecture.focus();
+
+    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument();
+    expect(architecture).toHaveFocus();
+    expect(architecture).toHaveAttribute('href', '/architecture');
+  });
+
+  it('marks only the active route with aria-current', () => {
+    render(
+      <MemoryRouter initialEntries={['/architecture']}>
+        <Sidebar />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Architecture' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Repositories' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Settings' })).not.toHaveAttribute('aria-current');
   });
 });
