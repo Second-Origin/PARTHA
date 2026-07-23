@@ -135,16 +135,29 @@ def test_feature_consumers_read_repository_intelligence(tmp_path: Path):
     _, _, _, intelligence = _build_intelligence(tmp_path)
     record = _record(tmp_path, intelligence)
 
-    architecture = ArchitectureAnalyzer().build_architecture(record)
     dependencies = DependencyGraphBuilder().build(record)
     review = EngineeringReviewBuilder().build(record)
 
-    assert architecture.summary.language == "TypeScript"
-    assert any(node.id == "module:services" for node in architecture.nodes)
     assert any(node.name == "react" for node in dependencies.nodes)
     assert dependencies.vulnerability_assessment.status == "not_computed"
     assert dependencies.outdated_assessment.status == "not_computed"
     assert review.summary.total_findings >= 1
+
+
+def test_architecture_without_snapshot_reports_honest_unknown_state(tmp_path: Path):
+    """Architecture (#95) reads exclusively through the snapshot query layer; it
+    no longer reads ``repo_metadata['intelligence']``. Without a sealed ri.v1
+    snapshot it reports an honest "unknown" state instead of falling back to
+    the legacy blob other consumers (dependencies, review) still read."""
+
+    _sample_repository(tmp_path)
+    _, _, _, intelligence = _build_intelligence(tmp_path)
+    record = _record(tmp_path, intelligence)
+
+    architecture = ArchitectureAnalyzer().build_architecture(record)
+
+    assert architecture.summary.language == "Unknown"
+    assert any(node.id == "module:repository" for node in architecture.nodes)
 
 
 def _nested_manifest_repository(root: Path) -> None:

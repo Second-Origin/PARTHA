@@ -7,6 +7,7 @@ import zipfile
 from app.extraction.manifests import DependencyManifestExtractor
 from app.extraction.pipeline import ExtractionPipeline
 from app.extraction.typescript import TypeScriptExtractor
+from app.intelligence.classification import RoleClassifier
 from app.intelligence.resolution import RelationshipResolver
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
 from app.models.repository import RepositoryRecord
@@ -49,7 +50,10 @@ def _persist_snapshot(
 
     pipeline = ExtractionPipeline([TypeScriptExtractor(), DependencyManifestExtractor()])
     runs = pipeline.run(snapshot_sources or sources)
-    producer_version_set = sorted({run.producer for run in runs} | {"relationship-resolver@1.0.0"})
+    producer_version_set = sorted(
+        {run.producer for run in runs}
+        | {"relationship-resolver@1.0.0", f"{RoleClassifier.name}@{RoleClassifier.version}"}
+    )
 
     with SessionLocal() as session:
         repository = session.get(RepositoryRecord, repository_id)
@@ -100,6 +104,7 @@ def _persist_snapshot(
                     details=diagnostic.details,
                 )
         RelationshipResolver(store).resolve(snapshot)
+        RoleClassifier(store).classify(snapshot)
         return store.seal(snapshot).snapshot_id
 
 
@@ -228,7 +233,11 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
     )
 
 
-def test_architecture_reports_resolved_facts_without_module_mapping(auth_client):
+def test_architecture_maps_every_snapshot_file_to_a_module(auth_client):
+    """Modules are derived from the sealed snapshot's own file set (#95), so a
+    file the snapshot observes always maps to some module — there is no longer
+    a legacy-intelligence file list that can disagree with what was sealed."""
+
     sources = {
         "README.md": b"# Mapping fixture\n",
         "src/beta/index.ts": b"export function beta() { return 1; }\n",
@@ -247,10 +256,18 @@ def test_architecture_reports_resolved_facts_without_module_mapping(auth_client)
 
     assert response.status_code == 200
     architecture = response.json()
-    diagnostic = next(item for item in architecture["diagnostics"] if item["code"] == "ARCH-REL-ENDPOINT-UNMAPPED")
-    assert diagnostic["subjectKey"] == "file:unmapped.ts"
-    assert diagnostic["objectKey"] == "file:src/beta/index.ts"
-    assert diagnostic["nodeIds"] == ["module:beta"]
+    assert not any(item["code"] == "ARCH-REL-ENDPOINT-UNMAPPED" for item in architecture["diagnostics"])
+    nodes = {node["id"]: node for node in architecture["nodes"]}
+    assert "module:unmapped.ts" in nodes
+    import_edges = [
+        edge
+        for edge in architecture["edges"]
+        if edge["source"] == "module:unmapped.ts"
+        and edge["target"] == "module:beta"
+        and edge["predicate"] == "imports"
+    ]
+    assert len(import_edges) == 1
+    assert import_edges[0]["evidence"][0]["path"] == "unmapped.ts"
 
 
 def test_architecture_without_snapshot_does_not_claim_isolation(auth_client):
