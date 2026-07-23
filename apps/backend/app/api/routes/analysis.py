@@ -5,6 +5,7 @@ from app.api.openapi import documented_responses, suppress_automatic_validation_
 from app.models.analysis_job import AnalysisJob
 from app.schemas.analysis import AnalysisStartResponse, AnalysisStatusResponse
 from app.schemas.architecture import ArchitectureResponse
+from app.schemas.authentication import AuthenticationExplanationResponse
 from app.schemas.dependencies import DependencyGraphResponse
 from app.schemas.review import EngineeringReviewResponse
 from app.services.analysis_job_service import AnalysisJobService
@@ -157,6 +158,55 @@ def get_architecture(
     service: AnalysisService = Depends(get_analysis_service),
 ) -> ArchitectureResponse:
     return service.architecture_model(repository_id)
+
+
+@router.get(
+    "/{repository_id}/architecture/authentication",
+    response_model=AuthenticationExplanationResponse,
+    responses=documented_responses(
+        200,
+        "Evidence-backed explanation of how authentication works, read exclusively "
+        "from the sealed Repository Intelligence snapshot query layer.",
+        {
+            "schemaVersion": "auth-explanation.v1",
+            "repositoryId": _REPOSITORY_ID,
+            "repositoryName": "example-service",
+            "revisionKind": "upload",
+            "revisionValue": "sha256:" + "0" * 64,
+            "snapshotId": "snap_example",
+            "status": "ready",
+            "summary": (
+                "Found 1 authentication-relevant route(s), 1 middleware/guard dependency(ies), "
+                "1 service(s), and 1 model(s), each backed by a citation to its exact stored source span."
+            ),
+            "claims": [
+                {
+                    "kind": "route",
+                    "name": "/me",
+                    "confidence": "observed",
+                    "evidence": [
+                        {
+                            "snapshotId": "snap_example",
+                            "factId": "src/routes.py::(anonymous:route#1)",
+                            "path": "src/routes.py",
+                            "startLine": 10,
+                            "endLine": 10,
+                        }
+                    ],
+                }
+            ],
+            "relationships": [],
+            "diagnostics": [],
+        },
+        *_COMMON_ERRORS,
+    ),
+    openapi_extra=suppress_automatic_validation_error(),
+)
+def get_authentication_explanation(
+    repository_id: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> AuthenticationExplanationResponse:
+    return service.authentication_explanation(repository_id)
 
 
 @router.get(

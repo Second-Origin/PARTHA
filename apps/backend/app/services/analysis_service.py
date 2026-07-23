@@ -1,9 +1,10 @@
 from app.analysis.architecture import ArchitectureAnalyzer
+from app.analysis.authentication import AuthenticationExplanationService
 from app.graph.dependency_graph import DependencyGraphBuilder
-from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.repositories.repository_repository import RepositoryRepository
 from app.review.review_service import EngineeringReviewBuilder
 from app.schemas.architecture import ArchitectureResponse
+from app.schemas.authentication import AuthenticationExplanationResponse
 from app.schemas.dependencies import DependencyGraphResponse
 from app.schemas.review import EngineeringReviewResponse
 from app.core.exceptions import NotFoundError
@@ -14,8 +15,8 @@ class AnalysisService:
 
     Enqueue/status/cancel of the durable analysis lifecycle now live in
     ``AnalysisJobService``; this service only builds the architecture, dependency,
-    and review read models from already-persisted intelligence, which the export
-    service also reuses.
+    review, and authentication-explanation read models from already-persisted
+    intelligence, which the export service also reuses.
     """
 
     def __init__(
@@ -24,14 +25,14 @@ class AnalysisService:
         architecture: ArchitectureAnalyzer,
         dependencies: DependencyGraphBuilder,
         review: EngineeringReviewBuilder,
-        intelligence: RepositoryIntelligenceEngine,
+        authentication: AuthenticationExplanationService,
         owner_id: str,
     ) -> None:
         self.repository = repository
         self.architecture = architecture
         self.dependencies = dependencies
         self.review = review
-        self.intelligence = intelligence
+        self.authentication = authentication
         self.owner_id = owner_id
 
     def architecture_model(self, repository_id: str) -> ArchitectureResponse:
@@ -42,6 +43,9 @@ class AnalysisService:
 
     def engineering_review(self, repository_id: str) -> EngineeringReviewResponse:
         return self.review.build(self._get_record(repository_id))
+
+    def authentication_explanation(self, repository_id: str) -> AuthenticationExplanationResponse:
+        return self.authentication.explain(self._get_record(repository_id))
 
     def _get_record(self, repository_id: str):
         # Owner-scoped: get_for_owner returns None for both a missing repository

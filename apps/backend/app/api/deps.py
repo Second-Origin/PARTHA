@@ -16,6 +16,7 @@ from app.ai.providers.openrouter import OpenRouterProvider
 from app.ai.providers.registry import ProviderRegistry
 from app.ai.repository_context import RepositoryContextBuilder
 from app.analysis.architecture import ArchitectureAnalyzer
+from app.analysis.authentication import AuthenticationExplanationService
 from app.auth.security import decode_access_token
 from app.auth.service import AuthService
 from app.core.config import Settings, get_settings
@@ -114,10 +115,15 @@ def get_repository_service(
 
 
 def get_architecture_analyzer(
-    intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
     snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
 ) -> ArchitectureAnalyzer:
-    return ArchitectureAnalyzer(intelligence, snapshots)
+    return ArchitectureAnalyzer(snapshots)
+
+
+def get_authentication_explanation_service(
+    snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
+) -> AuthenticationExplanationService:
+    return AuthenticationExplanationService(snapshots)
 
 
 def get_dependency_graph_builder(
@@ -188,7 +194,7 @@ def get_analysis_service(
     architecture: ArchitectureAnalyzer = Depends(get_architecture_analyzer),
     dependencies: DependencyGraphBuilder = Depends(get_dependency_graph_builder),
     review: EngineeringReviewBuilder = Depends(get_engineering_review_builder),
-    intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
+    authentication: AuthenticationExplanationService = Depends(get_authentication_explanation_service),
     current_user: User = Depends(get_current_user),
 ) -> AnalysisService:
     return AnalysisService(
@@ -196,7 +202,7 @@ def get_analysis_service(
         architecture=architecture,
         dependencies=dependencies,
         review=review,
-        intelligence=intelligence,
+        authentication=authentication,
         owner_id=current_user.id,
     )
 
