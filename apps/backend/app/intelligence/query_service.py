@@ -27,6 +27,7 @@ class ArchitectureSnapshotFacts:
     nodes: list[RiNode]
     observations: list[RiObservation]
     edges: list[RiEdge]
+    assertions: list[RiAssertion]
     node_evidence: dict[int, list[RiEvidence]]
     observation_evidence: dict[int, list[RiEvidence]]
     edge_evidence: dict[int, list[RiEvidence]]
@@ -89,11 +90,19 @@ class SnapshotQueryService:
                 )
             ).all()
         )
+        assertions = list(
+            self.db.scalars(
+                select(RiAssertion)
+                .where(RiAssertion.snapshot_id == snapshot.snapshot_id)
+                .order_by(RiAssertion.subject_key, RiAssertion.predicate, RiAssertion.assertion_id, RiAssertion.id)
+            ).all()
+        )
         return ArchitectureSnapshotFacts(
             snapshot=snapshot,
             nodes=nodes,
             observations=observations,
             edges=edges,
+            assertions=assertions,
             node_evidence=self._evidence_for(snapshot, "node_ref", [node.id for node in nodes]),
             observation_evidence=self._evidence_for(
                 snapshot,

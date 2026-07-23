@@ -18,6 +18,7 @@ SourceRole = Literal[
     "enum",
     "utility",
     "configuration",
+    "middleware",
     "test",
     "documentation",
     "unknown",

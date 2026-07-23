@@ -63,6 +63,11 @@ class RelationshipResolver:
     ``dependency``
         A manifest-backed dependency declaration whose subject is a dependency
         node.  It resolves ``repo:root -> dependency``.
+    ``injects``
+        A ``Depends(name)`` argument (#95).  Resolved exactly like a ``call``:
+        through proven evidence only, attributed to whichever symbol's span
+        contains it.  Produces an ``injects`` edge from the containing
+        function to the referenced dependency callable.
 
     New extractors can add observation kinds without making this class guess:
     unsupported kinds are simply not relationship inputs.
@@ -189,6 +194,14 @@ class RelationshipResolver:
         for input_ in inputs_by_kind["dependency"]:
             self._check_cancelled(check_cancelled)
             added, diagnosed = self._resolve_dependency(input_, nodes_by_key)
+            edges_added += added
+            diagnostics_added += diagnosed
+
+        for input_ in inputs_by_kind["injects"]:
+            self._check_cancelled(check_cancelled)
+            added, diagnosed = self._resolve_reference(
+                input_, nodes_by_key, evidence_by_node, bindings_by_file, predicate="injects"
+            )
             edges_added += added
             diagnostics_added += diagnosed
 
