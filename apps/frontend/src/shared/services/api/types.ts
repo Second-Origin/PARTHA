@@ -196,6 +196,88 @@ export interface AnalysisStatusResponse {
 // Architecture
 export type ArchitectureResponse = ArchitectureModel;
 
+// Authentication explanation (evidence-backed, snapshot-only)
+export type AuthSchemaVersion = 'auth-explanation.v1';
+export type AuthClaimKind = 'route' | 'middleware' | 'service' | 'model' | 'dependency';
+export type AuthRelationshipNodeKind = 'route' | 'handler' | 'middleware' | 'service' | 'model' | 'dependency';
+export type AuthConfidence = 'observed' | 'heuristic';
+export type AuthStatus = 'ready' | 'missing_snapshot';
+
+export interface AuthEvidenceRef {
+  snapshotId: string;
+  factId: string;
+  path: string;
+  startLine: number;
+  endLine: number;
+}
+
+export interface AuthClaim {
+  kind: AuthClaimKind;
+  name: string;
+  confidence: AuthConfidence;
+  evidence: AuthEvidenceRef[];
+}
+
+export interface AuthRelationship {
+  subject: string;
+  subjectKind: AuthRelationshipNodeKind;
+  predicate: string;
+  object: string;
+  objectKind: AuthRelationshipNodeKind;
+  evidence: AuthEvidenceRef[];
+}
+
+export interface AuthChain {
+  route: string;
+  hops: AuthRelationship[];
+}
+
+export interface AuthenticationDiagnostic {
+  code: string;
+  category: string;
+  severity: 'fatal' | 'error' | 'warning' | 'info';
+  message: string;
+  path: string | null;
+  startLine: number | null;
+  endLine: number | null;
+}
+
+export interface AuthenticationExplanationResponse {
+  schemaVersion: AuthSchemaVersion;
+  repositoryId: string;
+  repositoryName: string;
+  revisionKind: string | null;
+  revisionValue: string | null;
+  snapshotId: string | null;
+  status: AuthStatus;
+  summary: string;
+  claims: AuthClaim[];
+  relationships: AuthRelationship[];
+  chains: AuthChain[];
+  diagnostics: AuthenticationDiagnostic[];
+}
+
+// Evidence-source navigation (snapshot-and-revision-verified, #95)
+export type EvidenceSchemaVersion = 'evidence-source.v1';
+export type EvidenceSourceStatus = 'ready' | 'unavailable';
+
+export interface EvidenceSourceResponse {
+  schemaVersion: EvidenceSchemaVersion;
+  repositoryId: string;
+  snapshotId: string;
+  factId: string;
+  revisionKind: string | null;
+  revisionValue: string | null;
+  path: string;
+  startLine: number;
+  endLine: number;
+  status: EvidenceSourceStatus;
+  reason: string | null;
+  content: string | null;
+  truncated: boolean;
+  size: number;
+}
+
 // Dependency Graph
 export interface DependencyNode {
   id: string;

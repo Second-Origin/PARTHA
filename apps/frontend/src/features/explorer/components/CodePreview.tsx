@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
-import { Copy, Check, FileWarning, Loader2 } from 'lucide-react';
+import { Copy, Check, FileWarning, Loader2, ShieldAlert, Target } from 'lucide-react';
 import type { FileTreeNode } from '@/shared/types';
 import { repositoryService } from '@/shared/services/api/repositories';
+import { architectureService } from '@/shared/services/api/architecture';
 import { getErrorMessage } from '@/shared/services/api';
 import { getMonacoLanguage } from '../fileUtils';
+import type { ExplorerCitation } from './RepositoryExplorer';
 
 interface CodePreviewProps {
   node: FileTreeNode;
   repositoryId: string;
+  /** When set, the exact cited line span is fetched, verified, and highlighted. */
+  citation?: ExplorerCitation | null;
 }
 
-export function CodePreview({ node, repositoryId }: CodePreviewProps) {
+export function CodePreview({ node, repositoryId, citation }: CodePreviewProps) {
   const [copied, setCopied] = useState(false);
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
@@ -21,7 +25,17 @@ export function CodePreview({ node, repositoryId }: CodePreviewProps) {
   const [mediaType, setMediaType] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
-  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  // Set only once the cited snapshot/revision has actually been verified by
+  // the backend -- never optimistically from the (unverified) URL params.
+  const [verifiedRevision, setVerifiedRevision] = useState<{ kind: string | null; value: string | null } | null>(
+    null,
+  );
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
+  type Editor = Parameters<OnMount>[0];
+  type Monaco = Parameters<OnMount>[1];
+  const editorRef = useRef<Editor | null>(null);
+  const monacoRef = useRef<Monaco | null>(null);
+  const decorationsRef = useRef<ReturnType<Editor['createDecorationsCollection']> | null>(null);
   const copyResetTimerRef = useRef<number | null>(null);
 
   const language = getMonacoLanguage(node.extension);
@@ -45,6 +59,47 @@ export function CodePreview({ node, repositoryId }: CodePreviewProps) {
     setIsImage(false);
     setMediaType(null);
     setTruncated(false);
+    setVerifiedRevision(null);
+    setUnavailableReason(null);
+
+    if (citation) {
+      // Snapshot-and-revision-verified fetch: the backend proves the
+      // returned content genuinely belongs to the cited snapshot's exact
+      // immutable revision before returning it. It never falls back to
+      // `getFile` -- an unprovable citation reports `status: "unavailable"`
+      // with no content, rather than silently showing different content
+      // under a trusted-looking snapshot badge.
+      architectureService
+        .getEvidenceSource(
+          repositoryId,
+          citation.snapshotId,
+          citation.factId,
+          node.path,
+          citation.startLine,
+          citation.endLine,
+        )
+        .then((source) => {
+          if (cancelled) return;
+          if (source.status === 'unavailable') {
+            setUnavailableReason(source.reason ?? 'Evidence source unavailable for this snapshot revision.');
+            return;
+          }
+          setContent(source.content ?? '');
+          setTruncated(source.truncated);
+          setVerifiedRevision({ kind: source.revisionKind, value: source.revisionValue });
+        })
+        .catch((caught) => {
+          if (cancelled) return;
+          setError(getErrorMessage(caught));
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }
 
     repositoryService
       .getFile(repositoryId, node.path)
@@ -67,13 +122,36 @@ export function CodePreview({ node, repositoryId }: CodePreviewProps) {
     return () => {
       cancelled = true;
     };
-  }, [clearCopyResetTimer, repositoryId, node.path]);
+  }, [clearCopyResetTimer, repositoryId, node.path, citation]);
 
   useEffect(() => clearCopyResetTimer, [clearCopyResetTimer]);
 
-  const handleMount: OnMount = (editor) => {
+  const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
   };
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco || loading) return;
+    decorationsRef.current?.clear();
+    // Lines are highlighted only once verification has actually succeeded --
+    // never while loading, and never for an unavailable/mismatched citation.
+    if (!citation || unavailableReason !== null || error !== null) return;
+    const { startLine: start, endLine: end } = citation;
+    decorationsRef.current = editor.createDecorationsCollection([
+      {
+        range: new monaco.Range(start, 1, end, 1),
+        options: {
+          isWholeLine: true,
+          className: 'citation-highlight-line',
+          linesDecorationsClassName: 'citation-highlight-margin',
+        },
+      },
+    ]);
+    editor.revealLineInCenter(start);
+  }, [citation, loading, unavailableReason, error, content]);
 
   const handleCopy = useCallback(async () => {
     clearCopyResetTimer();
@@ -92,7 +170,7 @@ export function CodePreview({ node, repositoryId }: CodePreviewProps) {
     }
   }, [clearCopyResetTimer, content]);
 
-  const showCopy = !loading && !error && !isBinary && !isImage;
+  const showCopy = !loading && !error && !unavailableReason && !isBinary && !isImage;
 
   return (
     <div className="flex flex-col h-full">
@@ -102,6 +180,14 @@ export function CodePreview({ node, repositoryId }: CodePreviewProps) {
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{language}</span>
           {truncated && !isImage && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/10 text-warning">truncated</span>
+          )}
+          {citation && verifiedRevision && !unavailableReason && !loading && !error && (
+            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+              <Target className="h-3 w-3" />
+              Cited lines {citation.startLine}
+              {citation.endLine !== citation.startLine ? `-${citation.endLine}` : ''} · snapshot{' '}
+              {citation.snapshotId} · revision {verifiedRevision.kind}:{verifiedRevision.value}
+            </span>
           )}
         </div>
         {showCopy && (
@@ -121,7 +207,13 @@ export function CodePreview({ node, repositoryId }: CodePreviewProps) {
         {loading ? (
           <div className="flex items-center justify-center h-full gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading file...
+            {citation ? 'Verifying evidence...' : 'Loading file...'}
+          </div>
+        ) : unavailableReason ? (
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-center px-6">
+            <ShieldAlert className="h-8 w-8 text-warning/60" />
+            <p className="text-sm text-foreground">Evidence source unavailable for this snapshot revision.</p>
+            <p className="text-xs text-muted-foreground max-w-md">{unavailableReason}</p>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-center px-6">

@@ -1,6 +1,6 @@
 import posixpath
+from collections import Counter, defaultdict
 
-from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.intelligence.query_service import ArchitectureSnapshotFacts, SnapshotQueryService
 from app.intelligence.models import RepositoryModule
 from app.models.repository import RepositoryRecord
@@ -31,8 +31,18 @@ ROLE_TO_NODE_TYPE = {
     "utility": "utilities",
     "configuration": "configuration",
     "test": "utilities",
+    "middleware": "middleware",
     "documentation": "shared-library",
     "unknown": "shared-library",
+}
+
+_FRAMEWORK_BY_DEPENDENCY_NAME = {
+    "react": "React",
+    "next": "Next.js",
+    "vue": "Vue",
+    "fastapi": "FastAPI",
+    "django": "Django",
+    "flask": "Flask",
 }
 
 RELATIONSHIP_EDGE_TYPES = {
@@ -45,41 +55,24 @@ RELATIONSHIP_EDGE_TYPES = {
 
 
 class ArchitectureAnalyzer:
-    def __init__(
-        self,
-        intelligence: RepositoryIntelligenceEngine | None = None,
-        snapshots: SnapshotQueryService | None = None,
-    ) -> None:
-        self.intelligence = intelligence or RepositoryIntelligenceEngine()
+    """Builds the Architecture read model exclusively from sealed ri.v1 snapshots.
+
+    No filesystem read, no working-tree fallback, and no legacy
+    ``repo_metadata['intelligence']`` read: every field is derived from
+    :class:`SnapshotQueryService` facts, or from ``record.file_tree`` (already
+    persisted repository metadata, not a filesystem walk) when no sealed
+    snapshot exists yet.
+    """
+
+    def __init__(self, snapshots: SnapshotQueryService | None = None) -> None:
         self.snapshots = snapshots
 
     def build_architecture(self, record: RepositoryRecord) -> ArchitectureResponse:
-        # Architecture requests are persisted-data reads. ``from_record`` has a
-        # legacy compatibility fallback that rebuilds from ``local_path``; using
-        # it here would make a read endpoint depend on the working tree.
-        repository_intelligence = self.intelligence.load(record)
-        modules = (repository_intelligence.modules if repository_intelligence is not None else []) or [
-            RepositoryModule(
-                id="module:repository",
-                name="Repository",
-                role="unknown",
-                layer="shared",
-                path_prefix="/",
-                files=(
-                    [file.path for file in repository_intelligence.files]
-                    if repository_intelligence is not None
-                    else self._persisted_file_paths(record.file_tree or [])
-                ),
-                symbols=[],
-                dependencies=[],
-            )
-        ]
-        frameworks = repository_intelligence.discovery.frameworks if repository_intelligence is not None else []
-        primary_language = (
-            repository_intelligence.discovery.primary_language if repository_intelligence is not None else "Unknown"
-        )
-        entry_points = repository_intelligence.discovery.entry_points if repository_intelligence is not None else []
         facts = self.snapshots.architecture_facts(record.id) if self.snapshots is not None else None
+        modules = self._modules_from_facts(facts, record)
+        frameworks = self._frameworks_from_facts(facts)
+        primary_language = self._primary_language_from_facts(facts)
+        entry_points = self._entry_points_from_facts(facts)
         nodes = self._nodes_for_modules(modules)
         nodes.extend(self._dependency_nodes(facts))
         edges, diagnostics, unresolved_node_ids, covered_paths = self._edges_for_modules(modules, nodes, facts)
@@ -154,6 +147,158 @@ class ArchitectureAnalyzer:
             if isinstance(children, list):
                 paths.extend(self._persisted_file_paths(children))
         return sorted(set(paths))
+
+    def _empty_module(self, files: list[str]) -> list[RepositoryModule]:
+        return [
+            RepositoryModule(
+                id="module:repository",
+                name="Repository",
+                role="unknown",
+                layer="shared",
+                path_prefix="/",
+                files=files,
+                symbols=[],
+                dependencies=[],
+            )
+        ]
+
+    def _file_roles(self, facts: ArchitectureSnapshotFacts) -> dict[str, str]:
+        """Map file path -> role-classifier classification (#95), if any.
+
+        A file with no ``classified_as`` assertion has no entry: absence here
+        means "not classified", never a fabricated "unknown" guess.
+        """
+
+        roles: dict[str, str] = {}
+        for assertion in facts.assertions:
+            if assertion.predicate != "classified_as" or assertion.subject_kind != "file":
+                continue
+            classification = str((assertion.value or {}).get("classification", ""))
+            if not classification:
+                continue
+            roles[assertion.subject_key.removeprefix("file:")] = classification
+        return roles
+
+    def _modules_from_facts(
+        self, facts: ArchitectureSnapshotFacts | None, record: RepositoryRecord
+    ) -> list[RepositoryModule]:
+        if facts is None:
+            return self._empty_module(self._persisted_file_paths(record.file_tree or []))
+        file_paths = sorted(
+            node.stable_key.removeprefix("file:")
+            for node in facts.nodes
+            if node.node_kind == "file" and node.stable_key.startswith("file:")
+        )
+        if not file_paths:
+            return self._empty_module([])
+        role_by_path = self._file_roles(facts)
+        grouped: dict[str, list[str]] = defaultdict(list)
+        for path in file_paths:
+            grouped[self._module_id(path, role_by_path.get(path))].append(path)
+        modules: list[RepositoryModule] = []
+        for module_id, paths in grouped.items():
+            candidate_roles = [
+                role_by_path[path]
+                for path in paths
+                if role_by_path.get(path) not in (None, "unknown", "documentation", "test")
+            ]
+            dominant = (
+                Counter(candidate_roles).most_common(1)[0][0]
+                if candidate_roles
+                else (role_by_path.get(paths[0]) or "unknown")
+            )
+            modules.append(
+                RepositoryModule(
+                    id=module_id,
+                    name=module_id.replace("module:", "").replace("-", " ").title(),
+                    role=dominant,  # type: ignore[arg-type]
+                    layer=self._layer_for_role(dominant),
+                    path_prefix=self._path_prefix(paths),
+                    files=sorted(paths),
+                    symbols=[],
+                    dependencies=[],
+                )
+            )
+        return sorted(modules, key=lambda module: module.id)
+
+    @staticmethod
+    def _module_id(path: str, role: str | None) -> str:
+        parts = [part for part in path.strip("/").split("/") if part]
+        if role in {"controller", "route"}:
+            return "module:api"
+        if role == "service":
+            return "module:services"
+        if role == "repository":
+            return "module:repositories"
+        if role in {"model", "dto", "interface", "enum"}:
+            return "module:domain"
+        if role == "middleware":
+            return "module:middleware"
+        if role == "configuration":
+            return "module:configuration"
+        if role == "test":
+            return "module:tests"
+        if role == "documentation":
+            return "module:documentation"
+        if parts and parts[0] in {"app", "src", "backend", "frontend", "apps"} and len(parts) > 1:
+            return f"module:{parts[1].lower()}"
+        return f"module:{parts[0].lower() if parts else 'repository'}"
+
+    @staticmethod
+    def _layer_for_role(role: str | None) -> str:
+        if role in {"entrypoint", "controller", "route"}:
+            return "presentation"
+        if role == "service":
+            return "business-logic"
+        if role in {"model", "dto", "interface", "enum"}:
+            return "domain"
+        if role in {"repository", "configuration", "test", "middleware"}:
+            return "infrastructure"
+        return "shared"
+
+    @staticmethod
+    def _path_prefix(paths: list[str]) -> str:
+        if not paths:
+            return "/"
+        parts = [path.strip("/").split("/") for path in paths]
+        prefix: list[str] = []
+        for columns in zip(*parts):
+            if len(set(columns)) == 1:
+                prefix.append(columns[0])
+            else:
+                break
+        return "/" + "/".join(prefix) if prefix else "/"
+
+    def _frameworks_from_facts(self, facts: ArchitectureSnapshotFacts | None) -> list[str]:
+        if facts is None:
+            return []
+        names = {node.name.lower() for node in facts.nodes if node.node_kind == "dependency" and node.name}
+        return sorted(
+            {
+                framework
+                for dependency_name, framework in _FRAMEWORK_BY_DEPENDENCY_NAME.items()
+                if dependency_name in names
+            }
+        )
+
+    def _primary_language_from_facts(self, facts: ArchitectureSnapshotFacts | None) -> str:
+        if facts is None:
+            return "Unknown"
+        # Count persisted file facts, not symbols. Symbol counts make a file
+        # with many declarations (and synthetic route symbols) outweigh other
+        # files, and report "Unknown" for a valid script containing only
+        # top-level statements.
+        counts = Counter(node.language for node in facts.nodes if node.node_kind == "file" and node.language)
+        if not counts:
+            return "Unknown"
+        dominant = counts.most_common(1)[0][0]
+        return {"python": "Python", "typescript": "TypeScript"}.get(dominant, dominant.title())
+
+    def _entry_points_from_facts(self, facts: ArchitectureSnapshotFacts | None) -> list[str]:
+        if facts is None:
+            return []
+        role_by_path = self._file_roles(facts)
+        return sorted(path for path, role in role_by_path.items() if role == "entrypoint")
 
     def _dependency_nodes(self, facts: ArchitectureSnapshotFacts | None) -> list[ArchNode]:
         if facts is None:

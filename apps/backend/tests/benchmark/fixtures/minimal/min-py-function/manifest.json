@@ -7,7 +7,7 @@
   "description": "Two top-level function definitions and their module/repository nodes. Exercises py.function.def and py.module with hand-verified line spans.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.0.0"],
+  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.1.0"],
   "constructsCovered": ["py.function.def", "py.module"],
   "deterministic": true,
   "expected": {
@@ -17,25 +17,25 @@
         "stableKey": "repo:root",
         "name": "repository",
         "evidence": [
-          {"path": "README.md", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}
+          {"path": "README.md", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}
         ]
       },
       {
         "nodeKind": "file",
-        "stableKey": "file:README.md",
+        "stableKey": "file:README.md", "properties": {"content_sha256": "sha256:93a4f5891bc749cab5e3a971fd92dafa8474b44195dde264a989f1395f6a7086"},
         "name": "README.md",
         "evidence": [
-          {"path": "README.md", "startLine": 1, "endLine": 4, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}
+          {"path": "README.md", "startLine": 1, "endLine": 4, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}
         ]
       },
       {
         "nodeKind": "file",
-        "stableKey": "file:src/greeting.py",
+        "stableKey": "file:src/greeting.py", "properties": {"content_sha256": "sha256:cd06a4ecc6601302298533289ed47c77469c0368da7a1fe7ccc0a9a5142f390d"},
         "name": "greeting.py",
         "language": "python",
         "constructs": ["src.file"],
         "evidence": [
-          {"path": "src/greeting.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}
+          {"path": "src/greeting.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}
         ]
       },
       {

@@ -26,6 +26,7 @@ from app.intelligence import canonical
 
 _ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
 _REFLECTION_CALLS = {"getattr", "setattr", "delattr"}
+_DEPENDENCY_MARKERS = {"Depends"}
 
 # Collectors emit this; assign_ordinals sets the RFC §6.4 value on the way out.
 # It is deliberately invalid (ordinals are one-based) so a result that skipped
@@ -485,6 +486,24 @@ class PythonExtractor:
                         evidence=evidence,
                     )
                 )
+            # A ``Depends(name)`` argument is a bare reference, not itself a
+            # call, so the generic call-emission above never records it. This
+            # is the one dependency-injection idiom (#95) worth recording: the
+            # containing function (resolved the same way a bare ``call`` is,
+            # via its enclosing symbol span) injects whatever ``name`` names.
+            if node.func.id in _DEPENDENCY_MARKERS:
+                for argument in node.args:
+                    if isinstance(argument, ast.Name):
+                        observations.append(
+                            ExtractedObservation(
+                                observed_kind="injects",
+                                subject_kind="module",
+                                subject_key=module_key,
+                                referent_text=argument.id,
+                                ordinal=_UNASSIGNED_ORDINAL,
+                                evidence=evidence,
+                            )
+                        )
 
         def scan_signature(node, scope: _BindingScope) -> None:
             for decorator in node.decorator_list:

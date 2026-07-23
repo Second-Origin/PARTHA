@@ -15,8 +15,8 @@ def _fixture(
     language: str = "mixed",
     producers: tuple[str, ...] = (
         "python-ast@1.0.0",
-        "repository-inventory@1.0.0",
-        "typescript-ast@1.0.0",
+        "repository-inventory@1.1.0",
+        "typescript-ast@1.1.0",
     ),
     max_source_bytes: int = 512 * 1024,
 ) -> LoadedFixture:
@@ -76,7 +76,7 @@ def test_binary_and_malformed_supported_sources_use_real_extractors(tmp_path: Pa
 
     diagnostics = {(fact.kind, fact.producer) for fact in facts if fact.fact_type == "diagnostic"}
     assert ("RI-SRC-BINARY", "python-ast@1.0.0") in diagnostics
-    assert ("RI-SRC-MALFORMED", "typescript-ast@1.0.0") in diagnostics
+    assert ("RI-SRC-MALFORMED", "typescript-ast@1.1.0") in diagnostics
 
 
 def test_duplicate_symbols_observations_properties_and_provenance_are_preserved(tmp_path: Path):
@@ -109,7 +109,7 @@ def test_real_source_size_policy_emits_limit_diagnostic(tmp_path: Path):
     )
 
     diagnostic = next(fact for fact in facts if fact.kind == "RI-LIMIT-SKIP")
-    assert diagnostic.producer == "repository-inventory@1.0.0"
+    assert diagnostic.producer == "repository-inventory@1.1.0"
     assert diagnostic.subject == "file:src/large.py"
     assert '"budgetBytes":8' in diagnostic.value
     assert not any(fact.subject == "src/large.py::x" for fact in facts)

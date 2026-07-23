@@ -54,7 +54,7 @@ _NAMED_DECLARATIONS = {
 
 class TypeScriptExtractor:
     name = "typescript-ast"
-    version = "1.0.0"
+    version = "1.1.0"
 
     @property
     def producer(self) -> str:
@@ -118,6 +118,7 @@ class TypeScriptExtractor:
                     name=posixpath.basename(normalized_path),
                     language="typescript",
                     evidence=(file_ev,),
+                    properties={"content_sha256": canonical.sha256_prefixed(source)},
                 )
             )
             # #89 requires module nodes as well as file nodes. The module is

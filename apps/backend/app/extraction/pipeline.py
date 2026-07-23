@@ -48,7 +48,7 @@ class ExtractionPipeline:
     """Apply repository policy, then dispatch stored bytes to real extractors."""
 
     inventory_name = "repository-inventory"
-    inventory_version = "1.0.0"
+    inventory_version = "1.1.0"
 
     def __init__(
         self,
@@ -138,7 +138,7 @@ class ExtractionPipeline:
                     evidence = self._whole_file_evidence(path, source)
                     if evidence is not None:
                         inventory_nodes.append(
-                            self._file_node(path, evidence, self._language(path))
+                            self._file_node(path, evidence, self._language(path), source)
                         )
                 continue
 
@@ -169,7 +169,7 @@ class ExtractionPipeline:
                 logical_line_count=logical_line_count(text),
                 granularity="file",
             )
-            inventory_nodes.append(self._file_node(path, evidence, self._language(path)))
+            inventory_nodes.append(self._file_node(path, evidence, self._language(path), source))
 
         if repository_evidence is not None:
             inventory_nodes.insert(
@@ -230,7 +230,10 @@ class ExtractionPipeline:
 
     @staticmethod
     def _file_node(
-        path: str, evidence: ExtractedEvidence, language: str | None
+        path: str,
+        evidence: ExtractedEvidence,
+        language: str | None,
+        source: bytes,
     ) -> ExtractedNode:
         return ExtractedNode(
             node_kind="file",
@@ -238,4 +241,5 @@ class ExtractionPipeline:
             name=posixpath.basename(path),
             language=language,
             evidence=(evidence,),
+            properties={"content_sha256": canonical.sha256_prefixed(source)},
         )

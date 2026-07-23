@@ -256,6 +256,10 @@ def test_unresolved_import_is_preserved_as_a_warning(session):
 
 
 def _persist_extraction(store, snapshot, result, producer: str):
+    producer_version = {
+        "python-ast": PythonExtractor.version,
+        "typescript-ast": TypeScriptExtractor.version,
+    }[producer]
     for node in result.nodes:
         store.add_node(
             snapshot,
@@ -271,7 +275,7 @@ def _persist_extraction(store, snapshot, result, producer: str):
                     start_line=evidence.start_line,
                     end_line=evidence.end_line,
                     extractor=producer,
-                    extractor_version="1.0.0",
+                    extractor_version=producer_version,
                     logical_line_count=evidence.logical_line_count,
                     granularity=evidence.granularity,
                 )
@@ -291,7 +295,7 @@ def _persist_extraction(store, snapshot, result, producer: str):
                 start_line=observation.evidence.start_line,
                 end_line=observation.evidence.end_line,
                 extractor=producer,
-                extractor_version="1.0.0",
+                extractor_version=producer_version,
                 logical_line_count=observation.evidence.logical_line_count,
                 granularity=observation.evidence.granularity,
             ),
@@ -299,9 +303,9 @@ def _persist_extraction(store, snapshot, result, producer: str):
 
 
 def test_typescript_extractor_inputs_resolve_import_and_aliased_call(session):
-    store, snapshot = _store(session, ["typescript-ast@1.0.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["typescript-ast@1.1.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/source.ts", 1, 1, "typescript-ast", "1.0.0", 3)
+        Evidence("src/source.ts", 1, 1, "typescript-ast", "1.1.0", 3)
     ])
     extractor = TypeScriptExtractor()
     _persist_extraction(
@@ -360,9 +364,9 @@ def test_golden_ambiguous_call_fixture_emits_a_diagnostic_not_an_edge(session):
     # nothing, so the honest outcome is a single unresolved diagnostic and no
     # `calls` edge — never a guess at one of the same-named repository symbols.
     fixture = FIXTURE_ROOT / "ambiguous-call"
-    store, snapshot = _store(session, ["typescript-ast@1.0.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["typescript-ast@1.1.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/source.ts", 1, 1, "typescript-ast", "1.0.0", 3)
+        Evidence("src/source.ts", 1, 1, "typescript-ast", "1.1.0", 3)
     ])
     extractor = TypeScriptExtractor()
     for source_path in sorted(fixture.rglob("*.ts")):
@@ -457,9 +461,9 @@ def test_python_absolute_from_import_with_two_module_candidates_is_ambiguous(ses
 
 
 def test_shadowed_typescript_parameter_does_not_resolve_to_same_file_global(session):
-    store, snapshot = _store(session, ["typescript-ast@1.0.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["typescript-ast@1.1.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/main.ts", 1, 1, "typescript-ast", "1.0.0", 2)
+        Evidence("src/main.ts", 1, 1, "typescript-ast", "1.1.0", 2)
     ])
     _persist_extraction(
         store,
@@ -520,9 +524,9 @@ def test_shadowed_python_parameter_does_not_resolve_to_same_file_global(session)
 
 
 def test_default_imported_react_route_handler_resolves(session):
-    store, snapshot = _store(session, ["typescript-ast@1.0.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["typescript-ast@1.1.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/routes.tsx", 1, 1, "typescript-ast", "1.0.0", 2)
+        Evidence("src/routes.tsx", 1, 1, "typescript-ast", "1.1.0", 2)
     ])
     extractor = TypeScriptExtractor()
     _persist_extraction(
@@ -555,9 +559,9 @@ def test_default_imported_react_route_handler_resolves(session):
 
 
 def test_top_level_and_recursive_calls_resolve_without_dropping_self_edges(session):
-    store, snapshot = _store(session, ["typescript-ast@1.0.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["typescript-ast@1.1.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/main.ts", 1, 1, "typescript-ast", "1.0.0", 4)
+        Evidence("src/main.ts", 1, 1, "typescript-ast", "1.1.0", 4)
     ])
     _persist_extraction(
         store,
@@ -589,9 +593,9 @@ def test_top_level_and_recursive_calls_resolve_without_dropping_self_edges(sessi
 
 
 def test_abstract_generic_implements_resolves_to_base_interface(session):
-    store, snapshot = _store(session, ["typescript-ast@1.0.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["typescript-ast@1.1.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/worker.ts", 1, 1, "typescript-ast", "1.0.0", 2)
+        Evidence("src/worker.ts", 1, 1, "typescript-ast", "1.1.0", 2)
     ])
     _persist_extraction(
         store,

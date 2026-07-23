@@ -125,7 +125,7 @@ def _seal_analysis_snapshot(session, record: RepositoryRecord) -> RiSnapshot:
                 start_line=1,
                 end_line=1,
                 extractor="repository-inventory",
-                extractor_version="1.0.0",
+                extractor_version="1.1.0",
                 logical_line_count=1,
                 granularity="file",
             )

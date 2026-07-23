@@ -39,6 +39,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.extraction.base import ExtractedEvidence
+from app.extraction.manifests import DependencyManifestExtractor
 from app.extraction.pipeline import (
     DEFAULT_MAX_SOURCE_BYTES,
     ExtractionPipeline,
@@ -47,6 +48,7 @@ from app.extraction.pipeline import (
 from app.extraction.python import PythonExtractor
 from app.extraction.typescript import TypeScriptExtractor
 from app.intelligence import canonical
+from app.intelligence.classification import RoleClassifier
 from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.intelligence.resolution import RelationshipResolver
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
@@ -365,7 +367,7 @@ class AnalysisWorker:
         assert store is not None and snapshot is not None
         sources = self._read_sources(record, ctx)
         pipeline = ExtractionPipeline(
-            (PythonExtractor(), TypeScriptExtractor()),
+            (PythonExtractor(), TypeScriptExtractor(), DependencyManifestExtractor()),
             max_source_bytes=self.max_source_bytes,
         )
         ctx.produced = pipeline.run(
@@ -377,6 +379,11 @@ class AnalysisWorker:
             self._persist_produced(store, snapshot, produced, ctx)
         self._check_heartbeat(ctx)
         RelationshipResolver(store).resolve(
+            snapshot,
+            check_cancelled=lambda: self._check_heartbeat(ctx),
+        )
+        self._check_heartbeat(ctx)
+        RoleClassifier(store).classify(
             snapshot,
             check_cancelled=lambda: self._check_heartbeat(ctx),
         )

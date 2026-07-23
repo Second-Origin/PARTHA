@@ -7,32 +7,32 @@
   "description": "Import, aliased import, export, and re-export as observed occurrences. Exercises ts.import, ts.import_alias, ts.export, ts.reexport.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["repository-inventory@1.0.0", "typescript-ast@1.0.0"],
+  "producerVersionSet": ["repository-inventory@1.1.0", "typescript-ast@1.1.0"],
   "constructsCovered": ["ts.module", "ts.import", "ts.import_alias", "ts.export", "ts.reexport"],
   "deterministic": false,
   "expected": {
     "nodes": [
       {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
-       "evidence": [{"path": "src/index.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
-      {"nodeKind": "file", "stableKey": "file:src/index.ts", "name": "index.ts", "language": "typescript", "constructs": ["ts.module"],
-       "evidence": [{"path": "src/index.ts", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]},
-      {"nodeKind":"module","stableKey":"mod:src","name":"src","constructs":["ts.directory_module"],"evidence":[{"path":"src/index.ts","startLine":1,"endLine":7,"granularity":"file","extractor":"typescript-ast","extractorVersion":"1.0.0"}]},
-      {"nodeKind":"symbol","stableKey":"src/index.ts::VERSION","name":"VERSION","language":"typescript","properties":{"exported":true},"constructs":["ts.const","ts.export"],"evidence":[{"path":"src/index.ts","startLine":4,"endLine":4,"extractor":"typescript-ast","extractorVersion":"1.0.0"}]}
+       "evidence": [{"path": "src/index.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]},
+      {"nodeKind": "file", "stableKey": "file:src/index.ts", "properties": {"content_sha256": "sha256:3463de6392986ede90933aaf9f609a46426011cbe932ed28827d4cb7913484db"}, "name": "index.ts", "language": "typescript", "constructs": ["ts.module"],
+       "evidence": [{"path": "src/index.ts", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}]},
+      {"nodeKind":"module","stableKey":"mod:src","name":"src","constructs":["ts.directory_module"],"evidence":[{"path":"src/index.ts","startLine":1,"endLine":7,"granularity":"file","extractor":"typescript-ast","extractorVersion":"1.1.0"}]},
+      {"nodeKind":"symbol","stableKey":"src/index.ts::VERSION","name":"VERSION","language":"typescript","properties":{"exported":true},"constructs":["ts.const","ts.export"],"evidence":[{"path":"src/index.ts","startLine":4,"endLine":4,"extractor":"typescript-ast","extractorVersion":"1.1.0"}]}
     ],
     "edges": [],
     "observations": [
       {"observedKind": "import", "subjectKind": "file", "subjectKey": "file:src/index.ts", "referentText": "fs", "ordinal": 1, "constructs": ["ts.import"],
-       "evidence": {"path": "src/index.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}},
+       "evidence": {"path": "src/index.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}},
       {"observedKind": "import_binding", "subjectKind": "file", "subjectKey": "file:src/index.ts", "referentText": "fs|readFile|readFile", "ordinal": 1, "constructs": ["ts.import"],
-       "evidence": {"path": "src/index.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}},
+       "evidence": {"path": "src/index.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}},
       {"observedKind": "import", "subjectKind": "file", "subjectKey": "file:src/index.ts", "referentText": "path", "ordinal": 1, "constructs": ["ts.import_alias"],
-       "evidence": {"path": "src/index.ts", "startLine": 2, "endLine": 2, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}},
+       "evidence": {"path": "src/index.ts", "startLine": 2, "endLine": 2, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}},
       {"observedKind": "import_binding", "subjectKind": "file", "subjectKey": "file:src/index.ts", "referentText": "path|join|pathJoin", "ordinal": 1, "constructs": ["ts.import_alias"],
-       "evidence": {"path": "src/index.ts", "startLine": 2, "endLine": 2, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}},
+       "evidence": {"path": "src/index.ts", "startLine": 2, "endLine": 2, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}},
       {"observedKind": "definition", "subjectKind": "symbol", "subjectKey": "src/index.ts::VERSION", "ordinal": 1, "constructs": ["ts.const", "ts.export"],
-       "evidence": {"path": "src/index.ts", "startLine": 4, "endLine": 4, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}},
+       "evidence": {"path": "src/index.ts", "startLine": 4, "endLine": 4, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}},
       {"observedKind": "import", "subjectKind": "file", "subjectKey": "file:src/index.ts", "referentText": "fs", "ordinal": 1, "constructs": ["ts.reexport"],
-       "evidence": {"path": "src/index.ts", "startLine": 6, "endLine": 6, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}}
+       "evidence": {"path": "src/index.ts", "startLine": 6, "endLine": 6, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}}
     ],
     "assertions": [], "diagnostics": []
   }

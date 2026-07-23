@@ -104,4 +104,12 @@
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--muted-foreground));
   }
+  .citation-highlight-line {
+    background-color: hsl(var(--primary) / 0.16);
+  }
+  .citation-highlight-margin {
+    background-color: hsl(var(--primary) / 0.4);
+    width: 3px !important;
+    margin-left: 3px;
+  }
 }

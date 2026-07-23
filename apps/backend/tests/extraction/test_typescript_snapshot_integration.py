@@ -43,7 +43,7 @@ def _to_evidence(extracted) -> Evidence:
     return Evidence(
         path=extracted.path, start_line=extracted.start_line,
         end_line=extracted.end_line, extractor="typescript-ast",
-        extractor_version="1.0.0", logical_line_count=extracted.logical_line_count,
+        extractor_version="1.1.0", logical_line_count=extracted.logical_line_count,
         granularity=extracted.granularity,
     )
 
@@ -58,12 +58,12 @@ def test_typescript_extraction_result_seals_into_a_snapshot(session):
     snapshot = store.begin(
         repository_id=repository.id,
         revision=Revision("upload", UPLOAD_REVISION),
-        producer_version_set=["typescript-ast@1.0.0"],
+        producer_version_set=["typescript-ast@1.1.0"],
     )
     # a repo:root node is required for a coherent snapshot (RFC §11.2 rule 5)
     root_ev = Evidence(
         path="src/auth/service.ts", start_line=1, end_line=1,
-        extractor="typescript-ast", extractor_version="1.0.0",
+        extractor="typescript-ast", extractor_version="1.1.0",
         logical_line_count=1, granularity="file",
     )
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[root_ev])
@@ -83,7 +83,7 @@ def test_typescript_extraction_result_seals_into_a_snapshot(session):
     for diag in result.diagnostics:
         store.add_diagnostic(
             snapshot, code=diag.code, category=diag.category, severity=diag.severity,
-            message=diag.message, producer="typescript-ast@1.0.0", path=diag.path,
+            message=diag.message, producer="typescript-ast@1.1.0", path=diag.path,
             span=diag.span, subject=diag.subject, details=diag.details,
         )
 
@@ -100,13 +100,13 @@ def test_sibling_typescript_files_seal_into_one_snapshot(session):
     snapshot = store.begin(
         repository_id=repository.id,
         revision=Revision("upload", UPLOAD_REVISION),
-        producer_version_set=["typescript-ast@1.0.0"],
+        producer_version_set=["typescript-ast@1.1.0"],
     )
     store.add_node(
         snapshot, node_kind="repository", stable_key="repo:root",
         evidence=[Evidence(
             path="src/auth/service.ts", start_line=1, end_line=1,
-            extractor="typescript-ast", extractor_version="1.0.0",
+            extractor="typescript-ast", extractor_version="1.1.0",
             logical_line_count=1, granularity="file",
         )],
     )

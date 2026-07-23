@@ -32,15 +32,20 @@ observations, and seals a normalized `ri.v1` snapshot.
 The `ri.v1` persistence boundary includes first-class repository revision
 columns, normalized snapshot/fact/provenance tables, deterministic canonical
 hashing, and a lifecycle store that validates and seals immutable snapshots.
-Evidence-backed Python and TypeScript extractors, their support matrices, the
-repository-level source-policy pipeline, and deterministic
+Evidence-backed Python and TypeScript extractors, the dependency-manifest
+extractor, their support matrices, the repository-level source-policy
+pipeline, deterministic
 [relationship resolution](REPOSITORY_INTELLIGENCE_RESOLUTION.md) over stored
-observations run in the durable product job. The versioned, owner-scoped
-`/intelligence/v1/snapshots` API reads sealed normalized snapshots only and
-explicitly rejects unsupported schema versions; it never falls back to legacy
-metadata or a repository working tree. The Architecture Graph consumes that
-query boundary for relationships, while its module inventory and discovery
-summary remain legacy compatibility data.
+observations, and a heuristic `role-classifier` producer (file- and
+symbol-level `classified_as` assertions, always `inferred`) all run in the
+durable product job. The versioned, owner-scoped `/intelligence/v1/snapshots`
+API reads sealed normalized snapshots only and explicitly rejects unsupported
+schema versions; it never falls back to legacy metadata or a repository
+working tree. The Architecture Graph and the evidence-backed authentication
+explanation (`GET /analysis/{repositoryId}/architecture/authentication`, #95)
+both consume that query boundary **exclusively** — modules, primary language,
+entry points, frameworks, and relationships are all derived from the sealed
+snapshot, with no legacy-metadata fallback for either consumer.
 
 ```mermaid
 flowchart LR
@@ -147,8 +152,9 @@ same-snapshot foreign keys and provenance, validates derivation chains, computes
 the canonical graph hash, and seals the snapshot. Completed snapshots reject
 mutation. The query API exposes sealed snapshot metadata, symbols, stored
 resolved relationships, inferred assertions, file facts, and evidence spans.
-Architecture relationship construction uses its owner-scoped persisted-fact
-query; other product consumers remain on the legacy model.
+Architecture and the authentication explanation both build entirely from that
+owner-scoped persisted-fact query; other product consumers (dependency graph,
+engineering review, documentation, AI) remain on the legacy model.
 
 ---
 
@@ -168,11 +174,12 @@ Each relationship carries an `evidence` list — which currently holds **file pa
 
 | Consumer | Module | Reads |
 | --- | --- | --- |
-| Architecture | `app/analysis/` | legacy modules/discovery plus resolved edges, diagnostics, and evidence from the latest sealed snapshot |
-| Dependency graph | `app/graph/` | dependencies, `depends_on` relationships |
-| Engineering review | `app/review/` | discovery, statistics, file roles and sizes |
-| Documentation | `app/services/documentation_service.py` | discovery, files, routes, architecture, dependencies |
-| AI | `app/ai/repository_context.py` | discovery, modules, dependencies, file paths |
+| Architecture | `app/analysis/architecture.py` | exclusively the sealed snapshot query layer — nodes, resolved edges, `classified_as` assertions, diagnostics, and evidence. No legacy `repo_metadata['intelligence']` read. |
+| Authentication explanation (#95) | `app/analysis/authentication.py` | exclusively the sealed snapshot query layer — routes, `routes_to`/`injects`/`calls` edges, `classified_as` assertions, diagnostics. No legacy read. |
+| Dependency graph | `app/graph/` | legacy engine: dependencies, `depends_on` relationships |
+| Engineering review | `app/review/` | legacy engine: discovery, statistics, file roles and sizes |
+| Documentation | `app/services/documentation_service.py` | legacy engine: discovery, files, routes, architecture, dependencies |
+| AI | `app/ai/repository_context.py` | legacy engine: discovery, modules, dependencies, file paths |
 | Reports and exports | `app/reports/` | existing analysis and documentation output |
 
 ### What consumers are forbidden from doing
@@ -220,16 +227,21 @@ module is isolated.
 
 This is why AI answers carry no citations. The AI context builder deliberately emits an empty citation list and sends the provider **no source content and no line numbers** — fabricating `1:1` placeholder citations would misrepresent a structural answer as line-level evidence. See [`app/ai/repository_context.py`](../../apps/backend/app/ai/repository_context.py).
 
-Do not describe PARTHA as having evidence-backed or grounded output until line spans, per-fact extraction method, and revision-addressed facts actually exist.
+Describe evidence-backed output per consumer: normalized snapshot facts and the
+authentication explanation have revision-, fact-, extractor-, and line-addressed
+evidence, while AI and legacy compatibility consumers remain uncited.
 
 ---
 
 ## Current limitations
 
-- **Symbols:** regex-derived, Python and TS/JS only, no line spans, no signatures, no nesting, no cross-file resolution. Matches inside comments and strings are not excluded.
+- **Symbols:** syntax-derived for supported Python and TS/JS constructs, with line spans but limited signatures/nesting and deliberately conservative cross-file resolution.
 - **Line spans:** emitted by the Python and TypeScript extractors, stored by durable analysis, and returned unchanged from sealed snapshots.
-- **Graph production and consumption:** durable jobs populate normalized immutable graph tables through syntax-aware producers. Architecture relationships consume sealed facts; module classification and other product surfaces still read the legacy JSON blob.
-- **Relationships:** four of the eight declared types are never emitted. An import edge resolves to a declared dependency when the name matches and otherwise creates an `external:` node — there is no real module resolution.
+- **Graph production and consumption:** durable jobs populate normalized immutable graph tables through syntax-aware producers. Architecture and the authentication explanation consume sealed facts exclusively; dependency graph, engineering review, documentation, and AI still read the legacy JSON blob.
+- **Relationships:** four of the eight legacy-model-declared types are never emitted. An import edge resolves to a declared dependency when the name matches and otherwise creates an `external:` node — there is no real module resolution. The `ri.v1` resolver additionally emits an `injects` predicate (#95) for a FastAPI `Depends(name)` argument, resolved the same way a direct call is — through same-file definitions or explicit import bindings only, never a repository-wide same-name guess.
+- **Role classification (`classified_as` assertions, #95):** a small, explicit rule set — filename/path substring matching for files, and class-name suffix matching (`Service`, `Repository`, `Controller`, `Model`, `Middleware`, `Dto`) for symbols, plus a name-pattern heuristic (`auth`, `current_user`, `token`, `verify`, …) applied only to functions that are the object of a resolved `injects` edge. Always `truth_class="inferred"`, never presented as a guaranteed fact. It does not understand base classes, decorators beyond `Depends()`, or any framework's actual dependency-injection semantics — a differently named auth guard, or one injected some other way, is simply not classified, not misclassified.
+- **Authentication subgraph selection (#95):** the classifier and the resolved graph together only produce *candidate* facts; `AuthenticationExplanationService` additionally requires graph connectivity before any of them is claimed as authentication. A route is included only when its resolved `routes_to` handler has a resolved `injects` edge to a symbol explicitly classified `auth_dependency`; a service or model is included only when it lies on a resolved `calls` path from that guard (a breadth-first walk that keeps only edges on a path to a `service`/`model`-classified symbol, discarding everything else the guard happens to call). This is why an unrelated `/health` route, a generic `Depends(get_database)`, or a same-suffix `PaymentService`/`AuditModel` that the guard never calls are never claimed as authentication even though the classifier still labels them `service`/`model` for Architecture's module grouping — a name match alone is never sufficient. The response also returns `chains`: one ordered route -> handler -> guard -> (service/model) path per qualifying route, so a consumer does not have to reconstruct the flow from the flat `relationships` list.
+- **Evidence navigation (#95):** each authentication citation links to the existing repository Explorer with `snapshotId`, `factId`, path, and line span. The Explorer calls the owner-scoped `GET /analysis/{repositoryId}/evidence` endpoint, which returns source only when the exact fact/span exists and the current source bytes match the SHA-256 sealed on the snapshot's file fact; otherwise it displays an explicit unavailable state. The same Monaco-based `CodePreview` is reused rather than adding a second viewer.
 - **Revision identity:** first-class and immutable per imported repository revision. Snapshot history can be retained, but diff/query APIs and product re-analysis orchestration are not implemented.
 - **Dependencies:** three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The dependency API reports both assessments as explicit `not_computed` statuses; it emits no clean result or count without a scanner.
 - **Dependency inventory:** only direct declarations from accepted `package.json`, `pyproject.toml`, and `requirements.txt` paths are reported. The parser inventory excludes `.git`, dependency/install directories, build output, virtual environments, caches, vendor paths, and generated paths; lockfiles are not read. Each candidate is size-checked and read with the existing 512 KiB source budget before being processed individually; oversized manifests produce `RI-LIMIT-SKIP` rather than being retained in memory. Multiple workspace declarations remain attached to one logical dependency, including conflicts rather than an arbitrarily selected version. A malformed supported manifest produces a safe `RI-SRC-MALFORMED` diagnostic in the dependency response while valid manifests continue to contribute declarations. No transitive resolution, vulnerability scanning, or outdated-version scanning is implemented.
