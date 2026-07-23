@@ -1,13 +1,16 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Network } from 'lucide-react';
+import { Network, ShieldCheck } from 'lucide-react';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { ArchWorkspace } from '@/features/architecture/components/ArchWorkspace';
+import { AuthenticationExplanationPanel } from '@/features/architecture/components/AuthenticationExplanationPanel';
 import { useArchitecture } from '@/features/architecture/hooks/useArchitecture';
 
 export function ArchitecturePage() {
   const navigate = useNavigate();
   const architecture = useArchitecture();
+  const [authPanelOpen, setAuthPanelOpen] = useState(false);
 
   if (architecture.emptyReason === 'no-completed-repositories') {
     return (
@@ -64,11 +67,22 @@ export function ArchitecturePage() {
     <div className="h-[calc(100vh-8rem)] -m-6 flex flex-col">
       <div className="flex items-center justify-between border-b border-border px-6 py-3">
         <h1 className="text-sm font-medium text-foreground">Architecture - {architecture.model.repositoryName}</h1>
-        <ExportMenu repositoryId={architecture.model.repositoryId} target="architecture" label="Export Report" />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAuthPanelOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Explain Authentication
+          </button>
+          <ExportMenu repositoryId={architecture.model.repositoryId} target="architecture" label="Export Report" />
+        </div>
       </div>
       <div className="flex-1 min-h-0">
         <ArchWorkspace model={architecture.model} source={architecture.source} />
       </div>
+      <AuthenticationExplanationPanel open={authPanelOpen} onClose={() => setAuthPanelOpen(false)} />
     </div>
   );
 }

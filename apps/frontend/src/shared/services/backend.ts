@@ -1,7 +1,13 @@
 import type { Repository } from '@/shared/types';
 import type { ArchitectureModel } from '@/shared/types/architecture';
 import type { EngineeringReview } from '@/shared/types/review';
-import type { AnalysisStartResponse, AnalysisStatusResponse, DependencyGraphResponse, RepositoryResponse } from './api/types';
+import type {
+  AnalysisStartResponse,
+  AnalysisStatusResponse,
+  AuthenticationExplanationResponse,
+  DependencyGraphResponse,
+  RepositoryResponse,
+} from './api/types';
 import { repositoryService } from './api/repositories';
 import { uploadService } from './api/upload';
 import { analysisService } from './api/analysis';
@@ -64,6 +70,13 @@ export const backendService = {
       throw new Error('Backend API is not configured.');
     }
     return architectureService.getArchitecture(repository.id);
+  },
+
+  async fetchAuthenticationExplanation(repository: Repository): Promise<AuthenticationExplanationResponse> {
+    if (!USE_BACKEND) {
+      throw new Error('Backend API is not configured.');
+    }
+    return architectureService.getAuthenticationExplanation(repository.id);
   },
 
   async fetchReview(repository: Repository): Promise<EngineeringReview> {

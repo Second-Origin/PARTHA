@@ -196,6 +196,58 @@ export interface AnalysisStatusResponse {
 // Architecture
 export type ArchitectureResponse = ArchitectureModel;
 
+// Authentication explanation (evidence-backed, snapshot-only)
+export type AuthSchemaVersion = 'auth-explanation.v1';
+export type AuthClaimKind = 'route' | 'middleware' | 'service' | 'model' | 'dependency';
+export type AuthConfidence = 'observed' | 'heuristic';
+export type AuthStatus = 'ready' | 'missing_snapshot';
+
+export interface AuthEvidenceRef {
+  snapshotId: string;
+  factId: string;
+  path: string;
+  startLine: number;
+  endLine: number;
+}
+
+export interface AuthClaim {
+  kind: AuthClaimKind;
+  name: string;
+  confidence: AuthConfidence;
+  evidence: AuthEvidenceRef[];
+}
+
+export interface AuthRelationship {
+  subject: string;
+  predicate: string;
+  object: string;
+  evidence: AuthEvidenceRef[];
+}
+
+export interface AuthenticationDiagnostic {
+  code: string;
+  category: string;
+  severity: 'fatal' | 'error' | 'warning' | 'info';
+  message: string;
+  path: string | null;
+  startLine: number | null;
+  endLine: number | null;
+}
+
+export interface AuthenticationExplanationResponse {
+  schemaVersion: AuthSchemaVersion;
+  repositoryId: string;
+  repositoryName: string;
+  revisionKind: string | null;
+  revisionValue: string | null;
+  snapshotId: string | null;
+  status: AuthStatus;
+  summary: string;
+  claims: AuthClaim[];
+  relationships: AuthRelationship[];
+  diagnostics: AuthenticationDiagnostic[];
+}
+
 // Dependency Graph
 export interface DependencyNode {
   id: string;
