@@ -12,30 +12,43 @@ from app.models.repository import RepositoryRecord
 
 from tests.analysis_helpers import run_analysis_jobs
 
+# A genuinely connected authentication path (route -> handler -> guard ->
+# service -> model, every hop a resolved edge) alongside unrelated noise that
+# must never be claimed as authentication: an unrelated `/health` route, a
+# generic `Depends(get_database)`, and disconnected `PaymentService` /
+# `AuditModel` symbols that merely share a role-classifier suffix.
 _AUTH_SOURCES = {
     "README.md": b"# auth fixture\n",
     "src/dependencies.py": (
-        b"def get_current_user(token: str = Depends(oauth2_scheme)):\n"
-        b"    if not token:\n"
-        b"        raise Exception('unauthorized')\n"
-        b"    return token\n"
+        b"from src.services import UserService\n\n\n"
+        b"def get_current_user(token: str) -> dict:\n"
+        b"    return UserService(token)\n\n\n"
+        b"def get_database() -> str:\n"
+        b"    return 'db-session'\n"
     ),
     "src/services.py": (
-        b"class UserService:\n"
-        b"    def get_user(self):\n"
-        b"        return None\n"
+        b"from src.models import UserModel\n\n\n"
+        b"def UserService(token: str) -> dict:\n"
+        b"    return UserModel(token)\n\n\n"
+        b"def PaymentService(amount: int) -> int:\n"
+        b"    return amount\n"
     ),
     "src/models.py": (
-        b"class UserModel:\n"
-        b"    pass\n"
+        b"def UserModel(token: str) -> dict:\n"
+        b"    return {'token': token}\n\n\n"
+        b"def AuditModel(event: str) -> dict:\n"
+        b"    return {'event': event}\n"
     ),
     "src/routes.py": (
         b"from fastapi import FastAPI, Depends\n"
-        b"from src.dependencies import get_current_user\n\n"
+        b"from src.dependencies import get_current_user, get_database\n\n"
         b"app = FastAPI()\n\n\n"
         b"@app.get(\"/me\")\n"
         b"def read_me(user=Depends(get_current_user)):\n"
-        b"    return user\n"
+        b"    return user\n\n\n"
+        b"@app.get(\"/health\")\n"
+        b"def health_check(db=Depends(get_database)):\n"
+        b"    return {'status': 'ok'}\n"
     ),
 }
 
@@ -159,7 +172,10 @@ def test_authentication_explanation_survives_filesystem_deletion(auth_client):
     assert body["snapshotId"] == snapshot_id
 
 
-def test_authentication_explanation_identifies_route_middleware_service_model(auth_client):
+def test_authentication_explanation_includes_the_connected_path(auth_client):
+    """The real route -> handler -> guard -> service -> model chain is
+    included, and every claim/relationship carries valid evidence."""
+
     repository = _upload(auth_client, _AUTH_SOURCES)
     _persist_snapshot(repository["id"], _AUTH_SOURCES)
 
@@ -171,10 +187,10 @@ def test_authentication_explanation_identifies_route_middleware_service_model(au
     for claim in body["claims"]:
         claims_by_kind.setdefault(claim["kind"], []).append(claim)
 
-    assert any(claim["name"] == "/me" for claim in claims_by_kind.get("route", []))
-    assert any(claim["name"] == "get_current_user" for claim in claims_by_kind.get("middleware", []))
-    assert any(claim["name"] == "UserService" for claim in claims_by_kind.get("service", []))
-    assert any(claim["name"] == "UserModel" for claim in claims_by_kind.get("model", []))
+    assert {claim["name"] for claim in claims_by_kind.get("route", [])} == {"/me"}
+    assert {claim["name"] for claim in claims_by_kind.get("middleware", [])} == {"get_current_user"}
+    assert {claim["name"] for claim in claims_by_kind.get("service", [])} == {"UserService"}
+    assert {claim["name"] for claim in claims_by_kind.get("model", [])} == {"UserModel"}
 
     # Every displayed claim resolves to a valid evidence span in the stored revision.
     for claim in body["claims"]:
@@ -185,20 +201,106 @@ def test_authentication_explanation_identifies_route_middleware_service_model(au
             assert citation["endLine"] >= citation["startLine"]
             assert citation["path"]
 
-    # Middleware/dependency claims are inferred, never presented as guaranteed fact.
+    # Middleware/service/model claims are inferred, never presented as guaranteed fact.
     middleware_claim = claims_by_kind["middleware"][0]
     assert middleware_claim["confidence"] == "heuristic"
     route_claim = claims_by_kind["route"][0]
     assert route_claim["confidence"] == "observed"
 
-    assert any(
-        relationship["predicate"] == "injects" and relationship["object"] == "get_current_user"
-        for relationship in body["relationships"]
-    )
-    assert any(
-        relationship["predicate"] == "routes_to" and relationship["object"] == "read_me"
-        for relationship in body["relationships"]
-    )
+    relationship_pairs = {(r["subject"], r["predicate"], r["object"]) for r in body["relationships"]}
+    assert ("/me", "routes_to", "read_me") in relationship_pairs
+    assert ("read_me", "injects", "get_current_user") in relationship_pairs
+    assert ("get_current_user", "calls", "UserService") in relationship_pairs
+    assert ("UserService", "calls", "UserModel") in relationship_pairs
+    for relationship in body["relationships"]:
+        assert relationship["evidence"]
+
+    assert len(body["chains"]) == 1
+    chain = body["chains"][0]
+    assert chain["route"] == "/me"
+    assert [hop["predicate"] for hop in chain["hops"]] == ["routes_to", "injects", "calls", "calls"]
+
+
+def test_authentication_explanation_excludes_unrelated_route_and_dependency(auth_client):
+    """`/health` and its generic `Depends(get_database)` are never authentication."""
+
+    repository = _upload(auth_client, _AUTH_SOURCES)
+    _persist_snapshot(repository["id"], _AUTH_SOURCES)
+
+    response = auth_client.get(f"/analysis/{repository['id']}/architecture/authentication")
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    names = {claim["name"] for claim in body["claims"]}
+    assert "/health" not in names
+    assert "get_database" not in names
+    assert "health_check" not in names
+
+    for relationship in body["relationships"]:
+        assert relationship["subject"] not in {"/health", "get_database", "health_check"}
+        assert relationship["object"] not in {"/health", "get_database", "health_check"}
+
+
+def test_authentication_explanation_excludes_unrelated_service_and_model(auth_client):
+    """`PaymentService`/`AuditModel` share a role-classifier suffix with the
+    real auth path but are never called from it, so they must not appear."""
+
+    repository = _upload(auth_client, _AUTH_SOURCES)
+    _persist_snapshot(repository["id"], _AUTH_SOURCES)
+
+    response = auth_client.get(f"/analysis/{repository['id']}/architecture/authentication")
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    names = {claim["name"] for claim in body["claims"]}
+    assert "PaymentService" not in names
+    assert "AuditModel" not in names
+
+    for relationship in body["relationships"]:
+        assert relationship["subject"] not in {"PaymentService", "AuditModel"}
+        assert relationship["object"] not in {"PaymentService", "AuditModel"}
+
+
+def test_authentication_explanation_excludes_public_route_without_a_guard(auth_client):
+    """A route whose only dependency is non-authentication is not claimed,
+    even though it is a perfectly resolved `injects` edge."""
+
+    sources = {
+        "src/dependencies.py": b"def get_database() -> str:\n    return 'db-session'\n",
+        "src/routes.py": (
+            b"from fastapi import FastAPI, Depends\n"
+            b"from src.dependencies import get_database\n\n"
+            b"app = FastAPI()\n\n\n"
+            b"@app.get(\"/health\")\n"
+            b"def health_check(db=Depends(get_database)):\n"
+            b"    return {'status': 'ok'}\n"
+        ),
+    }
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(repository["id"], sources)
+
+    response = auth_client.get(f"/analysis/{repository['id']}/architecture/authentication")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["claims"] == []
+    assert body["relationships"] == []
+    assert body["chains"] == []
+    # get_database resolves fine as an `injects` edge -- it just is not
+    # classified `auth_dependency`, so nothing surfaces. This is a "filtered
+    # out" empty result, not an extraction failure: prove the edge is real.
+    from app.core.database import SessionLocal
+    from app.intelligence.query_service import SnapshotQueryService
+
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        assert record is not None
+        query_service = SnapshotQueryService(session, record.owner_id)
+        facts = query_service.architecture_facts(record.id)
+        assert facts is not None
+        assert any(
+            edge.predicate == "injects" and edge.object_key.endswith("get_database")
+            for edge in facts.edges
+        )
 
 
 def test_authentication_explanation_missing_snapshot_is_honest(auth_client):
@@ -231,6 +333,7 @@ def test_authentication_explanation_no_auth_is_distinguishable_from_unparsed(aut
     assert body["status"] == "ready"
     assert body["claims"] == []
     assert body["relationships"] == []
+    assert body["chains"] == []
     assert body["diagnostics"] == []
 
 
@@ -254,6 +357,7 @@ def test_authentication_explanation_unresolved_dependency_is_a_visible_diagnosti
     assert response.status_code == 200
     body = response.json()
     assert any(diagnostic["code"] == "RI-RES-UNRESOLVED" for diagnostic in body["diagnostics"])
+    assert body["claims"] == []
 
 
 def test_authentication_explanation_is_owner_scoped(auth_client, make_auth_headers):
@@ -310,3 +414,47 @@ def test_authentication_explanation_evidence_binds_to_exact_snapshot(auth_client
     for claim in body["claims"]:
         for citation in claim["evidence"]:
             assert citation["snapshotId"] == first_snapshot_id
+    for relationship in body["relationships"]:
+        for citation in relationship["evidence"]:
+            assert citation["snapshotId"] == first_snapshot_id
+
+
+def test_authentication_explanation_evidence_fact_ids_resolve_to_real_facts(auth_client):
+    """Every evidence ``factId`` must name a node or edge that genuinely exists
+    in the returned snapshot — not merely a non-empty string."""
+
+    from app.core.database import SessionLocal
+    from app.intelligence.query_service import SnapshotQueryService
+
+    repository = _upload(auth_client, _AUTH_SOURCES)
+    _persist_snapshot(repository["id"], _AUTH_SOURCES)
+
+    response = auth_client.get(f"/analysis/{repository['id']}/architecture/authentication")
+    body = response.json()
+
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        assert record is not None
+        query_service = SnapshotQueryService(session, record.owner_id)
+        facts = query_service.architecture_facts(record.id)
+        assert facts is not None
+        node_keys = {node.stable_key for node in facts.nodes}
+        edge_ids = {edge.edge_id for edge in facts.edges}
+        source_paths = {
+            evidence_item.path
+            for evidence_list in facts.node_evidence.values()
+            for evidence_item in evidence_list
+        } | {
+            evidence_item.path
+            for evidence_list in facts.edge_evidence.values()
+            for evidence_item in evidence_list
+        }
+
+    for claim in body["claims"]:
+        for citation in claim["evidence"]:
+            assert citation["factId"] in node_keys
+            assert citation["path"] in source_paths
+    for relationship in body["relationships"]:
+        for citation in relationship["evidence"]:
+            assert citation["factId"] in edge_ids
+            assert citation["path"] in source_paths

@@ -1,8 +1,8 @@
-import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X, ShieldCheck, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, X, ShieldCheck, ChevronRight } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
-import type { AuthClaim, AuthClaimKind } from '@/shared/services/api/types';
+import type { AuthClaim, AuthClaimKind, AuthEvidenceRef, AuthRelationshipNodeKind } from '@/shared/services/api/types';
 import { useAuthenticationExplanation } from '../hooks/useAuthenticationExplanation';
 
 interface AuthenticationExplanationPanelProps {
@@ -18,30 +18,42 @@ const GROUP_ORDER: Array<{ kind: AuthClaimKind; label: string }> = [
   { kind: 'dependency', label: 'Dependencies' },
 ];
 
-function EvidenceCitation({ evidence }: { evidence: AuthClaim['evidence'][number] }) {
-  const [expanded, setExpanded] = useState(false);
+const ROLE_LABEL: Record<AuthRelationshipNodeKind, string> = {
+  route: 'route',
+  handler: 'handler',
+  middleware: 'guard',
+  service: 'service',
+  model: 'model',
+  dependency: 'dependency',
+};
+
+function evidenceHref(repositoryId: string, evidence: AuthEvidenceRef): string {
+  const params = new URLSearchParams({
+    tab: 'Explorer',
+    path: evidence.path,
+    startLine: String(evidence.startLine),
+    endLine: String(evidence.endLine),
+    snapshotId: evidence.snapshotId,
+  });
+  return `/repositories/${repositoryId}?${params.toString()}`;
+}
+
+function EvidenceCitation({ repositoryId, evidence }: { repositoryId: string; evidence: AuthEvidenceRef }) {
   const span = evidence.startLine === evidence.endLine ? `${evidence.startLine}` : `${evidence.startLine}-${evidence.endLine}`;
   const label = `View evidence at ${evidence.path}, line ${span}`;
 
   return (
-    <button
-      type="button"
-      onClick={() => setExpanded((value) => !value)}
+    <Link
+      to={evidenceHref(repositoryId, evidence)}
       aria-label={label}
-      aria-expanded={expanded}
-      className="block w-full text-left text-[11px] text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded-sm"
+      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded-sm"
     >
       {evidence.path}:{span}
-      {expanded && (
-        <span className="block text-[10px] text-muted-foreground normal-case">
-          fact {evidence.factId} · snapshot {evidence.snapshotId}
-        </span>
-      )}
-    </button>
+    </Link>
   );
 }
 
-function ClaimRow({ claim }: { claim: AuthClaim }) {
+function ClaimRow({ claim, repositoryId }: { claim: AuthClaim; repositoryId: string }) {
   return (
     <li className="rounded-md border border-border px-3 py-2">
       <div className="flex items-center justify-between gap-2">
@@ -55,9 +67,9 @@ function ClaimRow({ claim }: { claim: AuthClaim }) {
           {claim.confidence === 'observed' ? 'observed' : 'inferred'}
         </span>
       </div>
-      <div className="mt-1 space-y-0.5">
+      <div className="mt-1 flex flex-col gap-0.5">
         {claim.evidence.map((item, index) => (
-          <EvidenceCitation key={`${item.factId}-${index}`} evidence={item} />
+          <EvidenceCitation key={`${item.factId}-${index}`} repositoryId={repositoryId} evidence={item} />
         ))}
       </div>
     </li>
@@ -138,8 +150,45 @@ export function AuthenticationExplanationPanel({ open, onClose }: Authentication
               )}
 
               {!loading && !error && explanation && explanation.status === 'ready' && (
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <p className="text-xs text-muted-foreground">{explanation.summary}</p>
+
+                  {explanation.chains.length > 0 && (
+                    <div>
+                      <h3 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1">
+                        <ChevronRight className="h-3 w-3" />
+                        How authentication works
+                      </h3>
+                      <ul className="space-y-3">
+                        {explanation.chains.map((chain) => (
+                          <li key={chain.route} className="rounded-md border border-border p-2.5">
+                            <p className="text-xs font-medium text-foreground mb-2">{chain.route}</p>
+                            <ol className="space-y-1.5">
+                              {chain.hops.map((hop, index) => (
+                                <li key={`${chain.route}-${index}`} className="flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-1.5 text-[11px] text-foreground flex-wrap">
+                                    <span className="font-mono">{hop.subject}</span>
+                                    <span className="text-muted-foreground">({ROLE_LABEL[hop.subjectKind]})</span>
+                                    <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                                    <span className="font-mono">{hop.object}</span>
+                                    <span className="text-muted-foreground">({ROLE_LABEL[hop.objectKind]})</span>
+                                    <span className="text-[10px] text-muted-foreground/70">{hop.predicate}</span>
+                                  </div>
+                                  {hop.evidence.map((item, evidenceIndex) => (
+                                    <EvidenceCitation
+                                      key={`${item.factId}-${evidenceIndex}`}
+                                      repositoryId={explanation.repositoryId}
+                                      evidence={item}
+                                    />
+                                  ))}
+                                </li>
+                              ))}
+                            </ol>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {GROUP_ORDER.map(({ kind, label }) => {
                     const claims = claimsByKind.get(kind);
@@ -152,7 +201,11 @@ export function AuthenticationExplanationPanel({ open, onClose }: Authentication
                         </h3>
                         <ul className="space-y-1.5">
                           {claims.map((claim, index) => (
-                            <ClaimRow key={`${claim.kind}-${claim.name}-${index}`} claim={claim} />
+                            <ClaimRow
+                              key={`${claim.kind}-${claim.name}-${index}`}
+                              claim={claim}
+                              repositoryId={explanation.repositoryId}
+                            />
                           ))}
                         </ul>
                       </div>

@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
-import { Copy, Check, FileWarning, Loader2 } from 'lucide-react';
+import { Copy, Check, FileWarning, Loader2, Target } from 'lucide-react';
 import type { FileTreeNode } from '@/shared/types';
 import { repositoryService } from '@/shared/services/api/repositories';
 import { getErrorMessage } from '@/shared/services/api';
 import { getMonacoLanguage } from '../fileUtils';
+import type { ExplorerCitation } from './RepositoryExplorer';
 
 interface CodePreviewProps {
   node: FileTreeNode;
   repositoryId: string;
+  /** When set, the exact cited line span is revealed and highlighted. */
+  citation?: ExplorerCitation | null;
 }
 
-export function CodePreview({ node, repositoryId }: CodePreviewProps) {
+export function CodePreview({ node, repositoryId, citation }: CodePreviewProps) {
   const [copied, setCopied] = useState(false);
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
@@ -21,7 +24,11 @@ export function CodePreview({ node, repositoryId }: CodePreviewProps) {
   const [mediaType, setMediaType] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
-  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  type Editor = Parameters<OnMount>[0];
+  type Monaco = Parameters<OnMount>[1];
+  const editorRef = useRef<Editor | null>(null);
+  const monacoRef = useRef<Monaco | null>(null);
+  const decorationsRef = useRef<ReturnType<Editor['createDecorationsCollection']> | null>(null);
   const copyResetTimerRef = useRef<number | null>(null);
 
   const language = getMonacoLanguage(node.extension);
@@ -71,9 +78,31 @@ export function CodePreview({ node, repositoryId }: CodePreviewProps) {
 
   useEffect(() => clearCopyResetTimer, [clearCopyResetTimer]);
 
-  const handleMount: OnMount = (editor) => {
+  const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
   };
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco || loading) return;
+    decorationsRef.current?.clear();
+    if (!citation || citation.startLine === null) return;
+    const start = citation.startLine;
+    const end = citation.endLine ?? citation.startLine;
+    decorationsRef.current = editor.createDecorationsCollection([
+      {
+        range: new monaco.Range(start, 1, end, 1),
+        options: {
+          isWholeLine: true,
+          className: 'citation-highlight-line',
+          linesDecorationsClassName: 'citation-highlight-margin',
+        },
+      },
+    ]);
+    editor.revealLineInCenter(start);
+  }, [citation, loading, content]);
 
   const handleCopy = useCallback(async () => {
     clearCopyResetTimer();
@@ -102,6 +131,14 @@ export function CodePreview({ node, repositoryId }: CodePreviewProps) {
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{language}</span>
           {truncated && !isImage && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/10 text-warning">truncated</span>
+          )}
+          {citation && citation.startLine !== null && (
+            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+              <Target className="h-3 w-3" />
+              Cited lines {citation.startLine}
+              {citation.endLine && citation.endLine !== citation.startLine ? `-${citation.endLine}` : ''}
+              {citation.snapshotId ? ` · snapshot ${citation.snapshotId}` : ''}
+            </span>
           )}
         </div>
         {showCopy && (

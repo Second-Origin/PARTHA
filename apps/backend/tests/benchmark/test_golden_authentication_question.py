@@ -1,54 +1,232 @@
-"""The #95 golden question, run against the real production chain end to end.
+"""The #95 golden question, run against a dedicated, honest benchmark set.
 
-Issue #94's harness scores raw node/observation/diagnostic extraction; it has
-no notion of "ask a question, get a scored answer." This test is that missing
-piece for the one golden question #95 requires: it runs the exact production
-chain (extraction -> resolution -> role classification -> sealing) over the
-committed ``real-py-auth-service`` fixture, queries the sealed snapshot
-exclusively through :class:`SnapshotQueryService`, and asserts the
-:class:`AuthenticationExplanationService` answer against hand-authored
-expected facts — the same discipline the rest of the corpus uses, extended
-past raw extraction to the actual consumer-facing answer.
+Issue #94's 23-fixture corpus scores raw node/observation/diagnostic
+extraction accuracy; it has no notion of "ask a question, get a scored
+answer," and its fixtures and thresholds are not touched here. This is a
+*separate*, smaller, hand-authored set of 5 fixtures built specifically to
+answer one fixed question against the real production chain end to end
+(extraction -> resolution -> role classification -> sealing -> query). Do not
+conflate the two counts: this module answers the golden *authentication*
+question against these 5 fixtures; #94 proves raw extraction accuracy
+against its own 23.
+
+Only Python/FastAPI-style ``Depends()`` dependency injection is a supported
+authentication-detection path today (see app/intelligence/classification.py
+and app/extraction/python.py's ``_DEPENDENCY_MARKERS``). TypeScript appears in
+one fixture only as an inert sibling file that manufactures a genuine
+cross-language import ambiguity; it is not a second supported authentication
+language, and no TypeScript-native dependency-injection idiom is claimed.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.analysis.authentication import AuthenticationExplanationService
 from app.core.database import register_sqlite_foreign_key_enforcement
 from app.extraction.pipeline import ExtractionPipeline, ProducedExtraction
 from app.extraction.python import PythonExtractor
+from app.extraction.typescript import TypeScriptExtractor
+from app.intelligence import canonical
 from app.intelligence.classification import RoleClassifier
 from app.intelligence.query_service import SnapshotQueryService
 from app.intelligence.resolution import RelationshipResolver
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
 from app.models import RepositoryRecord, User
 from app.models.base import Base
-
-from benchmark import paths
-from benchmark.loader import load_corpus, load_support_matrix
+from app.schemas.authentication import AuthenticationExplanationResponse
 
 GOLDEN_QUESTION = (
     "Explain how authentication works in this repository, citing exact "
     "routes, middleware, services, models, dependencies, symbols, and line spans."
 )
-FIXTURE_ID = "real-py-auth-service"
-
-EXPECTED_ROUTES = {"/me"}
-EXPECTED_MIDDLEWARE = {"get_current_user"}
-EXPECTED_SERVICES = {"UserService"}
-EXPECTED_MODELS = {"UserModel"}
 
 
-def _load_fixture():
-    support_matrix = load_support_matrix(paths.SUPPORT_MATRIX_PATH)
-    fixtures = load_corpus(paths.FIXTURES_DIR, support_matrix)
-    fixture = next(item for item in fixtures if item.fixture_id == FIXTURE_ID)
-    return fixture
+@dataclass(frozen=True)
+class AuthQuestionFixture:
+    """One hand-authored authentication-question scenario and its exact expected answer."""
+
+    fixture_id: str
+    sources: dict[str, bytes]
+    expected_routes: frozenset[str]
+    expected_middleware: frozenset[str]
+    expected_services: frozenset[str]
+    expected_models: frozenset[str]
+    expected_relationship_pairs: frozenset[tuple[str, str, str]]
+    forbidden_names: frozenset[str] = field(default_factory=frozenset)
+    expected_diagnostic_codes: frozenset[str] = field(default_factory=frozenset)
+
+
+_CONNECTED = AuthQuestionFixture(
+    fixture_id="connected_auth_path",
+    sources={
+        "src/dependencies.py": (
+            b"from src.services import UserService\n\n\n"
+            b"def get_current_user(token: str) -> dict:\n"
+            b"    return UserService(token)\n"
+        ),
+        "src/services.py": (
+            b"from src.models import UserModel\n\n\n"
+            b"def UserService(token: str) -> dict:\n"
+            b"    return UserModel(token)\n"
+        ),
+        "src/models.py": (
+            b"def UserModel(token: str) -> dict:\n"
+            b"    return {'token': token}\n"
+        ),
+        "src/routes.py": (
+            b"from fastapi import FastAPI, Depends\n"
+            b"from src.dependencies import get_current_user\n\n"
+            b"app = FastAPI()\n\n\n"
+            b"@app.get(\"/me\")\n"
+            b"def read_me(user=Depends(get_current_user)):\n"
+            b"    return user\n"
+        ),
+    },
+    expected_routes=frozenset({"/me"}),
+    expected_middleware=frozenset({"get_current_user"}),
+    expected_services=frozenset({"UserService"}),
+    expected_models=frozenset({"UserModel"}),
+    expected_relationship_pairs=frozenset(
+        {
+            ("/me", "routes_to", "read_me"),
+            ("read_me", "injects", "get_current_user"),
+            ("get_current_user", "calls", "UserService"),
+            ("UserService", "calls", "UserModel"),
+        }
+    ),
+)
+
+_UNRELATED_NOISE = AuthQuestionFixture(
+    fixture_id="unrelated_noise_excluded",
+    sources={
+        "src/dependencies.py": (
+            b"from src.services import UserService\n\n\n"
+            b"def get_current_user(token: str) -> dict:\n"
+            b"    return UserService(token)\n\n\n"
+            b"def get_database() -> str:\n"
+            b"    return 'db-session'\n"
+        ),
+        "src/services.py": (
+            b"from src.models import UserModel\n\n\n"
+            b"def UserService(token: str) -> dict:\n"
+            b"    return UserModel(token)\n\n\n"
+            b"def PaymentService(amount: int) -> int:\n"
+            b"    return amount\n"
+        ),
+        "src/models.py": (
+            b"def UserModel(token: str) -> dict:\n"
+            b"    return {'token': token}\n\n\n"
+            b"def AuditModel(event: str) -> dict:\n"
+            b"    return {'event': event}\n"
+        ),
+        "src/routes.py": (
+            b"from fastapi import FastAPI, Depends\n"
+            b"from src.dependencies import get_current_user, get_database\n\n"
+            b"app = FastAPI()\n\n\n"
+            b"@app.get(\"/me\")\n"
+            b"def read_me(user=Depends(get_current_user)):\n"
+            b"    return user\n\n\n"
+            b"@app.get(\"/health\")\n"
+            b"def health_check(db=Depends(get_database)):\n"
+            b"    return {'status': 'ok'}\n"
+        ),
+    },
+    expected_routes=frozenset({"/me"}),
+    expected_middleware=frozenset({"get_current_user"}),
+    expected_services=frozenset({"UserService"}),
+    expected_models=frozenset({"UserModel"}),
+    expected_relationship_pairs=frozenset(
+        {
+            ("/me", "routes_to", "read_me"),
+            ("read_me", "injects", "get_current_user"),
+            ("get_current_user", "calls", "UserService"),
+            ("UserService", "calls", "UserModel"),
+        }
+    ),
+    forbidden_names=frozenset({"/health", "health_check", "get_database", "PaymentService", "AuditModel"}),
+)
+
+_GENERIC_DEPENDENCY_ONLY = AuthQuestionFixture(
+    fixture_id="generic_dependency_not_auth",
+    sources={
+        "src/dependencies.py": b"def get_database() -> str:\n    return 'db-session'\n",
+        "src/routes.py": (
+            b"from fastapi import FastAPI, Depends\n"
+            b"from src.dependencies import get_database\n\n"
+            b"app = FastAPI()\n\n\n"
+            b"@app.get(\"/health\")\n"
+            b"def health_check(db=Depends(get_database)):\n"
+            b"    return {'status': 'ok'}\n"
+        ),
+    },
+    expected_routes=frozenset(),
+    expected_middleware=frozenset(),
+    expected_services=frozenset(),
+    expected_models=frozenset(),
+    expected_relationship_pairs=frozenset(),
+    forbidden_names=frozenset({"/health", "health_check", "get_database"}),
+)
+
+_UNRESOLVED_AND_AMBIGUOUS = AuthQuestionFixture(
+    fixture_id="unresolved_and_ambiguous_gaps",
+    sources={
+        "src/routes.py": (
+            b"from fastapi import FastAPI, Depends\n"
+            b"from .shared import get_current_user\n"
+            b"from src.dependencies import missing_guard\n\n"
+            b"app = FastAPI()\n\n\n"
+            b"@app.get(\"/me\")\n"
+            b"def read_me(user=Depends(get_current_user)):\n"
+            b"    return user\n\n\n"
+            b"@app.get(\"/profile\")\n"
+            b"def read_profile(user=Depends(missing_guard)):\n"
+            b"    return user\n"
+        ),
+        # Both files define `get_current_user`; the relative import binding
+        # resolves to both candidate files, so the reference stays a
+        # deterministic RI-RES-AMBIGUOUS diagnostic rather than guessing.
+        "src/shared.py": b"def get_current_user(token: str) -> str:\n    return token\n",
+        "src/shared.ts": (
+            b"export function get_current_user(token: string): string {\n"
+            b"  return token;\n"
+            b"}\n"
+        ),
+    },
+    expected_routes=frozenset(),
+    expected_middleware=frozenset(),
+    expected_services=frozenset(),
+    expected_models=frozenset(),
+    expected_relationship_pairs=frozenset(),
+    forbidden_names=frozenset(
+        {"/me", "/profile", "read_me", "read_profile", "get_current_user", "missing_guard"}
+    ),
+    expected_diagnostic_codes=frozenset({"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS"}),
+)
+
+_NO_AUTH_CONSTRUCTS = AuthQuestionFixture(
+    fixture_id="no_auth_constructs",
+    sources={"src/plain.py": b"def add(a, b):\n    return a + b\n"},
+    expected_routes=frozenset(),
+    expected_middleware=frozenset(),
+    expected_services=frozenset(),
+    expected_models=frozenset(),
+    expected_relationship_pairs=frozenset(),
+)
+
+FIXTURES = [
+    _CONNECTED,
+    _UNRELATED_NOISE,
+    _GENERIC_DEPENDENCY_ONLY,
+    _UNRESOLVED_AND_AMBIGUOUS,
+    _NO_AUTH_CONSTRUCTS,
+]
+FIXTURE_IDS = [item.fixture_id for item in FIXTURES]
 
 
 def _evidence(record, produced: ProducedExtraction) -> Evidence:
@@ -63,13 +241,10 @@ def _evidence(record, produced: ProducedExtraction) -> Evidence:
     )
 
 
-def _seal_fixture(db_path) -> tuple[str, str]:
-    """Run the real production chain and return (owner_id, repository_id)."""
+def _seal_sources(db_path, sources: dict[str, bytes]) -> tuple[Session, str, str, str]:
+    """Run the real production chain and return (session, owner_id, repository_id, snapshot_id)."""
 
-    fixture = _load_fixture()
-    runs = ExtractionPipeline(
-        (PythonExtractor(),), max_source_bytes=fixture.max_source_bytes
-    ).run(fixture.source_files())
+    runs = ExtractionPipeline((PythonExtractor(), TypeScriptExtractor())).run(sources)
 
     register_sqlite_foreign_key_enforcement()
     engine = create_engine(f"sqlite:///{db_path}")
@@ -80,11 +255,12 @@ def _seal_fixture(db_path) -> tuple[str, str]:
     session.add(owner)
     session.commit()
 
-    revision_value = fixture.revision_value()
+    digest_map = {path: canonical.sha256_hex(data) for path, data in sources.items()}
+    revision_value = canonical.sha256_prefixed(canonical.canonical_json_bytes(digest_map))
     repository = RepositoryRecord(
         id=str(uuid4()),
         owner_id=owner.id,
-        name="real-py-auth-service",
+        name="auth-question-fixture",
         source="upload",
         revision_kind="upload",
         revision_value=revision_value,
@@ -100,13 +276,13 @@ def _seal_fixture(db_path) -> tuple[str, str]:
     snapshot = store.begin(
         repository_id=repository.id,
         revision=Revision("upload", revision_value),
-        producer_version_set=[
-            "python-ast@1.0.0",
-            "repository-inventory@1.0.0",
-            f"{RelationshipResolver.name}@{RelationshipResolver.version}",
-            f"{RoleClassifier.name}@{RoleClassifier.version}",
-        ],
-        config={"max_source_bytes": fixture.max_source_bytes},
+        producer_version_set=sorted(
+            {run.producer for run in runs}
+            | {
+                f"{RelationshipResolver.name}@{RelationshipResolver.version}",
+                f"{RoleClassifier.name}@{RoleClassifier.version}",
+            }
+        ),
     )
     for produced in runs:
         for node in produced.result.nodes:
@@ -155,16 +331,24 @@ def _seal_fixture(db_path) -> tuple[str, str]:
     return session, owner.id, repository.id, sealed.snapshot_id
 
 
-def test_golden_authentication_question(tmp_path):
-    """The fixed golden question (#95), answered by the real production chain."""
+def _explain(session: Session, owner_id: str, repository_id: str) -> AuthenticationExplanationResponse:
+    record = session.get(RepositoryRecord, repository_id)
+    assert record is not None
+    query_service = SnapshotQueryService(session, owner_id)
+    service = AuthenticationExplanationService(query_service)
+    return service.explain(record)
 
-    session, owner_id, repository_id, snapshot_id = _seal_fixture(tmp_path / "golden.db")
+
+@pytest.mark.parametrize("fixture", FIXTURES, ids=FIXTURE_IDS)
+def test_golden_authentication_question(fixture: AuthQuestionFixture, tmp_path) -> None:
+    """The fixed golden question (#95), answered by the real production chain
+    against each of the 5 dedicated authentication-question fixtures."""
+
+    session, owner_id, repository_id, snapshot_id = _seal_sources(
+        tmp_path / f"{fixture.fixture_id}.db", fixture.sources
+    )
     try:
-        record = session.get(RepositoryRecord, repository_id)
-        query_service = SnapshotQueryService(session, owner_id)
-        service = AuthenticationExplanationService(query_service)
-
-        response = service.explain(record)
+        response = _explain(session, owner_id, repository_id)
 
         assert response.status == "ready", GOLDEN_QUESTION
         assert response.snapshot_id == snapshot_id
@@ -173,37 +357,72 @@ def test_golden_authentication_question(tmp_path):
         for claim in response.claims:
             by_kind.setdefault(claim.kind, set()).add(claim.name)
 
-        assert by_kind.get("route") == EXPECTED_ROUTES
-        assert by_kind.get("middleware") == EXPECTED_MIDDLEWARE
-        assert by_kind.get("service") == EXPECTED_SERVICES
-        assert by_kind.get("model") == EXPECTED_MODELS
+        assert by_kind.get("route", set()) == fixture.expected_routes
+        assert by_kind.get("middleware", set()) == fixture.expected_middleware
+        assert by_kind.get("service", set()) == fixture.expected_services
+        assert by_kind.get("model", set()) == fixture.expected_models
 
-        # No unsupported claim: every emitted kind is one #95 declares meaningful,
-        # and nothing beyond the expected four sets was produced.
-        assert set(by_kind) <= {"route", "middleware", "service", "model", "dependency"}
+        relationship_pairs = {(item.subject, item.predicate, item.object) for item in response.relationships}
+        assert relationship_pairs == fixture.expected_relationship_pairs
+
+        # No unsupported claim: nothing forbidden for this scenario leaked
+        # into a claim or a relationship endpoint.
+        all_names: set[str] = set()
+        for names in by_kind.values():
+            all_names |= names
+        for relationship in response.relationships:
+            all_names.add(relationship.subject)
+            all_names.add(relationship.object)
+        leaked = all_names & fixture.forbidden_names
+        assert not leaked, f"{fixture.fixture_id}: forbidden names leaked into the answer: {leaked}"
+
+        diagnostic_codes = {diagnostic.code for diagnostic in response.diagnostics}
+        assert fixture.expected_diagnostic_codes <= diagnostic_codes
 
         # Every citation resolves to the exact fixture revision, path, and span.
-        source = (
-            _load_fixture().source_files()["src/service.py"].decode("utf-8").splitlines()
-        )
+        source_line_counts = {
+            path: len(content.decode("utf-8").splitlines()) for path, content in fixture.sources.items()
+        }
         for claim in response.claims:
             assert claim.evidence, f"claim {claim.name!r} has no evidence"
             for citation in claim.evidence:
                 assert citation.snapshot_id == snapshot_id
-                assert citation.path == "src/service.py"
-                assert 1 <= citation.start_line <= citation.end_line <= len(source)
-
-        # The route -> handler -> middleware chain is itself evidence-backed.
-        relationship_pairs = {(item.subject, item.predicate, item.object) for item in response.relationships}
-        assert ("/me", "routes_to", "read_me") in relationship_pairs
-        assert ("read_me", "injects", "get_current_user") in relationship_pairs
+                assert citation.path in source_line_counts
+                assert 1 <= citation.start_line <= citation.end_line <= source_line_counts[citation.path]
         for relationship in response.relationships:
-            assert relationship.evidence
-
-        # oauth2_scheme is referenced but never defined in the fixture: it must
-        # surface as a visible "could not resolve" diagnostic, never be silently
-        # dropped or fabricated as a resolved middleware claim.
-        assert any(diagnostic.code == "RI-RES-UNRESOLVED" for diagnostic in response.diagnostics)
-        assert "oauth2_scheme" not in {claim.name for claim in response.claims}
+            assert relationship.evidence, f"{relationship.subject} -> {relationship.object} has no evidence"
+            for citation in relationship.evidence:
+                assert citation.snapshot_id == snapshot_id
+                assert citation.path in source_line_counts
+                assert 1 <= citation.start_line <= citation.end_line <= source_line_counts[citation.path]
     finally:
         session.close()
+
+
+@pytest.mark.parametrize("fixture", FIXTURES, ids=FIXTURE_IDS)
+def test_golden_authentication_question_is_deterministic(fixture: AuthQuestionFixture, tmp_path) -> None:
+    """Sealing the same sources twice, independently, must answer identically."""
+
+    first_session, first_owner, first_repo, _ = _seal_sources(tmp_path / "first.db", fixture.sources)
+    second_session, second_owner, second_repo, _ = _seal_sources(tmp_path / "second.db", fixture.sources)
+    try:
+        first = _explain(first_session, first_owner, first_repo)
+        second = _explain(second_session, second_owner, second_repo)
+
+        def _shape(response: AuthenticationExplanationResponse):
+            return (
+                response.status,
+                frozenset((claim.kind, claim.name, claim.confidence) for claim in response.claims),
+                frozenset(
+                    (item.subject, item.predicate, item.object) for item in response.relationships
+                ),
+                frozenset(
+                    (diagnostic.code, diagnostic.path, diagnostic.start_line, diagnostic.end_line)
+                    for diagnostic in response.diagnostics
+                ),
+            )
+
+        assert _shape(first) == _shape(second)
+    finally:
+        first_session.close()
+        second_session.close()

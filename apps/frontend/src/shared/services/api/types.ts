@@ -199,6 +199,7 @@ export type ArchitectureResponse = ArchitectureModel;
 // Authentication explanation (evidence-backed, snapshot-only)
 export type AuthSchemaVersion = 'auth-explanation.v1';
 export type AuthClaimKind = 'route' | 'middleware' | 'service' | 'model' | 'dependency';
+export type AuthRelationshipNodeKind = 'route' | 'handler' | 'middleware' | 'service' | 'model' | 'dependency';
 export type AuthConfidence = 'observed' | 'heuristic';
 export type AuthStatus = 'ready' | 'missing_snapshot';
 
@@ -219,9 +220,16 @@ export interface AuthClaim {
 
 export interface AuthRelationship {
   subject: string;
+  subjectKind: AuthRelationshipNodeKind;
   predicate: string;
   object: string;
+  objectKind: AuthRelationshipNodeKind;
   evidence: AuthEvidenceRef[];
+}
+
+export interface AuthChain {
+  route: string;
+  hops: AuthRelationship[];
 }
 
 export interface AuthenticationDiagnostic {
@@ -245,6 +253,7 @@ export interface AuthenticationExplanationResponse {
   summary: string;
   claims: AuthClaim[];
   relationships: AuthRelationship[];
+  chains: AuthChain[];
   diagnostics: AuthenticationDiagnostic[];
 }
 

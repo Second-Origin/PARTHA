@@ -1,4 +1,5 @@
-import { Navigate, useParams, useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
+import { Navigate, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -29,8 +30,26 @@ import { cn } from '@/shared/utils/cn';
 export function RepositoryDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { repository: repo, tabs, activeTab, setActiveTab, redirectToAnalysis } = useRepositoryDetail(id);
   const repositoryTree = useRepositoryTree(repo);
+
+  const citationPath = searchParams.get('path');
+  const citationStartLine = searchParams.get('startLine');
+  const citationEndLine = searchParams.get('endLine');
+  const citationSnapshotId = searchParams.get('snapshotId');
+  const citation = useMemo(
+    () =>
+      citationPath
+        ? {
+            path: citationPath,
+            startLine: citationStartLine ? Number(citationStartLine) : null,
+            endLine: citationEndLine ? Number(citationEndLine) : null,
+            snapshotId: citationSnapshotId,
+          }
+        : null,
+    [citationPath, citationStartLine, citationEndLine, citationSnapshotId],
+  );
 
   if (!repo) {
     return (
@@ -182,7 +201,7 @@ export function RepositoryDetailPage() {
 
           {activeTab === 'Explorer' && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-              <RepositoryExplorer fileTree={repositoryTree.fileTree} repositoryId={repo.id} />
+              <RepositoryExplorer fileTree={repositoryTree.fileTree} repositoryId={repo.id} citation={citation} />
             </motion.div>
           )}
         </>
