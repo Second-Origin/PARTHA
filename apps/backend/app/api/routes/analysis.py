@@ -229,6 +229,7 @@ def get_authentication_explanation(
             "schemaVersion": "evidence-source.v1",
             "repositoryId": _REPOSITORY_ID,
             "snapshotId": "snap_example",
+            "factId": "src/routes.py::(anonymous:route#1)",
             "revisionKind": "upload",
             "revisionValue": "sha256:" + "0" * 64,
             "path": "src/routes.py",
@@ -250,12 +251,13 @@ def get_authentication_explanation(
 def get_evidence_source(
     repository_id: str,
     snapshot_id: str = Query(..., alias="snapshotId"),
+    fact_id: str = Query(..., alias="factId", min_length=1, max_length=1024),
     path: str = Query(...),
     start_line: int = Query(..., alias="startLine", ge=1),
     end_line: int = Query(..., alias="endLine", ge=1),
     service: EvidenceSourceService = Depends(get_evidence_source_service),
 ) -> EvidenceSourceResponse:
-    return service.read(repository_id, snapshot_id, path, start_line, end_line)
+    return service.read(repository_id, snapshot_id, fact_id, path, start_line, end_line)
 
 
 @router.get(

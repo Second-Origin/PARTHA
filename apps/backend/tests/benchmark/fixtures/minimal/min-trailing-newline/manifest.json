@@ -7,15 +7,15 @@
   "description": "A file ending in a newline has a final empty logical line, so 'alpha\\nbeta\\n' has logical_line_count 3 (RFC-0001 §6.2). Exercises src.trailing_newline.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["repository-inventory@1.0.0"],
+  "producerVersionSet": ["repository-inventory@1.1.0"],
   "constructsCovered": ["src.trailing_newline"],
   "deterministic": true,
   "expected": {
     "nodes": [
       {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
-       "evidence": [{"path": "data.txt", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
-      {"nodeKind": "file", "stableKey": "file:data.txt", "name": "data.txt", "constructs": ["src.trailing_newline"],
-       "evidence": [{"path": "data.txt", "startLine": 1, "endLine": 3, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]}
+       "evidence": [{"path": "data.txt", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]},
+      {"nodeKind": "file", "stableKey": "file:data.txt", "properties": {"content_sha256": "sha256:e49c81e2d2f84e259d40e2fb8192f3bcd198b355184845d76d8f58807d0d78ee"}, "name": "data.txt", "constructs": ["src.trailing_newline"],
+       "evidence": [{"path": "data.txt", "startLine": 1, "endLine": 3, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]}
     ],
     "edges": [], "observations": [], "assertions": [], "diagnostics": []
   }

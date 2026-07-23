@@ -284,7 +284,11 @@ class ArchitectureAnalyzer:
     def _primary_language_from_facts(self, facts: ArchitectureSnapshotFacts | None) -> str:
         if facts is None:
             return "Unknown"
-        counts = Counter(node.language for node in facts.nodes if node.node_kind == "symbol" and node.language)
+        # Count persisted file facts, not symbols. Symbol counts make a file
+        # with many declarations (and synthetic route symbols) outweigh other
+        # files, and report "Unknown" for a valid script containing only
+        # top-level statements.
+        counts = Counter(node.language for node in facts.nodes if node.node_kind == "file" and node.language)
         if not counts:
             return "Unknown"
         dominant = counts.most_common(1)[0][0]

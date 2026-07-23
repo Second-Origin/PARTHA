@@ -3,7 +3,7 @@
 from collections import defaultdict
 from dataclasses import dataclass
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError, UnsupportedSchemaVersionError
@@ -46,31 +46,71 @@ class SnapshotQueryService:
     def metadata(self, snapshot_id: str) -> RiSnapshot:
         return self._snapshot(snapshot_id)
 
-    def has_evidence_span(
+    def has_evidence_reference(
         self,
         snapshot: RiSnapshot,
+        fact_id: str,
         path: str,
         start_line: int,
         end_line: int,
     ) -> bool:
-        """Whether an exact citation span exists in this snapshot's evidence.
+        """Whether the exact fact citation exists in this snapshot's evidence.
 
         A client-controlled deep link must not be able to keep a genuine
-        evidence path while substituting unrelated line numbers and still
-        receive a verified citation response.
+        snapshot/span while substituting a different fact (or vice versa) and
+        still receive a verified citation response.
         """
 
         count = self.db.scalar(
             select(func.count())
             .select_from(RiEvidence)
+            .outerjoin(
+                RiNode,
+                and_(
+                    RiNode.snapshot_id == RiEvidence.snapshot_id,
+                    RiNode.id == RiEvidence.node_ref,
+                ),
+            )
+            .outerjoin(
+                RiEdge,
+                and_(
+                    RiEdge.snapshot_id == RiEvidence.snapshot_id,
+                    RiEdge.id == RiEvidence.edge_ref,
+                ),
+            )
+            .outerjoin(
+                RiObservation,
+                and_(
+                    RiObservation.snapshot_id == RiEvidence.snapshot_id,
+                    RiObservation.id == RiEvidence.observation_ref,
+                ),
+            )
             .where(
                 RiEvidence.snapshot_id == snapshot.snapshot_id,
                 RiEvidence.path == path,
                 RiEvidence.start_line == start_line,
                 RiEvidence.end_line == end_line,
+                or_(
+                    RiNode.stable_key == fact_id,
+                    RiEdge.edge_id == fact_id,
+                    RiObservation.observation_id == fact_id,
+                ),
             )
         )
         return bool(count)
+
+    def source_content_hash(self, snapshot: RiSnapshot, path: str) -> str | None:
+        """Return the sealed byte hash for a snapshot file, if one exists."""
+
+        node = self.db.scalars(
+            select(RiNode).where(
+                RiNode.snapshot_id == snapshot.snapshot_id,
+                RiNode.node_kind == "file",
+                RiNode.stable_key == f"file:{path}",
+            )
+        ).first()
+        value = (node.properties or {}).get("content_sha256") if node is not None else None
+        return value if isinstance(value, str) else None
 
     def architecture_facts(self, repository_id: str) -> ArchitectureSnapshotFacts | None:
         """Return the newest sealed snapshot facts for an owner-scoped repository.

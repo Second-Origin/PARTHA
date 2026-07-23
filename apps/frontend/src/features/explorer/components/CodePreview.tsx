@@ -70,7 +70,14 @@ export function CodePreview({ node, repositoryId, citation }: CodePreviewProps) 
       // with no content, rather than silently showing different content
       // under a trusted-looking snapshot badge.
       architectureService
-        .getEvidenceSource(repositoryId, citation.snapshotId, node.path, citation.startLine, citation.endLine)
+        .getEvidenceSource(
+          repositoryId,
+          citation.snapshotId,
+          citation.factId,
+          node.path,
+          citation.startLine,
+          citation.endLine,
+        )
         .then((source) => {
           if (cancelled) return;
           if (source.status === 'unavailable') {

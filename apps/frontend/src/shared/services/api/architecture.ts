@@ -17,6 +17,7 @@ export const architectureService = {
   getEvidenceSource(
     repositoryId: string,
     snapshotId: string,
+    factId: string,
     path: string,
     startLine: number,
     endLine: number,
@@ -24,6 +25,7 @@ export const architectureService = {
   ): Promise<EvidenceSourceResponse> {
     const params = new URLSearchParams({
       snapshotId,
+      factId,
       path,
       startLine: String(startLine),
       endLine: String(endLine),

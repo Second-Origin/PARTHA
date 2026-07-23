@@ -66,7 +66,8 @@ Statuses below were checked against the implementation, not against prior docume
 | Engineering review | **Implemented but limited** | A fixed set of heuristic checks with derived category scores. Scores are arithmetic over finding severities, not a measured quality metric. |
 | AI provider integration | **Implemented but limited** | Several providers behind one abstraction. Provider configuration is per-user, with the API key encrypted at rest and injected per request; outbound destinations are centrally allowlisted and DNS-pinned. See [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md). |
 | Authorization and owner isolation | **Implemented** | All repository, analysis, AI, documentation, and export routes require authentication and are owner-scoped in the service layer; a non-owner request returns 404. Rate-limit budgets are keyed per authenticated user. |
-| Citations and grounded AI answers | **Not implemented** | No source content or line numbers are sent to providers, and no citations are returned. |
+| Evidence-backed authentication explanation | **Implemented but limited** | A deterministic Python/FastAPI authentication subgraph cites snapshot-, fact-, revision-, and line-addressed source. Classification remains heuristic and unsupported patterns are reported as gaps. |
+| Grounded AI answers | **Not implemented** | No source content or line numbers are sent to providers, and no AI citations are returned. |
 | Asynchronous / incremental processing | **Partially implemented** | Import and initial file-tree parsing remain synchronous. Analysis runs in a durable, cancellable background job with progress, bounded retry, and stale-worker recovery; incremental re-analysis is not implemented. |
 | Change-impact analysis | **Not implemented** | — |
 | Vulnerability and outdated-dependency scanning | **Not implemented** | The API exposes explicit `not_computed` assessment statuses. It emits no clean result or count because no scanning is performed. |
@@ -83,9 +84,9 @@ Two terms PARTHA uses precisely, because the difference decides how far a claim 
 - **Evidence** is the source artifact supporting a repository fact: a file, declaration, import, route, or configuration entry.
 - **Provenance** identifies where the fact came from: repository revision, path, symbol, line span, and extraction method.
 
-**PARTHA currently provides only partial evidence and provenance.** Facts carry the *file* they came from. They do not carry line spans, they do not record which extraction method produced them, and they are not addressed to a specific revision — the commit is recorded on the repository, not on the fact.
+**PARTHA currently provides partial, surface-dependent evidence and provenance.** Normalized `ri.v1` facts from supported Python and TypeScript extraction carry a repository revision, fact identity, path, line span, and extractor version. The authentication explanation consumes those facts and verifies its citation destination against the sealed fact/span and stored source-byte hash before displaying a trusted revision badge.
 
-So PARTHA can tell you *which file* a fact came from. It cannot yet tell you which line, from which revision, or how the fact was derived. It does not provide exact file-symbol-line-commit traceability, complete citations, fully evidence-backed AI answers, a persistent semantic knowledge graph, or language-aware extraction. Treat heuristic output as a lead to verify, not a guarantee.
+Legacy compatibility facts and several consumers still lack that traceability. AI receives no source content or line numbers and returns no citations. Extraction covers only documented syntax, and role classifications remain explicitly heuristic. Treat inferred output as a lead to verify, not a guarantee.
 
 ---
 

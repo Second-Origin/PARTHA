@@ -5,6 +5,7 @@ export interface ExplorerCitation {
   startLine: number;
   endLine: number;
   snapshotId: string;
+  factId: string;
 }
 
 function parsePositiveInteger(value: string | null): number | null {
@@ -16,19 +17,20 @@ function parsePositiveInteger(value: string | null): number | null {
 /**
  * Parse an evidence-citation deep-link's query params defensively: any
  * missing or malformed field (non-integer line, end before start, empty
- * path/snapshot id) yields `null` rather than a partially valid citation
+ * path/snapshot/fact id) yields `null` rather than a partially valid citation
  * that could produce an invalid Monaco range or an unverified request.
  */
 export function parseEvidenceCitation(searchParams: URLSearchParams): ExplorerCitation | null {
   const path = searchParams.get('path');
   const snapshotId = searchParams.get('snapshotId');
+  const factId = searchParams.get('factId');
   const startLine = parsePositiveInteger(searchParams.get('startLine'));
   const endLine = parsePositiveInteger(searchParams.get('endLine'));
 
-  if (!path || !snapshotId || startLine === null || endLine === null || endLine < startLine) {
+  if (!path || !snapshotId || !factId || startLine === null || endLine === null || endLine < startLine) {
     return null;
   }
-  return { path, startLine, endLine, snapshotId };
+  return { path, startLine, endLine, snapshotId, factId };
 }
 
 export interface FileDetails {
@@ -183,4 +185,3 @@ export function getMonacoLanguage(ext: string | null | undefined): string {
   };
   return map[ext] || 'plaintext';
 }
-

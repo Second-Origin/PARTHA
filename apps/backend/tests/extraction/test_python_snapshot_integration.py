@@ -152,7 +152,7 @@ def test_python_and_typescript_in_one_directory_seal(session):
     snapshot = store.begin(
         repository_id=repository.id,
         revision=Revision("upload", UPLOAD_REVISION),
-        producer_version_set=["python-ast@1.0.0", "typescript-ast@1.0.0"],
+        producer_version_set=["python-ast@1.0.0", "typescript-ast@1.1.0"],
     )
     store.add_node(
         snapshot, node_kind="repository", stable_key="repo:root",
@@ -174,7 +174,7 @@ def test_python_and_typescript_in_one_directory_seal(session):
                 evidence=[
                     Evidence(
                         path=e.path, start_line=e.start_line, end_line=e.end_line,
-                        extractor=producer, extractor_version="1.0.0",
+                        extractor=producer, extractor_version=extractor.version,
                         logical_line_count=e.logical_line_count, granularity=e.granularity,
                     )
                     for e in node.evidence

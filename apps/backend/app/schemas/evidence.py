@@ -9,16 +9,17 @@ EvidenceSourceStatus = Literal["ready", "unavailable"]
 class EvidenceSourceResponse(CamelModel):
     """The exact source text a citation points at, bound to its cited snapshot.
 
-    ``status="unavailable"`` covers every case where the exact cited revision
-    cannot be honestly displayed (revision mismatch, missing source, out-of-
-    range span, binary content): ``content`` is always ``None`` in that case
-    rather than falling back to different content under a trusted-looking
-    snapshot/revision identity.
+    ``status="unavailable"`` covers every case where the exact cited fact and
+    revision cannot be honestly displayed (fact/span mismatch, source-hash
+    mismatch, missing source, out-of-range span, binary content): ``content``
+    is always ``None`` in that case rather than falling back to different
+    content under a trusted-looking snapshot/revision identity.
     """
 
     schema_version: EvidenceSchemaVersion
     repository_id: str
     snapshot_id: str
+    fact_id: str
     revision_kind: str | None
     revision_value: str | None
     path: str

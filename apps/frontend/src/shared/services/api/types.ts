@@ -265,6 +265,7 @@ export interface EvidenceSourceResponse {
   schemaVersion: EvidenceSchemaVersion;
   repositoryId: string;
   snapshotId: string;
+  factId: string;
   revisionKind: string | null;
   revisionValue: string | null;
   path: string;

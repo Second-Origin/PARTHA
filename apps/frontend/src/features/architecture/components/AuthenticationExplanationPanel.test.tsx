@@ -180,6 +180,7 @@ describe('AuthenticationExplanationPanel', () => {
     expect(url.searchParams.get('startLine')).toBe('6');
     expect(url.searchParams.get('endLine')).toBe('7');
     expect(url.searchParams.get('snapshotId')).toBe('snap_1');
+    expect(url.searchParams.get('factId')).toBe('src/dependencies.py::get_current_user');
     expect(url.searchParams.get('tab')).toBe('Explorer');
 
     // The relationship (chain hop) citations are real links too, not just claim citations.

@@ -65,6 +65,7 @@ describe('RepositoryExplorer citation deep-link', () => {
       schemaVersion: 'evidence-source.v1',
       repositoryId: 'repo-1',
       snapshotId: 'snap_1',
+      factId: 'fact_1',
       revisionKind: 'upload',
       revisionValue: 'sha256:' + '0'.repeat(64),
       path: 'src/dependencies.py',
@@ -83,7 +84,13 @@ describe('RepositoryExplorer citation deep-link', () => {
       <RepositoryExplorer
         fileTree={FILE_TREE}
         repositoryId="repo-1"
-        citation={{ path: 'src/dependencies.py', startLine: 6, endLine: 7, snapshotId: 'snap_1' }}
+        citation={{
+          path: 'src/dependencies.py',
+          startLine: 6,
+          endLine: 7,
+          snapshotId: 'snap_1',
+          factId: 'fact_1',
+        }}
       />,
     );
 
@@ -91,7 +98,14 @@ describe('RepositoryExplorer citation deep-link', () => {
     expect(screen.getByText(/Cited lines 6-7/)).toBeInTheDocument();
     expect(screen.getByText(/snapshot snap_1/)).toBeInTheDocument();
     expect(screen.getByText(/revision upload:sha256:0{64}/)).toBeInTheDocument();
-    expect(mockedGetEvidenceSource).toHaveBeenCalledWith('repo-1', 'snap_1', 'src/dependencies.py', 6, 7);
+    expect(mockedGetEvidenceSource).toHaveBeenCalledWith(
+      'repo-1',
+      'snap_1',
+      'fact_1',
+      'src/dependencies.py',
+      6,
+      7,
+    );
     // Never the unverified, unversioned file endpoint for a citation.
     expect(mockedGetFile).not.toHaveBeenCalled();
   });
@@ -101,6 +115,7 @@ describe('RepositoryExplorer citation deep-link', () => {
       schemaVersion: 'evidence-source.v1',
       repositoryId: 'repo-1',
       snapshotId: 'snap_1',
+      factId: 'fact_1',
       revisionKind: 'upload',
       revisionValue: 'sha256:' + '0'.repeat(64),
       path: 'src/dependencies.py',
@@ -117,7 +132,13 @@ describe('RepositoryExplorer citation deep-link', () => {
       <RepositoryExplorer
         fileTree={FILE_TREE}
         repositoryId="repo-1"
-        citation={{ path: 'src/dependencies.py', startLine: 6, endLine: 7, snapshotId: 'snap_1' }}
+        citation={{
+          path: 'src/dependencies.py',
+          startLine: 6,
+          endLine: 7,
+          snapshotId: 'snap_1',
+          factId: 'fact_1',
+        }}
       />,
     );
 

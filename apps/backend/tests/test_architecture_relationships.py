@@ -270,6 +270,17 @@ def test_architecture_maps_every_snapshot_file_to_a_module(auth_client):
     assert import_edges[0]["evidence"][0]["path"] == "unmapped.ts"
 
 
+def test_architecture_language_comes_from_files_when_source_has_no_symbols(auth_client):
+    sources = {"script.py": b"answer = 42\n"}
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(repository["id"], sources)
+
+    response = auth_client.get(f"/analysis/{repository['id']}/architecture")
+
+    assert response.status_code == 200
+    assert response.json()["summary"]["language"] == "Python"
+
+
 def test_architecture_without_snapshot_does_not_claim_isolation(auth_client):
     # Leave the analysis job queued (worker not drained) so no snapshot is sealed:
     # this exercises the genuine "no sealed snapshot" architecture response, which

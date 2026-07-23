@@ -7,28 +7,28 @@
   "description": "A class with two methods. Exercises ts.class and ts.method.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["repository-inventory@1.0.0", "typescript-ast@1.0.0"],
+  "producerVersionSet": ["repository-inventory@1.1.0", "typescript-ast@1.1.0"],
   "constructsCovered": ["ts.module", "ts.class", "ts.method"],
   "deterministic": true,
   "expected": {
     "nodes": [
       {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
-       "evidence": [{"path": "src/service.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
-      {"nodeKind": "file", "stableKey": "file:src/service.ts", "name": "service.ts", "language": "typescript", "constructs": ["ts.module"],
-       "evidence": [{"path": "src/service.ts", "startLine": 1, "endLine": 10, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]},
+       "evidence": [{"path": "src/service.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]},
+      {"nodeKind": "file", "stableKey": "file:src/service.ts", "properties": {"content_sha256": "sha256:424db9934ede4aac6b9a1e1dfb7426de9f26ba60dedf752ae5c62ca61e3dd6a1"}, "name": "service.ts", "language": "typescript", "constructs": ["ts.module"],
+       "evidence": [{"path": "src/service.ts", "startLine": 1, "endLine": 10, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "module", "stableKey": "mod:src", "name": "src", "constructs": ["ts.directory_module"],
-       "evidence": [{"path": "src/service.ts", "startLine": 1, "endLine": 10, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]},
+       "evidence": [{"path": "src/service.ts", "startLine": 1, "endLine": 10, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/service.ts::Cache", "name": "Cache", "language": "typescript", "constructs": ["ts.class"],
-       "evidence": [{"path": "src/service.ts", "startLine": 1, "endLine": 9, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]},
+       "evidence": [{"path": "src/service.ts", "startLine": 1, "endLine": 9, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/service.ts::Cache.get", "name": "get", "language": "typescript", "constructs": ["ts.method"],
-       "evidence": [{"path": "src/service.ts", "startLine": 2, "endLine": 4, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]},
+       "evidence": [{"path": "src/service.ts", "startLine": 2, "endLine": 4, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/service.ts::Cache.clear", "name": "clear", "language": "typescript", "constructs": ["ts.method"],
-       "evidence": [{"path": "src/service.ts", "startLine": 6, "endLine": 8, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]}
+       "evidence": [{"path": "src/service.ts", "startLine": 6, "endLine": 8, "granularity": "span", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}]}
     ],
     "edges": [], "observations": [
-      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.ts::Cache","ordinal":1,"constructs":["ts.class"],"evidence":{"path":"src/service.ts","startLine":1,"endLine":9,"extractor":"typescript-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.ts::Cache.get","ordinal":1,"constructs":["ts.method"],"evidence":{"path":"src/service.ts","startLine":2,"endLine":4,"extractor":"typescript-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.ts::Cache.clear","ordinal":1,"constructs":["ts.method"],"evidence":{"path":"src/service.ts","startLine":6,"endLine":8,"extractor":"typescript-ast","extractorVersion":"1.0.0"}}
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.ts::Cache","ordinal":1,"constructs":["ts.class"],"evidence":{"path":"src/service.ts","startLine":1,"endLine":9,"extractor":"typescript-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.ts::Cache.get","ordinal":1,"constructs":["ts.method"],"evidence":{"path":"src/service.ts","startLine":2,"endLine":4,"extractor":"typescript-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/service.ts::Cache.clear","ordinal":1,"constructs":["ts.method"],"evidence":{"path":"src/service.ts","startLine":6,"endLine":8,"extractor":"typescript-ast","extractorVersion":"1.1.0"}}
     ], "assertions": [], "diagnostics": []
   }
 }

@@ -3,7 +3,7 @@ from app.extraction.base import build_evidence
 
 def test_valid_span_builds_normalized_evidence():
     ev, diag = build_evidence(
-        "src/./auth/service.ts", 41, 58, 100, producer="typescript-ast@1.0.0"
+        "src/./auth/service.ts", 41, 58, 100, producer="typescript-ast@1.1.0"
     )
     assert diag is None
     assert ev.path == "src/auth/service.ts"  # normalized

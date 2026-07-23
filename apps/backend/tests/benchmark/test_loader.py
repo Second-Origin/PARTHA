@@ -50,7 +50,7 @@ def _base_manifest() -> dict:
         "description": "d",
         "sourceRoot": ".",
         "revisionIdentity": "upload-sha256",
-        "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.0.0"],
+        "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.1.0"],
         "constructsCovered": ["py.function.def"],
         "deterministic": False,
         "expected": {
@@ -60,7 +60,7 @@ def _base_manifest() -> dict:
                     "stableKey": "repo:root",
                     "name": "repository",
                     "evidence": [
-                        {"path": "README.md", "startLine": 1, "endLine": 1, "extractor": "repository-inventory", "extractorVersion": "1.0.0"}
+                        {"path": "README.md", "startLine": 1, "endLine": 1, "extractor": "repository-inventory", "extractorVersion": "1.1.0"}
                     ],
                 },
                 {

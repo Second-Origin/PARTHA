@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+from urllib.parse import urlencode
 
 from app.extraction.pipeline import ExtractionPipeline
 from app.extraction.python import PythonExtractor
@@ -25,6 +26,7 @@ _SOURCES = {
     ),
     "src/dependencies.py": b"def get_current_user(token: str) -> str:\n    return token\n",
 }
+_ROUTE_FACT_ID = "src/routes.py::(anonymous:route#1)"
 
 
 def _upload(auth_client, files: dict[str, bytes]) -> dict:
@@ -107,10 +109,23 @@ def _persist_snapshot(repository_id: str, sources: dict[str, bytes], *, schema_v
         return store.seal(snapshot).snapshot_id
 
 
-def _evidence_url(repository_id: str, snapshot_id: str, path: str, start_line: int, end_line: int) -> str:
-    return (
-        f"/analysis/{repository_id}/evidence"
-        f"?snapshotId={snapshot_id}&path={path}&startLine={start_line}&endLine={end_line}"
+def _evidence_url(
+    repository_id: str,
+    snapshot_id: str,
+    path: str,
+    start_line: int,
+    end_line: int,
+    *,
+    fact_id: str = _ROUTE_FACT_ID,
+) -> str:
+    return f"/analysis/{repository_id}/evidence?" + urlencode(
+        {
+            "snapshotId": snapshot_id,
+            "factId": fact_id,
+            "path": path,
+            "startLine": start_line,
+            "endLine": end_line,
+        }
     )
 
 
@@ -124,6 +139,7 @@ def test_evidence_source_returns_exact_cited_revision_content(auth_client):
 
     assert body["status"] == "ready"
     assert body["snapshotId"] == snapshot_id
+    assert body["factId"] == _ROUTE_FACT_ID
     assert body["revisionKind"] == "upload"
     assert body["revisionValue"] == repository["revision"]["value"]
     assert body["path"] == "src/routes.py"
@@ -283,6 +299,25 @@ def test_evidence_source_reports_unavailable_for_forged_in_range_span(auth_clien
     assert body["content"] is None
 
 
+def test_evidence_source_reports_unavailable_when_fact_id_does_not_match_span(auth_client):
+    repository = _upload(auth_client, _SOURCES)
+    snapshot_id = _persist_snapshot(repository["id"], _SOURCES)
+
+    response = auth_client.get(
+        _evidence_url(
+            repository["id"],
+            snapshot_id,
+            "src/routes.py",
+            7,
+            7,
+            fact_id="src/routes.py::read_me",
+        )
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "unavailable"
+    assert response.json()["content"] is None
+
+
 def test_evidence_source_rejects_path_traversal(auth_client):
     repository = _upload(auth_client, _SOURCES)
     snapshot_id = _persist_snapshot(repository["id"], _SOURCES)
@@ -310,8 +345,7 @@ def test_evidence_source_second_layer_rejects_a_maliciously_stored_traversal_pat
     snapshot_id = _persist_snapshot(repository["id"], _SOURCES)
 
     with SessionLocal() as session:
-        any_node_id = session.scalar(select(RiNode.id).where(RiNode.snapshot_id == snapshot_id).limit(1))
-        assert any_node_id is not None
+        any_node = session.scalars(select(RiNode).where(RiNode.snapshot_id == snapshot_id).limit(1)).one()
         # A sealed snapshot's facts are immutable through the ORM by design;
         # a Core-level statement simulates a corrupted/malicious evidence row
         # bypassing the extractor's own path normalization, purely to prove
@@ -322,7 +356,7 @@ def test_evidence_source_second_layer_rejects_a_maliciously_stored_traversal_pat
         session.execute(
             insert(RiEvidence).values(
                 snapshot_id=snapshot_id,
-                node_ref=any_node_id,
+                node_ref=any_node.id,
                 edge_ref=None,
                 observation_ref=None,
                 path="../../../etc/passwd",
@@ -337,7 +371,14 @@ def test_evidence_source_second_layer_rejects_a_maliciously_stored_traversal_pat
         session.commit()
 
     response = auth_client.get(
-        _evidence_url(repository["id"], snapshot_id, "../../../etc/passwd", 1, 1)
+        _evidence_url(
+            repository["id"],
+            snapshot_id,
+            "../../../etc/passwd",
+            1,
+            1,
+            fact_id=any_node.stable_key,
+        )
     )
     assert response.status_code == 422
 
@@ -383,3 +424,28 @@ def test_evidence_source_reports_unavailable_when_source_deleted(auth_client):
     body = response.json()
     assert body["status"] == "unavailable"
     assert body["content"] is None
+
+
+def test_evidence_source_reports_unavailable_when_source_bytes_change(auth_client):
+    from pathlib import Path
+
+    from app.core.database import SessionLocal
+
+    repository = _upload(auth_client, _SOURCES)
+    snapshot_id = _persist_snapshot(repository["id"], _SOURCES)
+
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        assert record is not None
+        source_path = Path(record.local_path) / "src/routes.py"
+    source_path.write_text(
+        _SOURCES["src/routes.py"].decode("utf-8").replace('"/me"', '"/mutated"'),
+        encoding="utf-8",
+    )
+
+    response = auth_client.get(_evidence_url(repository["id"], snapshot_id, "src/routes.py", 7, 7))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "unavailable"
+    assert body["content"] is None
+    assert "do not match" in body["reason"]

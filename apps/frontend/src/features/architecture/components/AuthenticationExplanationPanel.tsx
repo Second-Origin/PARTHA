@@ -34,6 +34,7 @@ function evidenceHref(repositoryId: string, evidence: AuthEvidenceRef): string {
     startLine: String(evidence.startLine),
     endLine: String(evidence.endLine),
     snapshotId: evidence.snapshotId,
+    factId: evidence.factId,
   });
   return `/repositories/${repositoryId}?${params.toString()}`;
 }

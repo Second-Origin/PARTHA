@@ -7,15 +7,15 @@
   "description": "Star import, dynamic import, imported-name monkey-patching, and reflection produce exact real diagnostics.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.0.0"],
+  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.1.0"],
   "constructsCovered": ["src.repository", "src.file", "py.module", "py.import", "py.star_import", "py.dynamic_import", "py.monkeypatch", "py.reflection"],
   "deterministic": false,
   "expected": {
     "nodes": [
       {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository", "constructs": ["src.repository"],
-       "evidence": [{"path": "src/dynamic.py", "startLine": 1, "endLine": 1, "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
-      {"nodeKind": "file", "stableKey": "file:src/dynamic.py", "name": "dynamic.py", "language": "python", "constructs": ["src.file"],
-       "evidence": [{"path": "src/dynamic.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
+       "evidence": [{"path": "src/dynamic.py", "startLine": 1, "endLine": 1, "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]},
+      {"nodeKind": "file", "stableKey": "file:src/dynamic.py", "properties": {"content_sha256": "sha256:3a573501dabf9de11fd3c263d985271a210509d8fff00f92a61d27f969c4a4e0"}, "name": "dynamic.py", "language": "python", "constructs": ["src.file"],
+       "evidence": [{"path": "src/dynamic.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "module", "stableKey": "mod:src", "name": "src", "constructs": ["py.module"],
        "evidence": [{"path": "src/dynamic.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
     ],

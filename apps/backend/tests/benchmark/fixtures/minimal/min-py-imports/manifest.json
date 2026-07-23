@@ -7,15 +7,15 @@
   "description": "Plain, aliased, and from-imports as observed import occurrences (RFC-0001 §6.4). Exercises py.import, py.import_alias, py.from_import.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.0.0"],
+  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.1.0"],
   "constructsCovered": ["py.import", "py.import_alias", "py.from_import", "py.module"],
   "deterministic": false,
   "expected": {
     "nodes": [
       {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
-       "evidence": [{"path": "src/wiring.py", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
-      {"nodeKind": "file", "stableKey": "file:src/wiring.py", "name": "wiring.py", "language": "python", "constructs": ["src.file"],
-       "evidence": [{"path": "src/wiring.py", "startLine": 1, "endLine": 4, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]}
+       "evidence": [{"path": "src/wiring.py", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]},
+      {"nodeKind": "file", "stableKey": "file:src/wiring.py", "properties": {"content_sha256": "sha256:7d2a93943dd56d0d18b1623928724305970070c7a6840606809e6d1eaca6fc87"}, "name": "wiring.py", "language": "python", "constructs": ["src.file"],
+       "evidence": [{"path": "src/wiring.py", "startLine": 1, "endLine": 4, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]}
       ,{"nodeKind": "module", "stableKey": "mod:src", "name": "src", "constructs": ["py.module"],
        "evidence": [{"path": "src/wiring.py", "startLine": 1, "endLine": 4, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
     ],

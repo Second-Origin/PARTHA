@@ -7,27 +7,27 @@
   "description": "A namespace declaration and a dynamic import() expression. Both are outside the support matrix and MUST produce RI-EXT-UNSUPPORTED diagnostics.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["repository-inventory@1.0.0", "typescript-ast@1.0.0"],
+  "producerVersionSet": ["repository-inventory@1.1.0", "typescript-ast@1.1.0"],
   "constructsCovered": ["ts.module", "ts.namespace", "ts.dynamic_import"],
   "deterministic": false,
   "expected": {
     "nodes": [
       {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository",
-       "evidence": [{"path": "src/dynamic.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.0.0"}]},
-      {"nodeKind": "file", "stableKey": "file:src/dynamic.ts", "name": "dynamic.ts", "language": "typescript", "constructs": ["ts.module"],
-       "evidence": [{"path": "src/dynamic.ts", "startLine": 1, "endLine": 8, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.0.0"}]},
-      {"nodeKind":"module","stableKey":"mod:src","name":"src","constructs":["ts.directory_module"],"evidence":[{"path":"src/dynamic.ts","startLine":1,"endLine":8,"granularity":"file","extractor":"typescript-ast","extractorVersion":"1.0.0"}]},
-      {"nodeKind":"symbol","stableKey":"src/dynamic.ts::load","name":"load","language":"typescript","constructs":["ts.function"],"evidence":[{"path":"src/dynamic.ts","startLine":5,"endLine":7,"extractor":"typescript-ast","extractorVersion":"1.0.0"}]}
+       "evidence": [{"path": "src/dynamic.ts", "startLine": 1, "endLine": 1, "granularity": "span", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]},
+      {"nodeKind": "file", "stableKey": "file:src/dynamic.ts", "properties": {"content_sha256": "sha256:90636de41f5f7e2387422531ae1aac0214abda206431799efba5072961588add"}, "name": "dynamic.ts", "language": "typescript", "constructs": ["ts.module"],
+       "evidence": [{"path": "src/dynamic.ts", "startLine": 1, "endLine": 8, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}]},
+      {"nodeKind":"module","stableKey":"mod:src","name":"src","constructs":["ts.directory_module"],"evidence":[{"path":"src/dynamic.ts","startLine":1,"endLine":8,"granularity":"file","extractor":"typescript-ast","extractorVersion":"1.1.0"}]},
+      {"nodeKind":"symbol","stableKey":"src/dynamic.ts::load","name":"load","language":"typescript","constructs":["ts.function"],"evidence":[{"path":"src/dynamic.ts","startLine":5,"endLine":7,"extractor":"typescript-ast","extractorVersion":"1.1.0"}]}
     ],
     "edges": [], "observations": [
-      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/dynamic.ts::load","ordinal":1,"constructs":["ts.function"],"evidence":{"path":"src/dynamic.ts","startLine":5,"endLine":7,"extractor":"typescript-ast","extractorVersion":"1.0.0"}}
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/dynamic.ts::load","ordinal":1,"constructs":["ts.function"],"evidence":{"path":"src/dynamic.ts","startLine":5,"endLine":7,"extractor":"typescript-ast","extractorVersion":"1.1.0"}}
     ], "assertions": [],
     "diagnostics": [
       {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info",
-       "message": "TypeScript namespace is outside the support matrix.", "producer": "typescript-ast@1.0.0",
+       "message": "TypeScript namespace is outside the support matrix.", "producer": "typescript-ast@1.1.0",
        "path": "src/dynamic.ts", "span": {"startLine": 1, "endLine": 3}, "subject": "file:src/dynamic.ts", "constructs": ["ts.namespace"]},
       {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info",
-       "message": "Dynamic import() is outside the TypeScript support matrix.", "producer": "typescript-ast@1.0.0",
+       "message": "Dynamic import() is outside the TypeScript support matrix.", "producer": "typescript-ast@1.1.0",
        "path": "src/dynamic.ts", "span": {"startLine": 6, "endLine": 6}, "subject": "file:src/dynamic.ts", "constructs": ["ts.dynamic_import"]}
     ]
   }
