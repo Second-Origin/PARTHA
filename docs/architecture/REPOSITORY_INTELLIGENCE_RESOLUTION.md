@@ -34,6 +34,7 @@ edge.
 | `implements` | TypeScript `implements` clause | `implements` |
 | `route` + `route_handler` | Route declaration and one handler reference | `routes_to` |
 | `dependency` | Direct manifest declaration on a dependency node | `depends_on` |
+| `injects` | A `Depends(name)` argument (#95) | `injects` |
 
 `import_binding` uses an unambiguous delimiter format because `ri.v1`
 observations intentionally have only `referent_text`; it is still direct
@@ -96,11 +97,21 @@ only to a symbol carrying an explicit stored `default_export` property; the
 resolver never substitutes the only symbol in a file. A call inside a symbol
 uses that symbol as its source; a top-level call retains its observed
 file/module source, and recursive calls may produce an intentional self-edge.
-This applies identically to `calls`, `implements`, and `routes_to`. TypeScript
-extraction emits `implements` for direct concrete or abstract class clauses,
-and generic targets use their AST base reference while retaining evidence over
-the complete clause. `extends` is intentionally not repurposed as an
-`implements` fact.
+This applies identically to `calls`, `implements`, `routes_to`, and `injects`.
+TypeScript extraction emits `implements` for direct concrete or abstract class
+clauses, and generic targets use their AST base reference while retaining
+evidence over the complete clause. `extends` is intentionally not repurposed
+as an `implements` fact.
+
+`injects` (#95) resolves a Python `Depends(name)` argument the same way a
+`call` does: the extractor records only the bare referenced name and its
+source span; the resolver attributes it to whichever symbol's stored span
+contains it (the function whose default argument reads `Depends(name)`), then
+looks up `name` through the identical same-file-definition /
+`import_binding`-only rule above. A dependency imported from another module,
+or one this fixture never defines (e.g. a bare `oauth2_scheme` reference with
+no local definition), stays an honest `RI-RES-UNRESOLVED` diagnostic rather
+than a guessed edge.
 
 ### Routes
 
