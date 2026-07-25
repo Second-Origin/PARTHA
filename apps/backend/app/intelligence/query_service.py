@@ -19,19 +19,53 @@ from app.models.snapshot import (
 )
 
 
+#: Predicates Architecture renders, mapped to the architecture edge type.
+ARCHITECTURE_RELATIONSHIP_EDGE_TYPES = {
+    "imports": "import",
+    "calls": "calls",
+    "routes_to": "api-call",
+    "implements": "dependency",
+    "depends_on": "dependency",
+}
+#: Predicates the authentication explanation walks to build guard chains. It
+#: shares ``architecture_facts`` with Architecture but needs ``injects``, which
+#: Architecture never draws.
+AUTHENTICATION_EXPLANATION_PREDICATES = frozenset({"injects", "calls", "routes_to"})
+#: What ``architecture_facts`` actually loads: the union of both consumers.
+#: Each consumer still filters again in Python for what it renders, so widening
+#: this set never widens a response — it only prevents starving a consumer.
+ARCHITECTURE_FACT_PREDICATES = (
+    frozenset(ARCHITECTURE_RELATIONSHIP_EDGE_TYPES) | AUTHENTICATION_EXPLANATION_PREDICATES
+)
+ARCHITECTURE_DIAGNOSTIC_CODES = frozenset({"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS"})
+#: Diagnostic codes the authentication explanation renders.
+AUTHENTICATION_DIAGNOSTIC_CODES = frozenset(
+    {"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS", "RI-EXT-UNSUPPORTED", "RI-SRC-MALFORMED"}
+)
+#: Union of diagnostic codes loaded for both consumers.
+ARCHITECTURE_FACT_DIAGNOSTIC_CODES = ARCHITECTURE_DIAGNOSTIC_CODES | AUTHENTICATION_DIAGNOSTIC_CODES
+#: Node kinds the architecture consumer always needs, independent of whether the
+#: node participates in a relationship edge. ``symbol`` is deliberately absent:
+#: symbols are loaded only when an edge references them.
+ARCHITECTURE_NODE_KINDS = frozenset({"file", "dependency", "repository"})
+#: The only assertion predicate the architecture consumer reads (file role
+#: classification). Others stay in the snapshot and are simply not loaded here.
+ARCHITECTURE_ASSERTION_PREDICATES = frozenset({"classified_as"})
+ARCHITECTURE_EVIDENCE_BATCH_SIZE = 500
+
+
 @dataclass(frozen=True)
 class ArchitectureSnapshotFacts:
     """Persisted facts needed to build evidence-backed architecture relationships."""
 
     snapshot: RiSnapshot
     nodes: list[RiNode]
-    observations: list[RiObservation]
     edges: list[RiEdge]
     assertions: list[RiAssertion]
     node_evidence: dict[int, list[RiEvidence]]
-    observation_evidence: dict[int, list[RiEvidence]]
     edge_evidence: dict[int, list[RiEvidence]]
     diagnostics: list[RiDiagnostic]
+    covered_paths: set[str]
 
 
 class SnapshotQueryService:
@@ -123,31 +157,40 @@ class SnapshotQueryService:
         snapshot = self._latest_snapshot(repository_id)
         if snapshot is None:
             return None
-        nodes = list(
-            self.db.scalars(
-                select(RiNode)
-                .where(RiNode.snapshot_id == snapshot.snapshot_id)
-                .order_by(RiNode.stable_key, RiNode.id)
-            ).all()
-        )
         edges = list(
             self.db.scalars(
                 select(RiEdge)
-                .where(RiEdge.snapshot_id == snapshot.snapshot_id)
+                .where(
+                    RiEdge.snapshot_id == snapshot.snapshot_id,
+                    RiEdge.predicate.in_(ARCHITECTURE_FACT_PREDICATES),
+                )
                 .order_by(RiEdge.subject_key, RiEdge.predicate, RiEdge.object_key, RiEdge.edge_id, RiEdge.id)
             ).all()
         )
-        observations = list(
+        # The architecture consumer needs every file node (module inventory and
+        # primary language), every dependency node (frameworks and dependency
+        # nodes) and the repository node. It needs a ``symbol`` node only when
+        # that symbol is an endpoint of a relationship edge. Symbols dominate a
+        # large snapshot, so excluding the unreferenced ones is the bound that
+        # matters here — while still returning every node the consumer reads.
+        endpoint_keys = {key for edge in edges for key in (edge.subject_key, edge.object_key)}
+        node_filter = RiNode.node_kind.in_(ARCHITECTURE_NODE_KINDS)
+        if endpoint_keys:
+            node_filter = or_(node_filter, RiNode.stable_key.in_(endpoint_keys))
+        nodes = list(
             self.db.scalars(
-                select(RiObservation)
-                .where(RiObservation.snapshot_id == snapshot.snapshot_id)
-                .order_by(RiObservation.observation_id, RiObservation.id)
+                select(RiNode)
+                .where(RiNode.snapshot_id == snapshot.snapshot_id, node_filter)
+                .order_by(RiNode.stable_key, RiNode.id)
             ).all()
         )
         diagnostics = list(
             self.db.scalars(
                 select(RiDiagnostic)
-                .where(RiDiagnostic.snapshot_id == snapshot.snapshot_id)
+                .where(
+                    RiDiagnostic.snapshot_id == snapshot.snapshot_id,
+                    RiDiagnostic.code.in_(ARCHITECTURE_FACT_DIAGNOSTIC_CODES),
+                )
                 .order_by(
                     RiDiagnostic.path,
                     RiDiagnostic.span_start_line,
@@ -159,24 +202,23 @@ class SnapshotQueryService:
         assertions = list(
             self.db.scalars(
                 select(RiAssertion)
-                .where(RiAssertion.snapshot_id == snapshot.snapshot_id)
+                .where(
+                    RiAssertion.snapshot_id == snapshot.snapshot_id,
+                    RiAssertion.predicate.in_(ARCHITECTURE_ASSERTION_PREDICATES),
+                )
                 .order_by(RiAssertion.subject_key, RiAssertion.predicate, RiAssertion.assertion_id, RiAssertion.id)
             ).all()
         )
+        covered_paths = self._architecture_covered_paths(snapshot)
         return ArchitectureSnapshotFacts(
             snapshot=snapshot,
             nodes=nodes,
-            observations=observations,
             edges=edges,
             assertions=assertions,
             node_evidence=self._evidence_for(snapshot, "node_ref", [node.id for node in nodes]),
-            observation_evidence=self._evidence_for(
-                snapshot,
-                "observation_ref",
-                [observation.id for observation in observations],
-            ),
             edge_evidence=self._evidence_for(snapshot, "edge_ref", [edge.id for edge in edges]),
             diagnostics=diagnostics,
+            covered_paths=covered_paths,
         )
 
     def symbols(self, snapshot_id: str, *, offset: int, limit: int) -> tuple[RiSnapshot, list[RiNode], int]:
@@ -356,26 +398,56 @@ class SnapshotQueryService:
         rows = self.db.scalars(select(model).where(*where).order_by(*order_by).offset(offset).limit(limit)).all()
         return list(rows), total
 
+    def _architecture_covered_paths(self, snapshot: RiSnapshot) -> set[str]:
+        """Return snapshot paths that carry non-inventory extraction evidence.
+
+        Inventory-only file evidence proves a path exists, not that a
+        relationship-capable extractor ran over it, so the architecture consumer
+        uses this set to avoid reporting an unsupported file as genuinely
+        isolated.
+
+        The result is one distinct-path column read rather than a full evidence
+        materialization: previously the caller derived these paths by walking
+        every node and observation evidence row it had already loaded, which is
+        what made the read unbounded on large snapshots (#133).
+        """
+
+        return set(
+            self.db.scalars(
+                select(RiEvidence.path)
+                .where(
+                    RiEvidence.snapshot_id == snapshot.snapshot_id,
+                    RiEvidence.extractor != "repository-inventory",
+                    or_(RiEvidence.node_ref.is_not(None), RiEvidence.observation_ref.is_not(None)),
+                )
+                .distinct()
+            ).all()
+        )
+
     def _evidence_for(self, snapshot: RiSnapshot, column: str, ids: list[int]) -> dict[int, list[RiEvidence]]:
         if not ids:
             return {}
         field = getattr(RiEvidence, column)
-        rows = self.db.scalars(
-            select(RiEvidence)
-            .where(RiEvidence.snapshot_id == snapshot.snapshot_id, field.in_(ids))
-            .order_by(
-                RiEvidence.path,
-                RiEvidence.start_line,
-                RiEvidence.end_line,
-                RiEvidence.granularity,
-                RiEvidence.extractor,
-                RiEvidence.extractor_version,
-                RiEvidence.id,
-            )
-        ).all()
         grouped: dict[int, list[RiEvidence]] = defaultdict(list)
-        for row in rows:
-            parent = getattr(row, column)
-            if parent is not None:
-                grouped[parent].append(row)
+        for start in range(0, len(ids), ARCHITECTURE_EVIDENCE_BATCH_SIZE):
+            rows = self.db.scalars(
+                select(RiEvidence)
+                .where(
+                    RiEvidence.snapshot_id == snapshot.snapshot_id,
+                    field.in_(ids[start : start + ARCHITECTURE_EVIDENCE_BATCH_SIZE]),
+                )
+                .order_by(
+                    RiEvidence.path,
+                    RiEvidence.start_line,
+                    RiEvidence.end_line,
+                    RiEvidence.granularity,
+                    RiEvidence.extractor,
+                    RiEvidence.extractor_version,
+                    RiEvidence.id,
+                )
+            ).all()
+            for row in rows:
+                parent = getattr(row, column)
+                if parent is not None:
+                    grouped[parent].append(row)
         return grouped

@@ -1,7 +1,12 @@
 import posixpath
 from collections import Counter, defaultdict
 
-from app.intelligence.query_service import ArchitectureSnapshotFacts, SnapshotQueryService
+from app.intelligence.query_service import (
+    ARCHITECTURE_DIAGNOSTIC_CODES,
+    ARCHITECTURE_RELATIONSHIP_EDGE_TYPES,
+    ArchitectureSnapshotFacts,
+    SnapshotQueryService,
+)
 from app.intelligence.models import RepositoryModule
 from app.models.repository import RepositoryRecord
 from app.models.snapshot import RiDiagnostic, RiEvidence, RiNode
@@ -45,13 +50,6 @@ _FRAMEWORK_BY_DEPENDENCY_NAME = {
     "flask": "Flask",
 }
 
-RELATIONSHIP_EDGE_TYPES = {
-    "imports": "import",
-    "calls": "calls",
-    "routes_to": "api-call",
-    "implements": "dependency",
-    "depends_on": "dependency",
-}
 
 
 class ArchitectureAnalyzer:
@@ -306,7 +304,7 @@ class ArchitectureAnalyzer:
         relationship_keys = {
             key
             for edge in facts.edges
-            if edge.predicate in RELATIONSHIP_EDGE_TYPES
+            if edge.predicate in ARCHITECTURE_RELATIONSHIP_EDGE_TYPES
             for key in (edge.subject_key, edge.object_key)
         }
         result: list[ArchNode] = []
@@ -360,21 +358,19 @@ class ArchitectureAnalyzer:
                 modules_by_file.setdefault(self._normalize_path(path), []).append(module.id)
         snapshot_node_by_key = {item.stable_key: item for item in facts.nodes}
         node_ids = {node.id for node in nodes}
-        diagnostics = [self._architecture_diagnostic(item, modules_by_file, node_ids) for item in facts.diagnostics]
+        diagnostics = [
+            self._architecture_diagnostic(item, modules_by_file, node_ids)
+            for item in facts.diagnostics
+            if item.code in ARCHITECTURE_DIAGNOSTIC_CODES
+        ]
         unresolved_node_ids: set[str] = set()
         # Inventory-only file nodes prove that a path exists, not that a
         # relationship-capable extractor ran. Count only evidence emitted by a
         # syntax/manifest producer so unsupported files cannot look isolated.
-        covered_paths = {
-            item.path
-            for evidence_by_fact in (facts.node_evidence, facts.observation_evidence)
-            for evidence in evidence_by_fact.values()
-            for item in evidence
-            if item.extractor != "repository-inventory"
-        }
+        covered_paths = facts.covered_paths
 
         for item in facts.diagnostics:
-            if item.code not in {"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS"}:
+            if item.code not in ARCHITECTURE_DIAGNOSTIC_CODES:
                 continue
             if item.path:
                 unresolved_node_ids.update(modules_by_file.get(self._normalize_path(item.path), []))
@@ -384,7 +380,7 @@ class ArchitectureAnalyzer:
 
         edges: list[ArchEdge] = []
         for fact in facts.edges:
-            if fact.predicate not in RELATIONSHIP_EDGE_TYPES:
+            if fact.predicate not in ARCHITECTURE_RELATIONSHIP_EDGE_TYPES:
                 continue
             evidence_rows = facts.edge_evidence.get(fact.id, [])
             source_ids = self._architecture_endpoint_ids(
@@ -478,7 +474,7 @@ class ArchitectureAnalyzer:
                         id=edge_id,
                         source=source,
                         target=target,
-                        type=RELATIONSHIP_EDGE_TYPES[fact.predicate],  # type: ignore[arg-type]
+                        type=ARCHITECTURE_RELATIONSHIP_EDGE_TYPES[fact.predicate],  # type: ignore[arg-type]
                         label=fact.predicate.replace("_", " "),
                         predicate=fact.predicate,
                         truth_class="inferred",

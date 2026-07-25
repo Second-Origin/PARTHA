@@ -156,6 +156,18 @@ Architecture and the authentication explanation both build entirely from that
 owner-scoped persisted-fact query; other product consumers (dependency graph,
 engineering review, documentation, AI) remain on the legacy model.
 
+The architecture read is bounded to what the response actually renders (#133):
+the relationship predicates Architecture draws, the resolution diagnostics it
+displays, `classified_as` assertions, and the file, dependency and repository
+nodes it inventories — plus any symbol node that is an endpoint of a rendered
+relationship. Symbol nodes that no rendered edge references are not loaded, and
+observations are no longer hydrated at all. Covered module paths come from a
+single distinct-path read over non-inventory node or observation evidence
+instead of walking every evidence row already in memory. Evidence lookups by ID
+run in bounded batches. The architecture response therefore stays proportional
+to the relationships and diagnostics it exposes; this is a targeted read, not
+API pagination.
+
 ---
 
 ## The knowledge graph
