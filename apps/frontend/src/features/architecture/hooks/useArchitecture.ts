@@ -11,8 +11,8 @@ export type ArchitectureEmptyReason = 'no-completed-repositories' | 'no-active-r
 export function useArchitecture() {
   const { activeRepository, completedRepositories } = useRepository();
   const setStoreModel = useArchitectureStore((state) => state.setModel);
-  const storeModel = useArchitectureStore((state) => state.model);
-  const [model, setModel] = useState<ArchitectureModel | null>(storeModel);
+  const resetForRepository = useArchitectureStore((state) => state.resetForRepository);
+  const [model, setModel] = useState<ArchitectureModel | null>(null);
   const [source, setSource] = useState<RepositorySource | null>(null);
   const [status, setStatus] = useState<FeatureStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +24,7 @@ export function useArchitecture() {
     if (completedRepositories.length === 0) {
       setStatus('empty');
       setModel(null);
+      setStoreModel(null);
       setSource(null);
       setError(null);
       return;
@@ -32,12 +33,16 @@ export function useArchitecture() {
     if (!activeRepository || activeRepository.status !== 'completed') {
       setStatus('empty');
       setModel(null);
+      setStoreModel(null);
       setSource(null);
       setError(null);
       return;
     }
 
     let cancelled = false;
+    resetForRepository();
+    setModel(null);
+    setSource(null);
 
     async function loadArchitecture() {
       if (!activeRepository) return;
@@ -66,7 +71,7 @@ export function useArchitecture() {
     return () => {
       cancelled = true;
     };
-  }, [activeRepository, completedRepositories.length, refreshKey, setStoreModel]);
+  }, [activeRepository, completedRepositories.length, refreshKey, resetForRepository, setStoreModel]);
 
   const emptyReason: ArchitectureEmptyReason =
     status === 'empty'

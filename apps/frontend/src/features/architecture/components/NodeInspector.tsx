@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -7,7 +7,6 @@ import {
   GitBranch,
   Tag,
   Layers,
-  Code2,
 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import type { ArchNode } from '@/shared/types/architecture';
@@ -19,13 +18,50 @@ interface NodeInspectorProps {
 }
 
 export function NodeInspector({ node, onClose }: NodeInspectorProps) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const dialog = closeRef.current?.closest<HTMLElement>('[role="dialog"]');
+      const focusable = Array.from(
+        dialog?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])') ?? [],
+      ).filter((element) => element.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [onClose]);
+
   return (
     <motion.div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Architecture node: ${node.name}`}
       initial={{ x: 20, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: 20, opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="w-80 border-l border-border bg-card flex flex-col h-full overflow-hidden"
+      className="flex h-full w-80 flex-col overflow-hidden border-l border-border bg-card max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:w-full"
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="min-w-0">
@@ -33,6 +69,9 @@ export function NodeInspector({ node, onClose }: NodeInspectorProps) {
           <p className="text-2xs text-muted-foreground capitalize">{node.type.replace('-', ' ')}</p>
         </div>
         <button
+          ref={closeRef}
+          type="button"
+          aria-label="Close architecture node inspector"
           onClick={onClose}
           className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
         >
@@ -113,13 +152,6 @@ export function NodeInspector({ node, onClose }: NodeInspectorProps) {
           </div>
         </InspectorSection>
 
-        <InspectorSection title="AI Summary" icon={Code2}>
-          <div className="rounded-lg bg-muted/50 border border-border p-3">
-            <p className="text-xs text-muted-foreground italic">
-              AI-powered analysis will provide detailed explanations, refactoring suggestions, and documentation for this component.
-            </p>
-          </div>
-        </InspectorSection>
       </div>
     </motion.div>
   );

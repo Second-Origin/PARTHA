@@ -4,9 +4,12 @@ import type { ArchLayer, ArchNode, ArchEdge, HeatmapMode } from '@/shared/types/
 import type { ArchFlowNode } from './components/ArchitectureNode';
 
 export const ARCH_NODE_WIDTH = 220;
-export const ARCH_NODE_HEIGHT = 104;
-const RANK_GAP = 140;
-const NODE_GAP = 60;
+export const ARCH_NODE_HEIGHT = 112;
+// Keep the review-default graph inside a laptop viewport at the readable
+// 0.85x zoom floor. Wider graphs remain pannable, but common five-layer and
+// busy single-layer fixtures should not open with partially clipped cards.
+const RANK_GAP = 50;
+const NODE_GAP = 35;
 
 export function getLayoutedElements(
   archNodes: ArchNode[],
@@ -64,6 +67,8 @@ export function getLayoutedElements(
     return {
       id: node.id,
       type: 'architectureNode' as const,
+      initialWidth: ARCH_NODE_WIDTH,
+      initialHeight: ARCH_NODE_HEIGHT,
       position: { x: pos.x - ARCH_NODE_WIDTH / 2, y: pos.y - ARCH_NODE_HEIGHT / 2 },
       data: {
         label: node.name,
@@ -127,6 +132,7 @@ function getLayerPositions(
 ): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  let layerCursor = 0;
 
   layers.forEach((layer, layerIndex) => {
     const layerNodes = layer.nodes
@@ -138,20 +144,40 @@ function getLayerPositions(
         return leftY - rightY || left.name.localeCompare(right.name) || left.id.localeCompare(right.id);
       });
 
-    const offset = -((layerNodes.length - 1) * (ARCH_NODE_HEIGHT + NODE_GAP)) / 2;
-    layerNodes.forEach((node, nodeIndex) => {
-      if (direction === 'LR') {
+    if (direction === 'LR') {
+      // A semantic layer is a band, not necessarily one physical column.
+      // Deterministically wrap a busy layer into sub-columns so a 14-node
+      // single-layer repository opens as a compact grid instead of one very
+      // tall column with an empty canvas beside it (#112).
+      // A small semantic layer reads best as one column. Only wrap layers
+      // large enough to become taller than the review canvas.
+      const maxRows = layerNodes.length <= 4
+        ? Math.max(1, layerNodes.length)
+        : Math.max(2, Math.ceil(Math.sqrt(layerNodes.length)));
+      const columnCount = Math.max(1, Math.ceil(layerNodes.length / maxRows));
+      layerNodes.forEach((node, nodeIndex) => {
+        const columnIndex = Math.floor(nodeIndex / maxRows);
+        const rowIndex = nodeIndex % maxRows;
+        const rowsInColumn = Math.min(maxRows, layerNodes.length - columnIndex * maxRows);
+        const offset = -((rowsInColumn - 1) * (ARCH_NODE_HEIGHT + NODE_GAP)) / 2;
         positions.set(node.id, {
-          x: layerIndex * (ARCH_NODE_WIDTH + RANK_GAP) + ARCH_NODE_WIDTH / 2,
-          y: offset + nodeIndex * (ARCH_NODE_HEIGHT + NODE_GAP) + ARCH_NODE_HEIGHT / 2,
+          x: layerCursor + columnIndex * (ARCH_NODE_WIDTH + NODE_GAP) + ARCH_NODE_WIDTH / 2,
+          y: offset + rowIndex * (ARCH_NODE_HEIGHT + NODE_GAP) + ARCH_NODE_HEIGHT / 2,
         });
-      } else {
+      });
+      layerCursor +=
+        columnCount * ARCH_NODE_WIDTH
+        + Math.max(0, columnCount - 1) * NODE_GAP
+        + RANK_GAP;
+    } else {
+      const offset = -((layerNodes.length - 1) * (ARCH_NODE_WIDTH + NODE_GAP)) / 2;
+      layerNodes.forEach((node, nodeIndex) => {
         positions.set(node.id, {
           x: offset + nodeIndex * (ARCH_NODE_WIDTH + NODE_GAP) + ARCH_NODE_WIDTH / 2,
           y: layerIndex * (ARCH_NODE_HEIGHT + RANK_GAP) + ARCH_NODE_HEIGHT / 2,
         });
-      }
-    });
+      });
+    }
   });
 
   return positions;

@@ -2,10 +2,12 @@ import {
   FileText,
   FolderGit2,
   GitBranch,
+  BarChart3,
   LayoutDashboard,
   MessageSquareText,
   Network,
   Settings,
+  ShieldCheck,
   Upload,
   type LucideIcon,
 } from 'lucide-react';
@@ -115,8 +117,10 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/dependencies',
     icon: GitBranch,
     phase: 0,
-    readiness: 'ready',
+    readiness: 'preview',
     primaryNavigation: true,
+    limitation:
+      'Data comes from package manifests through the legacy analysis path and is not bound to the sealed ri.v1 snapshot. Vulnerability and outdated-version assessments are not computed; do not treat this as a security scan.',
     load: async () => {
       const { DependenciesPage } = await import('@/app/pages/DependenciesPage');
       return { Component: DependenciesPage };
@@ -155,18 +159,20 @@ export const productSurfaces: readonly ProductSurface[] = [
     },
   },
   {
-    // Stays deferred: the review builder derives 0-100 category scores by
-    // subtracting per-severity costs from 100 (app/review/review_service.py).
-    // That number is not computed from measured evidence, and the prototype
-    // must not present opaque grades as analysis.
+    // Restored as a primary snapshot-backed surface (#154). The active
+    // engineering-review.v2 contract contains no scores or generated roadmap:
+    // only diagnostics with same-snapshot source evidence become findings.
     id: 'engineering-review',
     label: 'Engineering Review',
     path: '/review',
+    icon: ShieldCheck,
     phase: 3,
-    readiness: 'deferred',
-    primaryNavigation: false,
-    blockingIssues: [96, 113],
-    unavailableMessage: 'Evidence-based engineering review is not available yet.',
+    readiness: 'ready',
+    primaryNavigation: true,
+    load: async () => {
+      const { EngineeringReviewPage } = await import('@/app/pages/EngineeringReviewPage');
+      return { Component: EngineeringReviewPage };
+    },
   },
   {
     // Restored as Preview (#154): the endpoint is real, owner-scoped and reads
@@ -187,16 +193,20 @@ export const productSurfaces: readonly ProductSurface[] = [
     },
   },
   {
-    // Stays deferred: there is no Insights backend endpoint at all, so every
-    // metric the page could show would be invented.
+    // Restored as a primary snapshot-backed surface (#154). Every displayed
+    // value comes from repository-insights.v1 and carries an exact definition,
+    // snapshot identity and assessment state.
     id: 'insights',
     label: 'Insights',
     path: '/insights',
+    icon: BarChart3,
     phase: 'not-scheduled',
-    readiness: 'deferred',
-    primaryNavigation: false,
-    blockingIssues: [117],
-    unavailableMessage: 'Repository insights are not available yet.',
+    readiness: 'ready',
+    primaryNavigation: true,
+    load: async () => {
+      const { InsightsPage } = await import('@/app/pages/InsightsPage');
+      return { Component: InsightsPage };
+    },
   },
 ];
 

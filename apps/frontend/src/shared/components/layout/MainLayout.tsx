@@ -18,16 +18,16 @@ export function MainLayout() {
 
   return (
     <RepositoryProvider>
-      <div className="flex h-screen overflow-hidden">
+      <div className="flex h-screen min-w-0 overflow-hidden">
         <Sidebar />
         <div
           className={cn(
-            'flex flex-1 flex-col transition-all duration-200',
-            sidebarCollapsed ? 'ml-16' : 'ml-60'
+            'ml-0 flex min-w-0 flex-1 flex-col transition-all duration-200',
+            sidebarCollapsed ? 'md:ml-16' : 'md:ml-60'
           )}
         >
           <TopBar />
-          <main className="flex-1 overflow-y-auto scrollbar-thin p-6">
+          <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 scrollbar-thin sm:p-6">
             <Outlet />
           </main>
         </div>

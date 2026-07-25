@@ -81,4 +81,24 @@ describe('getLayoutedElements', () => {
     expect(result.nodes.map((item) => item.id)).toEqual(['web', 'db']);
     expect(result.edges).toEqual([]);
   });
+
+  it('wraps a busy single semantic layer into a compact deterministic grid', () => {
+    const busyNodes = Array.from({ length: 14 }, (_, index) =>
+      node(`segment-${String(index + 1).padStart(2, '0')}`, 'shared'),
+    );
+    const busyLayer: ArchLayer[] = [
+      { id: 'shared', name: 'Shared', order: 0, nodes: busyNodes.map((item) => item.id) },
+    ];
+
+    const first = getLayoutedElements(busyNodes, [], { layers: busyLayer });
+    const second = getLayoutedElements(busyNodes, [], { layers: busyLayer });
+    const xPositions = new Set(first.nodes.map((item) => item.position.x));
+    const yPositions = new Set(first.nodes.map((item) => item.position.y));
+
+    expect(first).toEqual(second);
+    expect(xPositions.size).toBeGreaterThan(1);
+    expect(yPositions.size).toBeGreaterThan(1);
+    expect(Math.max(...xPositions) - Math.min(...xPositions)).toBeLessThan(1000);
+    expect(Math.max(...yPositions) - Math.min(...yPositions)).toBeLessThan(1000);
+  });
 });

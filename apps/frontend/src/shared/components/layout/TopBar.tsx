@@ -11,6 +11,7 @@ import {
   Check,
   Loader2,
   Ban,
+  Menu,
 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useAppStore } from '@/app/store/useAppStore';
@@ -28,6 +29,7 @@ export function TopBar() {
     setSearchQuery,
     searchOpen,
     setSearchOpen,
+    setMobileSidebarOpen,
   } = useAppStore();
   const { repositories, activeRepository, selectRepository } = useRepository();
   const logout = useAuthStore((state) => state.logout);
@@ -47,6 +49,8 @@ export function TopBar() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const repoRef = useRef<HTMLDivElement>(null);
+  const repoTriggerRef = useRef<HTMLButtonElement>(null);
+  const repoMenuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -83,6 +87,36 @@ export function TopBar() {
     }
   }, [searchOpen, setSearchOpen]);
 
+  useEffect(() => {
+    if (!repoDropdownOpen) return;
+    const options = Array.from(
+      repoMenuRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]') ?? [],
+    );
+    (options.find((option) => option.getAttribute('aria-selected') === 'true') ?? options[0])?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setRepoDropdownOpen(false);
+        repoTriggerRef.current?.focus();
+        return;
+      }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || options.length === 0) return;
+      event.preventDefault();
+      const current = options.indexOf(document.activeElement as HTMLButtonElement);
+      const next =
+        event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? options.length - 1
+            : event.key === 'ArrowDown'
+              ? (current + 1 + options.length) % options.length
+              : (current - 1 + options.length) % options.length;
+      options[next]?.focus();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [repoDropdownOpen]);
+
   const statusIcon = (status: string) => {
     if (status === 'completed') return <Check className="h-3 w-3 text-success" />;
     if (status === 'analysing') return <Loader2 className="h-3 w-3 text-primary animate-spin" />;
@@ -91,12 +125,25 @@ export function TopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/80 backdrop-blur-sm px-4 gap-4">
-      <div className="flex items-center gap-3 flex-1">
+    <header className="sticky top-0 z-30 flex h-14 min-w-0 items-center justify-between gap-2 border-b border-border bg-background/80 px-2 backdrop-blur-sm sm:px-4">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+        <button
+          type="button"
+          onClick={() => setMobileSidebarOpen(true)}
+          aria-label="Open navigation drawer"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent md:hidden"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
         <div ref={repoRef} className="relative">
           <button
+            ref={repoTriggerRef}
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={repoDropdownOpen}
+            aria-controls="repository-selector-options"
             onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
-            className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent transition-colors max-w-[200px]"
+            className="flex max-w-[150px] items-center gap-2 rounded-md border border-border px-2 py-1.5 text-sm transition-colors hover:bg-accent sm:max-w-[200px] sm:px-3"
           >
             <span className="text-muted-foreground truncate">
               {activeRepository ? activeRepository.name : 'No repository'}
@@ -104,7 +151,13 @@ export function TopBar() {
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           </button>
           {repoDropdownOpen && (
-            <div className="absolute top-full left-0 mt-1 w-64 rounded-lg border border-border bg-popover shadow-lg animate-scale-in z-50">
+            <div
+              ref={repoMenuRef}
+              id="repository-selector-options"
+              role="listbox"
+              aria-label="Repositories"
+              className="absolute top-full left-0 mt-1 w-64 rounded-lg border border-border bg-popover shadow-lg animate-scale-in z-50"
+            >
               <div className="p-2">
                 {repositories.length === 0 ? (
                   <p className="px-3 py-2 text-sm text-muted-foreground">No repositories uploaded</p>
@@ -112,9 +165,13 @@ export function TopBar() {
                   repositories.map((repo) => (
                     <button
                       key={repo.id}
+                      type="button"
+                      role="option"
+                      aria-selected={activeRepository?.id === repo.id}
                       onClick={() => {
                         selectRepository(repo);
                         setRepoDropdownOpen(false);
+                        repoTriggerRef.current?.focus();
                       }}
                       className={cn(
                         'w-full flex items-center justify-between rounded-md px-3 py-2 text-sm text-left hover:bg-accent transition-colors',
@@ -131,7 +188,7 @@ export function TopBar() {
           )}
         </div>
 
-        <div className="relative flex-1 max-w-md">
+        <div className="relative hidden max-w-md flex-1 md:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             ref={searchRef}
@@ -181,12 +238,12 @@ export function TopBar() {
           onClick={() => activeRepository?.sourceUrl && window.open(activeRepository.sourceUrl, '_blank', 'noopener,noreferrer')}
           disabled={!activeRepository?.sourceUrl}
           title={activeRepository?.sourceUrl ? 'Open repository source' : 'No GitHub URL available'}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="hidden h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 sm:flex"
         >
           <Github className="h-4 w-4" />
         </button>
 
-        <div ref={notifRef} className="relative">
+        <div ref={notifRef} className="relative hidden sm:block">
           <button
             onClick={() => setNotifOpen(!notifOpen)}
             className="relative flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"

@@ -5,6 +5,7 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useNodesInitialized,
   useReactFlow,
   ReactFlowProvider,
   type Node,
@@ -41,7 +42,7 @@ const nodeTypes = { architectureNode: ArchitectureNode };
  * graph is big enough, so legibility wins: the graph opens readable and the
  * minimap plus pan/zoom handle the overview.
  */
-const READABLE_MIN_ZOOM = 0.5;
+export const READABLE_MIN_ZOOM = 0.85;
 
 interface ArchWorkspaceInnerProps {
   model: ArchitectureModel;
@@ -94,16 +95,21 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const nodesInitialized = useNodesInitialized();
 
   useEffect(() => {
     const { nodes: newNodes, edges: newEdges } = getLayoutedElements(model.nodes, model.edges, layoutOptions);
     setNodes(newNodes);
     setEdges(newEdges);
+  }, [layoutOptions, model.nodes, model.edges, setNodes, setEdges]);
+
+  useEffect(() => {
+    if (!nodesInitialized) return;
     const frame = requestAnimationFrame(() =>
       reactFlowInstance.fitView({ padding: 0.12, duration: 300, minZoom: READABLE_MIN_ZOOM }),
     );
     return () => cancelAnimationFrame(frame);
-  }, [layoutOptions, model.nodes, model.edges, reactFlowInstance, setNodes, setEdges]);
+  }, [initialNodes, nodesInitialized, reactFlowInstance]);
 
   useEffect(() => {
     setNodes((nds) =>
@@ -193,6 +199,42 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
     closeContextMenu();
   }, [setSelectedNodeId, setInspectorOpen, closeContextMenu]);
 
+  const handleGraphKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Escape' && inspectorOpen) {
+        event.preventDefault();
+        setSelectedNodeId(null);
+        setInspectorOpen(false);
+        return;
+      }
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const active = document.activeElement as HTMLElement | null;
+      const focusedNode = active?.closest<HTMLElement>('.react-flow__node');
+      const nodeId = focusedNode?.dataset.id;
+      if (!nodeId) return;
+      event.preventDefault();
+      setSelectedNodeId(nodeId);
+      setInspectorOpen(true);
+    },
+    [inspectorOpen, setInspectorOpen, setSelectedNodeId],
+  );
+
+  const handleGraphFocus = useCallback(
+    (event: React.FocusEvent<HTMLDivElement>) => {
+      const focusedNode = (event.target as HTMLElement).closest<HTMLElement>('.react-flow__node');
+      const nodeId = focusedNode?.dataset.id;
+      if (!nodeId) return;
+      reactFlowInstance.fitView({
+        nodes: [{ id: nodeId }],
+        padding: 0.35,
+        minZoom: READABLE_MIN_ZOOM,
+        maxZoom: 1,
+        duration: 150,
+      });
+    },
+    [reactFlowInstance],
+  );
+
   const handleFitView = useCallback(() => {
     reactFlowInstance.fitView({ padding: 0.2, duration: 300, minZoom: READABLE_MIN_ZOOM });
   }, [reactFlowInstance]);
@@ -270,8 +312,8 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
     <div ref={containerRef} className="flex flex-col h-full bg-background">
       <ArchSummaryBar model={model} source={source} />
 
-      <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-border">
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-2 overflow-x-auto border-b border-border px-3 py-2 sm:px-4">
+        <div className="flex shrink-0 items-center gap-1">
           <TabButton active={activeTab === 'graph'} onClick={() => setActiveTab('graph')}>
             Architecture Graph
           </TabButton>
@@ -294,9 +336,17 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {explorerOpen && (activeTab === 'graph' || activeTab === 'heatmap') && <ModuleExplorer />}
+        {explorerOpen && (activeTab === 'graph' || activeTab === 'heatmap') && (
+          <div className="hidden md:block">
+            <ModuleExplorer />
+          </div>
+        )}
 
-        <div className="flex-1 relative flex flex-col">
+        <div
+          className="relative flex min-w-0 flex-1 flex-col"
+          onKeyDown={handleGraphKeyDown}
+          onFocusCapture={handleGraphFocus}
+        >
           <div className="flex-1 relative">
             {(activeTab === 'graph' || activeTab === 'heatmap') ? (
               <>
@@ -322,9 +372,7 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
                   onNodeMouseLeave={handleNodeMouseLeave}
                   onPaneClick={handlePaneClick}
                   nodeTypes={nodeTypes}
-                  fitView
-                  fitViewOptions={{ padding: 0.12, minZoom: READABLE_MIN_ZOOM }}
-                  minZoom={0.1}
+                  minZoom={0.25}
                   maxZoom={3}
                   proOptions={{ hideAttribution: true }}
                   // Keyboard access (#112): nodes are reachable with Tab and

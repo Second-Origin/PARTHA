@@ -91,7 +91,7 @@ export const ArchitectureNode = memo(({ data }: NodeProps<ArchFlowNode>) => {
       aria-current={data.isSelected ? 'true' : undefined}
       title={accessibleName}
       className={cn(
-        'relative h-[104px] w-[220px] rounded-lg border px-4 py-3 shadow-sm transition-all duration-200',
+        'relative h-[112px] w-[220px] rounded-lg border px-4 py-3 shadow-sm transition-all duration-200',
         config.bg,
         data.isSelected && 'ring-2 ring-primary shadow-lg scale-105',
         data.isHighlighted && !data.isSelected && 'ring-1 ring-primary/50 shadow-md',
@@ -109,22 +109,22 @@ export const ArchitectureNode = memo(({ data }: NodeProps<ArchFlowNode>) => {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
-            <p className="text-sm font-semibold text-foreground truncate">{data.label}</p>
+            <p data-testid="architecture-node-label" className="truncate text-sm font-semibold text-foreground">{data.label}</p>
             {data.isBookmarked && (
               <span className="text-amber-400 text-[10px]">*</span>
             )}
           </div>
-          <p className="text-2xs text-muted-foreground mt-0.5 truncate">
+          <p data-testid="architecture-node-type" className="mt-0.5 truncate text-xs text-muted-foreground">
             {formatLabel(data.nodeType)} · {formatLabel(data.layer)}
           </p>
-          <p className="text-2xs text-muted-foreground mt-0.5 line-clamp-1">{data.description}</p>
+          <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{data.description}</p>
           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
             {data.filesCount > 0 && (
-              <span className="text-2xs text-muted-foreground">{data.filesCount} files</span>
+              <span className="text-xs text-muted-foreground">{data.filesCount} files</span>
             )}
             <span
               className={cn(
-                'text-2xs px-1 py-0.5 rounded',
+                'rounded px-1 py-0.5 text-xs',
                 data.complexity === 'high' && 'bg-destructive/10 text-destructive',
                 data.complexity === 'medium' && 'bg-warning/10 text-warning',
                 data.complexity === 'low' && 'bg-success/10 text-success'
@@ -132,7 +132,7 @@ export const ArchitectureNode = memo(({ data }: NodeProps<ArchFlowNode>) => {
             >
               {data.complexity}
             </span>
-            <span className={cn('text-2xs px-1 py-0.5 rounded', relationshipStateConfig[data.relationshipState].className)}>
+            <span data-testid="architecture-node-trust" className={cn('rounded px-1 py-0.5 text-xs', relationshipStateConfig[data.relationshipState].className)}>
               {relationshipStateConfig[data.relationshipState].label}
             </span>
           </div>

@@ -10,8 +10,8 @@ export type ReviewEmptyReason = 'no-completed-repositories' | 'no-active-reposit
 
 export function useReview() {
   const { activeRepository, completedRepositories } = useRepository();
-  const { review: storeReview, setReview } = useReviewStore();
-  const [review, setLocalReview] = useState<EngineeringReview | null>(storeReview);
+  const { setReview, resetForRepository } = useReviewStore();
+  const [review, setLocalReview] = useState<EngineeringReview | null>(null);
   const [source, setSource] = useState<RepositorySource | null>(null);
   const [status, setStatus] = useState<FeatureStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +23,7 @@ export function useReview() {
     if (completedRepositories.length === 0) {
       setStatus('empty');
       setLocalReview(null);
+      setReview(null);
       setSource(null);
       setError(null);
       return;
@@ -31,12 +32,16 @@ export function useReview() {
     if (!activeRepository || activeRepository.status !== 'completed') {
       setStatus('empty');
       setLocalReview(null);
+      setReview(null);
       setSource(null);
       setError(null);
       return;
     }
 
     let cancelled = false;
+    resetForRepository();
+    setLocalReview(null);
+    setSource(null);
 
     async function loadReview() {
       if (!activeRepository) return;
@@ -65,7 +70,7 @@ export function useReview() {
     return () => {
       cancelled = true;
     };
-  }, [activeRepository, completedRepositories.length, refreshKey, setReview]);
+  }, [activeRepository, completedRepositories.length, refreshKey, resetForRepository, setReview]);
 
   const emptyReason: ReviewEmptyReason =
     status === 'empty'

@@ -40,6 +40,8 @@ export function RevisionManifestPanel({ repositoryId }: RevisionManifestPanelPro
 
   useEffect(() => {
     let cancelled = false;
+    setManifest(null);
+    setExpanded(false);
     setLoading(true);
     setError(null);
     architectureService

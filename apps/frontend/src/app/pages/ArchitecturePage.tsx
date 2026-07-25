@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Network, ShieldCheck } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ExternalLink, Network, ShieldCheck } from 'lucide-react';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
@@ -69,9 +69,16 @@ export function ArchitecturePage() {
 
   return (
     <div className="h-[calc(100vh-8rem)] -m-6 flex flex-col">
-      <div className="flex items-center justify-between border-b border-border px-6 py-3">
-        <h1 className="text-sm font-medium text-foreground">Architecture - {architecture.model.repositoryName}</h1>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-6">
+        <h1 className="min-w-0 truncate text-sm font-medium text-foreground">Architecture - {architecture.model.repositoryName}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/review"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            Engineering Review
+            <ExternalLink className="h-3 w-3" />
+          </Link>
           <button
             type="button"
             onClick={() => setAuthPanelOpen(true)}

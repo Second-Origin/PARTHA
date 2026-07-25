@@ -45,10 +45,7 @@ describe('product surface readiness contract', () => {
   });
 
   it('keeps every deferred surface out of primary navigation with internal roadmap metadata recorded', () => {
-    expect(deferredSurfaces.map((surface) => surface.id)).toEqual([
-      'engineering-review',
-      'insights',
-    ]);
+    expect(deferredSurfaces.map((surface) => surface.id)).toEqual([]);
 
     for (const surface of deferredSurfaces) {
       expect(surface.primaryNavigation).toBe(false);
@@ -89,7 +86,11 @@ describe('product surface readiness contract', () => {
   );
 
   it('records a user-facing limitation for every restored preview surface', () => {
-    expect(previewSurfaces.map((surface) => surface.id)).toEqual(['ai-workspace', 'documentation']);
+    expect(previewSurfaces.map((surface) => surface.id)).toEqual([
+      'dependencies',
+      'ai-workspace',
+      'documentation',
+    ]);
 
     for (const surface of previewSurfaces) {
       expect(surface.limitation.length).toBeGreaterThan(0);
@@ -98,6 +99,14 @@ describe('product surface readiness contract', () => {
       expect(surface.icon).toBeDefined();
       expect(surface.limitation).not.toMatch(FORBIDDEN_INTERNAL_TERMS);
     }
+  });
+
+  it('keeps Engineering Review and Insights restored in primary navigation', () => {
+    const review = productSurfaces.find((surface) => surface.id === 'engineering-review');
+    const insights = productSurfaces.find((surface) => surface.id === 'insights');
+
+    expect(review).toMatchObject({ readiness: 'ready', primaryNavigation: true, path: '/review' });
+    expect(insights).toMatchObject({ readiness: 'ready', primaryNavigation: true, path: '/insights' });
   });
 
   it.each(previewSurfaces)(
