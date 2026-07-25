@@ -13,10 +13,12 @@ cd apps/backend
 python3.13 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-python -m uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload --reload-dir app
 ```
 
 Or from the repository root: `npm run dev:backend` (prefers `apps/backend/.venv`, falls back to `python`).
+
+`--reload-dir app` restricts the reload watcher to backend source. Without it, uvicorn watches the whole `apps/backend` working directory, including `.local/storage` — the local filesystem storage the app itself writes to during ingestion and analysis — so an in-progress analysis job's own writes could trigger a server restart and drop open requests (#161). Migration files under `alembic/` are applied with an explicit `alembic upgrade` command, not hot-reloaded, so they are intentionally not watched.
 
 Local development defaults to SQLite at `.local/partha.db` and storage at `.local/storage`, so the app starts with no PostgreSQL and no Redis. **No `.env` file is required** — every setting has a working default. Copy `.env.example` to `.env` only to change one.
 
