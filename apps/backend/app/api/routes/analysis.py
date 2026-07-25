@@ -6,6 +6,7 @@ from app.api.deps import (
     get_current_user,
     get_evidence_source_service,
     require_repository_owner,
+    get_revision_manifest_service,
 )
 from app.api.openapi import documented_responses, suppress_automatic_validation_error
 from app.models.analysis_job import AnalysisJob
@@ -14,10 +15,16 @@ from app.schemas.architecture import ArchitectureResponse
 from app.schemas.authentication import AuthenticationExplanationResponse
 from app.schemas.dependencies import DependencyGraphResponse
 from app.schemas.evidence import EvidenceSourceResponse
+from app.schemas.manifest import (
+    RevisionManifestResponse,
+    RevisionManifestVerificationRequest,
+    RevisionManifestVerificationResponse,
+)
 from app.schemas.review import EngineeringReviewResponse
 from app.services.analysis_job_service import AnalysisJobService
 from app.services.analysis_service import AnalysisService
 from app.services.evidence_service import EvidenceSourceService
+from app.analysis.manifest import RevisionManifestService
 
 # Every analysis route requires auth; records are owner-scoped in the services.
 router = APIRouter(prefix="/analysis", tags=["analysis"], dependencies=[Depends(get_current_user)])
@@ -258,6 +265,87 @@ def get_evidence_source(
     service: EvidenceSourceService = Depends(get_evidence_source_service),
 ) -> EvidenceSourceResponse:
     return service.read(repository_id, snapshot_id, fact_id, path, start_line, end_line)
+
+
+_MANIFEST_EXAMPLE = {
+    "manifest": {
+        "schemaVersion": "revision-manifest.v1",
+        "repositoryId": _REPOSITORY_ID,
+        "revisionKind": "upload",
+        "revisionValue": "sha256:" + "0" * 64,
+        "revisionRef": None,
+        "snapshotId": "snap_example",
+        "snapshotSchemaVersion": "ri.v1",
+        "extractors": [
+            {"name": "typescript-extractor", "version": "1.0.0"},
+            {"name": "relationship-resolver", "version": "1.0.0"},
+        ],
+        "producerSetHash": "sha256:" + "1" * 64,
+        "configHash": "sha256:" + "2" * 64,
+        "canonicalGraphHash": "sha256:" + "3" * 64,
+        "createdAt": "2026-07-25T00:00:00Z",
+        "sealedAt": "2026-07-25T00:00:05Z",
+    },
+    "manifestDigest": "sha256:" + "4" * 64,
+    "verificationMethod": "sha256-canonical-json",
+    "verificationState": "verified",
+    "verificationNote": (
+        "This digest is a SHA-256 over the canonical JSON encoding of the manifest "
+        "fields above. It is a content hash, not a digital signature."
+    ),
+}
+
+
+@router.get(
+    "/{repository_id}/revision-manifest",
+    response_model=RevisionManifestResponse,
+    dependencies=[Depends(require_repository_owner)],
+    responses=documented_responses(
+        200,
+        "Verifiable identity of the sealed snapshot backing this repository's "
+        "evidence: revision, snapshot, extractor versions and canonical digest. "
+        "The digest is a canonical content hash, not a digital signature.",
+        _MANIFEST_EXAMPLE,
+        *_COMMON_ERRORS,
+    ),
+    openapi_extra=suppress_automatic_validation_error(),
+)
+def get_revision_manifest(
+    repository_id: str,
+    service: RevisionManifestService = Depends(get_revision_manifest_service),
+) -> RevisionManifestResponse:
+    return service.read(repository_id)
+
+
+@router.post(
+    "/{repository_id}/revision-manifest/verify",
+    response_model=RevisionManifestVerificationResponse,
+    dependencies=[Depends(require_repository_owner)],
+    responses=documented_responses(
+        200,
+        "Re-check a previously exported manifest against the stored snapshot. "
+        "Reports a mismatch when the supplied digest does not match the supplied "
+        "manifest, or when the manifest does not match stored facts.",
+        {
+            "verificationState": "verified",
+            "verificationMethod": "sha256-canonical-json",
+            "matchesStoredSnapshot": True,
+            "mismatchedFields": [],
+            "detail": "The manifest matches the sealed snapshot stored for this repository.",
+        },
+        401,
+        404,
+        422,
+        429,
+        500,
+    ),
+)
+def verify_revision_manifest(
+    repository_id: str,
+    request: RevisionManifestVerificationRequest,
+    service: RevisionManifestService = Depends(get_revision_manifest_service),
+) -> RevisionManifestVerificationResponse:
+    return service.verify(repository_id, request.manifest, request.manifest_digest)
 
 
 @router.get(

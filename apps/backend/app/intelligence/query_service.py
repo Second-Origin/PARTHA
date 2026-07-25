@@ -146,6 +146,16 @@ class SnapshotQueryService:
         value = (node.properties or {}).get("content_sha256") if node is not None else None
         return value if isinstance(value, str) else None
 
+    def latest_snapshot_for_owner(self, repository_id: str) -> RiSnapshot | None:
+        """Newest sealed snapshot for an owner-scoped repository, or ``None``.
+
+        Public entry point for consumers that need snapshot identity rather
+        than snapshot facts (#113). Owner scoping and the sealed-state filter
+        are the same ones every other consumer query uses.
+        """
+
+        return self._latest_snapshot(repository_id)
+
     def architecture_facts(self, repository_id: str) -> ArchitectureSnapshotFacts | None:
         """Return the newest sealed snapshot facts for an owner-scoped repository.
 

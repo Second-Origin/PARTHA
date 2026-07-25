@@ -5,6 +5,7 @@ import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { ArchWorkspace } from '@/features/architecture/components/ArchWorkspace';
 import { AuthenticationExplanationPanel } from '@/features/architecture/components/AuthenticationExplanationPanel';
+import { RevisionManifestPanel } from '@/features/architecture/components/RevisionManifestPanel';
 import { useArchitecture } from '@/features/architecture/hooks/useArchitecture';
 
 export function ArchitecturePage() {
@@ -78,6 +79,11 @@ export function ArchitecturePage() {
           </button>
           <ExportMenu repositoryId={architecture.model.repositoryId} target="architecture" label="Export Report" />
         </div>
+      </div>
+      {/* The manifest names the exact revision every citation below belongs
+          to, so it sits with the evidence rather than in a settings page. */}
+      <div className="mb-4">
+        <RevisionManifestPanel repositoryId={architecture.model.repositoryId} />
       </div>
       <div className="flex-1 min-h-0">
         <ArchWorkspace model={architecture.model} source={architecture.source} />

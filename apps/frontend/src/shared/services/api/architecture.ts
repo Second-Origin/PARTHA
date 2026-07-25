@@ -1,6 +1,11 @@
 import { api } from './client';
 import type { RequestConfig } from './client';
-import type { ArchitectureResponse, AuthenticationExplanationResponse, EvidenceSourceResponse } from './types';
+import type {
+  ArchitectureResponse,
+  AuthenticationExplanationResponse,
+  EvidenceSourceResponse,
+  RevisionManifestResponse,
+} from './types';
 
 export const architectureService = {
   getArchitecture(repositoryId: string, config?: RequestConfig): Promise<ArchitectureResponse> {
@@ -12,6 +17,10 @@ export const architectureService = {
     config?: RequestConfig,
   ): Promise<AuthenticationExplanationResponse> {
     return api.get(`/analysis/${repositoryId}/architecture/authentication`, config);
+  },
+
+  getRevisionManifest(repositoryId: string, config?: RequestConfig): Promise<RevisionManifestResponse> {
+    return api.get(`/analysis/${repositoryId}/revision-manifest`, config);
   },
 
   getEvidenceSource(

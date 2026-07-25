@@ -462,3 +462,35 @@ export interface ExportResponse {
   encoding: 'utf-8' | 'base64';
   content: string;
 }
+
+// Revision manifest (#113): the verifiable identity of the sealed snapshot an
+// answer was derived from. `manifestDigest` is a canonical content hash, not a
+// digital signature.
+export interface ManifestExtractor {
+  name: string;
+  version: string;
+}
+
+export interface RevisionManifest {
+  schemaVersion: 'revision-manifest.v1';
+  repositoryId: string;
+  revisionKind: 'git' | 'upload';
+  revisionValue: string;
+  revisionRef: string | null;
+  snapshotId: string;
+  snapshotSchemaVersion: string;
+  extractors: ManifestExtractor[];
+  producerSetHash: string;
+  configHash: string;
+  canonicalGraphHash: string | null;
+  createdAt: string;
+  sealedAt: string | null;
+}
+
+export interface RevisionManifestResponse {
+  manifest: RevisionManifest;
+  manifestDigest: string;
+  verificationMethod: string;
+  verificationState: 'verified' | 'mismatch' | 'unverifiable';
+  verificationNote: string;
+}

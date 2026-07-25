@@ -25,6 +25,7 @@ from app.core.database import get_db
 from app.core.exceptions import NotFoundError, UnauthorizedError
 from app.github.client import GitHubClient
 from app.graph.dependency_graph import DependencyGraphBuilder
+from app.analysis.manifest import RevisionManifestService
 from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.intelligence.query_service import SnapshotQueryService
 from app.models.repository import RepositoryRecord
@@ -146,6 +147,12 @@ def get_authentication_explanation_service(
     snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
 ) -> AuthenticationExplanationService:
     return AuthenticationExplanationService(snapshots)
+
+
+def get_revision_manifest_service(
+    snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
+) -> RevisionManifestService:
+    return RevisionManifestService(snapshots)
 
 
 def get_evidence_source_service(
