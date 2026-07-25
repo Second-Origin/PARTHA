@@ -21,7 +21,13 @@ ManifestSchemaVersion = Literal["revision-manifest.v1"]
 #: How ``manifestDigest`` is produced. Not a signature scheme.
 VERIFICATION_METHOD = "sha256-canonical-json"
 
-VerificationState = Literal["verified", "mismatch", "unverifiable"]
+#: ``verified``     the manifest matches the snapshot for the current revision.
+#: ``superseded``   the manifest matches a sealed snapshot it names, but that
+#:                  snapshot is no longer the repository's current revision.
+#:                  The manifest is authentic; only the repository moved on.
+#: ``mismatch``     the manifest does not match stored facts.
+#: ``unverifiable`` the snapshot is not sealed, so it has no revision identity.
+VerificationState = Literal["verified", "superseded", "mismatch", "unverifiable"]
 
 
 class ManifestExtractor(CamelModel):

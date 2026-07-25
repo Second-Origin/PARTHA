@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 import zipfile
+from collections import Counter
+from dataclasses import dataclass
 
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
 from app.models.repository import RepositoryRecord
@@ -41,6 +43,19 @@ def _upload(auth_client, files: dict[str, bytes], *, analyse: bool = True) -> di
         assert auth_client.post(f"/analysis/{repository['id']}/start").status_code == 200
         assert run_analysis_jobs() == 1
     return repository
+
+
+@dataclass(frozen=True)
+class _FileDiagnostic:
+    """A file-level diagnostic, as the extractors emit them: path, but no span."""
+
+    path: str
+    details: dict[str, object] | None = None
+    object_key: str | None = None
+
+    @property
+    def subject_key(self) -> str:
+        return f"file:{self.path}"
 
 
 def _assert_forbidden_score_fields(value) -> None:
@@ -114,7 +129,11 @@ def test_every_public_finding_has_same_snapshot_evidence_that_opens(auth_client)
     review = auth_client.get(f"/analysis/{repository['id']}/review").json()
 
     assert review["findings"], "fixture must produce a supported resolver diagnostic"
-    assert review["summary"]["unsupportedFindingCount"] == 0
+    # Resolver diagnostics carry their own span, so every finding here must be
+    # span-exact. A file-scoped finding in this fixture would mean support
+    # selection had fallen back to whole-file evidence.
+    assert review["summary"]["fileScopedFindingCount"] == 0
+    assert review["summary"]["evidenceBackedFindingCount"] == len(review["findings"])
     for finding in review["findings"]:
         assert finding["supportStatus"] == "supported"
         assert finding["snapshotId"] == review["snapshotId"]
@@ -176,6 +195,197 @@ def test_review_category_matrix_and_honest_empty_finding_state(auth_client):
     assert categories["dependency_declarations"]["state"] == "insufficient_evidence"
     assert categories["security_vulnerability_scanning"]["state"] == "not_assessed"
     assert all("score" not in item["explanation"].lower() for item in categories.values())
+
+
+def _seal_snapshot_with_file_diagnostic(auth_client, *, granularity: str) -> dict:
+    """Seal a snapshot whose only rule-matching diagnostic records no span.
+
+    ``RI-SRC-MALFORMED`` and ``RI-LIMIT-SKIP`` are file-level by construction:
+    the extractors emit them with a path and no span. The stored evidence for
+    that path decides whether such a diagnostic can be published at all, so the
+    fixture controls its granularity directly.
+    """
+
+    repository = _upload(auth_client, _EMPTY_SOURCES, analyse=False)
+
+    from app.core.database import SessionLocal
+
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        assert record is not None
+        store = SnapshotStore(session)
+        snapshot = store.begin(
+            repository_id=record.id,
+            revision=Revision(record.revision_kind, record.revision_value, record.revision_ref),
+            schema_version="ri.v1",
+            producer_version_set=["typescript-extractor@1.0.0", "repository-inventory@1.1.0"],
+        )
+        store.add_node(
+            snapshot,
+            node_kind="repository",
+            stable_key="repo:root",
+            name="repository",
+            language=None,
+            evidence=[
+                Evidence(
+                    path="README.md",
+                    start_line=1,
+                    end_line=1,
+                    logical_line_count=2,
+                    extractor="repository-inventory",
+                    extractor_version="1.1.0",
+                    granularity="file",
+                )
+            ],
+        )
+        store.add_node(
+            snapshot,
+            node_kind="file",
+            stable_key="file:src/app.ts",
+            name="app.ts",
+            language="TypeScript",
+            evidence=[
+                Evidence(
+                    path="src/app.ts",
+                    # Deliberately not line 1: if support selection ever borrows
+                    # this span for a span-less diagnostic, the finding would
+                    # point at lines the diagnostic never named.
+                    start_line=10,
+                    end_line=12,
+                    logical_line_count=40,
+                    extractor="typescript-extractor",
+                    extractor_version="1.0.0",
+                    granularity=granularity,
+                )
+            ],
+        )
+        store.add_diagnostic(
+            snapshot,
+            code="RI-SRC-MALFORMED",
+            category="malformed source",
+            severity="error",
+            message="file is not valid UTF-8 and could not be decoded",
+            producer="typescript-extractor@1.0.0",
+            path="src/app.ts",
+            span=None,
+            subject="file:src/app.ts",
+        )
+        store.seal(snapshot)
+
+    response = auth_client.get(f"/analysis/{repository['id']}/review")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_a_span_less_diagnostic_never_borrows_a_line_addressed_evidence_span(auth_client):
+    """A span-less diagnostic must not be published at someone else's span.
+
+    The only evidence for the path is a line-addressed span the diagnostic never
+    named. Publishing it would invent a location and still label the finding
+    `supported`, so the diagnostic has to be omitted and counted instead.
+    """
+
+    body = _seal_snapshot_with_file_diagnostic(auth_client, granularity="span")
+
+    assert body["findings"] == []
+    assert body["summary"]["evidenceBackedFindingCount"] == 0
+    assert body["summary"]["omittedUnsupportedDiagnosticCount"] >= 1
+    assert body["summary"]["fileScopedFindingCount"] == 0
+
+
+def test_a_file_level_diagnostic_is_published_as_file_scoped_not_as_span_exact(auth_client):
+    """File-granularity evidence supports the finding, and says so."""
+
+    body = _seal_snapshot_with_file_diagnostic(auth_client, granularity="file")
+
+    assert len(body["findings"]) == 1
+    finding = body["findings"][0]
+    assert finding["diagnosticCode"] == "RI-SRC-MALFORMED"
+    # The span is the file's own evidence record, and the support status states
+    # that it covers the file rather than the exact defect.
+    assert finding["supportStatus"] == "file_scoped"
+    assert finding["path"] == "src/app.ts"
+    assert (finding["startLine"], finding["endLine"]) == (10, 12)
+    assert body["summary"]["fileScopedFindingCount"] == 1
+    assert body["summary"]["evidenceBackedFindingCount"] == 1
+
+
+def test_review_evidence_reads_stay_within_the_sql_parameter_bound(client):
+    """Review reads must be batched, not sized by the repository.
+
+    Every id set the review binds grows with the number of diagnostics. Binding
+    them in one statement makes a large snapshot exceed SQLite's per-statement
+    parameter cap, so a review of a big repository fails with a database error
+    instead of returning. The id set here is deliberately larger than two
+    batches: an unbatched read would bind all of it in one statement and exceed
+    the asserted bound, so the assertion fails if the batching is removed.
+
+    The ``client`` fixture is taken only to create the schema these reads run
+    against, so the test does not depend on another test having run first.
+    """
+
+    from sqlalchemy import event
+
+    from app.core.database import SessionLocal
+    from app.intelligence.query_service import SNAPSHOT_IN_CLAUSE_BATCH_SIZE, SnapshotQueryService
+    from app.review.review_service import EngineeringReviewBuilder
+
+    identifier_count = SNAPSHOT_IN_CLAUSE_BATCH_SIZE * 2 + 1
+    diagnostics = [
+        _FileDiagnostic(path=f"src/module-{index:05d}.ts") for index in range(identifier_count)
+    ]
+
+    parameter_counts: list[int] = []
+
+    def record_parameters(_conn, _cursor, _statement, parameters, _context, executemany):
+        if not executemany and parameters is not None:
+            parameter_counts.append(len(parameters))
+
+    with SessionLocal() as session:
+        engine = session.get_bind()
+        event.listen(engine, "before_cursor_execute", record_parameters)
+        try:
+            builder = EngineeringReviewBuilder(SnapshotQueryService(session, "unused-owner"))
+            # No snapshot has this id, so the reads return nothing. What matters
+            # is the shape of the statements the builder issues to find that out.
+            builder._evidence_by_fact("snap_absent", diagnostics)
+        finally:
+            event.remove(engine, "before_cursor_execute", record_parameters)
+
+    assert parameter_counts, "expected to observe the evidence lookup's SQL parameters"
+    # One batch of ids plus the snapshot id and any other fixed predicates.
+    assert max(parameter_counts) <= SNAPSHOT_IN_CLAUSE_BATCH_SIZE + 8
+    # And the work was actually spread across batches rather than skipped.
+    assert len(parameter_counts) >= 3
+
+
+def test_assessment_status_is_derived_from_the_category_states(auth_client):
+    """The overall status must summarise the matrix, not assert a constant."""
+
+    from app.review.review_service import _overall_assessment_status
+
+    body = _seal_snapshot_with_file_diagnostic(auth_client, granularity="file")
+    summary = body["summary"]
+    states = Counter(category["state"] for category in body["categories"])
+
+    assert body["assessmentStatus"] == _overall_assessment_status(states)
+    assert states["assessed"] == summary["assessedCategories"]
+    assert states["not_assessed"] == summary["notAssessedCategories"]
+    # A matrix containing a not_assessed category cannot report full assessment.
+    assert summary["notAssessedCategories"] >= 1
+    assert body["assessmentStatus"] != "assessed"
+
+
+def test_overall_assessment_status_never_overstates_coverage():
+    from app.review.review_service import _overall_assessment_status
+
+    assert _overall_assessment_status(Counter({"assessed": 8})) == "assessed"
+    assert _overall_assessment_status(Counter({"assessed": 4, "not_assessed": 4})) == "partially_assessed"
+    assert _overall_assessment_status(Counter({"not_assessed": 8})) == "not_assessed"
+    assert (
+        _overall_assessment_status(Counter({"insufficient_evidence": 2, "not_assessed": 6}))
+        == "insufficient_evidence"
+    )
 
 
 def test_review_rejects_an_unsupported_snapshot_schema(auth_client):

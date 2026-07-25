@@ -37,12 +37,17 @@ Every finding includes:
 - human-readable explanation and deterministic remediation guidance;
 - snapshot, fact, evidence, extractor, diagnostic, and rule identity;
 - exact path and inclusive line span;
-- `supportStatus: supported`.
+- `supportStatus`: `supported` when the span is the diagnostic's own recorded
+  span, or `file_scoped` when the diagnostic named a file but no span.
 
-A diagnostic becomes a finding only when the exact fact and line-addressed evidence exist in
-the same snapshot. Unsupported diagnostics are omitted and counted. The category matrix uses
-`assessed`, `partially_assessed`, `not_assessed`, and `insufficient_evidence`. Vulnerability
-scanning is a visible `not_assessed` category.
+A diagnostic becomes a finding only when the same snapshot holds evidence that addresses it: a
+diagnostic with a span requires evidence at exactly that path and span, and a file-level
+diagnostic requires that file's own file-granularity evidence record and is published as
+`file_scoped` so a whole-file range is never presented as a line-addressed defect. A diagnostic
+whose location cannot be established is omitted and counted, never published at a borrowed
+span. The category matrix uses `assessed`, `partially_assessed`, `not_assessed`, and
+`insufficient_evidence`, and the overall `assessmentStatus` is derived from that matrix rather
+than fixed. Vulnerability scanning is a visible `not_assessed` category.
 
 No response or report contains an overall score, category score, grade, health percentage, or
 invented roadmap.

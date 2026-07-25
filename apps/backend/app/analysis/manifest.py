@@ -1,6 +1,5 @@
 """Build and verify revision manifests from sealed snapshots (#113)."""
 
-from app.core.exceptions import NotFoundError
 from app.intelligence.canonical import canonical_json_bytes, sha256_prefixed
 from app.intelligence.query_service import SnapshotQueryService
 from app.models.snapshot import RiSnapshot
@@ -77,22 +76,19 @@ class RevisionManifestService:
     def __init__(self, snapshots: SnapshotQueryService) -> None:
         self.snapshots = snapshots
 
-    def _latest_sealed(self, repository_id: str) -> RiSnapshot:
-        snapshot = self.snapshots.latest_snapshot_for_owner(repository_id)
-        if snapshot is None:
-            # Same shape as any other missing repository-derived resource: a
-            # repository owned by someone else is indistinguishable from one
-            # that has never been analysed.
-            raise NotFoundError(
-                "No sealed Repository Intelligence snapshot is available for this repository.",
-                {"repositoryId": repository_id},
-            )
-        return snapshot
+    def _current_revision_snapshot(self, repository_id: str) -> RiSnapshot:
+        # The same resolution Review and Insights use, so the manifest always
+        # names the revision those surfaces describe. Resolving "latest sealed"
+        # independently let the manifest advertise a superseded revision while
+        # Review and Insights reported 404 for the current one. A repository
+        # owned by someone else stays indistinguishable from one that has never
+        # been analysed.
+        return self.snapshots.require_sealed_snapshot_for_current_revision(repository_id)
 
     def read(self, repository_id: str) -> RevisionManifestResponse:
-        snapshot = self._latest_sealed(repository_id)
+        snapshot = self._current_revision_snapshot(repository_id)
         manifest = build_manifest(snapshot)
-        sealed = snapshot.canonical_graph_hash is not None and snapshot.state == "completed"
+        sealed = snapshot.canonical_graph_hash is not None
         return RevisionManifestResponse(
             manifest=manifest,
             manifest_digest=manifest_digest(manifest),
@@ -114,30 +110,44 @@ class RevisionManifestService:
         even if the digest was left alone), and the submitted body has to equal
         the manifest rebuilt from the stored snapshot (so a self-consistent but
         fabricated manifest is caught too).
+
+        The comparison is against the snapshot the manifest *names*, not against
+        whichever snapshot is newest. A manifest kept from before a re-analysis
+        is authentic and must be reported as authentic; calling it a mismatch
+        would tell a user their evidence had been altered when only the
+        repository moved on. That case is ``superseded``, and it is reported
+        separately from tampering.
         """
 
-        snapshot = self._latest_sealed(repository_id)
-        stored = build_manifest(snapshot)
+        current = self._current_revision_snapshot(repository_id)
 
         recomputed = manifest_digest(submitted)
-        digest_matches = recomputed == submitted_digest
-
-        stored_fields = stored.model_dump(mode="json", by_alias=True)
-        submitted_fields = submitted.model_dump(mode="json", by_alias=True)
-        mismatched = sorted(
-            key for key in stored_fields if stored_fields[key] != submitted_fields.get(key)
-        )
-
-        if not digest_matches:
+        if recomputed != submitted_digest:
+            # Reported before any lookup: a body that does not match its own
+            # digest has been altered regardless of which snapshot it names.
             return RevisionManifestVerificationResponse(
                 verification_state="mismatch",
                 matches_stored_snapshot=False,
-                mismatched_fields=mismatched,
+                mismatched_fields=self._mismatched_fields(build_manifest(current), submitted),
                 detail=(
                     "The supplied digest is not the digest of the supplied manifest. "
                     "The manifest content has been altered."
                 ),
             )
+
+        named = self.snapshots.sealed_snapshot_for_owner(repository_id, submitted.snapshot_id)
+        if named is None:
+            return RevisionManifestVerificationResponse(
+                verification_state="mismatch",
+                matches_stored_snapshot=False,
+                mismatched_fields=self._mismatched_fields(build_manifest(current), submitted),
+                detail=(
+                    "This repository has no sealed snapshot with the identity this manifest "
+                    "names, so the manifest cannot be confirmed against stored facts."
+                ),
+            )
+
+        mismatched = self._mismatched_fields(build_manifest(named), submitted)
         if mismatched:
             return RevisionManifestVerificationResponse(
                 verification_state="mismatch",
@@ -148,9 +158,28 @@ class RevisionManifestService:
                     "snapshot stored for this repository."
                 ),
             )
+        if named.snapshot_id != current.snapshot_id:
+            return RevisionManifestVerificationResponse(
+                verification_state="superseded",
+                matches_stored_snapshot=True,
+                mismatched_fields=[],
+                detail=(
+                    "The manifest matches a sealed snapshot stored for this repository, but "
+                    "that snapshot is no longer the current revision. It remains a valid "
+                    "record of the revision it names."
+                ),
+            )
         return RevisionManifestVerificationResponse(
             verification_state="verified",
             matches_stored_snapshot=True,
             mismatched_fields=[],
             detail="The manifest matches the sealed snapshot stored for this repository.",
+        )
+
+    @staticmethod
+    def _mismatched_fields(stored: RevisionManifest, submitted: RevisionManifest) -> list[str]:
+        stored_fields = stored.model_dump(mode="json", by_alias=True)
+        submitted_fields = submitted.model_dump(mode="json", by_alias=True)
+        return sorted(
+            key for key in stored_fields if stored_fields[key] != submitted_fields.get(key)
         )

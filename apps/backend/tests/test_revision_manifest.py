@@ -13,6 +13,7 @@ import io
 import zipfile
 
 from app.analysis.manifest import build_manifest, manifest_digest
+from app.intelligence.snapshot_store import Evidence
 from app.models.repository import RepositoryRecord
 
 from tests.analysis_helpers import run_analysis_jobs
@@ -173,6 +174,110 @@ def test_manifest_rehashed_after_tampering_still_fails_against_stored_facts(auth
     assert body["verificationState"] == "mismatch"
     assert body["matchesStoredSnapshot"] is False
     assert "canonicalGraphHash" in body["mismatchedFields"]
+
+
+def test_a_manifest_naming_a_superseded_snapshot_is_authentic_not_a_mismatch(auth_client):
+    """An exported manifest must survive an extractor upgrade.
+
+    A repository revision is immutable and re-analysis is content-addressed, so
+    the snapshot identity for one record changes only when the producer set or
+    config changes -- an extractor upgrade. The manifest a user exported before
+    that upgrade still describes a snapshot this deployment stores, so it is
+    authentic. Comparing it against whichever snapshot is merely *newest* would
+    report `mismatch`, telling the user their evidence had been altered when
+    nothing had been. That case is `superseded`.
+    """
+
+    repository = _analysed_repository(auth_client)
+    exported = auth_client.get(f"/analysis/{repository['id']}/revision-manifest").json()
+    original_snapshot_id = exported["manifest"]["snapshotId"]
+
+    # Seal a second snapshot for the same immutable revision under a newer
+    # extractor version, which is what upgrading a producer does.
+    from app.core.database import SessionLocal
+    from app.intelligence.snapshot_store import Revision, SnapshotStore
+
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        assert record is not None
+        store = SnapshotStore(session)
+        snapshot = store.begin(
+            repository_id=record.id,
+            revision=Revision(record.revision_kind, record.revision_value, record.revision_ref),
+            schema_version="ri.v1",
+            producer_version_set=["repository-inventory@9.9.9"],
+        )
+        store.add_node(
+            snapshot,
+            node_kind="repository",
+            stable_key="repo:root",
+            name="repository",
+            language=None,
+            evidence=[
+                Evidence(
+                    path="README.md",
+                    start_line=1,
+                    end_line=1,
+                    logical_line_count=2,
+                    extractor="repository-inventory",
+                    extractor_version="9.9.9",
+                    granularity="file",
+                )
+            ],
+        )
+        superseding_id = store.seal(snapshot).snapshot_id
+        session.commit()
+
+    assert superseding_id != original_snapshot_id
+    # The surface now publishes the newer snapshot, so a fresh read and the
+    # older export legitimately disagree about snapshot identity.
+    current = auth_client.get(f"/analysis/{repository['id']}/revision-manifest").json()
+    assert current["manifest"]["snapshotId"] == superseding_id
+    assert current["manifest"]["revisionValue"] == exported["manifest"]["revisionValue"]
+
+    verify = auth_client.post(
+        f"/analysis/{repository['id']}/revision-manifest/verify",
+        json={"manifest": exported["manifest"], "manifestDigest": exported["manifestDigest"]},
+    )
+
+    assert verify.status_code == 200, verify.text
+    body = verify.json()
+    assert body["verificationState"] == "superseded"
+    # Authentic: it matches the snapshot it names, which this deployment stores.
+    assert body["matchesStoredSnapshot"] is True
+    assert body["mismatchedFields"] == []
+
+    # Tampering is still caught while a superseded snapshot is the named one.
+    forged = dict(exported["manifest"])
+    forged["canonicalGraphHash"] = "sha256:" + "b" * 64
+    tampered = auth_client.post(
+        f"/analysis/{repository['id']}/revision-manifest/verify",
+        json={"manifest": forged, "manifestDigest": exported["manifestDigest"]},
+    ).json()
+    assert tampered["verificationState"] == "mismatch"
+    assert tampered["matchesStoredSnapshot"] is False
+
+
+def test_a_manifest_naming_an_unknown_snapshot_is_a_mismatch(auth_client):
+    """A fabricated snapshot identity must not pass as superseded."""
+
+    repository = _analysed_repository(auth_client)
+    exported = auth_client.get(f"/analysis/{repository['id']}/revision-manifest").json()
+
+    from app.schemas.manifest import RevisionManifest
+
+    forged = dict(exported["manifest"])
+    forged["snapshotId"] = "snap_" + "0" * 32
+    forged_digest = manifest_digest(RevisionManifest.model_validate(forged))
+
+    body = auth_client.post(
+        f"/analysis/{repository['id']}/revision-manifest/verify",
+        json={"manifest": forged, "manifestDigest": forged_digest},
+    ).json()
+
+    assert body["verificationState"] == "mismatch"
+    assert body["matchesStoredSnapshot"] is False
+    assert "snapshotId" in body["mismatchedFields"]
 
 
 def test_another_owner_cannot_retrieve_or_verify_the_manifest(auth_client, make_auth_headers):

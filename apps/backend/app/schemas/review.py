@@ -31,6 +31,13 @@ ReviewCategoryId = Literal[
     "repository_structure",
     "analysis_integrity",
 ]
+#: How precisely the finding's evidence addresses the diagnostic.
+#:
+#: ``supported``    the evidence span is the diagnostic's own recorded span.
+#: ``file_scoped``  the diagnostic named a file but recorded no span, so the
+#:                  evidence is that file's file-granularity record and the
+#:                  reported lines cover the whole file, not the exact defect.
+ReviewSupportStatus = Literal["supported", "file_scoped"]
 
 
 class ReviewProvenance(CamelModel):
@@ -68,7 +75,7 @@ class ReviewFinding(CamelModel):
     diagnostic_code: str
     rule_id: str
     remediation_guidance: str
-    support_status: Literal["supported"] = "supported"
+    support_status: ReviewSupportStatus = "supported"
     provenance: ReviewProvenance
     evidence: ReviewEvidenceReference
 
@@ -97,7 +104,12 @@ class ReviewSummary(CamelModel):
     not_assessed_categories: int
     insufficient_evidence_categories: int
     evidence_backed_finding_count: int
-    unsupported_finding_count: int = 0
+    #: Findings whose evidence covers the whole named file because the
+    #: diagnostic recorded no span. A subset of
+    #: ``evidence_backed_finding_count``, not an addition to it.
+    file_scoped_finding_count: int = 0
+    #: Diagnostics deliberately not published: no rule, or no evidence in this
+    #: snapshot that addresses them.
     omitted_unsupported_diagnostic_count: int = 0
     vulnerability_scanning: Literal["not_assessed"] = "not_assessed"
 

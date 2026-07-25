@@ -5,7 +5,6 @@ from __future__ import annotations
 from sqlalchemy import func, select
 
 from app.analysis.manifest import build_manifest, manifest_digest
-from app.core.exceptions import NotFoundError
 from app.intelligence.query_service import SnapshotQueryService
 from app.models.repository import RepositoryRecord
 from app.models.snapshot import RiDiagnostic, RiEdge, RiEvidence, RiNode
@@ -30,26 +29,7 @@ class RepositoryInsightsBuilder:
         self.snapshots = snapshots
 
     def build(self, record: RepositoryRecord) -> RepositoryInsightsResponse:
-        snapshot = self.snapshots.latest_snapshot_for_owner(record.id)
-        if snapshot is None:
-            raise NotFoundError(
-                "No sealed Repository Intelligence snapshot is available for this repository.",
-                {"repositoryId": record.id},
-            )
-        if (
-            snapshot.repository_id != record.id
-            or snapshot.revision_kind != record.revision_kind
-            or snapshot.revision_value != record.revision_value
-        ):
-            raise NotFoundError(
-                "The sealed snapshot does not match the selected repository revision.",
-                {"repositoryId": record.id, "snapshotId": snapshot.snapshot_id},
-            )
-        if snapshot.canonical_graph_hash is None or snapshot.sealed_at is None:
-            raise NotFoundError(
-                "The selected repository revision has no sealed snapshot.",
-                {"repositoryId": record.id},
-            )
+        snapshot = self.snapshots.require_sealed_snapshot_for_current_revision(record.id)
 
         snapshot_id = snapshot.snapshot_id
         provenance = InsightProvenance(
@@ -123,9 +103,11 @@ class RepositoryInsightsBuilder:
         }
 
         eligible_files = {
-            node.stable_key.removeprefix("file:")
-            for node in self.snapshots.db.scalars(
-                select(RiNode).where(
+            stable_key.removeprefix("file:")
+            for stable_key in self.snapshots.db.scalars(
+                # Only the key is needed, so the row is not hydrated: this set
+                # is one entry per source file in the repository.
+                select(RiNode.stable_key).where(
                     RiNode.snapshot_id == snapshot_id,
                     RiNode.node_kind == "file",
                     RiNode.language.is_not(None),

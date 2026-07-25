@@ -491,6 +491,6 @@ export interface RevisionManifestResponse {
   manifest: RevisionManifest;
   manifestDigest: string;
   verificationMethod: string;
-  verificationState: 'verified' | 'mismatch' | 'unverifiable';
+  verificationState: 'verified' | 'superseded' | 'mismatch' | 'unverifiable';
   verificationNote: string;
 }

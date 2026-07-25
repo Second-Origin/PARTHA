@@ -1,6 +1,7 @@
 """Read-only, owner-scoped queries over sealed ``ri.v1`` snapshots (#92)."""
 
 from collections import defaultdict
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import and_, func, or_, select
@@ -51,7 +52,19 @@ ARCHITECTURE_NODE_KINDS = frozenset({"file", "dependency", "repository"})
 #: The only assertion predicate the architecture consumer reads (file role
 #: classification). Others stay in the snapshot and are simply not loaded here.
 ARCHITECTURE_ASSERTION_PREDICATES = frozenset({"classified_as"})
-ARCHITECTURE_EVIDENCE_BATCH_SIZE = 500
+#: Upper bound on ids bound into a single ``IN`` clause. SQLite caps bound
+#: parameters per statement (999 before 3.32, 32766 after), so any read whose
+#: id set grows with repository size must be split into batches rather than
+#: trusting the set to stay small.
+SNAPSHOT_IN_CLAUSE_BATCH_SIZE = 500
+ARCHITECTURE_EVIDENCE_BATCH_SIZE = SNAPSHOT_IN_CLAUSE_BATCH_SIZE
+
+
+def batched_ids[T](values: Sequence[T], size: int = SNAPSHOT_IN_CLAUSE_BATCH_SIZE) -> Iterator[list[T]]:
+    """Yield ``values`` in ``size``-sized lists for bounded ``IN`` clauses."""
+
+    for start in range(0, len(values), size):
+        yield list(values[start : start + size])
 
 
 @dataclass(frozen=True)
@@ -155,6 +168,77 @@ class SnapshotQueryService:
         """
 
         return self._latest_snapshot(repository_id)
+
+    def require_sealed_snapshot_for_current_revision(self, repository_id: str) -> RiSnapshot:
+        """Newest sealed snapshot bound to the repository's *current* revision.
+
+        Every product surface that publishes snapshot identity must agree on
+        which snapshot it is describing. Resolving "latest sealed" alone is not
+        enough: after a re-import the newest sealed snapshot can belong to the
+        previous revision, and a surface that rendered it would present stale
+        facts under the current revision's name. Consumers therefore share this
+        one resolution, so Architecture, Review, Insights and the revision
+        manifest cannot disagree about the revision under review.
+
+        Raises ``NotFoundError`` rather than returning ``None`` so a repository
+        owned by someone else stays indistinguishable from one that has never
+        been analysed.
+        """
+
+        from app.models.repository import RepositoryRecord
+
+        snapshot = self._latest_snapshot(repository_id)
+        if snapshot is None:
+            raise NotFoundError(
+                "No sealed Repository Intelligence snapshot is available for this repository.",
+                {"repositoryId": repository_id},
+            )
+        record = self.db.get(RepositoryRecord, repository_id)
+        if (
+            record is None
+            or snapshot.repository_id != record.id
+            or snapshot.revision_kind != record.revision_kind
+            or snapshot.revision_value != record.revision_value
+        ):
+            # Fail closed even if persistence constraints are bypassed or a test
+            # double supplies mismatched facts.
+            raise NotFoundError(
+                "The sealed snapshot does not match the selected repository revision.",
+                {"repositoryId": repository_id, "snapshotId": snapshot.snapshot_id},
+            )
+        if snapshot.canonical_graph_hash is None or snapshot.sealed_at is None:
+            raise NotFoundError(
+                "The selected repository revision has no sealed snapshot.",
+                {"repositoryId": repository_id},
+            )
+        return snapshot
+
+    def sealed_snapshot_for_owner(self, repository_id: str, snapshot_id: str) -> RiSnapshot | None:
+        """One named sealed snapshot of an owner-scoped repository, or ``None``.
+
+        Verification needs the snapshot a submitted manifest actually names, not
+        whichever snapshot happens to be newest, so an authentic manifest for a
+        superseded revision can be recognised as authentic.
+        """
+
+        from app.models.repository import RepositoryRecord
+
+        snapshot = self.db.scalars(
+            select(RiSnapshot)
+            .join(RepositoryRecord, RepositoryRecord.id == RiSnapshot.repository_id)
+            .where(
+                RiSnapshot.repository_id == repository_id,
+                RiSnapshot.snapshot_id == snapshot_id,
+                RiSnapshot.state == "completed",
+                RepositoryRecord.owner_id == self.owner_id,
+            )
+        ).first()
+        if snapshot is not None and snapshot.schema_version not in self.supported_schema_versions:
+            raise UnsupportedSchemaVersionError(
+                f"Unsupported snapshot schema version: {snapshot.schema_version}.",
+                details={"received": snapshot.schema_version, "supported": list(self.supported_schema_versions)},
+            )
+        return snapshot
 
     def architecture_facts(self, repository_id: str) -> ArchitectureSnapshotFacts | None:
         """Return the newest sealed snapshot facts for an owner-scoped repository.

@@ -83,7 +83,7 @@ function review(repositoryId: string): EngineeringReview {
       notAssessedCategories: 1,
       insufficientEvidenceCategories: 0,
       evidenceBackedFindingCount: 0,
-      unsupportedFindingCount: 0,
+      fileScopedFindingCount: 0,
       omittedUnsupportedDiagnosticCount: 0,
       vulnerabilityScanning: 'not_assessed',
     },

@@ -107,6 +107,12 @@ export function FindingDetail({ repositoryId, finding, onClose }: FindingDetailP
               {finding.path}:{finding.startLine}
               {finding.endLine !== finding.startLine ? `-${finding.endLine}` : ''}
             </Link>
+            {finding.supportStatus === 'file_scoped' && (
+              <p className="mt-2 text-[10px] leading-relaxed text-amber-400">
+                This diagnostic applies to the whole file. The lines above are the file's
+                evidence record, not the exact location of the problem.
+              </p>
+            )}
             <dl className="mt-3 space-y-2 text-[10px] text-muted-foreground">
               <Field label="Fact ID" value={finding.factId} />
               <Field label="Evidence ID" value={finding.evidenceId} />
@@ -124,7 +130,9 @@ export function FindingDetail({ repositoryId, finding, onClose }: FindingDetailP
           <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
             <p className="text-xs text-muted-foreground">
-              This finding is shown because its fact and source span belong to the selected sealed snapshot.
+              {finding.supportStatus === 'file_scoped'
+                ? "This finding is shown because its fact and the named file's evidence record belong to the selected sealed snapshot."
+                : 'This finding is shown because its fact and source span belong to the selected sealed snapshot.'}
             </p>
           </div>
         </div>

@@ -15,6 +15,15 @@ export type ReviewCategory =
   | 'repository_structure'
   | 'analysis_integrity';
 
+/**
+ * How precisely a finding's evidence addresses its diagnostic.
+ *
+ * `supported`   the reported lines are the diagnostic's own recorded span.
+ * `file_scoped` the diagnostic named a file but no span, so the reported lines
+ *               cover the whole file rather than the exact defect.
+ */
+export type ReviewSupportStatus = 'supported' | 'file_scoped';
+
 export interface ReviewProvenance {
   source: 'ri.v1';
   snapshotId: string;
@@ -50,7 +59,7 @@ export interface ReviewFinding {
   diagnosticCode: string;
   ruleId: string;
   remediationGuidance: string;
-  supportStatus: 'supported';
+  supportStatus: ReviewSupportStatus;
   provenance: ReviewProvenance;
   evidence: ReviewEvidenceReference;
 }
@@ -79,7 +88,8 @@ export interface ReviewSummary {
   notAssessedCategories: number;
   insufficientEvidenceCategories: number;
   evidenceBackedFindingCount: number;
-  unsupportedFindingCount: number;
+  /** Subset of evidenceBackedFindingCount scoped to a whole file, not a span. */
+  fileScopedFindingCount: number;
   omittedUnsupportedDiagnosticCount: number;
   vulnerabilityScanning: 'not_assessed';
 }
