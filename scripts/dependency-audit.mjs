@@ -2,18 +2,25 @@
 /**
  * Policy-aware frontend dependency audit gate (#154).
  *
- * `npm audit` alone is a poor gate: it fails on advisories that cannot be
- * fixed, and it treats a build-tool transitive the same as something shipped
- * to a browser. This wraps it with two ideas:
+ * `npm audit` alone is a poor gate: it exits non-zero on advisories whose fix
+ * is a major migration, and it treats a build-tool transitive the same as
+ * something shipped to a browser. This wraps it with two ideas:
  *
  *  1. Runtime exposure is separated from development-only exposure, by running
  *     the audit a second time with `--omit=dev`. Anything present in the full
  *     audit but absent from the runtime audit reaches only developer machines
  *     and CI, never a user's browser.
  *
- *  2. An advisory may be acknowledged, but only with a written reason and a
- *     review date. An expired acknowledgement fails the build, so "we looked at
- *     this once" cannot silently become "we stopped looking".
+ *  2. An advisory may be acknowledged, but the acknowledgement stays valid only
+ *     while what it described is still true. It fails the build when it
+ *     expires, when the advisory stops naming the accepted package, when the
+ *     lockfile moves the accepted package to a different version, when our own
+ *     source starts touching the affected surface, or when the advisory
+ *     disappears entirely and the exception is left behind.
+ *
+ * npm's "No fix available" means npm cannot apply a fix automatically -- often
+ * because the fix is a major version bump. It does NOT mean no patched release
+ * exists. Record the real patched version in the policy.
  *
  * Note on invocation: the repository root declares npm workspaces but has no
  * lockfile, so `npm audit` from the root or from apps/frontend fails with
@@ -22,7 +29,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -77,6 +84,100 @@ function advisories(report) {
   return found;
 }
 
+/** Version of a package as pinned by the frontend lockfile, or null. */
+function lockedVersion(name) {
+  const lock = JSON.parse(readFileSync(join(repoRoot, 'apps', 'frontend', 'package-lock.json'), 'utf8'));
+  return lock.packages?.[`node_modules/${name}`]?.version ?? null;
+}
+
+/**
+ * Source files under a policy root, so a reachability guard can be evaluated
+ * against our own code rather than against the dependency tree.
+ */
+function sourceFiles(root) {
+  const found = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(entry.name)) found.push(full);
+    }
+  };
+  try {
+    walk(join(repoRoot, root));
+  } catch {
+    return [];
+  }
+  return found;
+}
+
+/**
+ * An acknowledgement is only valid while the thing it described is still the
+ * thing in front of us. Anything else means a human needs to look again.
+ */
+function validateAcknowledgement(entry, advisory, today) {
+  const problems = [];
+
+  if (entry.reviewBy < today) {
+    problems.push(`acknowledgement expired on ${entry.reviewBy}; re-review it`);
+  }
+
+  // Identity: the advisory must still concern the package we accepted it for.
+  if (entry.package && !advisory.packages.has(entry.package)) {
+    problems.push(
+      `acknowledgement names package "${entry.package}" but the advisory now affects ` +
+        `${[...advisory.packages].join(', ')}; re-review it`,
+    );
+  }
+
+  // Version drift: accepting a risk for one version is not accepting it for
+  // whatever the lockfile drifts to next.
+  if (entry.acceptedVersion) {
+    const installed = lockedVersion(entry.package);
+    if (installed === null) {
+      problems.push(`"${entry.package}" is no longer in the lockfile; remove the acknowledgement`);
+    } else if (installed !== entry.acceptedVersion) {
+      problems.push(
+        `accepted for ${entry.package}@${entry.acceptedVersion} but the lockfile now pins ` +
+          `${installed}; re-review it`,
+      );
+    }
+  }
+
+  // Reachability: the acceptance rests on us not using the affected surface.
+  // If that stops being true, the acceptance stops being valid.
+  const reachability = entry.reachability;
+  if (reachability?.forbiddenPatterns?.length) {
+    const hits = [];
+    for (const root of reachability.roots || []) {
+      for (const file of sourceFiles(root)) {
+        const text = readFileSync(file, 'utf8');
+        for (const pattern of reachability.forbiddenPatterns) {
+          if (text.includes(pattern)) {
+            hits.push(`${file.replace(`${repoRoot}/`, '')} uses "${pattern}"`);
+          }
+        }
+      }
+    }
+    if (hits.length) {
+      problems.push(
+        `the accepted advisory may now be reachable; the acceptance assumed otherwise:\n      ` +
+          hits.slice(0, 10).join('\n      '),
+      );
+    }
+  }
+
+  return problems;
+}
+
+export { advisories, validateAcknowledgement };
+
+// Importing this module (from its tests) must not run the audit.
+if (process.argv[1] !== fileURLToPath(import.meta.url)) {
+  // eslint-disable-next-line no-empty-function
+} else {
+
 const policy = JSON.parse(readFileSync(policyPath, 'utf8'));
 const acknowledged = new Map((policy.acknowledged || []).map((entry) => [entry.id, entry]));
 
@@ -95,8 +196,9 @@ for (const [id, advisory] of full) {
   const label = `${advisory.severity.padEnd(8)} ${scope.padEnd(16)} ${id} ${advisory.title}`;
 
   if (acknowledgement) {
-    if (acknowledgement.reviewBy < today) {
-      failures.push(`${label}\n    acknowledgement expired on ${acknowledgement.reviewBy}; re-review it`);
+    const problems = validateAcknowledgement(acknowledgement, advisory, today);
+    if (problems.length) {
+      failures.push(`${label}\n    ${problems.join('\n    ')}`);
     } else {
       accepted.push(`${label}\n    accepted until ${acknowledgement.reviewBy}: ${acknowledgement.reason}`);
     }
@@ -132,3 +234,4 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(`\nNo blocking findings (${accepted.length} accepted).`);
+}

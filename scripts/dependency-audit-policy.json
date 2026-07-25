@@ -2,16 +2,35 @@
   "$comment": [
     "Reviewed exceptions for scripts/dependency-audit.mjs.",
     "An entry needs a reason a reviewer can check and a reviewBy date.",
-    "Past its reviewBy date the build fails, so an exception cannot be forgotten.",
-    "Removing the vulnerable dependency also requires removing its entry: a stale",
-    "acknowledgement fails the build too."
+    "The build fails if the acceptance expires, if the advisory or package identity stops",
+    "matching, if the accepted package version changes without review, or if the affected",
+    "functionality becomes reachable in our own source. Removing the vulnerable dependency",
+    "also requires removing its entry: a stale acknowledgement fails the build too."
   ],
   "acknowledged": [
     {
       "id": "GHSA-qwww-vcr4-c8h2",
       "package": "react-router",
       "severity": "high",
-      "reason": "RSC Mode CSRF bypass. PARTHA is a client-only Vite SPA that mounts createBrowserRouter; React Router RSC mode is never enabled, so the vulnerable code path is not reachable. No fixed release exists at any version: 7.12.0-8.3.0 are affected and npm reports 'No fix available', while downgrading below 7.12.0 reintroduces the open-redirect advisories GHSA-wrjc-x8rr-h8h6 and GHSA-jjmj-jmhj-qwj2 that do affect this app. Upgraded to 7.18.1 to fix those two and accepted this one.",
+      "acceptedVersion": "7.18.1",
+      "patchedVersion": "8.3.0",
+      "advisoryUrl": "https://github.com/advisories/GHSA-qwww-vcr4-c8h2",
+      "reason": "GitHub lists React Router 8.3.0 as patched (affected >=7.12.0 <8.3.0). PARTHA temporarily remains on 7.18.1 because the patched major version has not yet been validated against the current React 18 prototype: react-router@8.3.0 declares peerDependencies react>=19.2.7 and react-dom>=19.2.7, and react-router-dom has no 8.x release at all (latest 7.18.1), so adopting it means a React 19 migration plus moving all 33 react-router-dom import sites. The affected behavior is restricted to unstable RSC APIs, which PARTHA does not import or enable; PARTHA is a client-only Vite SPA mounting createBrowserRouter with no server-side React Router runtime. This acceptance expires on 2026-10-01 and does not claim that no patched version exists.",
+      "reachability": {
+        "description": "Fails if our own source starts using an unstable or server-side React Router surface, which is the only way the advisory becomes reachable.",
+        "roots": ["apps/frontend/src"],
+        "forbiddenPatterns": [
+          "unstable_",
+          "createStaticHandler",
+          "createStaticRouter",
+          "StaticRouterProvider",
+          "deserializeErrors",
+          "react-router/server",
+          "@react-router/node",
+          "@react-router/express",
+          "@react-router/serve"
+        ]
+      },
       "reviewBy": "2026-10-01"
     }
   ]
