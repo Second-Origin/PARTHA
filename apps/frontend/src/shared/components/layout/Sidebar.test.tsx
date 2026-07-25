@@ -41,20 +41,26 @@ describe('Sidebar', () => {
     expect(screen.queryByText('Free Plan')).not.toBeInTheDocument();
   });
 
-  it('derives primary navigation from the current ready product surfaces', () => {
+  it('derives primary navigation from the current navigable product surfaces', () => {
     renderSidebar();
 
-    expect(screen.getAllByRole('link', { name: /Dashboard|Repositories|Upload Repository|Architecture|Dependency Graph|Settings/ }))
-      .toHaveLength(6);
+    expect(
+      screen.getAllByRole('link', {
+        name: /Dashboard|Repositories|Upload Repository|Architecture|Dependency Graph|Settings|AI Workspace|Documentation/,
+      }),
+    ).toHaveLength(8);
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('link', { name: 'Repositories' })).toHaveAttribute('href', '/repositories');
     expect(screen.getByRole('link', { name: 'Upload Repository' })).toHaveAttribute('href', '/upload');
     expect(screen.getByRole('link', { name: 'Architecture' })).toHaveAttribute('href', '/architecture');
     expect(screen.getByRole('link', { name: 'Dependency Graph' })).toHaveAttribute('href', '/dependencies');
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
+    // Restored as Preview surfaces (#154): reachable from navigation, each
+    // labelled Preview with its limitation on the page itself.
+    expect(screen.getByRole('link', { name: 'AI Workspace' })).toHaveAttribute('href', '/ai-workspace');
+    expect(screen.getByRole('link', { name: 'Documentation' })).toHaveAttribute('href', '/documentation');
+    // Still deferred: opaque review scores, and Insights has no backend at all.
     expect(screen.queryByRole('link', { name: 'Engineering Review' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'AI Workspace' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Documentation' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Insights' })).not.toBeInTheDocument();
     expect(screen.queryByText('Beta')).not.toBeInTheDocument();
     expect(screen.queryByText('Experimental')).not.toBeInTheDocument();

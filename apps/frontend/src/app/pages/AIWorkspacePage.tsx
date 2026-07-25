@@ -1,10 +1,16 @@
 import { useNavigate } from 'react-router-dom';
 import { Bot, Send, AlertCircle } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
+import { PreviewBanner } from '@/shared/components/ui/PreviewBanner';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 import { useAIWorkspace } from '@/features/ai/hooks/useAIWorkspace';
 import { cn } from '@/shared/utils/cn';
+
+// Kept identical to the `limitation` recorded for this surface in the
+// product-surface registry, which is what classifies it as Preview.
+const AI_WORKSPACE_LIMITATION =
+  'Evidence-backed answers currently cover authentication and are derived only from the sealed snapshot for the selected revision. Free-form questions need a configured AI provider and use the legacy repository context.';
 
 export function AIWorkspacePage() {
   const navigate = useNavigate();
@@ -16,6 +22,7 @@ export function AIWorkspacePage() {
     return (
       <div>
         <PageHeader title="AI Workspace" description="Ask questions about your codebase using AI" />
+        <PreviewBanner limitation={AI_WORKSPACE_LIMITATION} />
         <EmptyState
           icon={Bot}
           title="No analysed repositories"
@@ -30,6 +37,7 @@ export function AIWorkspacePage() {
     return (
       <div>
         <PageHeader title="AI Workspace" description="Ask questions about your codebase using AI" />
+        <PreviewBanner limitation={AI_WORKSPACE_LIMITATION} />
         <EmptyState
           icon={Bot}
           title="Select a repository"
@@ -44,6 +52,7 @@ export function AIWorkspacePage() {
       <PageHeader title="AI Workspace" description={`AI-powered exploration of ${activeRepository.name}`}>
         <DataSourceBadge source={aiWorkspace.source} />
       </PageHeader>
+      <PreviewBanner limitation={AI_WORKSPACE_LIMITATION} />
 
       <div className="flex-1 flex flex-col rounded-xl border border-border bg-card overflow-hidden">
         <div className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-thin">
