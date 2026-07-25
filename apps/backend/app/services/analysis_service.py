@@ -1,11 +1,13 @@
 from app.analysis.architecture import ArchitectureAnalyzer
 from app.analysis.authentication import AuthenticationExplanationService
 from app.graph.dependency_graph import DependencyGraphBuilder
+from app.insights.service import RepositoryInsightsBuilder
 from app.repositories.repository_repository import RepositoryRepository
 from app.review.review_service import EngineeringReviewBuilder
 from app.schemas.architecture import ArchitectureResponse
 from app.schemas.authentication import AuthenticationExplanationResponse
 from app.schemas.dependencies import DependencyGraphResponse
+from app.schemas.insights import RepositoryInsightsResponse
 from app.schemas.review import EngineeringReviewResponse
 from app.core.exceptions import NotFoundError
 
@@ -25,6 +27,7 @@ class AnalysisService:
         architecture: ArchitectureAnalyzer,
         dependencies: DependencyGraphBuilder,
         review: EngineeringReviewBuilder,
+        insights: RepositoryInsightsBuilder,
         authentication: AuthenticationExplanationService,
         owner_id: str,
     ) -> None:
@@ -32,6 +35,7 @@ class AnalysisService:
         self.architecture = architecture
         self.dependencies = dependencies
         self.review = review
+        self.insights = insights
         self.authentication = authentication
         self.owner_id = owner_id
 
@@ -43,6 +47,9 @@ class AnalysisService:
 
     def engineering_review(self, repository_id: str) -> EngineeringReviewResponse:
         return self.review.build(self._get_record(repository_id))
+
+    def repository_insights(self, repository_id: str) -> RepositoryInsightsResponse:
+        return self.insights.build(self._get_record(repository_id))
 
     def authentication_explanation(self, repository_id: str) -> AuthenticationExplanationResponse:
         return self.authentication.explain(self._get_record(repository_id))

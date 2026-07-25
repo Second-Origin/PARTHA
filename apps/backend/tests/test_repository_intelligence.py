@@ -8,7 +8,6 @@ from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.models.repository import RepositoryRecord
 from app.parsers.repository_parser import RepositoryParser
-from app.review.review_service import EngineeringReviewBuilder
 
 
 def _sample_repository(root: Path) -> None:
@@ -136,12 +135,10 @@ def test_feature_consumers_read_repository_intelligence(tmp_path: Path):
     record = _record(tmp_path, intelligence)
 
     dependencies = DependencyGraphBuilder().build(record)
-    review = EngineeringReviewBuilder().build(record)
 
     assert any(node.name == "react" for node in dependencies.nodes)
     assert dependencies.vulnerability_assessment.status == "not_computed"
     assert dependencies.outdated_assessment.status == "not_computed"
-    assert review.summary.total_findings >= 1
 
     # The dependency graph is still built by the legacy engine. It must say so
     # rather than letting the surface imply snapshot-backed evidence (#154).
@@ -165,7 +162,7 @@ def test_architecture_without_snapshot_reports_honest_unknown_state(tmp_path: Pa
     """Architecture (#95) reads exclusively through the snapshot query layer; it
     no longer reads ``repo_metadata['intelligence']``. Without a sealed ri.v1
     snapshot it reports an honest "unknown" state instead of falling back to
-    the legacy blob other consumers (dependencies, review) still read."""
+    the legacy blob that the dependency preview still reads."""
 
     _sample_repository(tmp_path)
     _, _, _, intelligence = _build_intelligence(tmp_path)

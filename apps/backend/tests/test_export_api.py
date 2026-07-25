@@ -58,8 +58,10 @@ def test_export_review_json_parses(auth_client):
     assert body["mediaType"] == "application/json"
     assert body["filename"].endswith(".json")
     payload = json.loads(body["content"])
+    assert payload["schemaVersion"] == "engineering-review.v2"
     assert "summary" in payload
-    assert isinstance(payload["summary"]["overallScore"], int)
+    assert "overallScore" not in payload["summary"]
+    assert "score" not in payload
 
 
 def test_export_review_markdown_has_headings(auth_client):
@@ -73,7 +75,8 @@ def test_export_review_markdown_has_headings(auth_client):
     assert body["filename"].endswith(".md")
     assert "# Engineering Review" in body["content"]
     assert "## Executive Summary" in body["content"]
-    assert "| Overall Score |" in body["content"]
+    assert "## Category Assessment" in body["content"]
+    assert "Overall Score" not in body["content"]
 
 
 def test_export_review_html_is_valid_structure(auth_client):
@@ -109,8 +112,8 @@ def test_export_review_before_analysis_cannot_report_a_clean_result(auth_client)
 
     for fmt in ("json", "markdown"):
         response = _export(auth_client, repository_id, "review", fmt)
-        error = assert_error_response(response, 409, "conflict_error")
-        assert error.message == "Engineering review is unavailable until repository analysis completes."
+        error = assert_error_response(response, 404, "not_found")
+        assert error.message == "No sealed Repository Intelligence snapshot is available for this repository."
 
 
 def test_export_json_supported_for_every_target(auth_client):

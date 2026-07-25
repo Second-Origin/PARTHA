@@ -1,7 +1,7 @@
 """Build a `ReportDocument` from an existing analysis response.
 
 These builders never analyse a repository; they only reshape data already
-produced by the Repository Intelligence Engine / existing analysis builders.
+produced by the existing analysis builders.
 """
 
 from app.reports.report_document import ReportDocument, Section, Table
@@ -14,38 +14,59 @@ _DEPENDENCY_TYPES = ("production", "development", "peer", "optional")
 
 def build_review_document(review: EngineeringReviewResponse) -> ReportDocument:
     summary = review.summary
+    severities = summary.findings_by_severity
     sections: list[Section] = [
         Section(
             heading="Executive Summary",
+            paragraphs=[
+                summary.message,
+                "PARTHA reports only findings supported by the selected sealed snapshot. "
+                "Vulnerability scanning and categories without sufficient evidence are marked Not assessed.",
+            ],
             table=Table(
                 headers=["Metric", "Value"],
                 rows=[
-                    ["Overall Score", f"{summary.overall_score}/100"],
-                    ["Overall Trend", summary.overall_trend],
-                    ["Total Findings", str(summary.total_findings)],
-                    ["Critical", str(summary.critical_count)],
-                    ["High", str(summary.high_count)],
-                    ["Medium", str(summary.medium_count)],
-                    ["Low", str(summary.low_count)],
+                    ["Evidence-backed findings", str(summary.evidence_backed_finding_count)],
+                    ["Critical", str(severities.critical)],
+                    ["High", str(severities.high)],
+                    ["Medium", str(severities.medium)],
+                    ["Low", str(severities.low)],
+                    ["Info", str(severities.info)],
+                    ["Unsupported findings", str(summary.unsupported_finding_count)],
+                    ["Vulnerability scanning", "Not assessed"],
                 ],
             ),
         ),
         Section(
-            heading="Health Scores",
+            heading="Category Assessment",
             table=Table(
-                headers=["Category", "Score", "Risk", "Findings"],
+                headers=["Category", "State", "Findings", "Scope"],
                 rows=[
                     [
-                        score.category.replace("-", " "),
-                        f"{score.score}/100",
-                        score.risk_level,
-                        str(score.findings_count),
+                        category.label,
+                        category.state.replace("_", " "),
+                        str(category.finding_count),
+                        category.explanation,
                     ]
-                    for score in review.scores
+                    for category in review.categories
                 ],
             ),
         ),
-        Section(heading="Findings", paragraphs=[] if review.findings else ["No findings were generated."]),
+        Section(
+            heading="Snapshot Identity",
+            fields=[
+                ("Revision", f"{review.revision_kind}:{review.revision_value}"),
+                ("Snapshot", review.snapshot_id),
+                ("Snapshot schema", review.snapshot_schema_version),
+                ("Manifest digest", review.manifest_digest),
+                ("Canonical graph hash", review.canonical_graph_hash),
+                ("Provenance", review.provenance.source),
+            ],
+        ),
+        Section(
+            heading="Findings",
+            paragraphs=[] if review.findings else ["No evidence-backed findings were identified."],
+        ),
     ]
 
     for finding in review.findings:
@@ -54,24 +75,19 @@ def build_review_document(review: EngineeringReviewResponse) -> ReportDocument:
                 heading=f"{finding.severity.upper()}: {finding.title}",
                 level=3,
                 fields=[
-                    ("Category", finding.category.replace("-", " ")),
-                    ("Effort", finding.estimated_effort),
-                    ("Problem", finding.problem),
-                    ("Impact", finding.impact),
-                    ("Recommendation", finding.recommendation),
+                    ("Category", finding.category.replace("_", " ")),
+                    ("Diagnostic", finding.diagnostic_code),
+                    ("Rule", finding.rule_id),
+                    ("Explanation", finding.explanation),
+                    ("Remediation guidance", finding.remediation_guidance),
+                    ("Extractor", f"{finding.extractor_name}@{finding.extractor_version}"),
+                    ("Support", finding.support_status),
                 ],
-                bullets=[f"Affected file: {path}" for path in finding.affected_files]
-                + [f"Affected module: {module}" for module in finding.affected_modules],
-            )
-        )
-
-    if review.roadmap:
-        sections.append(
-            Section(
-                heading="Improvement Roadmap",
                 bullets=[
-                    f"{index + 1}. {step.title} ({step.estimated_effort}) — {step.description}"
-                    for index, step in enumerate(review.roadmap)
+                    f"Evidence: {finding.path}:{finding.start_line}-{finding.end_line}",
+                    f"Fact: {finding.fact_id}",
+                    f"Evidence ID: {finding.evidence_id}",
+                    f"Snapshot: {finding.snapshot_id}",
                 ],
             )
         )

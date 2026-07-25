@@ -26,6 +26,7 @@ from app.core.exceptions import NotFoundError, UnauthorizedError
 from app.github.client import GitHubClient
 from app.graph.dependency_graph import DependencyGraphBuilder
 from app.analysis.manifest import RevisionManifestService
+from app.insights.service import RepositoryInsightsBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.intelligence.query_service import SnapshotQueryService
 from app.models.repository import RepositoryRecord
@@ -171,9 +172,15 @@ def get_dependency_graph_builder(
 
 
 def get_engineering_review_builder(
-    intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
+    snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
 ) -> EngineeringReviewBuilder:
-    return EngineeringReviewBuilder(intelligence)
+    return EngineeringReviewBuilder(snapshots)
+
+
+def get_repository_insights_builder(
+    snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
+) -> RepositoryInsightsBuilder:
+    return RepositoryInsightsBuilder(snapshots)
 
 
 def get_provider_cipher(settings: Settings = Depends(get_settings)) -> ProviderKeyCipher:
@@ -232,6 +239,7 @@ def get_analysis_service(
     architecture: ArchitectureAnalyzer = Depends(get_architecture_analyzer),
     dependencies: DependencyGraphBuilder = Depends(get_dependency_graph_builder),
     review: EngineeringReviewBuilder = Depends(get_engineering_review_builder),
+    insights: RepositoryInsightsBuilder = Depends(get_repository_insights_builder),
     authentication: AuthenticationExplanationService = Depends(get_authentication_explanation_service),
     current_user: User = Depends(get_current_user),
 ) -> AnalysisService:
@@ -240,6 +248,7 @@ def get_analysis_service(
         architecture=architecture,
         dependencies=dependencies,
         review=review,
+        insights=insights,
         authentication=authentication,
         owner_id=current_user.id,
     )

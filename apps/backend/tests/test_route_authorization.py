@@ -108,6 +108,7 @@ _CROSS_OWNER_ROUTES = [
     ("GET", "/analysis/{id}/architecture", None),
     ("GET", "/analysis/{id}/dependencies", None),
     ("GET", "/analysis/{id}/review", None),
+    ("GET", "/analysis/{id}/insights", None),
     ("POST", "/documentation/generate", "repositoryId"),
     ("POST", "/ai/query", "repositoryId"),
     ("POST", "/export", "repositoryId"),

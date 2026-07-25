@@ -15,6 +15,7 @@ from app.schemas.architecture import ArchitectureResponse
 from app.schemas.authentication import AuthenticationExplanationResponse
 from app.schemas.dependencies import DependencyGraphResponse
 from app.schemas.evidence import EvidenceSourceResponse
+from app.schemas.insights import RepositoryInsightsResponse
 from app.schemas.manifest import (
     RevisionManifestResponse,
     RevisionManifestVerificationRequest,
@@ -33,7 +34,7 @@ _REPOSITORY_ID = "11111111-1111-1111-1111-111111111111"
 _JOB_ID = "22222222-2222-2222-2222-222222222222"
 _COMMON_ERRORS = (401, 404, 429, 500)
 _CANCEL_ERRORS = (401, 404, 409, 429, 500)
-_REVIEW_ERRORS = (401, 404, 409, 429, 500)
+_REVIEW_ERRORS = (401, 404, 422, 429, 500)
 
 
 def _status_response(repository_id: str, job: AnalysisJob | None) -> AnalysisStatusResponse:
@@ -412,30 +413,100 @@ def get_dependencies(
     response_model=EngineeringReviewResponse,
     responses=documented_responses(
         200,
-        "Computed engineering-review findings and roadmap; pending analysis returns 409.",
+        "Deterministic evidence-backed findings for the selected sealed ri.v1 snapshot.",
         {
+            "schemaVersion": "engineering-review.v2",
             "repositoryId": _REPOSITORY_ID,
             "repositoryName": "example-service",
-            "generatedAt": "2026-07-17T00:00:00Z",
-            "summary": {
-                "overallScore": 100,
-                "overallTrend": "stable",
-                "criticalCount": 0,
-                "highCount": 0,
-                "mediumCount": 0,
-                "lowCount": 0,
-                "totalFindings": 0,
+            "revisionKind": "upload",
+            "revisionValue": "sha256:" + "0" * 64,
+            "snapshotId": "snap_example",
+            "snapshotSchemaVersion": "ri.v1",
+            "canonicalGraphHash": "sha256:" + "1" * 64,
+            "manifestDigest": "sha256:" + "2" * 64,
+            "provenance": {
+                "source": "ri.v1",
+                "snapshotId": "snap_example",
+                "snapshotSchemaVersion": "ri.v1",
+                "canonicalGraphHash": "sha256:" + "1" * 64,
             },
-            "scores": [],
+            "generatedAt": "2026-07-17T00:00:00Z",
+            "assessmentStatus": "partially_assessed",
+            "categories": [],
             "findings": [],
-            "roadmap": [],
+            "summary": {
+                "message": (
+                    "0 evidence-backed findings were identified in this revision. "
+                    "Security vulnerability scanning was not performed."
+                ),
+                "findingsBySeverity": {
+                    "info": 0,
+                    "low": 0,
+                    "medium": 0,
+                    "high": 0,
+                    "critical": 0,
+                },
+                "assessedCategories": 2,
+                "partiallyAssessedCategories": 4,
+                "notAssessedCategories": 0,
+                "insufficientEvidenceCategories": 1,
+                "evidenceBackedFindingCount": 0,
+                "unsupportedFindingCount": 0,
+                "omittedUnsupportedDiagnosticCount": 0,
+                "vulnerabilityScanning": "not_assessed",
+            },
         },
         *_REVIEW_ERRORS,
     ),
-    openapi_extra=suppress_automatic_validation_error(),
 )
 def get_review(
     repository_id: str,
     service: AnalysisService = Depends(get_analysis_service),
 ) -> EngineeringReviewResponse:
     return service.engineering_review(repository_id)
+
+
+@router.get(
+    "/{repository_id}/insights",
+    response_model=RepositoryInsightsResponse,
+    responses=documented_responses(
+        200,
+        "Defined repository metrics computed only from the selected sealed ri.v1 snapshot.",
+        {
+            "schemaVersion": "repository-insights.v1",
+            "repositoryId": _REPOSITORY_ID,
+            "repositoryName": "example-service",
+            "revisionKind": "upload",
+            "revisionValue": "sha256:" + "0" * 64,
+            "snapshotId": "snap_example",
+            "snapshotSchemaVersion": "ri.v1",
+            "canonicalGraphHash": "sha256:" + "1" * 64,
+            "manifestDigest": "sha256:" + "2" * 64,
+            "provenance": {
+                "source": "ri.v1",
+                "snapshotId": "snap_example",
+                "snapshotSchemaVersion": "ri.v1",
+                "canonicalGraphHash": "sha256:" + "1" * 64,
+            },
+            "computedAt": "2026-07-17T00:00:00Z",
+            "snapshotCreatedAt": "2026-07-17T00:00:00Z",
+            "snapshotSealedAt": "2026-07-17T00:00:00Z",
+            "extractorSet": [],
+            "metrics": [],
+            "relationshipsByPredicate": [],
+            "diagnosticsBySeverity": [],
+            "diagnosticsByCode": [],
+            "languages": [],
+            "changeOverTime": {
+                "assessmentState": "not_assessed",
+                "message": "Change-over-time insights are not available yet.",
+            },
+        },
+        *_REVIEW_ERRORS,
+    ),
+)
+def get_insights(
+    repository_id: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> RepositoryInsightsResponse:
+    return service.repository_insights(repository_id)
