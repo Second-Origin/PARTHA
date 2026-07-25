@@ -88,7 +88,7 @@ Baseline was 119 tests at 35.94 / 30.71 / 30.75 / 37.32. Thresholds raised from
 | `eslint .` | Pass, 0 problems |
 | `tsc -b` | Pass, 0 errors |
 | `vite build` | Pass |
-| Dependency-audit policy tests (`node --test scripts/`) | **9 passed** |
+| Dependency-audit policy tests (`node --test scripts/dependency-audit.test.mjs`) | **9 passed** |
 | `node scripts/dependency-audit.mjs` | Pass — 1 acknowledged, 0 blocking |
 | Visual acceptance (`test:visual`) | **8 passed** |
 
@@ -261,7 +261,7 @@ PARTHA_TEST_REDIS_URL="redis://localhost:6379/0" \
   apps/backend/.venv/bin/python -m pytest      # 710 passed, 0 skipped
 
 npm --prefix apps/frontend run test            # 143 passed
-node --test scripts/                           # 9 passed
+node --test scripts/dependency-audit.test.mjs   # 9 passed
 node scripts/dependency-audit.mjs              # 0 blocking
 ```
 

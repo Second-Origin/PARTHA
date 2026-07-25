@@ -63,7 +63,7 @@ jobs:
       # gated harder than development-only exposure, and every exception needs
       # a written reason and a review date that expires.
       - name: Dependency audit policy tests
-        run: node --test scripts/
+        run: node --test scripts/dependency-audit.test.mjs
 
       - name: Dependency audit
         run: node scripts/dependency-audit.mjs
