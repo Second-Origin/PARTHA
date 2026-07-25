@@ -22,6 +22,10 @@ Or from the repository root: `npm run dev:backend` (prefers `apps/backend/.venv`
 
 Local development defaults to SQLite at `.local/partha.db` and storage at `.local/storage`, so the app starts with no PostgreSQL and no Redis. **No `.env` file is required** — every setting has a working default. Copy `.env.example` to `.env` only to change one.
 
+### SQLite concurrency (development only)
+
+The durable analysis worker (a background thread) and API request handlers read and write the same SQLite file concurrently. Every SQLite connection is opened with `PRAGMA journal_mode=WAL` and a 5-second `PRAGMA busy_timeout` (`app/core/database.py`, a no-op on PostgreSQL): WAL lets a reader always see the last committed snapshot without waiting on an in-progress writer, and the busy timeout bounds the remaining writer-vs-writer wait instead of failing immediately (#162). This does not extend to multiple *processes* sharing one SQLite file — that remains PostgreSQL's job; Compose already runs Postgres for exactly this reason. The analysis worker's own per-stage transaction boundaries (why a stage's facts are flushed but not committed until the stage checkpoint) are documented directly in `app/workers/analysis_worker.py`'s module docstring and were deliberately left unchanged — restructuring them risks the job-recovery guarantees (leases, retries, stale-worker takeover) that same docstring exists to protect, and WAL removes the actual reader-blocking symptom without needing to.
+
 `AUTH_SECRET_KEY` falls back to a fixed insecure value when `APP_ENV` is `development` or `test`. Outside those environments the app **refuses to start** without an explicit secret of at least 32 characters:
 
 ```bash
