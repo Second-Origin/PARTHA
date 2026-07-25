@@ -7,7 +7,6 @@ from app.schemas.base import CamelModel
 
 RepositorySource = Literal["upload", "github"]
 RepositoryStatus = Literal["uploading", "analysing", "completed", "cancelled", "error"]
-DataSource = Literal["real"]
 AnalysisStage = Literal[
     "uploading",
     "extracting",
@@ -70,7 +69,6 @@ class RepositoryResponse(CamelModel):
     size: int
     file_count: int
     status: RepositoryStatus
-    data_source: DataSource
     analysis_stage: AnalysisStage | None = None
     analysis_progress: int
     uploaded_at: datetime

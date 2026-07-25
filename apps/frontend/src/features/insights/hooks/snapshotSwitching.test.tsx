@@ -39,7 +39,6 @@ function repository(id: string): Repository {
     size: 1,
     fileCount: 1,
     status: 'completed',
-    dataSource: 'real',
     analysisStage: 'completed',
     analysisProgress: 100,
     uploadedAt: '2026-07-25T00:00:00Z',
