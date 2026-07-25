@@ -4,7 +4,8 @@ import type { HeatmapMode } from '@/shared/types/architecture';
 
 interface ArchitectureState {
   model: ArchitectureModel | null;
-  setModel: (model: ArchitectureModel) => void;
+  setModel: (model: ArchitectureModel | null) => void;
+  resetForRepository: () => void;
 
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
@@ -17,6 +18,9 @@ interface ArchitectureState {
 
   expandedModules: Set<string>;
   toggleModule: (id: string) => void;
+  collapsedLayers: Set<string>;
+  toggleLayer: (id: string) => void;
+  showAllLayers: () => void;
 
   showMiniMap: boolean;
   setShowMiniMap: (show: boolean) => void;
@@ -58,6 +62,19 @@ interface ArchitectureState {
 export const useArchitectureStore = create<ArchitectureState>((set) => ({
   model: null,
   setModel: (model) => set({ model }),
+  resetForRepository: () =>
+    set({
+      model: null,
+      selectedNodeId: null,
+      highlightedNodeIds: new Set(),
+      searchQuery: '',
+      collapsedLayers: new Set(),
+      inspectorOpen: false,
+      hiddenNodes: new Set(),
+      isolatedSubtree: null,
+      contextMenuTarget: null,
+      contextMenuPosition: null,
+    }),
 
   selectedNodeId: null,
   setSelectedNodeId: (id) => set({ selectedNodeId: id, inspectorOpen: !!id }),
@@ -77,6 +94,16 @@ export const useArchitectureStore = create<ArchitectureState>((set) => ({
       return { expandedModules: next };
     }),
 
+  collapsedLayers: new Set(),
+  toggleLayer: (id) =>
+    set((state) => {
+      const next = new Set(state.collapsedLayers);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return { collapsedLayers: next };
+    }),
+  showAllLayers: () => set({ collapsedLayers: new Set() }),
+
   showMiniMap: true,
   setShowMiniMap: (show) => set({ showMiniMap: show }),
 
@@ -89,7 +116,10 @@ export const useArchitectureStore = create<ArchitectureState>((set) => ({
   inspectorOpen: false,
   setInspectorOpen: (open) => set({ inspectorOpen: open }),
 
-  explorerOpen: true,
+  // The graph is the primary review surface. The module explorer remains one
+  // click away, but opening it by default steals enough width to clip a
+  // readable five-layer graph at the minimum zoom.
+  explorerOpen: false,
   setExplorerOpen: (open) => set({ explorerOpen: open }),
 
   heatmapMode: 'none',

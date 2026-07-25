@@ -25,6 +25,7 @@ export function useAuthenticationExplanation(enabled: boolean) {
     }
 
     let cancelled = false;
+    setExplanation(null);
 
     async function load() {
       if (!activeRepository) return;

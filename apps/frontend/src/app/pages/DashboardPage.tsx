@@ -92,7 +92,7 @@ export function DashboardPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <DataSourceBadge source={repo.dataSource} />
+                <DataSourceBadge source={repo.source} />
                 {repo.meta && (
                   <span className="text-xs text-muted-foreground hidden sm:inline">
                     {repo.meta.totalFiles} files

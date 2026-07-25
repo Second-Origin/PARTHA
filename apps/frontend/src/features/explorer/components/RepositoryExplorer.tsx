@@ -13,6 +13,8 @@ import { Breadcrumbs } from './Breadcrumbs';
 
 export type { ExplorerCitation } from '../fileUtils';
 
+const normalizedPath = (path: string) => path.replace(/^\/+/, '');
+
 interface RepositoryExplorerProps {
   fileTree: FileTreeNode[];
   repositoryId: string;
@@ -44,7 +46,7 @@ export function RepositoryExplorer({ fileTree, repositoryId, citation }: Reposit
   useEffect(() => {
     if (!citation) return;
     const match = flattenTree(fileTree).find(
-      (node) => node.type === 'file' && node.path === citation.path,
+      (node) => node.type === 'file' && normalizedPath(node.path) === normalizedPath(citation.path),
     );
     if (!match) return;
     selectFile(match);
@@ -53,7 +55,9 @@ export function RepositoryExplorer({ fileTree, repositoryId, citation }: Reposit
     let prefix = '';
     for (const segment of segments) {
       prefix = prefix ? `${prefix}/${segment}` : segment;
-      const folder = flattenTree(fileTree).find((node) => node.type === 'folder' && node.path === prefix);
+      const folder = flattenTree(fileTree).find(
+        (node) => node.type === 'folder' && normalizedPath(node.path) === normalizedPath(prefix),
+      );
       if (folder) expandFolder(folder.id);
     }
   }, [citation, fileTree, selectFile, setDetailsTab, expandFolder]);
@@ -134,7 +138,11 @@ export function RepositoryExplorer({ fileTree, repositoryId, citation }: Reposit
             <CodePreview
               node={selectedNode}
               repositoryId={repositoryId}
-              citation={citation && citation.path === selectedNode.path ? citation : null}
+              citation={
+                citation && normalizedPath(citation.path) === normalizedPath(selectedNode.path)
+                  ? citation
+                  : null
+              }
             />
           ) : fileDetails ? (
             <FileDetailsPanel details={fileDetails} />

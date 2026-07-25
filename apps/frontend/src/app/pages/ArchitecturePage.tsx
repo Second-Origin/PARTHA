@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Network, ShieldCheck } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ExternalLink, Network, ShieldCheck } from 'lucide-react';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { ArchWorkspace } from '@/features/architecture/components/ArchWorkspace';
 import { AuthenticationExplanationPanel } from '@/features/architecture/components/AuthenticationExplanationPanel';
+import { RevisionManifestPanel } from '@/features/architecture/components/RevisionManifestPanel';
 import { useArchitecture } from '@/features/architecture/hooks/useArchitecture';
 
 export function ArchitecturePage() {
@@ -15,6 +17,7 @@ export function ArchitecturePage() {
   if (architecture.emptyReason === 'no-completed-repositories') {
     return (
       <div className="h-full flex flex-col">
+        <PageHeader title="Architecture" description="Explore the architecture of your codebase" />
         <EmptyState
           icon={Network}
           title="No architecture data"
@@ -28,6 +31,7 @@ export function ArchitecturePage() {
   if (architecture.emptyReason === 'no-active-repository') {
     return (
       <div className="h-full flex flex-col">
+        <PageHeader title="Architecture" description="Explore the architecture of your codebase" />
         <EmptyState
           icon={Network}
           title="Select a repository"
@@ -65,9 +69,16 @@ export function ArchitecturePage() {
 
   return (
     <div className="h-[calc(100vh-8rem)] -m-6 flex flex-col">
-      <div className="flex items-center justify-between border-b border-border px-6 py-3">
-        <h1 className="text-sm font-medium text-foreground">Architecture - {architecture.model.repositoryName}</h1>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-6">
+        <h1 className="min-w-0 truncate text-sm font-medium text-foreground">Architecture - {architecture.model.repositoryName}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/review"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            Engineering Review
+            <ExternalLink className="h-3 w-3" />
+          </Link>
           <button
             type="button"
             onClick={() => setAuthPanelOpen(true)}
@@ -78,6 +89,11 @@ export function ArchitecturePage() {
           </button>
           <ExportMenu repositoryId={architecture.model.repositoryId} target="architecture" label="Export Report" />
         </div>
+      </div>
+      {/* The manifest names the exact revision every citation below belongs
+          to, so it sits with the evidence rather than in a settings page. */}
+      <div className="mb-4">
+        <RevisionManifestPanel repositoryId={architecture.model.repositoryId} />
       </div>
       <div className="flex-1 min-h-0">
         <ArchWorkspace model={architecture.model} source={architecture.source} />

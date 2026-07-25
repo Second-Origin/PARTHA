@@ -58,6 +58,16 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefix apps/frontend
 
+      # Policy-aware, so a green build represents a reviewed dependency-risk
+      # posture rather than the absence of `npm audit`. Runtime exposure is
+      # gated harder than development-only exposure, and every exception needs
+      # a written reason and a review date that expires.
+      - name: Dependency audit policy tests
+        run: node --test scripts/dependency-audit.test.mjs
+
+      - name: Dependency audit
+        run: node scripts/dependency-audit.mjs
+
       - name: Lint
         run: npm --prefix apps/frontend run lint
 
@@ -177,6 +187,56 @@ jobs:
             exit 1
           fi
           echo "Repository Intelligence golden benchmark passed."
+
+  prototype-acceptance:
+    name: Prototype Browser Acceptance
+    needs:
+      - frontend
+      - backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install frontend
+        run: npm ci --prefix apps/frontend
+
+      - name: Install backend
+        run: |
+          python -m pip install -r apps/backend/requirements.txt
+          python -m pip install -e apps/backend --no-deps
+
+      - name: Install Chromium
+        run: npm --prefix apps/frontend exec -- playwright install --with-deps chromium
+
+      - name: Run disposable-fixture browser journeys
+        run: node scripts/run-prototype-acceptance.mjs
+
+      - name: Upload browser report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prototype-browser-acceptance
+          path: |
+            apps/frontend/e2e-report
+            apps/frontend/test-results
+          if-no-files-found: warn
+          retention-days: 14
 
   docker-compose:
     name: Docker Compose

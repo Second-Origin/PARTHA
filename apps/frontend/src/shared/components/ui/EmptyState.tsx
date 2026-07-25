@@ -24,7 +24,9 @@ export function EmptyState({ icon: Icon, title, description, action, className }
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mb-4">
         <Icon className="h-7 w-7 text-muted-foreground" />
       </div>
-      <h3 className="text-lg font-semibold text-foreground mb-1">{title}</h3>
+      {/* Sits directly beneath the page's h1, so it must be h2: skipping a
+          level breaks heading navigation for screen-reader users. */}
+      <h2 className="text-lg font-semibold text-foreground mb-1">{title}</h2>
       <p className="text-sm text-muted-foreground text-center max-w-sm mb-6">{description}</p>
       {action && (
         <button

@@ -66,10 +66,11 @@ flowchart LR
 | `api/` | HTTP boundary. Routes stay thin; `deps.py` wires every dependency. | Contain business logic. |
 | `services/` | Application services: repository import, analysis orchestration, documentation, AI. | Parse repository files directly. |
 | `intelligence/` | **The Repository Intelligence engine.** Builds, persists, and reloads reusable repository facts. | Render API response shapes. |
-| `parsers/` | `RepositoryParser` walks the extracted tree and produces the file tree plus basic metadata. `TreeSitterParser` is a **placeholder** — it maps extensions to language names and always returns zero symbols. | Produce feature-specific output. |
+| `parsers/` | `RepositoryParser` walks the extracted tree and produces the file tree plus basic metadata. Syntax-aware `PythonExtractor` and `TypeScriptExtractor` live under `extraction/`; legacy ingestion still uses the parser's heuristic symbol path. | Produce feature-specific output. |
 | `analysis/` | Architecture model — modules, layers, edges, request-flow hints. **Consumer.** | Read the filesystem. |
 | `graph/` | Dependency graph response model. **Consumer.** | Re-read dependency manifests. |
-| `review/` | Engineering review findings, scores, roadmap. **Consumer.** | Re-read the filesystem. |
+| `review/` | Deterministic `engineering-review.v2` findings and category assessment over one sealed snapshot. **Consumer.** | Read the legacy JSON model, invent scores/grades, or emit a finding without exact same-snapshot evidence. |
+| `insights/` | Defined `repository-insights.v1` metrics and breakdowns over one sealed snapshot. **Consumer.** | Read legacy metadata, infer trends without history, or publish undefined health metrics. |
 | `ai/` | Context builder, prompt builder, orchestrator, provider registry/factory, five provider implementations, and the central egress policy/pinned sender. **Consumer.** | Parse repositories, read source files, or let a tenant expand provider destinations. |
 | `reports/` | `ReportDocument` intermediate representation, builders, and JSON/Markdown/HTML/PDF renderers. **Second-order consumer** — renders analysis output that already exists. | Re-analyse a repository. |
 | `auth/` | Argon2 password hashing, HS256 access tokens, rotating refresh tokens with reuse detection. | — |
@@ -129,7 +130,7 @@ snapshot, and preserves the legacy compatibility model for unmigrated consumers.
 | Relational DB | `users`, `refresh_tokens`, `repositories`, `analysis_jobs`, `ai_provider_configs`, and normalized `ri_*` snapshot tables | SQLite by default for local development; PostgreSQL under Docker Compose. Analysis jobs and their worker leases are durable database state. |
 | `repositories.revision_kind`, `revision_value`, `revision_ref` | Exact imported source identity: Git commit + resolved ref, or upload archive hash. | `revision_value` is indexed and immutable; a moving branch name is metadata, never identity. |
 | `repositories.repo_metadata` (JSON column) | Parser metadata and the **legacy/unverified** serialized Repository Intelligence under the `intelligence` key. | New imports no longer stash `commitSha` here. Existing legacy facts are retained for compatibility and are not copied into `ri.v1` observed facts. |
-| `ri_snapshots`, `ri_nodes`, `ri_edges`, `ri_assertions`, `ri_observations`, `ri_evidence`, `ri_derivations`, `ri_diagnostics` | Revision-addressed normalized `ri.v1` artifacts, provenance, lifecycle state, and canonical hash. | Durable analysis runs the Python/TypeScript producers and resolver, then seals a snapshot. Architecture relationships consume it; other consumers remain on the legacy model. |
+| `ri_snapshots`, `ri_nodes`, `ri_edges`, `ri_assertions`, `ri_observations`, `ri_evidence`, `ri_derivations`, `ri_diagnostics` | Revision-addressed normalized `ri.v1` artifacts, provenance, lifecycle state, and canonical hash. | Durable analysis runs the Python/TypeScript producers and resolver, then seals a snapshot. Architecture, authentication explanation, Engineering Review, and Insights consume it. |
 | `repositories.file_tree` (JSON column) | The parsed file tree. | Serves the explorer. |
 | `ai_provider_configs` | One row per user: provider, model, base URL, and the **Fernet-encrypted** API key plus its last four characters. | Owner-scoped; the plaintext key is never stored or returned. A stored endpoint remains unusable unless it satisfies the current deployment egress policy. |
 | Filesystem (`STORAGE_PATH`) | Extracted archives and cloned repositories; uploaded archives (deleted after extraction). | Repository source is read from here on demand for file preview. |
@@ -178,17 +179,18 @@ Only two places in the backend read repository source from disk:
 1. `RepositoryParser` / `RepositoryIntelligenceEngine`, at build time.
 2. `RepositoryService.read_file`, which serves the explorer's file preview — a direct, path-checked read for display only. It feeds no analysis.
 
-Everything else calls `RepositoryIntelligenceEngine.from_record(record)` and transforms the result. See [REPOSITORY_INTELLIGENCE.md](REPOSITORY_INTELLIGENCE.md) for what the engine extracts and what it does not.
+Snapshot-backed consumers use the owner-scoped `SnapshotQueryService`; compatibility consumers use the legacy record loader and must disclose that boundary. See [REPOSITORY_INTELLIGENCE.md](REPOSITORY_INTELLIGENCE.md) for what each path extracts and what it does not.
 
 ### Current consumers
 
 | Consumer | Reads | Produces |
 | --- | --- | --- |
-| `analysis/` | modules, files, discovery | Architecture nodes, edges, layers, request-flow hints |
-| `graph/` | dependencies, `depends_on` relationships | Dependency graph response |
-| `review/` | discovery, statistics, file roles and sizes | Findings, category scores, roadmap |
-| `services/documentation_service.py` | discovery, files, routes, architecture, dependencies | Markdown / HTML documentation |
-| `ai/repository_context.py` | discovery, modules, dependencies, file paths | `RepositoryContext` → `PromptBundle` |
+| `analysis/` | sealed `ri.v1` nodes, edges, assertions, diagnostics, evidence | Architecture nodes, edges, layers, request-flow hints |
+| `review/` | sealed `ri.v1` diagnostics plus exact evidence and manifest identity | Supported findings and assessed/not-assessed category matrix; no scores |
+| `insights/` | sealed `ri.v1` nodes, edges, diagnostics, evidence and extractor set | Defined counts, ratios and breakdowns; no inferred trends |
+| `graph/` | legacy direct dependency declarations | Dependency Preview response with explicit legacy provenance |
+| `services/documentation_service.py` | legacy discovery, files, routes, architecture, dependencies | Preview Markdown / HTML documentation |
+| `ai/repository_context.py` | legacy discovery, modules, dependencies, file paths | Preview `RepositoryContext` → `PromptBundle` |
 | `reports/` | existing analysis and documentation output | JSON / Markdown / HTML / PDF |
 
 ---
@@ -243,12 +245,19 @@ flowchart TB
 
 These are properties of the system as built, not a wish list.
 
-1. **Extraction is heuristic, not language-aware.** File roles, modules, and layers are inferred from path segments and filenames. Symbols come from regular expressions. `TreeSitterParser` returns nothing, even though `tree-sitter` is a declared dependency.
+1. **Production ingestion remains partly heuristic.** File roles, modules, and layers are inferred from path segments and filenames, and legacy ingestion symbols come from regular expressions. Standalone syntax-aware Python and TypeScript extractors exist, but durable product integration remains a separate workflow.
 2. **No line-level provenance in production output.** The snapshot schema can store validated spans and derivations, but the current regex engine emits neither and is deliberately not promoted into `ri.v1`.
-3. **The graph store is not the only product read model.** Durable analysis populates immutable normalized snapshots and Architecture relationships consume them, but several module, review, documentation, export, and AI paths still use the legacy JSON model.
+3. **The graph store is not the only product read model.** Durable analysis
+   populates immutable normalized snapshots, and Architecture, Engineering
+   Review, and Insights consume the latest owner-scoped sealed snapshot.
+   Dependency Graph Preview plus several compatibility module, documentation,
+   export, and AI paths still use the legacy JSON model.
 4. **Analysis is whole-repository.** It runs in a durable, cancellable background job with bounded retry and stale-worker recovery, but incremental re-analysis is not implemented. Import extraction and file-tree parsing remain synchronous.
 5. **The rate limiter trusts only the direct socket peer for unauthenticated requests.** `X-Forwarded-For` is deliberately ignored, so behind a reverse proxy every unauthenticated client shares one IP budget until a trusted-proxy allowlist is designed. Authenticated requests are keyed per user and unaffected.
 6. **Dependency coverage is narrow.** Three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The API exposes explicit `not_computed` assessment statuses and does not emit a clean result or count without a scanner.
-7. **Frontend assurance is thin.** Coverage is limited and there is no end-to-end suite.
+7. **Frontend assurance remains focused.** Vitest covers shared and feature
+   behavior, and a disposable Playwright acceptance suite exercises the defined
+   Architecture, Engineering Review, and Insights prototype journeys. This is
+   not comprehensive end-to-end product coverage.
 
 These are missing guarantees in the system as built. They are not scheduled work, and this document does not commit to when or whether any of them change.

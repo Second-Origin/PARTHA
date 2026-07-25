@@ -1,209 +1,203 @@
-import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, AlertTriangle, AlertCircle, Info, CheckCircle2 } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
+import { AlertTriangle, CheckCircle2, ExternalLink, Info, ShieldCheck } from 'lucide-react';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
-import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 import { useReviewStore } from '@/features/review/store';
 import { useReview } from '@/features/review/hooks/useReview';
-import { ScoreCard, OverallScoreRing } from '@/features/review/components/ScoreCard';
 import { FindingCard } from '@/features/review/components/FindingCard';
 import { FindingDetail } from '@/features/review/components/FindingDetail';
 import { ReviewFilters } from '@/features/review/components/ReviewFilters';
-import { Roadmap } from '@/features/review/components/Roadmap';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
-import { cn } from '@/shared/utils/cn';
+import type { ReviewAssessmentState, ReviewSeverity } from '@/shared/types/review';
+
+const STATE_LABEL: Record<ReviewAssessmentState, string> = {
+  assessed: 'Assessed',
+  partially_assessed: 'Partially assessed',
+  not_assessed: 'Not assessed',
+  insufficient_evidence: 'Insufficient evidence',
+};
+
+const SEVERITY_ORDER: ReviewSeverity[] = ['critical', 'high', 'medium', 'low', 'info'];
 
 export function EngineeringReviewPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const reviewState = useReview();
   const {
     review,
     selectedFindingId,
     setSelectedFindingId,
-    setFilterCategory,
-    setFilterSeverity,
     filteredFindings,
+    setFilterDiagnosticCode,
   } = useReviewStore();
-  const activeReview = reviewState.review || review;
+
+  useEffect(() => {
+    setFilterDiagnosticCode(searchParams.get('diagnosticCode'));
+  }, [searchParams, setFilterDiagnosticCode]);
 
   const findings = filteredFindings();
   const selectedFinding = useMemo(
-    () => activeReview?.findings.find((f) => f.id === selectedFindingId) || null,
-    [activeReview, selectedFindingId]
+    () => review?.findings.find((finding) => finding.id === selectedFindingId) ?? null,
+    [review, selectedFindingId],
   );
 
   if (reviewState.emptyReason === 'no-completed-repositories') {
     return (
-      <div className="h-full flex flex-col">
+      <div>
+        <PageHeader title="Engineering Review" description="Verified engineering concerns and their source evidence" />
         <EmptyState
           icon={ShieldCheck}
           title="No engineering review available"
-          description="Upload and analyse a repository to generate its engineering review. The review is built from repository analysis data."
+          description="Upload and analyse a repository to assess its sealed snapshot."
           action={{ label: 'Upload Repository', onClick: () => navigate('/upload') }}
         />
       </div>
     );
   }
-
   if (reviewState.emptyReason === 'no-active-repository') {
     return (
-      <div className="h-full flex flex-col">
+      <div>
+        <PageHeader title="Engineering Review" description="Verified engineering concerns and their source evidence" />
         <EmptyState
           icon={ShieldCheck}
           title="Select a repository"
-          description="Choose an analysed repository from the top bar to view its engineering review."
+          description="Choose an analysed repository from the top bar to inspect its exact revision."
         />
       </div>
     );
   }
-
+  if (reviewState.loading) {
+    return <StatusPanel text="Loading evidence-backed engineering review..." />;
+  }
   if (reviewState.error) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-sm text-destructive mb-2">{reviewState.error}</p>
-          <button onClick={reviewState.retry} className="text-xs text-primary hover:underline">
-            Retry
-          </button>
-        </div>
-      </div>
-    );
+    return <ErrorPanel message={reviewState.error} retry={reviewState.retry} />;
   }
-
-  if (reviewState.loading || !activeReview) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          <span className="text-sm text-muted-foreground">Loading engineering review...</span>
-        </div>
-      </div>
-    );
-  }
+  if (!review) return null;
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] -m-6">
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-6">
-        <div className="max-w-5xl">
-          <div className="flex items-center justify-between mb-6">
-            <PageHeader
-              title="Engineering Review"
-              description={`Automated audit for ${activeReview.repositoryName}`}
-            >
-              <DataSourceBadge source={reviewState.source} />
-            </PageHeader>
-            <ExportMenu repositoryId={activeReview.repositoryId} target="review" />
-          </div>
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        title="Engineering Review"
+        description={`${review.repositoryName} · ${review.revisionKind} ${review.revisionValue}`}
+      >
+        <Link
+          to="/architecture"
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-accent"
+        >
+          Architecture <ExternalLink className="h-3 w-3" />
+        </Link>
+        <Link
+          to="/insights"
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-accent"
+        >
+          Insights <ExternalLink className="h-3 w-3" />
+        </Link>
+        <ExportMenu repositoryId={review.repositoryId} target="review" />
+      </PageHeader>
 
-          {/* Executive Summary */}
-          <section className="mb-8">
-            <div className="rounded-xl border border-border bg-card p-6">
-              <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
-                <OverallScoreRing
-                  score={activeReview.summary.overallScore}
-                  trend={activeReview.summary.overallTrend}
-                  totalFindings={activeReview.summary.totalFindings}
-                  criticalCount={activeReview.summary.criticalCount}
-                  highCount={activeReview.summary.highCount}
-                />
-                <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <SummaryPill
-                    icon={AlertTriangle}
-                    label="Critical"
-                    count={activeReview.summary.criticalCount}
-                    color="text-red-400"
-                    bg="bg-red-500/10"
-                  />
-                  <SummaryPill
-                    icon={AlertCircle}
-                    label="High"
-                    count={activeReview.summary.highCount}
-                    color="text-orange-400"
-                    bg="bg-orange-500/10"
-                  />
-                  <SummaryPill
-                    icon={Info}
-                    label="Medium"
-                    count={activeReview.summary.mediumCount}
-                    color="text-amber-400"
-                    bg="bg-amber-500/10"
-                  />
-                  <SummaryPill
-                    icon={CheckCircle2}
-                    label="Low"
-                    count={activeReview.summary.lowCount}
-                    color="text-blue-400"
-                    bg="bg-blue-500/10"
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Health Scores */}
-          <section className="mb-8">
-            <h2 className="text-sm font-medium text-foreground mb-3">Health Scores</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {activeReview.scores.map((score) => (
-                <ScoreCard
-                  key={score.category}
-                  score={score}
-                  onClick={() => {
-                    setFilterCategory(score.category);
-                    setFilterSeverity('all');
-                  }}
-                />
-              ))}
-            </div>
-          </section>
-
-          {/* Findings */}
-          <section className="mb-8">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-medium text-foreground">Findings</h2>
-              <span className="text-xs text-muted-foreground">{findings.length} results</span>
-            </div>
-            <ReviewFilters />
-            <div className="mt-4 space-y-2">
-              {findings.length === 0 ? (
-                <div className="rounded-lg border border-border bg-card p-8 text-center">
-                  <CheckCircle2 className="h-8 w-8 text-green-400 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">No findings match the current filters</p>
-                </div>
-              ) : (
-                findings.map((finding) => (
-                  <motion.div
-                    key={finding.id}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.15 }}
-                  >
-                    <FindingCard
-                      finding={finding}
-                      isSelected={selectedFindingId === finding.id}
-                      onClick={() => setSelectedFindingId(
-                        selectedFindingId === finding.id ? null : finding.id
-                      )}
-                    />
-                  </motion.div>
-                ))
-              )}
-            </div>
-          </section>
-
-          {/* Roadmap */}
-          <section className="mb-8">
-            <Roadmap steps={activeReview.roadmap} />
-          </section>
-        </div>
+      <div className="mb-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
+        PARTHA reports only findings supported by the selected sealed snapshot. Vulnerability scanning and
+        categories without sufficient evidence are marked Not assessed.
       </div>
 
-      {/* Detail Panel */}
+      <section aria-label="Review identity" className="mb-6 grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Identity label="Snapshot" value={review.snapshotId} />
+        <Identity label="Snapshot schema" value={review.snapshotSchemaVersion} />
+        <Identity label="Manifest digest" value={review.manifestDigest} />
+        <Identity label="Canonical graph hash" value={review.canonicalGraphHash} />
+      </section>
+
+      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-sm font-medium text-foreground">Evidence-backed summary</h2>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{review.summary.message}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              No overall score, grade, health percentage, or category score is produced.
+            </p>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            {SEVERITY_ORDER.map((severity) => (
+              <div key={severity} className="rounded-md bg-muted/50 px-2 py-2 text-center">
+                <p className="text-base font-semibold text-foreground">
+                  {review.summary.findingsBySeverity[severity]}
+                </p>
+                <p className="text-[9px] uppercase text-muted-foreground">{severity}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-7">
+        <h2 className="mb-3 text-sm font-medium text-foreground">Assessment matrix</h2>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {review.categories.map((category) => (
+            <article key={category.id} className="rounded-lg border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-sm font-medium text-foreground">{category.label}</h3>
+                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  {STATE_LABEL[category.state]}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{category.explanation}</p>
+              <p className="mt-2 text-[10px] text-muted-foreground">{category.findingCount} supported findings</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-medium text-foreground">Findings</h2>
+            <p className="text-xs text-muted-foreground">{findings.length} matching supported findings</p>
+          </div>
+          <ReviewFilters />
+        </div>
+        {review.findings.length === 0 ? (
+          <div className="rounded-xl border border-border bg-card p-8 text-center">
+            <CheckCircle2 className="mx-auto mb-2 h-7 w-7 text-emerald-400" />
+            <h3 className="text-sm font-medium text-foreground">No evidence-backed findings</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              This does not mean every engineering category was assessed; consult the matrix above.
+            </p>
+          </div>
+        ) : findings.length === 0 ? (
+          <div className="rounded-xl border border-border bg-card p-8 text-center">
+            <Info className="mx-auto mb-2 h-7 w-7 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">No findings match the selected filters.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {findings.map((finding) => (
+              <FindingCard
+                key={finding.id}
+                finding={finding}
+                isSelected={finding.id === selectedFindingId}
+                onClick={() => setSelectedFindingId(finding.id)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {review.summary.omittedUnsupportedDiagnosticCount > 0 && (
+        <div className="mb-6 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+          <p className="text-xs text-muted-foreground">
+            {review.summary.omittedUnsupportedDiagnosticCount} diagnostic record(s) were not promoted to findings
+            because an exact supporting evidence span was unavailable.
+          </p>
+        </div>
+      )}
+
       <AnimatePresence>
         {selectedFinding && (
           <FindingDetail
+            repositoryId={review.repositoryId}
             finding={selectedFinding}
             onClose={() => setSelectedFindingId(null)}
           />
@@ -213,24 +207,29 @@ export function EngineeringReviewPage() {
   );
 }
 
-function SummaryPill({
-  icon: Icon,
-  label,
-  count,
-  color,
-  bg,
-}: {
-  icon: typeof AlertTriangle;
-  label: string;
-  count: number;
-  color: string;
-  bg: string;
-}) {
+function Identity({ label, value }: { label: string; value: string }) {
   return (
-    <div className={cn('rounded-lg border border-border p-3 text-center', count > 0 && bg)}>
-      <Icon className={cn('h-4 w-4 mx-auto mb-1', count > 0 ? color : 'text-muted-foreground/50')} />
-      <p className={cn('text-lg font-bold', count > 0 ? color : 'text-muted-foreground/50')}>{count}</p>
-      <p className="text-[10px] text-muted-foreground">{label}</p>
+    <div className="min-w-0">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="truncate font-mono text-xs text-foreground" title={value}>{value}</p>
+    </div>
+  );
+}
+
+function StatusPanel({ text }: { text: string }) {
+  return (
+    <div className="flex min-h-72 items-center justify-center gap-3">
+      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <span className="text-sm text-muted-foreground">{text}</span>
+    </div>
+  );
+}
+
+function ErrorPanel({ message, retry }: { message: string; retry: () => void }) {
+  return (
+    <div className="flex min-h-72 flex-col items-center justify-center text-center">
+      <p className="text-sm text-destructive">{message}</p>
+      <button type="button" onClick={retry} className="mt-2 text-xs text-primary hover:underline">Retry</button>
     </div>
   );
 }

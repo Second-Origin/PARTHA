@@ -107,7 +107,10 @@ def test_zip_upload_persists_repository_and_analysis_completes(auth_client):
     assert review_response.status_code == 200
     review = review_response.json()
     assert review["repositoryId"] == repository["id"]
-    assert review["summary"]["totalFindings"] == len(review["findings"])
+    assert review["schemaVersion"] == "engineering-review.v2"
+    assert review["snapshotSchemaVersion"] == "ri.v1"
+    assert review["revisionValue"] == repository["revision"]["value"]
+    assert review["summary"]["evidenceBackedFindingCount"] == len(review["findings"])
 
     list_response = auth_client.get("/repositories")
     assert list_response.status_code == 200
@@ -150,9 +153,11 @@ def test_analysis_read_endpoints_return_typed_defaults_before_worker_runs(auth_c
     assert dependencies["manifestCount"] == 0
 
     review_response = auth_client.get(f"/analysis/{repository_id}/review")
-    error = assert_error_response(review_response, 409, "conflict_error")
-    assert error.message == "Engineering review is unavailable until repository analysis completes."
-    assert error.details == {"repositoryId": repository_id, "status": "analysing"}
+    error = assert_error_response(review_response, 404, "not_found")
+    assert error.message == (
+        "No sealed Repository Intelligence snapshot is available for this repository."
+    )
+    assert error.details == {"repositoryId": repository_id}
 
     # Read endpoints must not rebuild the missing compatibility model from disk.
     with SessionLocal() as session:

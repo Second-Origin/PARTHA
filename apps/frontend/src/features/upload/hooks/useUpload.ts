@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { DataSource, Repository, UploadFile } from '@/shared/types';
+import type { Repository, UploadFile } from '@/shared/types';
 import { backendService } from '@/shared/services/backend';
 import { getErrorMessage } from '@/shared/services/api';
 import { formatFileSize } from '@/shared/utils/cn';
@@ -27,8 +27,6 @@ export function useUpload() {
   const [uploadFile, setUploadFile] = useState<UploadFile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const dataSource: DataSource = 'real';
 
   const repositoryNames = useMemo(
     () => new Set(repositories.map((repo) => repo.name.toLowerCase())),
@@ -115,7 +113,7 @@ export function useUpload() {
     error,
     empty: !uploadFile,
     success: Boolean(uploadFile),
-    source: dataSource,
+    source: 'upload' as const,
     selectFile,
     rejectFile,
     removeFile,

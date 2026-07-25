@@ -55,7 +55,7 @@ The policy runs twice:
    denial is the normal `422 validation_error` response and leaves the existing
    record untouched.
 2. The common provider sender validates again immediately before every outbound
-   request. This covers `/ai/test`, `/ai/query`, and `/ai/stream`, including
+   request. This covers `/ai/test` and `/ai/query`, including
    configurations saved before this feature existed.
 
 At request time PARTHA resolves the original hostname, validates **every**

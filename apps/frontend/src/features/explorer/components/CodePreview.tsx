@@ -74,7 +74,7 @@ export function CodePreview({ node, repositoryId, citation }: CodePreviewProps) 
           repositoryId,
           citation.snapshotId,
           citation.factId,
-          node.path,
+          citation.path,
           citation.startLine,
           citation.endLine,
         )

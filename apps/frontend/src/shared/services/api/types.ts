@@ -322,6 +322,17 @@ export interface DependencyAssessment {
   status: 'not_computed';
 }
 
+/**
+ * Which intelligence path produced a repository-derived response. `ri.v1` is
+ * the sealed, evidence-backed snapshot model; `legacy-heuristic` is the older
+ * engine that reads mutable repository metadata. Legacy responses always carry
+ * a limitation so a heuristic result is never shown as snapshot-backed.
+ */
+export interface IntelligenceProvenance {
+  source: 'ri.v1' | 'legacy-heuristic';
+  limitation: string | null;
+}
+
 export interface DependencyGraphResponse {
   repositoryId: string;
   nodes: DependencyNode[];
@@ -331,6 +342,7 @@ export interface DependencyGraphResponse {
   diagnostics: DependencyDiagnostic[];
   vulnerabilityAssessment: DependencyAssessment;
   outdatedAssessment: DependencyAssessment;
+  provenance: IntelligenceProvenance;
 }
 
 // Review
@@ -364,13 +376,6 @@ export interface AiCitation {
 export interface AiQueryResponse {
   message: AiMessage;
   suggestions?: string[];
-}
-
-export interface AiStreamChunk {
-  type: 'content' | 'citation' | 'done' | 'error';
-  content?: string;
-  citation?: AiCitation;
-  error?: string;
 }
 
 export type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'openrouter' | 'ollama';
@@ -456,4 +461,36 @@ export interface ExportResponse {
   mediaType: string;
   encoding: 'utf-8' | 'base64';
   content: string;
+}
+
+// Revision manifest (#113): the verifiable identity of the sealed snapshot an
+// answer was derived from. `manifestDigest` is a canonical content hash, not a
+// digital signature.
+export interface ManifestExtractor {
+  name: string;
+  version: string;
+}
+
+export interface RevisionManifest {
+  schemaVersion: 'revision-manifest.v1';
+  repositoryId: string;
+  revisionKind: 'git' | 'upload';
+  revisionValue: string;
+  revisionRef: string | null;
+  snapshotId: string;
+  snapshotSchemaVersion: string;
+  extractors: ManifestExtractor[];
+  producerSetHash: string;
+  configHash: string;
+  canonicalGraphHash: string | null;
+  createdAt: string;
+  sealedAt: string | null;
+}
+
+export interface RevisionManifestResponse {
+  manifest: RevisionManifest;
+  manifestDigest: string;
+  verificationMethod: string;
+  verificationState: 'verified' | 'superseded' | 'mismatch' | 'unverifiable';
+  verificationNote: string;
 }

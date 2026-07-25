@@ -3,7 +3,7 @@ import type { EngineeringReview, ReviewCategory, ReviewSeverity, ReviewFinding }
 
 interface ReviewState {
   review: EngineeringReview | null;
-  setReview: (review: EngineeringReview) => void;
+  setReview: (review: EngineeringReview | null) => void;
 
   selectedFindingId: string | null;
   setSelectedFindingId: (id: string | null) => void;
@@ -14,10 +14,11 @@ interface ReviewState {
   filterSeverity: ReviewSeverity | 'all';
   setFilterSeverity: (severity: ReviewSeverity | 'all') => void;
 
-  filterStatus: 'open' | 'acknowledged' | 'resolved' | 'all';
-  setFilterStatus: (status: 'open' | 'acknowledged' | 'resolved' | 'all') => void;
+  filterDiagnosticCode: string | null;
+  setFilterDiagnosticCode: (code: string | null) => void;
 
   filteredFindings: () => ReviewFinding[];
+  resetForRepository: () => void;
 }
 
 export const useReviewStore = create<ReviewState>((set, get) => ({
@@ -33,8 +34,8 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   filterSeverity: 'all',
   setFilterSeverity: (severity) => set({ filterSeverity: severity }),
 
-  filterStatus: 'all',
-  setFilterStatus: (status) => set({ filterStatus: status }),
+  filterDiagnosticCode: null,
+  setFilterDiagnosticCode: (code) => set({ filterDiagnosticCode: code }),
 
   filteredFindings: () => {
     const state = get();
@@ -47,10 +48,19 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     if (state.filterSeverity !== 'all') {
       findings = findings.filter((f) => f.severity === state.filterSeverity);
     }
-    if (state.filterStatus !== 'all') {
-      findings = findings.filter((f) => f.status === state.filterStatus);
+    if (state.filterDiagnosticCode) {
+      findings = findings.filter((f) => f.diagnosticCode === state.filterDiagnosticCode);
     }
 
     return findings;
   },
+
+  resetForRepository: () =>
+    set({
+      review: null,
+      selectedFindingId: null,
+      filterCategory: 'all',
+      filterSeverity: 'all',
+      filterDiagnosticCode: null,
+    }),
 }));

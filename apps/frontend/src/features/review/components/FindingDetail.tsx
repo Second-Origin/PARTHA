@@ -1,137 +1,171 @@
+import { useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import {
-  X, AlertTriangle, FileCode, Box, Tag, Zap, ArrowRight, Brain,
-} from 'lucide-react';
-import { cn } from '@/shared/utils/cn';
+import { X, AlertTriangle, FileCode, ShieldCheck, ArrowRight, Database } from 'lucide-react';
 import type { ReviewFinding } from '@/shared/types/review';
 
 interface FindingDetailProps {
+  repositoryId: string;
   finding: ReviewFinding;
   onClose: () => void;
 }
 
-export function FindingDetail({ finding, onClose }: FindingDetailProps) {
-  const fileSizes = new Map(
-    (finding.affectedFileDetails ?? []).map((file) => [file.path, file.sizeBytes]),
-  );
-  const severityColor = {
-    critical: 'text-red-400',
-    high: 'text-orange-400',
-    medium: 'text-amber-400',
-    low: 'text-blue-400',
-  }[finding.severity];
+function evidenceHref(repositoryId: string, finding: ReviewFinding): string {
+  const params = new URLSearchParams({
+    tab: 'Explorer',
+    path: finding.path,
+    startLine: String(finding.startLine),
+    endLine: String(finding.endLine),
+    snapshotId: finding.snapshotId,
+    factId: finding.factId,
+  });
+  return `/repositories/${repositoryId}?${params.toString()}`;
+}
+
+export function FindingDetail({ repositoryId, finding, onClose }: FindingDetailProps) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const dialog = closeRef.current?.closest<HTMLElement>('[role="dialog"]');
+      const focusable = Array.from(
+        dialog?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])') ?? [],
+      ).filter((element) => element.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [onClose]);
 
   return (
-    <motion.div
-      initial={{ x: 20, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      exit={{ x: 20, opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      className="w-96 border-l border-border bg-card flex flex-col h-full overflow-hidden"
-    >
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-medium text-foreground truncate">{finding.title}</h3>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className={cn('text-[10px] font-medium capitalize', severityColor)}>{finding.severity}</span>
-            <span className="text-[10px] text-muted-foreground capitalize">{finding.category.replace('-', ' ')}</span>
-          </div>
-        </div>
-        <button
-          onClick={onClose}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-4">
-        <Section title="Problem" icon={AlertTriangle}>
-          <p className="text-xs text-muted-foreground leading-relaxed">{finding.problem}</p>
-        </Section>
-
-        <Section title="Impact" icon={Zap}>
-          <p className="text-xs text-muted-foreground leading-relaxed">{finding.impact}</p>
-        </Section>
-
-        <Section title="Recommendation" icon={ArrowRight}>
-          <p className="text-xs text-foreground leading-relaxed">{finding.recommendation}</p>
-        </Section>
-
-        <Section title="Metadata" icon={Tag}>
-          <div className="grid grid-cols-2 gap-2">
-            <MetaItem label="Priority" value={`#${finding.priority}`} />
-            <MetaItem label="Effort" value={finding.estimatedEffort} />
-            <MetaItem label="Status" value={finding.status} />
-            <MetaItem label="Category" value={finding.category.replace('-', ' ')} />
-          </div>
-        </Section>
-
-        {finding.affectedFiles.length > 0 && (
-          <Section title="Affected Files" icon={FileCode}>
-            <ul className="space-y-1">
-              {finding.affectedFiles.map((file) => (
-                <li key={file} className="text-xs text-muted-foreground font-mono">
-                  {file}{fileSizes.has(file) ? ` (${fileSizes.get(file)} bytes)` : ''}
-                </li>
-              ))}
-            </ul>
-          </Section>
-        )}
-
-        {finding.affectedModules.length > 0 && (
-          <Section title="Affected Modules" icon={Box}>
-            <div className="flex flex-wrap gap-1.5">
-              {finding.affectedModules.map((mod) => (
-                <span key={mod} className="text-[11px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground capitalize">
-                  {mod}
-                </span>
-              ))}
-            </div>
-          </Section>
-        )}
-
-        {finding.tags.length > 0 && (
-          <Section title="Tags" icon={Tag}>
-            <div className="flex flex-wrap gap-1.5">
-              {finding.tags.map((tag) => (
-                <span key={tag} className="text-[11px] px-2 py-0.5 rounded-md bg-primary/10 text-primary">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </Section>
-        )}
-
-        <Section title="AI Analysis" icon={Brain}>
-          <div className="rounded-lg bg-muted/50 border border-border p-3">
-            <p className="text-xs text-muted-foreground italic">
-              AI-powered analysis will provide detailed context, root cause analysis, and automated fix suggestions.
+    <>
+      <button
+        type="button"
+        aria-label="Close finding detail"
+        onClick={onClose}
+        className="fixed inset-0 z-40 bg-background/60"
+      />
+      <motion.aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Engineering finding: ${finding.title}`}
+        initial={{ x: 24, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: 24, opacity: 0 }}
+        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col overflow-hidden border-l border-border bg-card shadow-xl"
+      >
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-medium text-foreground">{finding.title}</h2>
+            <p className="text-[10px] uppercase text-muted-foreground">
+              {finding.severity} · {finding.diagnosticCode}
             </p>
           </div>
-        </Section>
-      </div>
-    </motion.div>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            aria-label="Close finding detail"
+            className="rounded-md p-1 text-muted-foreground hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 scrollbar-thin">
+          <Section title="Verified concern" icon={AlertTriangle}>
+            <p className="text-xs leading-relaxed text-muted-foreground">{finding.explanation}</p>
+          </Section>
+          <Section title="Remediation guidance" icon={ArrowRight}>
+            <p className="text-xs leading-relaxed text-foreground">{finding.remediationGuidance}</p>
+          </Section>
+          <Section title="Authentic source evidence" icon={FileCode}>
+            <Link
+              to={evidenceHref(repositoryId, finding)}
+              className="inline-flex rounded text-xs font-mono text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              {finding.path}:{finding.startLine}
+              {finding.endLine !== finding.startLine ? `-${finding.endLine}` : ''}
+            </Link>
+            {finding.supportStatus === 'file_scoped' && (
+              <p className="mt-2 text-[10px] leading-relaxed text-amber-400">
+                This diagnostic applies to the whole file. The lines above are the file's
+                evidence record, not the exact location of the problem.
+              </p>
+            )}
+            <dl className="mt-3 space-y-2 text-[10px] text-muted-foreground">
+              <Field label="Fact ID" value={finding.factId} />
+              <Field label="Evidence ID" value={finding.evidenceId} />
+              <Field label="Extractor" value={`${finding.extractorName}@${finding.extractorVersion}`} />
+            </dl>
+          </Section>
+          <Section title="Snapshot provenance" icon={Database}>
+            <dl className="space-y-2 text-[10px] text-muted-foreground">
+              <Field label="Snapshot" value={finding.snapshotId} />
+              <Field label="Rule" value={finding.ruleId} />
+              <Field label="Support status" value={finding.supportStatus} />
+              <Field label="Source" value={finding.provenance.source} />
+            </dl>
+          </Section>
+          <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+            <p className="text-xs text-muted-foreground">
+              {finding.supportStatus === 'file_scoped'
+                ? "This finding is shown because its fact and the named file's evidence record belong to the selected sealed snapshot."
+                : 'This finding is shown because its fact and source span belong to the selected sealed snapshot.'}
+            </p>
+          </div>
+        </div>
+      </motion.aside>
+    </>
   );
 }
 
-function Section({ title, icon: Icon, children }: { title: string; icon: typeof AlertTriangle; children: React.ReactNode }) {
+function Section({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: typeof AlertTriangle;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="rounded-lg border border-border p-3">
-      <div className="flex items-center gap-2 mb-2">
+    <section className="rounded-lg border border-border p-3">
+      <div className="mb-2 flex items-center gap-2">
         <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-        <h4 className="text-xs font-medium text-foreground">{title}</h4>
+        <h3 className="text-xs font-medium text-foreground">{title}</h3>
       </div>
       {children}
-    </div>
+    </section>
   );
 }
 
-function MetaItem({ label, value }: { label: string; value: string }) {
+function Field({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-muted/50 px-2.5 py-1.5">
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className="text-xs font-medium text-foreground capitalize">{value}</p>
+    <div>
+      <dt className="uppercase tracking-wide">{label}</dt>
+      <dd className="break-all font-mono text-foreground">{value}</dd>
     </div>
   );
 }

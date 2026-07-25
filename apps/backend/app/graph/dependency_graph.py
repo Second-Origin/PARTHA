@@ -6,6 +6,7 @@ from app.schemas.dependencies import (
     DependencyGraphResponse,
     DependencyNode,
 )
+from app.schemas.provenance import IntelligenceProvenance
 
 
 class DependencyGraphBuilder:
@@ -24,6 +25,7 @@ class DependencyGraphBuilder:
                 diagnostics=[],
                 vulnerability_assessment=DependencyAssessment(status="not_computed"),
                 outdated_assessment=DependencyAssessment(status="not_computed"),
+                provenance=IntelligenceProvenance.legacy(),
             )
         nodes = [
             DependencyNode(
@@ -52,4 +54,5 @@ class DependencyGraphBuilder:
             diagnostics=repository_intelligence.dependency_diagnostics,
             vulnerability_assessment=DependencyAssessment(status="not_computed"),
             outdated_assessment=DependencyAssessment(status="not_computed"),
+            provenance=IntelligenceProvenance.legacy(),
         )

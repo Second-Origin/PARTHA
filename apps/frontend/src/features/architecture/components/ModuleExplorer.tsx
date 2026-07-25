@@ -4,7 +4,16 @@ import { cn } from '@/shared/utils/cn';
 import { useArchitectureStore } from '../store';
 
 export function ModuleExplorer() {
-  const { model, expandedModules, toggleModule, selectedNodeId, setSelectedNodeId, setHighlightedNodeIds } = useArchitectureStore();
+  const {
+    model,
+    expandedModules,
+    toggleModule,
+    collapsedLayers,
+    toggleLayer,
+    selectedNodeId,
+    setSelectedNodeId,
+    setHighlightedNodeIds,
+  } = useArchitectureStore();
 
   if (!model) return null;
 
@@ -21,7 +30,7 @@ export function ModuleExplorer() {
       <div className="px-3 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-          <h3 className="text-xs font-medium text-foreground">Modules</h3>
+          <h2 className="text-xs font-medium text-foreground">Modules</h2>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto scrollbar-thin p-2 space-y-0.5">
@@ -32,10 +41,18 @@ export function ModuleExplorer() {
           return (
             <div key={layer.id}>
               <button
-                onClick={() => toggleModule(layer.id)}
+                onClick={() => {
+                  toggleModule(layer.id);
+                  toggleLayer(layer.id);
+                }}
                 onMouseEnter={() => handleModuleHover(layer.nodes)}
                 onMouseLeave={handleModuleLeave}
-                className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-left hover:bg-accent/50 transition-colors"
+                aria-expanded={isExpanded}
+                aria-pressed={!collapsedLayers.has(layer.id)}
+                className={cn(
+                  'w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-left hover:bg-accent/50 transition-colors',
+                  collapsedLayers.has(layer.id) && 'opacity-70'
+                )}
               >
                 <ChevronRight
                   className={cn(

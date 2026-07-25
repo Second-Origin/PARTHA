@@ -41,6 +41,10 @@ const graph: DependencyGraphResponse = {
   diagnostics: [],
   vulnerabilityAssessment: { status: 'not_computed' },
   outdatedAssessment: { status: 'not_computed' },
+  provenance: {
+    source: 'legacy-heuristic',
+    limitation: 'Derived from declared manifests by the legacy analysis engine.',
+  },
 };
 
 const dependencies: ReturnType<typeof useDependencies> = {
@@ -75,7 +79,7 @@ const dependencies: ReturnType<typeof useDependencies> = {
   error: null,
   empty: false,
   success: true,
-  source: 'real' as const,
+  source: 'upload' as const,
   emptyReason: null,
   graph,
   retry: vi.fn(),
@@ -230,5 +234,15 @@ describe('DependenciesPage', () => {
 
     expect(screen.getByText('Dependency service is unavailable.')).toBeInTheDocument();
     expect(screen.queryByText('Dependency inventory unavailable')).not.toBeInTheDocument();
+  });
+
+  it('discloses that the dependency graph comes from the legacy engine', () => {
+    mockDependencies({ graph });
+    renderPage();
+
+    expect(screen.getByTestId('provenance-notice')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Derived from declared manifests by the legacy analysis engine\./),
+    ).toBeInTheDocument();
   });
 });

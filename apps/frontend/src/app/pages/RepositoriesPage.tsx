@@ -125,7 +125,7 @@ export function RepositoriesPage() {
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <Badge variant={repositoryStatusVariant[repo.status]}>{repo.status}</Badge>
-                    <DataSourceBadge source={repo.dataSource} />
+                    <DataSourceBadge source={repo.source} />
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right">

@@ -9,6 +9,7 @@ from app.schemas.architecture import (
     RequestFlowStep,
 )
 from app.schemas.dependencies import DependencyAssessment, DependencyGraphResponse, DependencyNode
+from app.schemas.provenance import IntelligenceProvenance
 
 
 def _architecture() -> ArchitectureResponse:
@@ -74,6 +75,7 @@ def _dependencies() -> DependencyGraphResponse:
         total_dependencies=2,
         vulnerability_assessment=DependencyAssessment(status="not_computed"),
         outdated_assessment=DependencyAssessment(status="not_computed"),
+        provenance=IntelligenceProvenance.legacy(),
     )
 
 
@@ -110,6 +112,7 @@ def test_build_dependencies_document_handles_empty_inventory():
         total_dependencies=0,
         vulnerability_assessment=DependencyAssessment(status="not_computed"),
         outdated_assessment=DependencyAssessment(status="not_computed"),
+        provenance=IntelligenceProvenance.legacy(),
     )
 
     document = build_dependencies_document(empty, "sample")

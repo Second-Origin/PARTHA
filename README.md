@@ -60,10 +60,11 @@ Statuses below were checked against the implementation, not against prior docume
 | Repository explorer and file preview | **Implemented** | File tree, text and image preview, binary detection, truncation of large files. |
 | Documentation and report export | **Implemented** | JSON, Markdown, HTML, and PDF through a shared report pipeline. |
 | Authentication and frontend session flow | **Implemented** | Email/password with Argon2, short-lived access tokens, rotating refresh tokens with reuse detection. All frontend routes are behind an auth guard. |
-| Repository Intelligence | **Implemented but limited** | A durable analysis job preserves the legacy discovery model and also seals normalized, revision-addressed Python/TypeScript facts with evidence. Legacy module and review consumers remain heuristic. |
-| Architecture output | **Implemented but limited** | Modules, layers, relationships, and an interactive graph — with heuristic module and layer assignment. |
-| Dependency inventory | **Implemented but limited** | Reads `package.json`, `requirements.txt`, and `pyproject.toml`. Other ecosystems and lockfiles are not parsed. |
-| Engineering review | **Implemented but limited** | A fixed set of heuristic checks with derived category scores. Scores are arithmetic over finding severities, not a measured quality metric. |
+| Repository Intelligence | **Implemented but limited** | A durable analysis job preserves a legacy compatibility model and seals normalized, revision-addressed Python/TypeScript facts with evidence. Architecture, authentication explanation, Engineering Review, and Insights consume the sealed snapshot. |
+| Architecture output | **Implemented but limited** | Snapshot-backed nodes and relationships in a readable interactive graph. Module and layer classification remains a disclosed heuristic. |
+| Dependency inventory | **Preview** | Reads direct declarations from `package.json`, `requirements.txt`, and `pyproject.toml` through the legacy path. It is not snapshot-bound and does not scan vulnerabilities or outdated versions. |
+| Engineering review | **Implemented but limited** | Deterministic `engineering-review.v2` findings only when the selected sealed snapshot supplies an exact fact and source span. Unassessed categories stay explicit; no score, grade, percentage, or invented roadmap is produced. |
+| Repository insights | **Implemented but limited** | Defined counts, ratios, diagnostics, language and extractor breakdowns from one sealed snapshot. Trend and change-over-time metrics are explicitly unavailable. |
 | AI provider integration | **Implemented but limited** | Several providers behind one abstraction. Provider configuration is per-user, with the API key encrypted at rest and injected per request; outbound destinations are centrally allowlisted and DNS-pinned. See [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md). |
 | Authorization and owner isolation | **Implemented** | All repository, analysis, AI, documentation, and export routes require authentication and are owner-scoped in the service layer; a non-owner request returns 404. Rate-limit budgets are keyed per authenticated user. |
 | Evidence-backed authentication explanation | **Implemented but limited** | A deterministic Python/FastAPI authentication subgraph cites snapshot-, fact-, revision-, and line-addressed source. Classification remains heuristic and unsupported patterns are reported as gaps. |
@@ -84,7 +85,7 @@ Two terms PARTHA uses precisely, because the difference decides how far a claim 
 - **Evidence** is the source artifact supporting a repository fact: a file, declaration, import, route, or configuration entry.
 - **Provenance** identifies where the fact came from: repository revision, path, symbol, line span, and extraction method.
 
-**PARTHA currently provides partial, surface-dependent evidence and provenance.** Normalized `ri.v1` facts from supported Python and TypeScript extraction carry a repository revision, fact identity, path, line span, and extractor version. The authentication explanation consumes those facts and verifies its citation destination against the sealed fact/span and stored source-byte hash before displaying a trusted revision badge.
+**PARTHA currently provides partial, surface-dependent evidence and provenance.** Normalized `ri.v1` facts from supported Python and TypeScript extraction carry a repository revision, fact identity, path, line span, and extractor version. Architecture, the authentication explanation, Engineering Review, and Insights bind their output to one sealed snapshot. Review findings link to the exact stored fact/span; the Explorer verifies that destination and stored source-byte hash before displaying a trusted revision badge.
 
 Legacy compatibility facts and several consumers still lack that traceability. AI receives no source content or line numbers and returns no citations. Extraction covers only documented syntax, and role classifications remain explicitly heuristic. Treat inferred output as a lead to verify, not a guarantee.
 
@@ -231,11 +232,18 @@ npm run test:backend                  # backend tests (pytest)
 npm --prefix apps/frontend run test   # frontend tests (vitest)
 npm run lint:frontend                 # eslint
 npm run build:frontend                # tsc -b && vite build
+npm run test:prototype                # disposable fixtures + Playwright journeys
 ```
 
-`npm run build` runs the frontend build and the backend tests; it does not run frontend lint or frontend tests, so run those separately. CI runs all of the above plus a Docker Compose check.
+`npm run build` runs the frontend build and the backend tests; it does not run
+frontend lint, Vitest, or the prototype browser journeys, so run those
+separately. CI runs all of the above plus the disposable Playwright acceptance
+job and a Docker Compose check.
 
-Backend coverage is the stronger of the two. Frontend coverage is thin and there is no end-to-end suite, so passing tests indicate the covered paths work rather than overall maturity.
+The executable prototype acceptance suite exercises the review-ready
+Architecture, Engineering Review, and Insights journeys against disposable
+analyzed repositories. Passing tests demonstrate those defined journeys, not
+complete product maturity.
 
 ---
 
@@ -243,8 +251,8 @@ Backend coverage is the stronger of the two. Frontend coverage is thin and there
 
 - **Not yet hardened for public multi-tenant use.** Authentication and owner isolation are enforced across the backend routes, provider keys are encrypted at rest, and AI provider egress is centrally constrained, but PARTHA has not been operated as a hardened multi-tenant deployment. It is not production-ready and should not be exposed to the public internet without further review. Outside `development`/`test`, set `AUTH_SECRET_KEY` and `AI_ENCRYPTION_KEY` (a Fernet key); the backend refuses to start without them. Production also needs an independent network egress control; application validation is not a firewall.
 - **Extraction is heuristic.** File roles, modules, and layers are inferred from paths and filenames; symbols come from regular expressions. Expect wrong answers on projects that do not follow common conventions, and do not treat heuristic output as guaranteed fact.
-- **Evidence and provenance are partial at the product layer.** Normalized Python/TypeScript snapshot facts carry revision identity, line spans, and extractor versions, but legacy modules, reviews, documentation, exports, and AI answers do not all consume them yet.
-- **The persistent graph is not the only read model yet.** Durable analysis seals queryable `ri.v1` snapshots, while several compatibility consumers still read serialized legacy intelligence from the repository row.
+- **Evidence and provenance are partial at the product layer.** Architecture, Engineering Review, and Insights bind output to sealed snapshots and expose the provenance they use. Compatibility modules, documentation, exports, and AI answers do not all consume that model yet.
+- **The persistent graph is not the only read model yet.** Durable analysis seals queryable `ri.v1` snapshots, while Dependency Graph Preview and several compatibility consumers still read serialized legacy intelligence from the repository row.
 - **Analysis is whole-repository.** It now runs as a cancellable background job, but there is no incremental re-analysis.
 - **No change-impact analysis, and no vulnerability or outdated-dependency scanning.**
 - **AI answers are not evidence-backed.** They are grounded in repository structure and file paths only, with no citations. Treat them as a hypothesis to verify.

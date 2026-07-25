@@ -4,9 +4,14 @@ import { GitBranch, Package, Search } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
+import { ProvenanceNotice } from '@/shared/components/ui/ProvenanceNotice';
+import { PreviewBanner } from '@/shared/components/ui/PreviewBanner';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { useDependencies } from '@/features/dependencies/hooks/useDependencies';
 import type { DependencyAssessment } from '@/shared/services/api/types';
+
+const DEPENDENCY_LIMITATION =
+  'Data comes from package manifests through the legacy analysis path and is not bound to the sealed ri.v1 snapshot. Vulnerability and outdated-version assessments are not computed; do not treat this as a security scan.';
 
 export function DependenciesPage() {
   const navigate = useNavigate();
@@ -33,6 +38,7 @@ export function DependenciesPage() {
     return (
       <div>
         <PageHeader title="Dependency Graph" description="Explore the dependency relationships within your codebase" />
+        <PreviewBanner limitation={DEPENDENCY_LIMITATION} />
         <EmptyState
           icon={GitBranch}
           title="No dependency data"
@@ -47,6 +53,7 @@ export function DependenciesPage() {
     return (
       <div>
         <PageHeader title="Dependency Graph" description="Explore the dependency relationships within your codebase" />
+        <PreviewBanner limitation={DEPENDENCY_LIMITATION} />
         <EmptyState
           icon={GitBranch}
           title="Select a repository"
@@ -62,6 +69,7 @@ export function DependenciesPage() {
         <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
           <DataSourceBadge source={dependencies.source} />
         </PageHeader>
+        <PreviewBanner limitation={DEPENDENCY_LIMITATION} />
         <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">Loading dependency graph...</div>
       </div>
     );
@@ -73,6 +81,7 @@ export function DependenciesPage() {
         <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
           <DataSourceBadge source={dependencies.source} />
         </PageHeader>
+        <PreviewBanner limitation={DEPENDENCY_LIMITATION} />
         <div className="rounded-xl border border-destructive/50 bg-destructive/5 p-5">
           <p className="text-sm text-destructive">{dependencies.error}</p>
           <button onClick={dependencies.retry} className="mt-3 text-xs text-primary hover:underline">Retry</button>
@@ -87,6 +96,7 @@ export function DependenciesPage() {
         <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
           <DataSourceBadge source={dependencies.source} />
         </PageHeader>
+        <PreviewBanner limitation={DEPENDENCY_LIMITATION} />
         <EmptyState
           icon={GitBranch}
           title="Dependency inventory unavailable"
@@ -101,6 +111,8 @@ export function DependenciesPage() {
       <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
         <DataSourceBadge source={dependencies.source} />
       </PageHeader>
+      <PreviewBanner limitation={DEPENDENCY_LIMITATION} />
+      <ProvenanceNotice provenance={graph.provenance} />
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         <Stat label="Dependencies" value={graph.totalDependencies} />
         <Stat label="Relations" value={graph.edges.length} />

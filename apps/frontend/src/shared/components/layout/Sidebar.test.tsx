@@ -41,21 +41,26 @@ describe('Sidebar', () => {
     expect(screen.queryByText('Free Plan')).not.toBeInTheDocument();
   });
 
-  it('derives primary navigation from the current ready product surfaces', () => {
+  it('derives primary navigation from the current navigable product surfaces', () => {
     renderSidebar();
 
-    expect(screen.getAllByRole('link', { name: /Dashboard|Repositories|Upload Repository|Architecture|Dependency Graph|Settings/ }))
-      .toHaveLength(6);
+    expect(
+      screen.getAllByRole('link', {
+        name: /Dashboard|Repositories|Upload Repository|Architecture|Dependency Graph|Settings|AI Workspace|Engineering Review|Documentation|Insights/,
+      }),
+    ).toHaveLength(10);
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('link', { name: 'Repositories' })).toHaveAttribute('href', '/repositories');
     expect(screen.getByRole('link', { name: 'Upload Repository' })).toHaveAttribute('href', '/upload');
     expect(screen.getByRole('link', { name: 'Architecture' })).toHaveAttribute('href', '/architecture');
     expect(screen.getByRole('link', { name: 'Dependency Graph' })).toHaveAttribute('href', '/dependencies');
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
-    expect(screen.queryByRole('link', { name: 'Engineering Review' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'AI Workspace' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Documentation' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Insights' })).not.toBeInTheDocument();
+    // Restored as Preview surfaces (#154): reachable from navigation, each
+    // labelled Preview with its limitation on the page itself.
+    expect(screen.getByRole('link', { name: 'AI Workspace' })).toHaveAttribute('href', '/ai-workspace');
+    expect(screen.getByRole('link', { name: 'Documentation' })).toHaveAttribute('href', '/documentation');
+    expect(screen.getByRole('link', { name: 'Engineering Review' })).toHaveAttribute('href', '/review');
+    expect(screen.getByRole('link', { name: 'Insights' })).toHaveAttribute('href', '/insights');
     expect(screen.queryByText('Beta')).not.toBeInTheDocument();
     expect(screen.queryByText('Experimental')).not.toBeInTheDocument();
     expect(screen.queryByText('Planned')).not.toBeInTheDocument();

@@ -210,6 +210,7 @@ def test_revision_backfill_classifies_exact_legacy_values_and_downgrade_preserve
             connection.execute(repositories.insert(), rows)
 
         command.upgrade(cfg, "head")
+        assert "data_source" in {column["name"] for column in inspect(engine).get_columns("repositories")}
         upgraded = MetaData()
         upgraded_repositories = Table("repositories", upgraded, autoload_with=engine)
         with engine.connect() as connection:
@@ -247,6 +248,7 @@ def test_revision_backfill_classifies_exact_legacy_values_and_downgrade_preserve
 
         command.downgrade(cfg, "0004_ai_provider_configs")
         assert "ri_snapshots" not in inspect(engine).get_table_names()
+        assert "data_source" in {column["name"] for column in inspect(engine).get_columns("repositories")}
         assert "revision_value" not in {column["name"] for column in inspect(engine).get_columns("repositories")}
         restored = Table("repositories", MetaData(), autoload_with=engine)
         with engine.connect() as connection:

@@ -229,7 +229,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
     error,
     empty: !repository,
     success: repositoryStatus === 'completed',
-    source: repository?.dataSource || null,
+    source: repository?.source || null,
     retry: refresh,
     refresh,
     cancel,

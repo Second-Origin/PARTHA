@@ -76,9 +76,8 @@ class AiOrchestrator:
                 timestamp=datetime.now(UTC),
                 citations=[citation.to_schema() for citation in repository_context.citations] or None,
             ),
-            suggestions=[
-                "Explain the main architecture boundaries.",
-                "What files should I read first?",
-                "What are the highest-risk engineering issues?",
-            ],
+            # Suggestions are not computed from the provider response or the
+            # repository context yet. Return an explicit empty list instead of
+            # presenting generic prompts as analysis-derived recommendations.
+            suggestions=[],
         )

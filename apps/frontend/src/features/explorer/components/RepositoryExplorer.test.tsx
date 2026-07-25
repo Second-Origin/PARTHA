@@ -30,13 +30,13 @@ const FILE_TREE: FileTreeNode[] = [
     id: 'src',
     name: 'src',
     type: 'folder',
-    path: 'src',
+    path: '/src',
     children: [
       {
         id: 'src/dependencies.py',
         name: 'dependencies.py',
         type: 'file',
-        path: 'src/dependencies.py',
+        path: '/src/dependencies.py',
         extension: 'py',
       },
     ],
