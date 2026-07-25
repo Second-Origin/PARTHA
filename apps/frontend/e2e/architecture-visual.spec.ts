@@ -2,25 +2,15 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
-/**
- * Visual acceptance for the architecture graph (#112, #154).
- *
- * Issue #112 is a *visual* defect: nodes were unreadable at default zoom in a
- * single-row layout. Unit tests over the layout function and axe checks in
- * jsdom cannot settle that — neither has a viewport. This drives a real browser
- * against a real backend and asserts the things a reviewer would look at, then
- * captures screenshots as the evidence attached to the PR.
- *
- * Requires seeded fixtures. See docs/PROTOTYPE_READINESS_2026-08-02.md
- * ("Visual acceptance") for the exact commands.
- */
-
 interface Fixture {
   label: string;
   id: string;
   name: string;
+  revisionValue: string | null;
+  snapshotId: string | null;
   nodes: number;
   edges: number;
+  reviewFindings: number;
 }
 
 interface Fixtures {
@@ -30,13 +20,13 @@ interface Fixtures {
 }
 
 const FIXTURES: Fixtures = JSON.parse(
-  readFileSync(process.env.PARTHA_VISUAL_FIXTURES ?? '/tmp/visual-fixtures.json', 'utf8'),
+  readFileSync(process.env.PARTHA_VISUAL_FIXTURES ?? '/tmp/partha-prototype-fixtures.json', 'utf8'),
 );
 
 const byLabel = (label: string) => {
-  const found = FIXTURES.repos.find((repo) => repo.label === label);
-  if (!found) throw new Error(`fixture "${label}" missing`);
-  return found;
+  const fixture = FIXTURES.repos.find((repository) => repository.label === label);
+  if (!fixture) throw new Error(`fixture "${label}" missing`);
+  return fixture;
 };
 
 async function login(page: Page) {
@@ -47,51 +37,86 @@ async function login(page: Page) {
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
 }
 
-async function openArchitecture(page: Page, fixture: Fixture) {
-  // Navigate in-app rather than with page.goto: the access token is held in
-  // memory (refresh lives in an HTTP-only cookie), so a full document load
-  // drops the session and bounces to /login. Clicking the sidebar link is also
-  // the path a real user takes.
-  await page.getByRole('link', { name: 'Architecture' }).click();
-  await expect(page.getByRole('heading', { name: 'Architecture', level: 1 })).toBeVisible({
-    timeout: 15_000,
-  });
-
-  const trigger = page
-    .locator('button')
-    .filter({ hasText: /^(No repository|small|medium|large|unanalysed)$/ })
-    .first();
-  await trigger.click();
-  await page
-    .locator('button')
-    .filter({ hasText: new RegExp(`^${fixture.name}$`) })
-    .last()
-    .click();
-  await expect(trigger).toHaveText(new RegExp(fixture.name));
-}
-
-/**
- * Attach a screenshot to the test report and, when PARTHA_VISUAL_SCREENSHOT_DIR
- * is set, also write it to disk so the accepted evidence can be committed and
- * linked from the pull request.
- */
-async function capture(target: Page | Locator, name: string, testInfo: TestInfo) {
-  const body = await target.screenshot();
-  await testInfo.attach(name, { body, contentType: 'image/png' });
-  const dir = process.env.PARTHA_VISUAL_SCREENSHOT_DIR;
-  if (dir) {
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, `${name}.png`), body);
+async function openPrimaryNavigation(page: Page) {
+  if ((page.viewportSize()?.width ?? 1440) < 768) {
+    await page.getByRole('button', { name: 'Open navigation drawer' }).click();
+    await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeVisible();
   }
 }
 
-/** React Flow nodes, once the layout has settled. */
-const nodes = (page: Page) => page.locator('.react-flow__node');
+async function openSurface(page: Page, name: string) {
+  await openPrimaryNavigation(page);
+  await page.getByRole('link', { name, exact: true }).click();
+}
+
+async function selectRepository(page: Page, fixture: Fixture) {
+  const trigger = page.locator('header button').filter({
+    hasText: /^(No repository|small|medium|large-multi|large-single|long-labels|disconnected-unresolved|unanalysed)$/,
+  }).first();
+  await trigger.click();
+  await page.locator('button').filter({ hasText: new RegExp(`^${fixture.name}$`) }).last().click();
+  await expect(trigger).toHaveText(fixture.name);
+}
+
+async function openArchitecture(page: Page, fixture: Fixture) {
+  await openSurface(page, 'Architecture');
+  await expect(page.getByRole('heading', { name: 'Architecture', level: 1 })).toBeVisible({
+    timeout: 15_000,
+  });
+  await selectRepository(page, fixture);
+}
+
+async function capture(target: Page | Locator, name: string, testInfo: TestInfo) {
+  const body = await target.screenshot();
+  await testInfo.attach(name, { body, contentType: 'image/png' });
+  const directory = process.env.PARTHA_VISUAL_SCREENSHOT_DIR;
+  if (directory) {
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(join(directory, `${name}.png`), body);
+  }
+}
+
+const graphNodes = (page: Page) => page.locator('.react-flow__node');
 
 async function waitForGraph(page: Page) {
-  await expect(nodes(page).first()).toBeVisible({ timeout: 20_000 });
-  // Let the fit-to-view animation finish before measuring or capturing.
-  await page.waitForTimeout(1200);
+  await expect(graphNodes(page).first()).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(500);
+}
+
+async function nodeMeasurements(page: Page) {
+  return graphNodes(page).evaluateAll((elements) =>
+    elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      const label = element.querySelector<HTMLElement>('[data-testid="architecture-node-label"]');
+      const labelStyle = label ? getComputedStyle(label) : null;
+      const scale = rect.width / 220;
+      return {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        label: label?.textContent?.trim() ?? '',
+        effectiveFontSize: Number.parseFloat(labelStyle?.fontSize ?? '0') * scale,
+      };
+    }),
+  );
+}
+
+function overlapCount(boxes: Awaited<ReturnType<typeof nodeMeasurements>>) {
+  let overlaps = 0;
+  for (let left = 0; left < boxes.length; left += 1) {
+    for (let right = left + 1; right < boxes.length; right += 1) {
+      const a = boxes[left];
+      const b = boxes[right];
+      if (
+        a.x < b.x + b.width
+        && a.x + a.width > b.x
+        && a.y < b.y + b.height
+        && a.y + a.height > b.y
+      ) overlaps += 1;
+    }
+  }
+  return overlaps;
 }
 
 test.describe('architecture graph visual acceptance', () => {
@@ -99,154 +124,195 @@ test.describe('architecture graph visual acceptance', () => {
     await login(page);
   });
 
-  for (const label of ['small', 'medium', 'large'] as const) {
-    test(`${label} graph is readable at default zoom`, async ({ page }, testInfo) => {
+  for (const label of ['small', 'medium', 'large-multi', 'large-single'] as const) {
+    test(`${label} graph is readable at its default view`, async ({ page }, testInfo) => {
       const fixture = byLabel(label);
       await openArchitecture(page, fixture);
       await waitForGraph(page);
 
-      const boxes = await nodes(page).evaluateAll((elements) =>
-        elements.map((element) => {
-          const rect = element.getBoundingClientRect();
-          return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-        }),
-      );
-      expect(boxes.length).toBeGreaterThan(0);
+      const boxes = await nodeMeasurements(page);
+      expect(boxes).toHaveLength(fixture.nodes);
+      expect(boxes.every((box) => box.label.length > 0), 'a visible graph node has no label').toBe(true);
+      expect(
+        boxes.filter((box) => box.width < 180 || box.height < 85),
+        'node geometry fell below the readable 0.85x floor',
+      ).toHaveLength(0);
+      expect(
+        boxes.filter((box) => box.effectiveFontSize < 10),
+        'a node label renders below 10 CSS pixels after graph scaling',
+      ).toHaveLength(0);
+      expect(overlapCount(boxes), 'graph nodes overlap').toBe(0);
 
-      // 1. Nodes are big enough to read after fit-to-view. The #112 symptom was
-      //    nodes shrinking to illegibility because everything sat in one row.
-      const tooSmall = boxes.filter((box) => box.width < 60 || box.height < 30);
-      expect(tooSmall, `${tooSmall.length}/${boxes.length} nodes rendered too small`).toHaveLength(0);
-
-      // 2. The layout is not a single row: a layered graph must use vertical
-      //    space once it has more than a couple of nodes.
-      if (boxes.length > 2) {
-        const distinctRows = new Set(boxes.map((box) => Math.round(box.y / 40))).size;
-        expect(distinctRows, 'layout collapsed into a single row').toBeGreaterThan(1);
-      }
-
-      // 3. Nodes do not overlap each other.
-      let overlaps = 0;
-      for (let i = 0; i < boxes.length; i += 1) {
-        for (let j = i + 1; j < boxes.length; j += 1) {
-          const a = boxes[i];
-          const b = boxes[j];
-          const intersects =
-            a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
-          if (intersects) overlaps += 1;
-        }
-      }
-      expect(overlaps, 'overlapping nodes').toBe(0);
-
-      // 4. Fitting everything and keeping nodes legible conflict once a graph
-      //    is large enough. Legibility wins (see READABLE_MIN_ZOOM), so the
-      //    contract is: some nodes are on screen, and when the rest do not fit
-      //    there is a navigation affordance to reach them.
-      const viewport = page.viewportSize()!;
-      const onscreen = boxes.filter(
+      const graphBounds = await page.locator('.react-flow').boundingBox();
+      expect(graphBounds).not.toBeNull();
+      const clipped = boxes.filter(
         (box) =>
-          box.x + box.width > 0 && box.y + box.height > 0 && box.x < viewport.width && box.y < viewport.height,
+          box.x < graphBounds!.x - 1
+          || box.y < graphBounds!.y - 1
+          || box.x + box.width > graphBounds!.x + graphBounds!.width + 1
+          || box.y + box.height > graphBounds!.y + graphBounds!.height + 1,
       );
-      expect(onscreen.length, 'no nodes visible after fit-to-view').toBeGreaterThan(0);
+      expect(clipped, 'the default view partially clips a graph node').toHaveLength(0);
 
-      if (onscreen.length < boxes.length) {
-        await expect(
-          page.locator('.react-flow__minimap'),
-          'graph overflows the viewport but offers no minimap to navigate it',
-        ).toBeVisible();
+      const distinctColumns = new Set(boxes.map((box) => Math.round(box.x / 40))).size;
+      const distinctRows = new Set(boxes.map((box) => Math.round(box.y / 40))).size;
+      if (label === 'large-single') {
+        expect(distinctColumns, 'busy single semantic layer did not wrap into subcolumns').toBeGreaterThan(1);
+        expect(distinctRows, 'busy single semantic layer stayed in one row').toBeGreaterThan(1);
+      } else if (boxes.length > 2) {
+        expect(distinctColumns).toBeGreaterThan(1);
+        expect(distinctRows).toBeGreaterThan(1);
       }
+
+      if (label === 'small') {
+        const labels = boxes.map((box) => box.label);
+        expect(labels).toEqual(expect.arrayContaining(['Api', 'Services', 'Domain', 'Repositories']));
+      }
+
+      const viewport = page.viewportSize()!;
+      const visible = boxes.filter(
+        (box) =>
+          box.x + box.width > 0
+          && box.y + box.height > 0
+          && box.x < viewport.width
+          && box.y < viewport.height,
+      );
+      expect(visible.length, 'the default view contains no graph nodes').toBeGreaterThan(0);
+      if (visible.length < boxes.length) await expect(page.locator('.react-flow__minimap')).toBeVisible();
 
       await capture(page, `architecture-${label}`, testInfo);
     });
   }
 
-  test('long module names are truncated but recoverable', async ({ page }, testInfo) => {
-    await openArchitecture(page, byLabel('medium'));
+  test('long module names are truncated visually and recoverable accessibly', async ({ page }, testInfo) => {
+    await openArchitecture(page, byLabel('long-labels'));
     await waitForGraph(page);
 
-    // Labels truncate to keep node size stable, so the full text has to remain
-    // available as the accessible name and tooltip.
     const group = page.locator('.react-flow__node [role="group"]').first();
-    const label = await group.getAttribute('aria-label');
-    const title = await group.getAttribute('title');
-    expect(label && label.length).toBeGreaterThan(0);
-    expect(title).toBe(label);
-
+    const accessibleName = await group.getAttribute('aria-label');
+    expect(accessibleName).toContain('Customer Subscription Entitlement Orchestration');
+    expect(await group.getAttribute('title')).toBe(accessibleName);
     await capture(page, 'architecture-long-labels', testInfo);
   });
 
-  test('graph is keyboard reachable with a visible focus ring', async ({ page }, testInfo) => {
+  test('focused nodes remain visible, have a real focus ring, and open with the keyboard', async ({
+    page,
+  }, testInfo) => {
     await openArchitecture(page, byLabel('medium'));
     await waitForGraph(page);
 
-    // Tab until focus lands inside the graph, then confirm the browser paints a
-    // focus indicator rather than relying on hover alone.
-    let focusedNode = false;
-    for (let i = 0; i < 40 && !focusedNode; i += 1) {
+    let reachedNode = false;
+    for (let index = 0; index < 50 && !reachedNode; index += 1) {
       await page.keyboard.press('Tab');
-      focusedNode = await page.evaluate(
-        () => document.activeElement?.closest('.react-flow__node') !== null,
-      );
+      reachedNode = await page.evaluate(() => document.activeElement?.closest('.react-flow__node') !== null);
     }
-    expect(focusedNode, 'no graph node reachable by keyboard').toBe(true);
+    expect(reachedNode, 'no graph node is reachable by Tab').toBe(true);
 
-    const outline = await page.evaluate(() => {
-      const active = document.activeElement as HTMLElement | null;
-      if (!active) return null;
-      const style = getComputedStyle(active);
-      return { outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth, boxShadow: style.boxShadow };
+    const focusState = await page.evaluate(() => {
+      const node = document.activeElement?.closest<HTMLElement>('.react-flow__node');
+      if (!node) return null;
+      const style = getComputedStyle(node);
+      const box = node.getBoundingClientRect();
+      return {
+        outlineStyle: style.outlineStyle,
+        outlineWidth: Number.parseFloat(style.outlineWidth),
+        boxShadow: style.boxShadow,
+        fullyVisible:
+          box.left >= 0
+          && box.top >= 0
+          && box.right <= document.documentElement.clientWidth
+          && box.bottom <= document.documentElement.clientHeight,
+      };
     });
-    expect(outline).not.toBeNull();
-
+    expect(focusState?.fullyVisible).toBe(true);
+    expect(
+      (focusState?.outlineStyle === 'solid' && (focusState?.outlineWidth ?? 0) >= 2)
+        || focusState?.boxShadow !== 'none',
+      'focused graph node has no browser-painted indicator',
+    ).toBe(true);
     await capture(page, 'architecture-keyboard-focus', testInfo);
+
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog', { name: /architecture node/i })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: /architecture node/i })).toHaveCount(0);
+
+    await page.keyboard.press('Space');
+    await expect(page.getByRole('dialog', { name: /architecture node/i })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: /architecture node/i })).toHaveCount(0);
   });
 
-  test('narrow viewport keeps the graph usable and does not scroll the page sideways', async ({
+  test('fit and reset preserve readable node geometry', async ({ page }) => {
+    await openArchitecture(page, byLabel('large-single'));
+    await waitForGraph(page);
+    const initial = await nodeMeasurements(page);
+
+    await page.getByRole('button', { name: 'Fit View' }).click();
+    await page.waitForTimeout(400);
+    const fitted = await nodeMeasurements(page);
+    await page.getByRole('button', { name: 'Reset Layout' }).click();
+    await page.waitForTimeout(500);
+    const reset = await nodeMeasurements(page);
+
+    for (const boxes of [fitted, reset]) {
+      expect(boxes.filter((box) => box.width < 180 || box.height < 85)).toHaveLength(0);
+      expect(overlapCount(boxes)).toBe(0);
+    }
+    expect(reset.map((box) => box.label)).toEqual(initial.map((box) => box.label));
+  });
+
+  test('narrow viewport keeps navigation, graph, toolbar, and minimap reachable', async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openArchitecture(page, byLabel('medium'));
     await waitForGraph(page);
 
-    const overflows = await page.evaluate(
-      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+      ),
+      'page scrolls horizontally on a narrow viewport',
+    ).toBe(false);
+    const completeNodes = (await nodeMeasurements(page)).filter(
+      (box) => box.x >= 0 && box.y >= 0 && box.x + box.width <= 390 && box.y + box.height <= 844,
     );
-    expect(overflows, 'page scrolls horizontally on a narrow viewport').toBe(false);
-    await expect(nodes(page).first()).toBeVisible();
+    expect(completeNodes.length, 'no complete architecture node is visible on mobile').toBeGreaterThan(0);
+    await expect(page.getByRole('button', { name: 'Fit View' })).toBeVisible();
+    await expect(page.locator('.react-flow__minimap')).toBeVisible();
+
+    const openButton = page.getByRole('button', { name: 'Open navigation drawer' });
+    await openButton.click();
+    const navigation = page.getByRole('navigation', { name: 'Primary navigation' });
+    await expect(navigation).toBeVisible();
+    expect(await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe(
+      'Close navigation drawer',
+    );
+    await page.keyboard.press('Escape');
+    await expect(navigation).not.toBeInViewport();
+    await expect(openButton).toBeFocused();
 
     await capture(page, 'architecture-narrow-viewport', testInfo);
   });
 
-  test('an unanalysed repository shows an honest empty state, not an empty graph', async ({
-    page,
-  }, testInfo) => {
+  test('unanalysed repository has an honest empty state', async ({ page }, testInfo) => {
     await openArchitecture(page, byLabel('unanalysed'));
-
-    // It must say why there is nothing, and must not imply the repository has
-    // no relationships.
-    await expect(page.getByRole('heading', { level: 1, name: 'Architecture' })).toBeVisible();
-    await expect(nodes(page)).toHaveCount(0);
-
+    await expect(graphNodes(page)).toHaveCount(0);
+    await expect(page.getByText(/analysis|analysed|sealed snapshot/i).first()).toBeVisible();
     await capture(page, 'architecture-empty-state', testInfo);
   });
 
-  test('revision manifest is visible with the evidence it identifies', async ({ page }, testInfo) => {
+  test('revision manifest exposes verifiable snapshot identity without a signature claim', async ({
+    page,
+  }, testInfo) => {
     await openArchitecture(page, byLabel('small'));
     const manifest = page.getByTestId('revision-manifest');
     await expect(manifest).toBeVisible({ timeout: 15_000 });
     await expect(manifest.getByTestId('verification-state')).toHaveText(/verified/i);
-
-    // Collapsed by default so it cannot crowd out the graph, but the identity
-    // that binds every citation on this page to one revision stays visible.
-    await expect(manifest.getByRole('button', { name: /details/i })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
+    await expect(manifest).toContainText(byLabel('small').snapshotId!);
     await manifest.getByRole('button', { name: /details/i }).click();
-
-    // The wording must stay a content-hash claim, never a signature claim.
     await expect(manifest).toContainText(/not a digital signature/i);
-
     await capture(manifest, 'revision-manifest', testInfo);
   });
 });
