@@ -166,9 +166,9 @@ def get_evidence_source_service(
 
 
 def get_dependency_graph_builder(
-    intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
+    snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
 ) -> DependencyGraphBuilder:
-    return DependencyGraphBuilder(intelligence)
+    return DependencyGraphBuilder(snapshots)
 
 
 def get_engineering_review_builder(

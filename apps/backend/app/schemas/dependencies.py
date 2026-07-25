@@ -1,7 +1,25 @@
+"""Snapshot-bound Dependency Graph public contract (#158).
+
+This replaces the legacy-heuristic response: every field is built from sealed
+``ri.v1`` facts (``app/graph/dependency_graph.py``), never from the mutable
+``repo_metadata['intelligence']`` blob.
+"""
+
+from datetime import datetime
 from typing import Literal
 
+from pydantic import Field
+
 from app.schemas.base import CamelModel
-from app.schemas.provenance import IntelligenceProvenance
+
+DependencySchemaVersion = Literal["dependency-graph.v2"]
+
+
+class DependencyProvenance(CamelModel):
+    source: Literal["ri.v1"] = "ri.v1"
+    snapshot_id: str
+    snapshot_schema_version: str
+    canonical_graph_hash: str
 
 
 class DependencyDeclaration(CamelModel):
@@ -34,13 +52,13 @@ class DependencyNode(CamelModel):
     type: Literal["production", "development", "peer", "optional", "multiple"]
     ecosystem: str
     declarations: list[DependencyDeclaration]
-    size: int | None = None
 
 
 class DependencyEdge(CamelModel):
+    id: str
     source: str
     target: str
-    type: Literal["depends-on", "peer", "optional"]
+    type: Literal["depends-on"]
 
 
 class DependencyAssessment(CamelModel):
@@ -48,15 +66,21 @@ class DependencyAssessment(CamelModel):
 
 
 class DependencyGraphResponse(CamelModel):
+    schema_version: DependencySchemaVersion = "dependency-graph.v2"
     repository_id: str
+    repository_name: str
+    revision_kind: Literal["git", "upload"]
+    revision_value: str
+    snapshot_id: str
+    snapshot_schema_version: str
+    canonical_graph_hash: str
+    manifest_digest: str
+    provenance: DependencyProvenance
+    generated_at: datetime
     nodes: list[DependencyNode]
     edges: list[DependencyEdge]
     total_dependencies: int
     manifest_count: int = 0
-    diagnostics: list[DependencyDiagnostic] = []
+    diagnostics: list[DependencyDiagnostic] = Field(default_factory=list)
     vulnerability_assessment: DependencyAssessment
     outdated_assessment: DependencyAssessment
-    #: The dependency graph is still built by the legacy engine, so every
-    #: response declares that provenance rather than letting the surface imply
-    #: it is snapshot-backed.
-    provenance: IntelligenceProvenance

@@ -52,7 +52,7 @@ EXPECTED_RESPONSES = {
     ("GET", "/analysis/{repository_id}/evidence"): {200, 401, 404, 422, 429, 500},
     ("GET", "/analysis/{repository_id}/revision-manifest"): {200, 401, 404, 429, 500},
     ("POST", "/analysis/{repository_id}/revision-manifest/verify"): {200, 401, 404, 422, 429, 500},
-    ("GET", "/analysis/{repository_id}/dependencies"): {200, 401, 404, 429, 500},
+    ("GET", "/analysis/{repository_id}/dependencies"): {200, 401, 404, 422, 429, 500},
     ("GET", "/analysis/{repository_id}/review"): {200, 401, 404, 422, 429, 500},
     ("GET", "/analysis/{repository_id}/insights"): {200, 401, 404, 422, 429, 500},
     ("GET", "/ai/config"): {200, 401, 429, 500},

@@ -150,11 +150,14 @@ def test_evidence_backed_prototype_journey(auth_client, make_auth_headers):
     ).json()
     assert verified["verificationState"] == "verified"
 
-    # 11. A surface built by the legacy engine says so rather than implying it
-    # shares the snapshot provenance proven above.
+    # 11. Dependency Graph is snapshot-bound too (#158): it shares the exact
+    # same snapshot identity proven above, not a separate legacy inventory.
     dependencies = auth_client.get(f"/analysis/{repository_id}/dependencies").json()
-    assert dependencies["provenance"]["source"] == "legacy-heuristic"
-    assert dependencies["provenance"]["limitation"]
+    assert dependencies["schemaVersion"] == "dependency-graph.v2"
+    assert dependencies["snapshotId"] == snapshot_id
+    assert dependencies["provenance"]["source"] == "ri.v1"
+    fastapi = next(node for node in dependencies["nodes"] if node["id"] == "dep:pypi:fastapi")
+    assert fastapi["declarations"][0]["manifestPath"] == "requirements.txt"
 
     # 12. A second owner reaches none of it, and sees an empty list.
     intruder = make_auth_headers("journey-intruder@example.com")

@@ -8,8 +8,12 @@ from app.schemas.architecture import (
     ArchNode,
     RequestFlowStep,
 )
-from app.schemas.dependencies import DependencyAssessment, DependencyGraphResponse, DependencyNode
-from app.schemas.provenance import IntelligenceProvenance
+from app.schemas.dependencies import (
+    DependencyAssessment,
+    DependencyGraphResponse,
+    DependencyNode,
+    DependencyProvenance,
+)
 
 
 def _architecture() -> ArchitectureResponse:
@@ -50,12 +54,29 @@ def _architecture() -> ArchitectureResponse:
     )
 
 
+def _dependency_provenance() -> DependencyProvenance:
+    return DependencyProvenance(
+        snapshot_id="snap_example",
+        snapshot_schema_version="ri.v1",
+        canonical_graph_hash="sha256:" + "1" * 64,
+    )
+
+
 def _dependencies() -> DependencyGraphResponse:
     return DependencyGraphResponse(
         repository_id="repo-1",
+        repository_name="sample",
+        revision_kind="upload",
+        revision_value="sha256:" + "0" * 64,
+        snapshot_id="snap_example",
+        snapshot_schema_version="ri.v1",
+        canonical_graph_hash="sha256:" + "1" * 64,
+        manifest_digest="sha256:" + "2" * 64,
+        provenance=_dependency_provenance(),
+        generated_at="2026-07-17T00:00:00Z",
         nodes=[
             DependencyNode(
-                id="dependency:npm:react",
+                id="dep:npm:react",
                 name="react",
                 version="^18.0.0",
                 type="production",
@@ -63,7 +84,7 @@ def _dependencies() -> DependencyGraphResponse:
                 declarations=[],
             ),
             DependencyNode(
-                id="dependency:npm:vite",
+                id="dep:npm:vite",
                 name="vite",
                 version="^5.0.0",
                 type="development",
@@ -75,7 +96,6 @@ def _dependencies() -> DependencyGraphResponse:
         total_dependencies=2,
         vulnerability_assessment=DependencyAssessment(status="not_computed"),
         outdated_assessment=DependencyAssessment(status="not_computed"),
-        provenance=IntelligenceProvenance.legacy(),
     )
 
 
@@ -107,12 +127,20 @@ def test_build_dependencies_document_lists_inventory():
 def test_build_dependencies_document_handles_empty_inventory():
     empty = DependencyGraphResponse(
         repository_id="repo-1",
+        repository_name="sample",
+        revision_kind="upload",
+        revision_value="sha256:" + "0" * 64,
+        snapshot_id="snap_example",
+        snapshot_schema_version="ri.v1",
+        canonical_graph_hash="sha256:" + "1" * 64,
+        manifest_digest="sha256:" + "2" * 64,
+        provenance=_dependency_provenance(),
+        generated_at="2026-07-17T00:00:00Z",
         nodes=[],
         edges=[],
         total_dependencies=0,
         vulnerability_assessment=DependencyAssessment(status="not_computed"),
         outdated_assessment=DependencyAssessment(status="not_computed"),
-        provenance=IntelligenceProvenance.legacy(),
     )
 
     document = build_dependencies_document(empty, "sample")
