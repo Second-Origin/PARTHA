@@ -121,7 +121,7 @@ export function RepositoryDetailPage() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="rounded-xl border border-border bg-card p-5">
-                  <h3 className="text-sm font-medium text-foreground mb-4">Repository Information</h3>
+                  <h2 className="text-sm font-medium text-foreground mb-4">Repository Information</h2>
                   <div className="space-y-3">
                     <InfoRow icon={FolderGit2} label="Name" value={repo.name} />
                     <InfoRow
@@ -143,7 +143,7 @@ export function RepositoryDetailPage() {
                 </div>
 
                 <div className="rounded-xl border border-border bg-card p-5">
-                  <h3 className="text-sm font-medium text-foreground mb-4">Detected Configuration</h3>
+                  <h2 className="text-sm font-medium text-foreground mb-4">Detected Configuration</h2>
                   <div className="space-y-3">
                     {repo.meta.entryPoint && (
                       <InfoRow icon={FileCode} label="Entry Point" value={repo.meta.entryPoint} mono />

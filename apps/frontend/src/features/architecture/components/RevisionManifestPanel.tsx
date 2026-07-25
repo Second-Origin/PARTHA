@@ -104,7 +104,7 @@ export function RevisionManifestPanel({ repositoryId }: RevisionManifestPanelPro
       <header className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <ShieldCheck aria-hidden="true" className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-medium text-foreground">Revision manifest</h3>
+          <h2 className="text-sm font-medium text-foreground">Revision manifest</h2>
           <span
             className="rounded bg-muted px-1.5 py-0.5 text-2xs uppercase tracking-wide text-muted-foreground"
             data-testid="verification-state"

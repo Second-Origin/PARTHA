@@ -30,7 +30,7 @@ export function ModuleExplorer() {
       <div className="px-3 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-          <h3 className="text-xs font-medium text-foreground">Modules</h3>
+          <h2 className="text-xs font-medium text-foreground">Modules</h2>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto scrollbar-thin p-2 space-y-0.5">

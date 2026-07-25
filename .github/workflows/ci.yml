@@ -58,6 +58,13 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefix apps/frontend
 
+      # Policy-aware, so a green build represents a reviewed dependency-risk
+      # posture rather than the absence of `npm audit`. Runtime exposure is
+      # gated harder than development-only exposure, and every exception needs
+      # a written reason and a review date that expires.
+      - name: Dependency audit
+        run: node scripts/dependency-audit.mjs
+
       - name: Lint
         run: npm --prefix apps/frontend run lint
 

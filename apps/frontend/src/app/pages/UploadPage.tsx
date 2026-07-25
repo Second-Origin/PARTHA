@@ -103,7 +103,10 @@ export function UploadPage() {
                 upload.uploadFile && 'pointer-events-none opacity-50'
               )}
             >
-              <input {...getInputProps()} />
+              {/* react-dropzone renders a visually hidden file input. It is
+                  still reachable programmatically and by assistive tech, so it
+                  needs its own accessible name. */}
+              <input {...getInputProps()} aria-label="Choose a repository archive to upload" />
               <div className="flex flex-col items-center">
                 <div
                   className={cn(

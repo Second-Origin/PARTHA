@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Network, ShieldCheck } from 'lucide-react';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
+import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { ArchWorkspace } from '@/features/architecture/components/ArchWorkspace';
 import { AuthenticationExplanationPanel } from '@/features/architecture/components/AuthenticationExplanationPanel';
@@ -16,6 +17,7 @@ export function ArchitecturePage() {
   if (architecture.emptyReason === 'no-completed-repositories') {
     return (
       <div className="h-full flex flex-col">
+        <PageHeader title="Architecture" description="Explore the architecture of your codebase" />
         <EmptyState
           icon={Network}
           title="No architecture data"
@@ -29,6 +31,7 @@ export function ArchitecturePage() {
   if (architecture.emptyReason === 'no-active-repository') {
     return (
       <div className="h-full flex flex-col">
+        <PageHeader title="Architecture" description="Explore the architecture of your codebase" />
         <EmptyState
           icon={Network}
           title="Select a repository"

@@ -1,0 +1,18 @@
+{
+  "$comment": [
+    "Reviewed exceptions for scripts/dependency-audit.mjs.",
+    "An entry needs a reason a reviewer can check and a reviewBy date.",
+    "Past its reviewBy date the build fails, so an exception cannot be forgotten.",
+    "Removing the vulnerable dependency also requires removing its entry: a stale",
+    "acknowledgement fails the build too."
+  ],
+  "acknowledged": [
+    {
+      "id": "GHSA-qwww-vcr4-c8h2",
+      "package": "react-router",
+      "severity": "high",
+      "reason": "RSC Mode CSRF bypass. PARTHA is a client-only Vite SPA that mounts createBrowserRouter; React Router RSC mode is never enabled, so the vulnerable code path is not reachable. No fixed release exists at any version: 7.12.0-8.3.0 are affected and npm reports 'No fix available', while downgrading below 7.12.0 reintroduces the open-redirect advisories GHSA-wrjc-x8rr-h8h6 and GHSA-jjmj-jmhj-qwj2 that do affect this app. Upgraded to 7.18.1 to fix those two and accepted this one.",
+      "reviewBy": "2026-10-01"
+    }
+  ]
+}
