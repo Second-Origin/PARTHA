@@ -46,6 +46,25 @@ alembic downgrade -1
 
 `AUTO_CREATE_TABLES` defaults to true in `development`/`test` and false elsewhere, so non-dev environments rely on migrations rather than `create_all`. Every migration must downgrade cleanly — `tests/test_migrations.py` enforces it.
 
+### Local database schema drift (development/test only)
+
+`create_all` creates any table missing from the database but never alters an existing one and never advances the `alembic_version` stamp, so an existing local database can silently drift from the code after a schema-changing merge — without a check, that surfaces later as an opaque `IntegrityError`/`OperationalError` on whatever request happens to touch the drifted column or table, not as a clear migration error.
+
+To prevent that, startup in `development`/`test` compares the database's Alembic revision against head (`app/core/schema_sync.py`, wired into `app.main`'s lifespan):
+
+- **Up to date** — no action.
+- **Behind head, no physical conflict** — upgrades the database automatically (`alembic upgrade head`, run through the same in-process API `tests/test_migrations.py` uses, not the CLI) and logs exactly what it did. This is the common case after pulling a schema-changing merge.
+- **Behind head, but a pending migration's table already exists physically** — refuses to start rather than attempt an upgrade that would crash with "table already exists". This happens when `AUTO_CREATE_TABLES` built a table without ever advancing the stamp. The startup error names the conflicting table(s) and the exact recovery:
+
+  ```bash
+  cd apps/backend && .venv/bin/alembic stamp <revision>   # mark migrations already reflected physically as applied
+  cd apps/backend && .venv/bin/alembic upgrade head        # apply whatever genuinely remains pending
+  ```
+
+- **A brand-new, empty database** — `create_all` builds every table directly from the current models (by definition already head's shape), then the database is stamped at head directly; no migration body runs and no drift check is needed.
+
+Production/staging are unaffected: this check is a no-op outside `development`/`test`, so those environments keep relying on an operator running migrations explicitly.
+
 ## System endpoints
 
 | Endpoint | Purpose |

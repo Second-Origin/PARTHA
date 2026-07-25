@@ -92,10 +92,14 @@ def _build_client(
     )
     database.SessionLocal.configure(bind=database.engine)
 
+    from app.core.schema_sync import stamp_head
     from app.main import create_app
     from app.models.base import Base
 
     Base.metadata.create_all(bind=database.engine)
+    # Mirrors what the app's own lifespan does for a genuinely fresh database
+    # (#166); see the identical comment in tests/conftest.py.
+    stamp_head(database.engine)
     with TestClient(create_app()) as test_client:
         auth = register_user(test_client, "budget@example.com")
         test_client.headers.update(auth["headers"])

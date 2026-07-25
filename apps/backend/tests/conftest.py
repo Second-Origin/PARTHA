@@ -48,10 +48,16 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestCli
     database.engine = database.create_engine(settings.database_url, pool_pre_ping=True, connect_args=database.connect_args)
     database.SessionLocal.configure(bind=database.engine)
 
+    from app.core.schema_sync import stamp_head
     from app.main import create_app
     from app.models.base import Base
 
     Base.metadata.create_all(bind=database.engine)
+    # Mirrors what the app's own lifespan does for a genuinely fresh database
+    # (#166): without this, the lifespan's schema-drift check sees an
+    # unstamped database with every table already present and misreads it as
+    # drift instead of a fresh test database.
+    stamp_head(database.engine)
     with TestClient(create_app()) as test_client:
         yield test_client
 
