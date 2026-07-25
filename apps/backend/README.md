@@ -59,7 +59,9 @@ Logs default to human-readable text; set `LOG_FORMAT=json` for structured logs i
 
 `/auth` provides register, login, refresh, logout, and `/auth/me`. Passwords are hashed with Argon2; access tokens are HS256; refresh tokens rotate on every use, live in an httpOnly cookie, and reuse of a spent token revokes the whole family.
 
-**The API does not currently require authentication.** A presented Bearer token is always validated strictly — a bad token is a 401, never a silent downgrade — but a request with *no* token falls back to a shared seed user. Additionally, only the `/repositories` routes are owner-scoped; the analysis, AI, documentation, and export routes resolve a repository by ID with no owner check. Do not expose this backend to untrusted users. See [SYSTEM_OVERVIEW.md](../../docs/architecture/SYSTEM_OVERVIEW.md#current-architectural-limitations).
+Every non-public API route requires a valid Bearer token. Repository resolution is
+owner-scoped in the service layer across analysis and all product consumers, so
+one account cannot query another account's repository or snapshots.
 
 ## Docker
 
@@ -91,6 +93,7 @@ for configuration, rollout, and migration details.
 
 ```bash
 curl -X POST http://localhost:8000/repositories/github \
+  -H "Authorization: Bearer <access-token>" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://github.com/octocat/Hello-World"}'
 ```
@@ -138,4 +141,24 @@ Repository responses include first-class source identity:
 }
 ```
 
-For uploads, `kind` is `upload`, `value` is `sha256:<64 lowercase hex>`, and `ref` is `null`. `commitSha` remains a compatibility alias of `revision.value`; authoritative identity lives in the indexed revision columns, not `repo_metadata`. Re-importing the same source at a new commit or a changed archive creates a new repository revision. Snapshot query endpoints are not part of #87/#88 and remain #92.
+For uploads, `kind` is `upload`, `value` is `sha256:<64 lowercase hex>`, and `ref` is `null`. `commitSha` remains a compatibility alias of `revision.value`; authoritative identity lives in the indexed revision columns, not `repo_metadata`. Re-importing the same source at a new commit or a changed archive creates a new repository revision.
+
+## Snapshot-backed product endpoints
+
+Architecture, Engineering Review, and Insights resolve the authenticated
+owner's latest sealed `ri.v1` snapshot and bind every response to its exact
+repository revision and snapshot identity.
+
+- `GET /analysis/{repository_id}/architecture` returns the normalized graph and
+  provenance manifest.
+- `GET /analysis/{repository_id}/review` returns
+  `engineering-review.v2`: deterministic, evidence-linked findings and explicit
+  assessed/not-assessed category states. It emits no score, grade, or invented
+  metric.
+- `GET /analysis/{repository_id}/insights` returns `repository-insights.v1`:
+  defined snapshot counts, breakdowns, diagnostics, extractor coverage, and
+  provenance. Change history is explicitly unavailable until comparable
+  snapshots are implemented.
+
+Dependency Graph remains a Preview compatibility consumer. It does not provide
+vulnerability or outdated-package scanning.

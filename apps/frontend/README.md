@@ -37,9 +37,12 @@ npm --prefix apps/frontend run lint      # eslint
 npm --prefix apps/frontend run test      # vitest, with coverage
 npm --prefix apps/frontend run test:watch
 npm --prefix apps/frontend run build     # tsc -b && vite build
+npm run test:prototype                   # disposable fixtures + Playwright journeys
 ```
 
-From the repository root: `npm run dev:frontend`, `npm run lint:frontend`, `npm run build:frontend`. There is no root alias for the frontend tests — run `npm --prefix apps/frontend run test`.
+From the repository root: `npm run dev:frontend`, `npm run lint:frontend`,
+`npm run build:frontend`, and `npm run test:prototype`. There is no root alias
+for the Vitest suite — run `npm --prefix apps/frontend run test`.
 
 Type errors surface in `build`, not `lint`. Run the build before opening a PR.
 
@@ -53,4 +56,9 @@ The app expects the PARTHA backend on `http://localhost:8000` (`npm run dev:back
 
 ## Test coverage
 
-The suite currently covers the auth store, API client, error mapping, route guard, and a few utilities. Feature and page coverage is thin and there is no end-to-end suite. New frontend behaviour should come with tests; this is an area where contributions are especially welcome.
+Vitest covers shared infrastructure plus feature components, hooks, stores,
+routing, repository switching, and architecture layout behavior. The prototype
+acceptance runner creates disposable repositories, starts isolated backend and
+frontend processes, and exercises the review-ready Architecture, Engineering
+Review, and Insights journeys in Chromium. This executable acceptance coverage
+is deliberately focused; it is not a claim of complete product coverage.
