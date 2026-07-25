@@ -91,10 +91,14 @@ def limited_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator
     database.engine = database.create_engine(settings.database_url, pool_pre_ping=True, connect_args=database.connect_args)
     database.SessionLocal.configure(bind=database.engine)
 
+    from app.core.schema_sync import stamp_head
     from app.main import create_app
     from app.models.base import Base
 
     Base.metadata.create_all(bind=database.engine)
+    # Mirrors what the app's own lifespan does for a genuinely fresh database
+    # (#166); see the identical comment in tests/conftest.py.
+    stamp_head(database.engine)
     with TestClient(create_app()) as test_client:
         # Protected routes now require auth (E1.3 / #63); authenticate as a real
         # user so the budget tests exercise the routes rather than bouncing off
