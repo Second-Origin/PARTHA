@@ -87,7 +87,6 @@ describe('product surface readiness contract', () => {
 
   it('records a user-facing limitation for every restored preview surface', () => {
     expect(previewSurfaces.map((surface) => surface.id)).toEqual([
-      'dependencies',
       'ai-workspace',
       'documentation',
     ]);
@@ -107,6 +106,12 @@ describe('product surface readiness contract', () => {
 
     expect(review).toMatchObject({ readiness: 'ready', primaryNavigation: true, path: '/review' });
     expect(insights).toMatchObject({ readiness: 'ready', primaryNavigation: true, path: '/insights' });
+  });
+
+  it('graduates Dependency Graph out of Preview now that it is snapshot-bound (#158)', () => {
+    const dependencies = productSurfaces.find((surface) => surface.id === 'dependencies');
+
+    expect(dependencies).toMatchObject({ readiness: 'ready', primaryNavigation: true, path: '/dependencies' });
   });
 
   it.each(previewSurfaces)(

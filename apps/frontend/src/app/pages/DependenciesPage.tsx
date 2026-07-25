@@ -4,14 +4,9 @@ import { GitBranch, Package, Search } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
-import { ProvenanceNotice } from '@/shared/components/ui/ProvenanceNotice';
-import { PreviewBanner } from '@/shared/components/ui/PreviewBanner';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { useDependencies } from '@/features/dependencies/hooks/useDependencies';
 import type { DependencyAssessment } from '@/shared/services/api/types';
-
-const DEPENDENCY_LIMITATION =
-  'Data comes from package manifests through the legacy analysis path and is not bound to the sealed ri.v1 snapshot. Vulnerability and outdated-version assessments are not computed; do not treat this as a security scan.';
 
 export function DependenciesPage() {
   const navigate = useNavigate();
@@ -38,7 +33,6 @@ export function DependenciesPage() {
     return (
       <div>
         <PageHeader title="Dependency Graph" description="Explore the dependency relationships within your codebase" />
-        <PreviewBanner limitation={DEPENDENCY_LIMITATION} />
         <EmptyState
           icon={GitBranch}
           title="No dependency data"
@@ -53,7 +47,6 @@ export function DependenciesPage() {
     return (
       <div>
         <PageHeader title="Dependency Graph" description="Explore the dependency relationships within your codebase" />
-        <PreviewBanner limitation={DEPENDENCY_LIMITATION} />
         <EmptyState
           icon={GitBranch}
           title="Select a repository"
@@ -69,8 +62,26 @@ export function DependenciesPage() {
         <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
           <DataSourceBadge source={dependencies.source} />
         </PageHeader>
-        <PreviewBanner limitation={DEPENDENCY_LIMITATION} />
         <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">Loading dependency graph...</div>
+      </div>
+    );
+  }
+
+  // A repository can be analysed yet still have no sealed ri.v1 snapshot (#158,
+  // same 404 contract as Architecture/Review/Insights). That must read as "run
+  // analysis again", never as a silent, indistinguishable zero-dependency result.
+  if (dependencies.noSnapshot) {
+    return (
+      <div>
+        <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
+          <DataSourceBadge source={dependencies.source} />
+        </PageHeader>
+        <EmptyState
+          icon={GitBranch}
+          title="No sealed snapshot yet"
+          description="This repository has no sealed Repository Intelligence snapshot for its current revision. Analyse it again to generate one."
+          action={{ label: 'Run analysis', onClick: () => navigate('/upload') }}
+        />
       </div>
     );
   }
@@ -81,7 +92,6 @@ export function DependenciesPage() {
         <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
           <DataSourceBadge source={dependencies.source} />
         </PageHeader>
-        <PreviewBanner limitation={DEPENDENCY_LIMITATION} />
         <div className="rounded-xl border border-destructive/50 bg-destructive/5 p-5">
           <p className="text-sm text-destructive">{dependencies.error}</p>
           <button onClick={dependencies.retry} className="mt-3 text-xs text-primary hover:underline">Retry</button>
@@ -96,7 +106,6 @@ export function DependenciesPage() {
         <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
           <DataSourceBadge source={dependencies.source} />
         </PageHeader>
-        <PreviewBanner limitation={DEPENDENCY_LIMITATION} />
         <EmptyState
           icon={GitBranch}
           title="Dependency inventory unavailable"
@@ -111,8 +120,14 @@ export function DependenciesPage() {
       <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
         <DataSourceBadge source={dependencies.source} />
       </PageHeader>
-      <PreviewBanner limitation={DEPENDENCY_LIMITATION} />
-      <ProvenanceNotice provenance={graph.provenance} />
+
+      <section aria-label="Snapshot identity" className="mb-6 grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Identity label="Snapshot" value={graph.snapshotId} />
+        <Identity label="Snapshot schema" value={graph.snapshotSchemaVersion} />
+        <Identity label="Manifest digest" value={graph.manifestDigest} />
+        <Identity label="Canonical graph hash" value={graph.canonicalGraphHash} />
+      </section>
+
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         <Stat label="Dependencies" value={graph.totalDependencies} />
         <Stat label="Relations" value={graph.edges.length} />
@@ -193,7 +208,7 @@ export function DependenciesPage() {
           {dependencies.packageManager
             ? `Detected package manager: ${dependencies.packageManager}. `
             : 'Package-manager information is unavailable for this repository. '}
-          Dependency data, when available, comes from backend package manifests.
+          Dependency data, when available, comes from the sealed repository-intelligence snapshot.
         </div>
       </div>
     </div>
@@ -209,6 +224,15 @@ function Stat({ label, value }: { label: string; value: number | string }) {
     <div className="rounded-xl border border-border bg-card p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function Identity({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="truncate font-mono text-xs text-foreground" title={value}>{value}</p>
     </div>
   );
 }

@@ -278,7 +278,8 @@ export interface EvidenceSourceResponse {
   size: number;
 }
 
-// Dependency Graph
+// Dependency Graph (#158) — built exclusively from a sealed ri.v1 snapshot,
+// the same contract shape as Review/Insights: no legacy fallback.
 export interface DependencyNode {
   id: string;
   name: string;
@@ -286,7 +287,6 @@ export interface DependencyNode {
   type: 'production' | 'development' | 'peer' | 'optional' | 'multiple';
   ecosystem: string;
   declarations: DependencyDeclaration[];
-  size: number | null;
 }
 
 export interface DependencyDeclaration {
@@ -313,28 +313,35 @@ export interface DependencyDiagnostic {
 }
 
 export interface DependencyEdge {
+  id: string;
   source: string;
   target: string;
-  type: 'depends-on' | 'peer' | 'optional';
+  type: 'depends-on';
 }
 
 export interface DependencyAssessment {
   status: 'not_computed';
 }
 
-/**
- * Which intelligence path produced a repository-derived response. `ri.v1` is
- * the sealed, evidence-backed snapshot model; `legacy-heuristic` is the older
- * engine that reads mutable repository metadata. Legacy responses always carry
- * a limitation so a heuristic result is never shown as snapshot-backed.
- */
-export interface IntelligenceProvenance {
-  source: 'ri.v1' | 'legacy-heuristic';
-  limitation: string | null;
+export interface DependencyProvenance {
+  source: 'ri.v1';
+  snapshotId: string;
+  snapshotSchemaVersion: string;
+  canonicalGraphHash: string;
 }
 
 export interface DependencyGraphResponse {
+  schemaVersion: 'dependency-graph.v2';
   repositoryId: string;
+  repositoryName: string;
+  revisionKind: 'git' | 'upload';
+  revisionValue: string;
+  snapshotId: string;
+  snapshotSchemaVersion: string;
+  canonicalGraphHash: string;
+  manifestDigest: string;
+  provenance: DependencyProvenance;
+  generatedAt: string;
   nodes: DependencyNode[];
   edges: DependencyEdge[];
   totalDependencies: number;
@@ -342,7 +349,6 @@ export interface DependencyGraphResponse {
   diagnostics: DependencyDiagnostic[];
   vulnerabilityAssessment: DependencyAssessment;
   outdatedAssessment: DependencyAssessment;
-  provenance: IntelligenceProvenance;
 }
 
 // Review

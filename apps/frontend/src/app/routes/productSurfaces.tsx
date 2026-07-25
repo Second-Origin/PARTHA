@@ -112,15 +112,17 @@ export const productSurfaces: readonly ProductSurface[] = [
     },
   },
   {
+    // Restored as a primary snapshot-backed surface (#158). Dependency Graph
+    // now reads exclusively from the sealed ri.v1 snapshot, the same 404
+    // contract as Architecture/Review/Insights; vulnerability and
+    // outdated-version assessments remain explicit not_computed statuses.
     id: 'dependencies',
     label: 'Dependency Graph',
     path: '/dependencies',
     icon: GitBranch,
     phase: 0,
-    readiness: 'preview',
+    readiness: 'ready',
     primaryNavigation: true,
-    limitation:
-      'Data comes from package manifests through the legacy analysis path and is not bound to the sealed ri.v1 snapshot. Vulnerability and outdated-version assessments are not computed; do not treat this as a security scan.',
     load: async () => {
       const { DependenciesPage } = await import('@/app/pages/DependenciesPage');
       return { Component: DependenciesPage };
