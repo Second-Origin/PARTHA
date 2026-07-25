@@ -2,9 +2,10 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '@/app/store/useAppStore';
 import { backendService } from '@/shared/services/backend';
+import { NetworkError, TimeoutError } from '@/shared/services/api';
 import type { AnalysisStartResponse } from '@/shared/services/api/types';
 import type { Repository } from '@/shared/types';
-import { useAnalysisPipeline } from './useAnalysisPipeline';
+import { getNetworkRetryDelayMs, useAnalysisPipeline } from './useAnalysisPipeline';
 
 const repositoryState = vi.hoisted(() => ({ repositories: [] as Repository[] }));
 
@@ -35,6 +36,7 @@ describe('useAnalysisPipeline', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('requests server cancellation and stops in the cancelled terminal state', async () => {
@@ -267,5 +269,119 @@ describe('useAnalysisPipeline', () => {
     });
     await waitFor(() => expect(hook.result.current.jobStatus).toBe('queued'));
     expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  describe('getNetworkRetryDelayMs', () => {
+    it('backs off exponentially from 1s, capped at 15s', () => {
+      expect(getNetworkRetryDelayMs(1)).toBe(1000);
+      expect(getNetworkRetryDelayMs(2)).toBe(2000);
+      expect(getNetworkRetryDelayMs(3)).toBe(4000);
+      expect(getNetworkRetryDelayMs(4)).toBe(8000);
+      expect(getNetworkRetryDelayMs(5)).toBe(15000);
+    });
+  });
+
+  describe('poll resilience', () => {
+    const runningResponse = {
+      repositoryId: repository.id,
+      status: 'running' as const,
+      jobId: 'job-1',
+      stage: 'reading-structure' as const,
+      progress: 25,
+      startedAt: '2026-07-22T08:00:01Z',
+      completedAt: null,
+      error: null,
+    };
+
+    it('retries a transient network error with backoff and recovers without ever reporting Analysis Failed', async () => {
+      vi.useFakeTimers();
+      const fetchStatus = vi
+        .spyOn(backendService, 'fetchAnalysisStatus')
+        .mockRejectedValueOnce(new NetworkError('/analysis/repo-1/status'))
+        .mockResolvedValue(runningResponse);
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.connectionStatus).toBe('retrying');
+      expect(hook.result.current.error).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+
+      expect(hook.result.current.connectionStatus).toBe('connected');
+      expect(hook.result.current.jobStatus).toBe('running');
+      // A successful poll updates the store, which recreates the polling
+      // effect (pre-existing "known limitation" in this hook) -- so recovery
+      // may fire one extra immediate poll beyond the failed + retried pair.
+      expect(fetchStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('stops auto-polling and reports a connectivity error distinct from job failure once retries are exhausted', async () => {
+      vi.useFakeTimers();
+      vi.spyOn(backendService, 'fetchAnalysisStatus').mockRejectedValue(
+        new TimeoutError('/analysis/repo-1/status', 10000),
+      );
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+
+      // Attempt 1 fails immediately; five backoff retries follow: 1s, 2s, 4s, 8s, 15s.
+      for (const delay of [0, 1000, 2000, 4000, 8000, 15000]) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(delay);
+        });
+      }
+
+      expect(hook.result.current.connectionLost).toBe(true);
+      expect(hook.result.current.error).toBeNull();
+      expect(hook.result.current.status).not.toBe('error');
+    });
+
+    it('resumes polling on a manual retry after connectivity is lost', async () => {
+      vi.useFakeTimers();
+      const fetchStatus = vi
+        .spyOn(backendService, 'fetchAnalysisStatus')
+        .mockRejectedValue(new NetworkError('/analysis/repo-1/status'));
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+      for (const delay of [0, 1000, 2000, 4000, 8000, 15000]) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(delay);
+        });
+      }
+      expect(hook.result.current.connectionLost).toBe(true);
+
+      fetchStatus.mockReset().mockResolvedValue(runningResponse);
+      await act(async () => {
+        hook.result.current.retry();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(hook.result.current.connectionStatus).toBe('connected');
+      expect(hook.result.current.jobStatus).toBe('running');
+    });
+
+    it('renders a real job failure reported by the API immediately, without retrying', async () => {
+      vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
+        repositoryId: repository.id,
+        status: 'failed',
+        jobId: 'job-1',
+        stage: 'reading-structure',
+        progress: 25,
+        startedAt: '2026-07-22T08:00:01Z',
+        completedAt: '2026-07-22T08:00:02Z',
+        error: 'Extraction crashed.',
+      });
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+
+      await waitFor(() => expect(hook.result.current.jobStatus).toBe('failed'));
+      expect(hook.result.current.status).toBe('error');
+      expect(hook.result.current.error).toBe('Extraction crashed.');
+      expect(hook.result.current.connectionStatus).toBe('connected');
+    });
   });
 });
