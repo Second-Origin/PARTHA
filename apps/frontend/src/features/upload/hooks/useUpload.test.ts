@@ -27,7 +27,6 @@ function repository(id: string, name: string): Repository {
     size: 0,
     fileCount: 0,
     status: 'uploading',
-    dataSource: 'real',
     analysisStage: 'uploading',
     analysisProgress: 0,
     uploadedAt: '2026-01-01T00:00:00Z',

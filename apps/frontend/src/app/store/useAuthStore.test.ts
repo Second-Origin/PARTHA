@@ -16,7 +16,6 @@ function fakeRepository(id: string): Repository {
     size: 0,
     fileCount: 0,
     status: 'completed',
-    dataSource: 'real',
     analysisStage: 'completed',
     analysisProgress: 100,
     uploadedAt: new Date().toISOString(),

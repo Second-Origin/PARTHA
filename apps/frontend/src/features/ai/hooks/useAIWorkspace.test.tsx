@@ -24,7 +24,6 @@ const repository: Repository = {
   size: 0,
   fileCount: 0,
   status: 'completed',
-  dataSource: 'real',
   analysisStage: 'completed',
   analysisProgress: 100,
   uploadedAt: '2026-07-22T00:00:00Z',
