@@ -17,7 +17,6 @@ const baseAnalysis = {
     size: 10,
     fileCount: 1,
     status: 'analysing' as const,
-    dataSource: 'real' as const,
     analysisStage: 'reading-structure' as const,
     analysisProgress: 25,
     uploadedAt: '2026-07-22T08:00:00Z',
