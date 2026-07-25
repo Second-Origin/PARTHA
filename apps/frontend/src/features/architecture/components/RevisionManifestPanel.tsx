@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Download, ShieldCheck } from 'lucide-react';
+import { Check, ChevronDown, Copy, Download, ShieldCheck } from 'lucide-react';
 import { architectureService } from '@/shared/services/api/architecture';
 import { getErrorMessage } from '@/shared/services/api';
 import type { RevisionManifestResponse } from '@/shared/services/api/types';
@@ -32,6 +32,11 @@ export function RevisionManifestPanel({ repositoryId }: RevisionManifestPanelPro
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Collapsed by default. Browser review of #112 showed the expanded panel
+  // consuming most of the page and squeezing the graph into a thin strip; the
+  // graph is the primary content here, so the manifest summarises and expands
+  // on request.
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,9 +106,9 @@ export function RevisionManifestPanel({ repositoryId }: RevisionManifestPanelPro
       data-testid="revision-manifest"
       className="rounded-lg border border-border bg-card p-4"
     >
-      <header className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <ShieldCheck aria-hidden="true" className="h-4 w-4 text-primary" />
+      <header className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <ShieldCheck aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
           <h2 className="text-sm font-medium text-foreground">Revision manifest</h2>
           <span
             className="rounded bg-muted px-1.5 py-0.5 text-2xs uppercase tracking-wide text-muted-foreground"
@@ -111,8 +116,26 @@ export function RevisionManifestPanel({ repositoryId }: RevisionManifestPanelPro
           >
             {verificationState}
           </span>
+          {/* Snapshot id stays visible while collapsed: it is the identity that
+              ties every citation on this page to one revision. */}
+          <span className="truncate font-mono text-2xs text-muted-foreground" title={body.snapshotId}>
+            {body.snapshotId}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setExpanded((open) => !open)}
+            aria-expanded={expanded}
+            aria-controls="revision-manifest-detail"
+            className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-muted"
+          >
+            <ChevronDown
+              aria-hidden="true"
+              className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            />
+            {expanded ? 'Hide details' : 'Details'}
+          </button>
           <button
             type="button"
             onClick={handleCopy}
@@ -132,9 +155,11 @@ export function RevisionManifestPanel({ repositoryId }: RevisionManifestPanelPro
         </div>
       </header>
 
+      {!expanded ? null : (
+      <div id="revision-manifest-detail" className="mt-3">
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {/* Snapshot id is always shown in the header, so it is not repeated. */}
         <Field label={body.revisionKind === 'git' ? 'Commit' : 'Content hash'} value={body.revisionValue} />
-        <Field label="Snapshot" value={body.snapshotId} />
         <Field label="Snapshot schema" value={body.snapshotSchemaVersion} />
         <Field label="Canonical graph hash" value={body.canonicalGraphHash ?? 'not sealed'} />
         <Field label="Sealed at" value={body.sealedAt ?? 'not sealed'} />
@@ -156,6 +181,8 @@ export function RevisionManifestPanel({ repositoryId }: RevisionManifestPanelPro
       </div>
 
       <p className="mt-3 text-2xs text-muted-foreground">{verificationNote}</p>
+      </div>
+      )}
     </section>
   );
 }

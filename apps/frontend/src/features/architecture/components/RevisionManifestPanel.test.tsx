@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { architectureService } from '@/shared/services/api/architecture';
 import type { RevisionManifestResponse } from '@/shared/services/api/types';
@@ -41,12 +41,31 @@ describe('RevisionManifestPanel', () => {
     vi.clearAllMocks();
   });
 
+  it('stays collapsed by default so it cannot crowd out the graph', async () => {
+    // Browser review of #112 found the expanded panel squeezing the
+    // architecture graph into a thin strip. The graph is the primary content
+    // on this page, so detail is opt-in.
+    mockedGetManifest.mockResolvedValue(response);
+
+    render(<RevisionManifestPanel repositoryId="repo-1" />);
+
+    await waitFor(() => expect(screen.getByTestId('revision-manifest')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /details/i })).toHaveAttribute('aria-expanded', 'false');
+    // The identity that binds citations to a revision stays visible collapsed.
+    expect(screen.getByText('snap_example')).toBeInTheDocument();
+    expect(screen.getByTestId('verification-state')).toHaveTextContent('verified');
+    // Detail is not rendered until asked for.
+    expect(screen.queryByText('ri.v1')).not.toBeInTheDocument();
+    expect(screen.queryByText(/not a digital signature/)).not.toBeInTheDocument();
+  });
+
   it('shows the revision identity, extractor versions and digest', async () => {
     mockedGetManifest.mockResolvedValue(response);
 
     render(<RevisionManifestPanel repositoryId="repo-1" />);
 
     await waitFor(() => expect(screen.getByTestId('revision-manifest')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /details/i }));
     expect(screen.getByText('snap_example')).toBeInTheDocument();
     expect(screen.getByText('ri.v1')).toBeInTheDocument();
     expect(screen.getByText(`sha256:${'4'.repeat(64)}`)).toBeInTheDocument();
@@ -60,6 +79,7 @@ describe('RevisionManifestPanel', () => {
     render(<RevisionManifestPanel repositoryId="repo-1" />);
 
     await waitFor(() => expect(screen.getByTestId('revision-manifest')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /details/i }));
     expect(screen.getByText(/not a digital signature/)).toBeInTheDocument();
   });
 

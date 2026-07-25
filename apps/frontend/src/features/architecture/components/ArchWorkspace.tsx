@@ -31,6 +31,18 @@ import type { ArchitectureModel } from '@/shared/types/architecture';
 
 const nodeTypes = { architectureNode: ArchitectureNode };
 
+/**
+ * Floor for fit-to-view (#112).
+ *
+ * Browser review of a dense repository (14 modules in a single layer, 260
+ * relationships) found fit-to-view scaling to roughly 0.15, which rendered
+ * every node at about 36x17px -- unreadable, the same symptom #112 was raised
+ * for. Fitting the whole graph and keeping nodes legible are in conflict once a
+ * graph is big enough, so legibility wins: the graph opens readable and the
+ * minimap plus pan/zoom handle the overview.
+ */
+const READABLE_MIN_ZOOM = 0.5;
+
 interface ArchWorkspaceInnerProps {
   model: ArchitectureModel;
   source?: RepositorySource | null;
@@ -87,7 +99,9 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
     const { nodes: newNodes, edges: newEdges } = getLayoutedElements(model.nodes, model.edges, layoutOptions);
     setNodes(newNodes);
     setEdges(newEdges);
-    const frame = requestAnimationFrame(() => reactFlowInstance.fitView({ padding: 0.12, duration: 300 }));
+    const frame = requestAnimationFrame(() =>
+      reactFlowInstance.fitView({ padding: 0.12, duration: 300, minZoom: READABLE_MIN_ZOOM }),
+    );
     return () => cancelAnimationFrame(frame);
   }, [layoutOptions, model.nodes, model.edges, reactFlowInstance, setNodes, setEdges]);
 
@@ -180,7 +194,7 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
   }, [setSelectedNodeId, setInspectorOpen, closeContextMenu]);
 
   const handleFitView = useCallback(() => {
-    reactFlowInstance.fitView({ padding: 0.2, duration: 300 });
+    reactFlowInstance.fitView({ padding: 0.2, duration: 300, minZoom: READABLE_MIN_ZOOM });
   }, [reactFlowInstance]);
 
   const handleZoomIn = useCallback(() => {
@@ -202,7 +216,10 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
     showAllLayers();
     setNodes(newNodes);
     setEdges(newEdges);
-    setTimeout(() => reactFlowInstance.fitView({ padding: 0.2, duration: 300 }), 50);
+    setTimeout(
+      () => reactFlowInstance.fitView({ padding: 0.2, duration: 300, minZoom: READABLE_MIN_ZOOM }),
+      50,
+    );
   }, [model, setNodes, setEdges, reactFlowInstance, layoutOptions, setIsolatedSubtree, showAllNodes, showAllLayers]);
 
   const handleExportPng = useCallback(() => {
@@ -306,7 +323,7 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
                   onPaneClick={handlePaneClick}
                   nodeTypes={nodeTypes}
                   fitView
-                  fitViewOptions={{ padding: 0.12 }}
+                  fitViewOptions={{ padding: 0.12, minZoom: READABLE_MIN_ZOOM }}
                   minZoom={0.1}
                   maxZoom={3}
                   proOptions={{ hideAttribution: true }}
