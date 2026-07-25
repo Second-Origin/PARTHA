@@ -29,6 +29,9 @@ const baseAnalysis = {
   jobStatus: 'running' as const,
   loading: true,
   error: null,
+  connectionStatus: 'connected' as const,
+  retryingConnection: false,
+  connectionLost: false,
   empty: false,
   success: false,
   source: 'upload' as const,
@@ -76,5 +79,45 @@ describe('AnalysisPipelinePage', () => {
     expect(screen.queryByRole('button', { name: 'Cancel analysis' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Restart analysis' }));
     expect(baseAnalysis.restart).toHaveBeenCalled();
+  });
+
+  it('shows a non-terminal retrying notice for a transient poll failure, not Analysis Failed', () => {
+    vi.mocked(useAnalysisPipeline).mockReturnValue({
+      ...baseAnalysis,
+      connectionStatus: 'retrying',
+      retryingConnection: true,
+    });
+    renderPage();
+    expect(screen.getByText('Connection lost — retrying…')).toBeInTheDocument();
+    expect(screen.queryByText('Analysis Failed')).not.toBeInTheDocument();
+    // Progress is preserved, not reset or advanced, while retrying.
+    expect(screen.getByText('25%')).toBeInTheDocument();
+  });
+
+  it('shows a distinct connectivity error with a manual retry action once retries are exhausted', () => {
+    vi.mocked(useAnalysisPipeline).mockReturnValue({
+      ...baseAnalysis,
+      connectionStatus: 'lost',
+      connectionLost: true,
+    });
+    renderPage();
+    expect(screen.getByText('Connection lost')).toBeInTheDocument();
+    expect(screen.queryByText('Analysis Failed')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry connection' }));
+    expect(baseAnalysis.retry).toHaveBeenCalled();
+  });
+
+  it('still renders the terminal Analysis Failed state for a real job failure', () => {
+    vi.mocked(useAnalysisPipeline).mockReturnValue({
+      ...baseAnalysis,
+      status: 'error',
+      jobStatus: 'failed',
+      loading: false,
+      error: 'Analysis failed.',
+      repository: { ...baseAnalysis.repository, status: 'error', errorMessage: 'Analysis failed.' },
+    });
+    renderPage();
+    expect(screen.getByText('Analysis Failed')).toBeInTheDocument();
+    expect(screen.queryByText('Connection lost')).not.toBeInTheDocument();
   });
 });

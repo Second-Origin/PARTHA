@@ -2,10 +2,25 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FeatureStatus, Repository } from '@/shared/types';
 import { ANALYSIS_STAGES } from '@/shared/types';
 import { backendService, hasBackend } from '@/shared/services/backend';
-import { getErrorMessage } from '@/shared/services/api';
+import { getErrorMessage, isNetworkError, isTimeoutError } from '@/shared/services/api';
 import type { AnalysisJobStatus, AnalysisStatusResponse } from '@/shared/services/api/types';
 import { useAppStore } from '@/app/store/useAppStore';
 import { useRepository } from '@/features/repositories/hooks/useRepository';
+
+export type ConnectionStatus = 'connected' | 'retrying' | 'lost';
+
+// A dropped poll (laptop sleep, dev server restart, transient socket error) is
+// not a job failure -- the durable job keeps running server-side. Retry with
+// bounded backoff before surfacing a connectivity error, so a blip never reads
+// as "Analysis Failed".
+const MAX_NETWORK_RETRIES = 5;
+const RETRY_BASE_DELAY_MS = 1000;
+const RETRY_MAX_DELAY_MS = 15000;
+const POLL_INTERVAL_MS = 1500;
+
+export function getNetworkRetryDelayMs(attempt: number): number {
+  return Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+}
 
 export function useAnalysisPipeline(repositoryId: string | undefined) {
   const { repositories } = useRepository();
@@ -24,6 +39,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connected');
 
   const repository = repositories.find((repo) => repo.id === repositoryId) || null;
   const repositoryStatus = repository?.status;
@@ -34,6 +50,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
     startInFlightRef.current = null;
     setJobStatus(null);
     setCancelling(false);
+    setConnectionStatus('connected');
   }, [repositoryId]);
 
   const applyJobResponse = useCallback(
@@ -106,9 +123,12 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
     }
     setStatus('loading');
     setError(null);
+    setConnectionStatus('connected');
 
     if (hasBackend) {
       let cancelled = false;
+      let networkRetryCount = 0;
+      let timeoutId: number | undefined;
       const pollingGeneration = pollingGenerationRef.current;
 
       async function ensureStarted() {
@@ -143,6 +163,9 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
           const response = await backendService.fetchAnalysisStatus(repositoryId);
           if (!response || cancelled || pollingGeneration !== pollingGenerationRef.current) return;
 
+          networkRetryCount = 0;
+          setConnectionStatus('connected');
+
           if (response.status === 'queued' && response.jobId === null) {
             await ensureStarted();
             if (cancelled) return;
@@ -150,18 +173,38 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
             startedRef.current = repositoryId;
           }
 
+          // A job the API itself reports as failed is a real, terminal outcome --
+          // render it immediately, distinct from a dropped connection below.
           applyJobResponse(response);
         } catch (caught) {
+          if (cancelled) return;
+
+          if (isNetworkError(caught) || isTimeoutError(caught)) {
+            networkRetryCount += 1;
+            if (networkRetryCount > MAX_NETWORK_RETRIES) {
+              // Retry budget exhausted: a connectivity problem, not a job
+              // failure. Stop auto-polling; only a manual retry resumes it.
+              setConnectionStatus('lost');
+              return;
+            }
+            setConnectionStatus('retrying');
+            timeoutId = window.setTimeout(() => void pollStatus(), getNetworkRetryDelayMs(networkRetryCount));
+            return;
+          }
+
           setStatus('error');
           setError(getErrorMessage(caught));
+          return;
+        }
+        if (!cancelled) {
+          timeoutId = window.setTimeout(() => void pollStatus(), POLL_INTERVAL_MS);
         }
       }
 
       void pollStatus();
-      const intervalId = window.setInterval(() => void pollStatus(), 1500);
       return () => {
         cancelled = true;
-        window.clearInterval(intervalId);
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
       };
     }
 
@@ -226,6 +269,9 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
     jobStatus,
     loading: status === 'loading',
     error,
+    connectionStatus,
+    retryingConnection: connectionStatus === 'retrying',
+    connectionLost: connectionStatus === 'lost',
     empty: !repository,
     success: repositoryStatus === 'completed',
     source: repository?.source || null,
