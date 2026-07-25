@@ -42,7 +42,6 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
       setJobStatus(response.status);
 
       const repositoryUpdates: Partial<Repository> = {
-        dataSource: 'real',
         analysisStage: response.stage,
         analysisProgress: response.progress,
         errorMessage: response.error || undefined,

@@ -48,7 +48,6 @@ class RepositoryRecord(Base):
     size: Mapped[int] = mapped_column(BigInteger, default=0)
     file_count: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(32), index=True)
-    data_source: Mapped[str] = mapped_column(String(32), default="real")
     analysis_stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
     analysis_progress: Mapped[int] = mapped_column(Integer, default=0)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
