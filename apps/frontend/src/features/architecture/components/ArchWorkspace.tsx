@@ -310,6 +310,13 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
                   minZoom={0.1}
                   maxZoom={3}
                   proOptions={{ hideAttribution: true }}
+                  // Keyboard access (#112): nodes are reachable with Tab and
+                  // the pane pans with arrow keys, so the graph is navigable
+                  // without a pointer.
+                  nodesFocusable
+                  edgesFocusable={false}
+                  panOnScroll
+                  aria-label="Architecture graph. Use Tab to move between modules and arrow keys to pan."
                 >
                   {showGrid && (
                     <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="hsl(var(--border))" />

@@ -69,8 +69,27 @@ export const ArchitectureNode = memo(({ data }: NodeProps<ArchFlowNode>) => {
         : 'ring-1 ring-yellow-500/30'
     : '';
 
+  // Card text is truncated to keep node dimensions stable, so the full label,
+  // classification and description are also exposed as the node's accessible
+  // name and native tooltip. A truncated label must stay recoverable without
+  // zooming (#112).
+  const accessibleName = [
+    data.label,
+    `${formatLabel(data.nodeType)}, ${formatLabel(data.layer)}`,
+    data.description,
+    data.filesCount > 0 ? `${data.filesCount} files` : null,
+    `${data.complexity} complexity`,
+    relationshipStateConfig[data.relationshipState].label,
+  ]
+    .filter(Boolean)
+    .join('. ');
+
   return (
     <div
+      role="group"
+      aria-label={accessibleName}
+      aria-current={data.isSelected ? 'true' : undefined}
+      title={accessibleName}
       className={cn(
         'relative h-[104px] w-[220px] rounded-lg border px-4 py-3 shadow-sm transition-all duration-200',
         config.bg,
