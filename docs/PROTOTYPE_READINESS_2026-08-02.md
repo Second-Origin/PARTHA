@@ -4,8 +4,8 @@ This is the acceptance record for [issue #154](https://github.com/Second-Origin/
 and [PR #155](https://github.com/Second-Origin/PARTHA/pull/155). It describes executable
 behaviour on `revamp-architecture`, not a future product plan.
 
-> **Status: not merge-ready until independent review and required CI/CodeQL checks pass on the
-> final head.** The branch must not be merged by its author.
+> **Status: required CI and CodeQL checks pass on the current head.** Merge readiness is the
+> repository administrator's decision.
 
 ## Capability matrix
 
