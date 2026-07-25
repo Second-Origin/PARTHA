@@ -151,3 +151,7 @@ ri-benchmark-report/
 PARTHA_Defensible_Repository_Intelligence_Roadmap_2026_2027.html
 
 /confidential/
+
+# Local prototype readiness evidence. Records verified runtime results for a
+# specific machine and run; it is deliberately kept local and never pushed.
+docs/PROTOTYPE_READINESS_*.md
