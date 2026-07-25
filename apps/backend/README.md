@@ -159,6 +159,7 @@ repository revision and snapshot identity.
   defined snapshot counts, breakdowns, diagnostics, extractor coverage, and
   provenance. Change history is explicitly unavailable until comparable
   snapshots are implemented.
-
-Dependency Graph remains a Preview compatibility consumer. It does not provide
-vulnerability or outdated-package scanning.
+- `GET /analysis/{repository_id}/dependencies` returns `dependency-graph.v2`:
+  sealed-snapshot dependency nodes, declarations (with manifest path and line
+  span merged across manifests, #156), and resolved `depends_on` edges. It
+  does not provide vulnerability or outdated-package scanning.

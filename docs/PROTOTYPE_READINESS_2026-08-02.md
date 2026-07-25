@@ -18,7 +18,7 @@ behaviour on `revamp-architecture`, not a future product plan.
 | Revision manifest | Ready | sealed `ri.v1` snapshot | Canonical content hash, not a digital signature |
 | Engineering Review | Ready, limited | sealed `ri.v1` snapshot | `engineering-review.v2`; evidence-backed findings only; explicit category states; no score, grade, percentage, roadmap, or vulnerability scan |
 | Insights | Ready, limited | sealed `ri.v1` snapshot | `repository-insights.v1`; defined snapshot-local counts and ratios only; no trend claims without history |
-| Dependency Graph | **Preview** | legacy manifest analysis | Not snapshot-bound; direct declarations only; vulnerability/outdated assessment not computed |
+| Dependency Graph | Ready, limited | sealed `ri.v1` snapshot | `dependency-graph.v2` (#158); direct declarations only, merged across manifests (#156); vulnerability/outdated assessment not computed |
 | AI Workspace | **Preview** | mixed snapshot/legacy context | The built-in authentication explanation is cited from the sealed snapshot; free-form provider answers use legacy structure metadata and return no citations |
 | Documentation | **Preview** | legacy heuristic analysis | Not bound to a sealed snapshot |
 | Settings | Ready, limited | user configuration | Unavailable controls say so; no fabricated configuration |
@@ -180,8 +180,8 @@ The PR description records the exact final counts and check URLs for the pushed 
 6. Move among Architecture, Review, and Insights and show that revision and snapshot identity
    are unchanged. Rapidly switch repositories and show that old identity/data disappears while
    the new request loads.
-7. Open Dependency Graph and read the Preview limitation: legacy manifest path, not
-   snapshot-bound, no security scan.
+7. Open Dependency Graph, confirm its snapshot identity matches Architecture/Review/Insights,
+   and read the no-security-scan notice: vulnerability/outdated assessments not computed.
 
 ## Known limitations
 
@@ -193,7 +193,7 @@ The PR description records the exact final counts and check URLs for the pushed 
   security assessment. No vulnerability scanner runs.
 - Insights is a snapshot inventory. There is no revision-history comparison, trend analysis,
   contributor analysis, churn, complexity, or health score.
-- Dependency Graph, AI Workspace, and Documentation remain Preview legacy consumers.
+- AI Workspace and Documentation remain Preview legacy consumers.
 - The manifest digest proves content integrity against this deployment’s stored snapshot. It
   does not prove authorship and is not a signature.
 - AI receives no source content or line numbers and returns no citations.
