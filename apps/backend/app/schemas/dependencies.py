@@ -1,6 +1,7 @@
 from typing import Literal
 
 from app.schemas.base import CamelModel
+from app.schemas.provenance import IntelligenceProvenance
 
 
 class DependencyDeclaration(CamelModel):
@@ -55,3 +56,7 @@ class DependencyGraphResponse(CamelModel):
     diagnostics: list[DependencyDiagnostic] = []
     vulnerability_assessment: DependencyAssessment
     outdated_assessment: DependencyAssessment
+    #: The dependency graph is still built by the legacy engine, so every
+    #: response declares that provenance rather than letting the surface imply
+    #: it is snapshot-backed.
+    provenance: IntelligenceProvenance

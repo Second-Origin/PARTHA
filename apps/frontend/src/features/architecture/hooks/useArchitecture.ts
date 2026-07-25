@@ -89,6 +89,5 @@ export function useArchitecture() {
     activeRepository,
     completedRepositories,
     emptyReason,
-    usingMockData: false,
   };
 }

@@ -88,6 +88,5 @@ export function useReview() {
     activeRepository,
     completedRepositories,
     emptyReason,
-    usingMockData: false,
   };
 }

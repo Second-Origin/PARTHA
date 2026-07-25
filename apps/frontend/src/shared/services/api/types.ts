@@ -322,6 +322,17 @@ export interface DependencyAssessment {
   status: 'not_computed';
 }
 
+/**
+ * Which intelligence path produced a repository-derived response. `ri.v1` is
+ * the sealed, evidence-backed snapshot model; `legacy-heuristic` is the older
+ * engine that reads mutable repository metadata. Legacy responses always carry
+ * a limitation so a heuristic result is never shown as snapshot-backed.
+ */
+export interface IntelligenceProvenance {
+  source: 'ri.v1' | 'legacy-heuristic';
+  limitation: string | null;
+}
+
 export interface DependencyGraphResponse {
   repositoryId: string;
   nodes: DependencyNode[];
@@ -331,6 +342,7 @@ export interface DependencyGraphResponse {
   diagnostics: DependencyDiagnostic[];
   vulnerabilityAssessment: DependencyAssessment;
   outdatedAssessment: DependencyAssessment;
+  provenance: IntelligenceProvenance;
 }
 
 // Review

@@ -298,6 +298,15 @@ def get_evidence_source(
             "diagnostics": [],
             "vulnerabilityAssessment": {"status": "not_computed"},
             "outdatedAssessment": {"status": "not_computed"},
+            "provenance": {
+                "source": "legacy-heuristic",
+                "limitation": (
+                    "Derived from declared manifests by the legacy analysis engine, not "
+                    "from a sealed evidence snapshot. Results are not bound to a "
+                    "verifiable revision manifest and may differ from snapshot-backed "
+                    "surfaces."
+                ),
+            },
         },
         *_COMMON_ERRORS,
     ),

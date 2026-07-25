@@ -4,6 +4,7 @@ import { GitBranch, Package, Search } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
+import { ProvenanceNotice } from '@/shared/components/ui/ProvenanceNotice';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { useDependencies } from '@/features/dependencies/hooks/useDependencies';
 import type { DependencyAssessment } from '@/shared/services/api/types';
@@ -101,6 +102,7 @@ export function DependenciesPage() {
       <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
         <DataSourceBadge source={dependencies.source} />
       </PageHeader>
+      <ProvenanceNotice provenance={graph.provenance} />
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         <Stat label="Dependencies" value={graph.totalDependencies} />
         <Stat label="Relations" value={graph.edges.length} />

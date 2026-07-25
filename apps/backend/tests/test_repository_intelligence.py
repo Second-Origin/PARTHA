@@ -143,6 +143,23 @@ def test_feature_consumers_read_repository_intelligence(tmp_path: Path):
     assert dependencies.outdated_assessment.status == "not_computed"
     assert review.summary.total_findings >= 1
 
+    # The dependency graph is still built by the legacy engine. It must say so
+    # rather than letting the surface imply snapshot-backed evidence (#154).
+    assert dependencies.provenance.source == "legacy-heuristic"
+    assert dependencies.provenance.limitation
+
+
+def test_dependency_graph_declares_legacy_provenance_when_empty(tmp_path: Path):
+    """An empty dependency graph is still a legacy-derived answer, so the
+    not-analysed path must declare the same provenance as the populated one."""
+    record = RepositoryRecord(id="repo-empty", name="empty", owner_id="owner-1", repo_metadata=None)
+
+    dependencies = DependencyGraphBuilder().build(record)
+
+    assert dependencies.nodes == []
+    assert dependencies.provenance.source == "legacy-heuristic"
+    assert dependencies.provenance.limitation
+
 
 def test_architecture_without_snapshot_reports_honest_unknown_state(tmp_path: Path):
     """Architecture (#95) reads exclusively through the snapshot query layer; it
