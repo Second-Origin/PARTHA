@@ -10,10 +10,25 @@ vi.mock('@/features/dependencies/hooks/useDependencies', () => ({
 }));
 
 const graph: DependencyGraphResponse = {
+  schemaVersion: 'dependency-graph.v2',
   repositoryId: 'repo-1',
+  repositoryName: 'sample',
+  revisionKind: 'upload',
+  revisionValue: `sha256:${'0'.repeat(64)}`,
+  snapshotId: 'snap_example',
+  snapshotSchemaVersion: 'ri.v1',
+  canonicalGraphHash: `sha256:${'1'.repeat(64)}`,
+  manifestDigest: `sha256:${'2'.repeat(64)}`,
+  provenance: {
+    source: 'ri.v1',
+    snapshotId: 'snap_example',
+    snapshotSchemaVersion: 'ri.v1',
+    canonicalGraphHash: `sha256:${'1'.repeat(64)}`,
+  },
+  generatedAt: '2026-07-25T00:00:00Z',
   nodes: [
     {
-      id: 'dependency:npm:lodash',
+      id: 'dep:npm:lodash',
       name: 'lodash',
       version: '4.17.15',
       type: 'production',
@@ -32,19 +47,14 @@ const graph: DependencyGraphResponse = {
           type: 'production',
         },
       ],
-      size: null,
     },
   ],
-  edges: [],
+  edges: [{ id: 'edge_1', source: 'repo:root', target: 'dep:npm:lodash', type: 'depends-on' }],
   totalDependencies: 1,
   manifestCount: 1,
   diagnostics: [],
   vulnerabilityAssessment: { status: 'not_computed' },
   outdatedAssessment: { status: 'not_computed' },
-  provenance: {
-    source: 'legacy-heuristic',
-    limitation: 'Derived from declared manifests by the legacy analysis engine.',
-  },
 };
 
 const dependencies: ReturnType<typeof useDependencies> = {
@@ -77,6 +87,7 @@ const dependencies: ReturnType<typeof useDependencies> = {
   status: 'success' as const,
   loading: false,
   error: null,
+  noSnapshot: false,
   empty: false,
   success: true,
   source: 'upload' as const,
@@ -126,11 +137,22 @@ describe('DependenciesPage', () => {
     expect(screen.queryByText('outdated')).not.toBeInTheDocument();
   });
 
+  it('renders the sealed snapshot identity, consistent with Architecture/Review', () => {
+    renderPage();
+
+    expect(screen.getByText('Snapshot')).toBeInTheDocument();
+    expect(screen.getByText('snap_example')).toBeInTheDocument();
+    expect(screen.getByText('Canonical graph hash')).toBeInTheDocument();
+    expect(screen.getByText(graph.canonicalGraphHash)).toBeInTheDocument();
+    expect(screen.getByText('Manifest digest')).toBeInTheDocument();
+  });
+
   it('shows an empty inventory instead of a search-miss message', () => {
     mockDependencies({
       graph: {
         ...graph,
         nodes: [],
+        edges: [],
         totalDependencies: 0,
         manifestCount: 0,
       },
@@ -153,6 +175,7 @@ describe('DependenciesPage', () => {
       graph: {
         ...graph,
         nodes: [],
+        edges: [],
         totalDependencies: 0,
         diagnostics: [diagnostic(severity)],
       },
@@ -171,6 +194,7 @@ describe('DependenciesPage', () => {
       graph: {
         ...graph,
         nodes: [],
+        edges: [],
         totalDependencies: 0,
         manifestCount: 0,
         diagnostics: [diagnostic(severity)],
@@ -236,13 +260,30 @@ describe('DependenciesPage', () => {
     expect(screen.queryByText('Dependency inventory unavailable')).not.toBeInTheDocument();
   });
 
-  it('discloses that the dependency graph comes from the legacy engine', () => {
-    mockDependencies({ graph });
+  it('distinguishes "no sealed snapshot yet" from a genuine zero-dependency snapshot', () => {
+    mockDependencies({ graph: null, noSnapshot: true });
+
     renderPage();
 
-    expect(screen.getByTestId('provenance-notice')).toBeInTheDocument();
+    expect(screen.getByText('No sealed snapshot yet')).toBeInTheDocument();
     expect(
-      screen.getByText(/Derived from declared manifests by the legacy analysis engine\./),
+      screen.getByText(
+        'This repository has no sealed Repository Intelligence snapshot for its current revision. Analyse it again to generate one.',
+      ),
     ).toBeInTheDocument();
+    expect(screen.queryByText('No dependencies were discovered.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dependency inventory unavailable')).not.toBeInTheDocument();
+  });
+
+  it('does not show the no-snapshot state for a genuinely empty sealed snapshot', () => {
+    mockDependencies({
+      graph: { ...graph, nodes: [], edges: [], totalDependencies: 0, manifestCount: 0 },
+      noSnapshot: false,
+    });
+
+    renderPage();
+
+    expect(screen.getByText('No dependencies were discovered.')).toBeInTheDocument();
+    expect(screen.queryByText('No sealed snapshot yet')).not.toBeInTheDocument();
   });
 });

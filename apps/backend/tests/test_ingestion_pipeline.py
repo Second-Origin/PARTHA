@@ -144,13 +144,10 @@ def test_analysis_read_endpoints_return_typed_defaults_before_worker_runs(auth_c
     assert architecture["relationshipSnapshotId"] is None
     assert architecture["diagnostics"][0]["code"] == "ARCH-REL-NOT-EXTRACTED"
 
+    # Dependency Graph is sealed-snapshot-bound (#158), same as Review/Insights:
+    # no snapshot yet means 404, not a typed-empty 200.
     dependency_response = auth_client.get(f"/analysis/{repository_id}/dependencies")
-    assert dependency_response.status_code == 200
-    dependencies = dependency_response.json()
-    assert dependencies["nodes"] == []
-    assert dependencies["edges"] == []
-    assert dependencies["totalDependencies"] == 0
-    assert dependencies["manifestCount"] == 0
+    assert dependency_response.status_code == 404
 
     review_response = auth_client.get(f"/analysis/{repository_id}/review")
     error = assert_error_response(review_response, 404, "not_found")
@@ -255,11 +252,13 @@ def test_dependency_endpoint_returns_nested_manifest_provenance_and_malformed_di
     assert run_analysis_jobs() == 1
 
     payload = auth_client.get(f"/analysis/{repository_id}/dependencies").json()
+    assert payload["schemaVersion"] == "dependency-graph.v2"
+    assert payload["provenance"]["source"] == "ri.v1"
     assert payload["manifestCount"] == 4
     nodes = {node["id"]: node for node in payload["nodes"]}
-    assert set(nodes) == {"dependency:npm:react", "dependency:pypi:celery", "dependency:pypi:fastapi"}
-    assert nodes["dependency:pypi:fastapi"]["version"] is None
-    assert nodes["dependency:pypi:fastapi"]["declarations"] == [
+    assert set(nodes) == {"dep:npm:react", "dep:pypi:celery", "dep:pypi:fastapi"}
+    assert nodes["dep:pypi:fastapi"]["version"] is None
+    assert nodes["dep:pypi:fastapi"]["declarations"] == [
         {
             "name": "fastapi",
             "manifestPath": "apps/backend/pyproject.toml",

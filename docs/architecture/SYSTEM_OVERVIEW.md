@@ -249,9 +249,9 @@ These are properties of the system as built, not a wish list.
 2. **No line-level provenance in production output.** The snapshot schema can store validated spans and derivations, but the current regex engine emits neither and is deliberately not promoted into `ri.v1`.
 3. **The graph store is not the only product read model.** Durable analysis
    populates immutable normalized snapshots, and Architecture, Engineering
-   Review, and Insights consume the latest owner-scoped sealed snapshot.
-   Dependency Graph Preview plus several compatibility module, documentation,
-   export, and AI paths still use the legacy JSON model.
+   Review, Insights, and Dependency Graph consume the latest owner-scoped
+   sealed snapshot. Documentation, export, and AI paths still use the legacy
+   JSON model.
 4. **Analysis is whole-repository.** It runs in a durable, cancellable background job with bounded retry and stale-worker recovery, but incremental re-analysis is not implemented. Import extraction and file-tree parsing remain synchronous.
 5. **The rate limiter trusts only the direct socket peer for unauthenticated requests.** `X-Forwarded-For` is deliberately ignored, so behind a reverse proxy every unauthenticated client shares one IP budget until a trusted-proxy allowlist is designed. Authenticated requests are keyed per user and unaffected.
 6. **Dependency coverage is narrow.** Three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The API exposes explicit `not_computed` assessment statuses and does not emit a clean result or count without a scanner.

@@ -152,10 +152,10 @@ same-snapshot foreign keys and provenance, validates derivation chains, computes
 the canonical graph hash, and seals the snapshot. Completed snapshots reject
 mutation. The query API exposes sealed snapshot metadata, symbols, stored
 resolved relationships, inferred assertions, file facts, and evidence spans.
-Architecture, the authentication explanation, Engineering Review, and Insights
-build entirely from owner-scoped persisted-fact queries. Dependency Graph,
-Documentation, and free-form AI context remain on the legacy model and are
-classified as Preview.
+Architecture, the authentication explanation, Engineering Review, Insights, and
+Dependency Graph (#158) build entirely from owner-scoped persisted-fact
+queries. Documentation and free-form AI context remain on the legacy model and
+are classified as Preview.
 
 The architecture read is bounded to what the response actually renders (#133):
 the relationship predicates Architecture draws, the resolution diagnostics it
@@ -191,7 +191,7 @@ Each relationship carries an `evidence` list — which currently holds **file pa
 | Authentication explanation (#95) | `app/analysis/authentication.py` | exclusively the sealed snapshot query layer — routes, `routes_to`/`injects`/`calls` edges, `classified_as` assertions, diagnostics. No legacy read. |
 | Engineering review | `app/review/` | exclusively one sealed snapshot — diagnostics promoted only when an exact same-snapshot fact and evidence span exist; manifest identity; no legacy read and no scores. |
 | Repository insights | `app/insights/` | exclusively one sealed snapshot — defined node, relationship, evidence, diagnostic, language, coverage, and extractor counts; no legacy read. |
-| Dependency graph | `app/graph/` | legacy engine: dependencies, `depends_on` relationships |
+| Dependency graph (#158) | `app/graph/` | exclusively one sealed snapshot — `dependency` nodes and resolved `depends_on` edges, with declarations merged across manifests (#156); no legacy read. |
 | Documentation | `app/services/documentation_service.py` | legacy engine: discovery, files, routes, architecture, dependencies |
 | AI | `app/ai/repository_context.py` | legacy engine: discovery, modules, dependencies, file paths |
 | Reports and exports | `app/reports/` | existing analysis and documentation output |
@@ -251,7 +251,7 @@ consumers remain uncited.
 
 - **Symbols:** syntax-derived for supported Python and TS/JS constructs, with line spans but limited signatures/nesting and deliberately conservative cross-file resolution.
 - **Line spans:** emitted by the Python and TypeScript extractors, stored by durable analysis, and returned unchanged from sealed snapshots.
-- **Graph production and consumption:** durable jobs populate normalized immutable graph tables through syntax-aware producers. Architecture, the authentication explanation, Engineering Review, and Insights consume sealed facts exclusively; Dependency Graph, Documentation, and AI still read the legacy JSON blob and are disclosed as Preview.
+- **Graph production and consumption:** durable jobs populate normalized immutable graph tables through syntax-aware producers. Architecture, the authentication explanation, Engineering Review, Insights, and Dependency Graph (#158) consume sealed facts exclusively; Documentation and AI still read the legacy JSON blob and are disclosed as Preview.
 - **Relationships:** four of the eight legacy-model-declared types are never emitted. An import edge resolves to a declared dependency when the name matches and otherwise creates an `external:` node — there is no real module resolution. The `ri.v1` resolver additionally emits an `injects` predicate (#95) for a FastAPI `Depends(name)` argument, resolved the same way a direct call is — through same-file definitions or explicit import bindings only, never a repository-wide same-name guess.
 - **Role classification (`classified_as` assertions, #95):** a small, explicit rule set — filename/path substring matching for files, and class-name suffix matching (`Service`, `Repository`, `Controller`, `Model`, `Middleware`, `Dto`) for symbols, plus a name-pattern heuristic (`auth`, `current_user`, `token`, `verify`, …) applied only to functions that are the object of a resolved `injects` edge. Always `truth_class="inferred"`, never presented as a guaranteed fact. It does not understand base classes, decorators beyond `Depends()`, or any framework's actual dependency-injection semantics — a differently named auth guard, or one injected some other way, is simply not classified, not misclassified.
 - **Authentication subgraph selection (#95):** the classifier and the resolved graph together only produce *candidate* facts; `AuthenticationExplanationService` additionally requires graph connectivity before any of them is claimed as authentication. A route is included only when its resolved `routes_to` handler has a resolved `injects` edge to a symbol explicitly classified `auth_dependency`; a service or model is included only when it lies on a resolved `calls` path from that guard (a breadth-first walk that keeps only edges on a path to a `service`/`model`-classified symbol, discarding everything else the guard happens to call). This is why an unrelated `/health` route, a generic `Depends(get_database)`, or a same-suffix `PaymentService`/`AuditModel` that the guard never calls are never claimed as authentication even though the classifier still labels them `service`/`model` for Architecture's module grouping — a name match alone is never sufficient. The response also returns `chains`: one ordered route -> handler -> guard -> (service/model) path per qualifying route, so a consumer does not have to reconstruct the flow from the flat `relationships` list.

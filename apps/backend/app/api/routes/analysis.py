@@ -354,12 +354,27 @@ def verify_revision_manifest(
     response_model=DependencyGraphResponse,
     responses=documented_responses(
         200,
-        "Dependency inventory and declared relationships.",
+        "Dependency inventory and resolved depends_on relationships from the selected sealed ri.v1 snapshot.",
         {
+            "schemaVersion": "dependency-graph.v2",
             "repositoryId": _REPOSITORY_ID,
+            "repositoryName": "example-service",
+            "revisionKind": "upload",
+            "revisionValue": "sha256:" + "0" * 64,
+            "snapshotId": "snap_example",
+            "snapshotSchemaVersion": "ri.v1",
+            "canonicalGraphHash": "sha256:" + "1" * 64,
+            "manifestDigest": "sha256:" + "2" * 64,
+            "provenance": {
+                "source": "ri.v1",
+                "snapshotId": "snap_example",
+                "snapshotSchemaVersion": "ri.v1",
+                "canonicalGraphHash": "sha256:" + "1" * 64,
+            },
+            "generatedAt": "2026-07-17T00:00:00Z",
             "nodes": [
                 {
-                    "id": "dependency:npm:react",
+                    "id": "dep:npm:react",
                     "name": "react",
                     "version": "^18.3.0",
                     "type": "production",
@@ -378,28 +393,19 @@ def verify_revision_manifest(
                             "type": "production",
                         }
                     ],
-                    "size": None,
                 }
             ],
-            "edges": [],
+            "edges": [
+                {"id": "edge_example", "source": "repo:root", "target": "dep:npm:react", "type": "depends-on"}
+            ],
             "totalDependencies": 1,
             "manifestCount": 1,
             "diagnostics": [],
             "vulnerabilityAssessment": {"status": "not_computed"},
             "outdatedAssessment": {"status": "not_computed"},
-            "provenance": {
-                "source": "legacy-heuristic",
-                "limitation": (
-                    "Derived from declared manifests by the legacy analysis engine, not "
-                    "from a sealed evidence snapshot. Results are not bound to a "
-                    "verifiable revision manifest and may differ from snapshot-backed "
-                    "surfaces."
-                ),
-            },
         },
-        *_COMMON_ERRORS,
+        *_REVIEW_ERRORS,
     ),
-    openapi_extra=suppress_automatic_validation_error(),
 )
 def get_dependencies(
     repository_id: str,

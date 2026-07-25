@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 
 from app.analysis.architecture import ArchitectureAnalyzer
-from app.graph.dependency_graph import DependencyGraphBuilder
 from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.models.repository import RepositoryRecord
 from app.parsers.repository_parser import RepositoryParser
@@ -127,35 +126,6 @@ def test_repository_intelligence_is_serializable_and_persisted(tmp_path: Path):
     assert loaded.repository_id == "repo-1"
     assert loaded.graph.nodes
     assert loaded.model_dump(mode="json", by_alias=True)["graph"]["nodes"]
-
-
-def test_feature_consumers_read_repository_intelligence(tmp_path: Path):
-    _sample_repository(tmp_path)
-    _, _, _, intelligence = _build_intelligence(tmp_path)
-    record = _record(tmp_path, intelligence)
-
-    dependencies = DependencyGraphBuilder().build(record)
-
-    assert any(node.name == "react" for node in dependencies.nodes)
-    assert dependencies.vulnerability_assessment.status == "not_computed"
-    assert dependencies.outdated_assessment.status == "not_computed"
-
-    # The dependency graph is still built by the legacy engine. It must say so
-    # rather than letting the surface imply snapshot-backed evidence (#154).
-    assert dependencies.provenance.source == "legacy-heuristic"
-    assert dependencies.provenance.limitation
-
-
-def test_dependency_graph_declares_legacy_provenance_when_empty(tmp_path: Path):
-    """An empty dependency graph is still a legacy-derived answer, so the
-    not-analysed path must declare the same provenance as the populated one."""
-    record = RepositoryRecord(id="repo-empty", name="empty", owner_id="owner-1", repo_metadata=None)
-
-    dependencies = DependencyGraphBuilder().build(record)
-
-    assert dependencies.nodes == []
-    assert dependencies.provenance.source == "legacy-heuristic"
-    assert dependencies.provenance.limitation
 
 
 def test_architecture_without_snapshot_reports_honest_unknown_state(tmp_path: Path):
