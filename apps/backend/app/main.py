@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import text
 
+from sqlalchemy import inspect as sa_inspect
+
 from app.api.router import api_router
 from app.api.openapi import (
     documented_responses,
@@ -24,6 +26,7 @@ from app.core.exceptions import ErrorResponse, register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.observability import new_request_id, reset_request_id, runtime_metrics, set_request_id
 from app.core.rate_limit import RateLimitMiddleware, build_rate_limit_store
+from app.core.schema_sync import ensure_schema_in_sync, stamp_head
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.models.base import Base
 
@@ -149,7 +152,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     settings.storage_path.mkdir(parents=True, exist_ok=True)
     if settings.auto_create_tables:
-        Base.metadata.create_all(bind=database.engine)
+        # A database with no tables at all is genuinely fresh: create_all
+        # builds every table directly from the current models (== head's
+        # shape by definition), so stamping head afterward is safe and
+        # bypasses the drift check entirely. An existing database (some
+        # tables already present) may be stamped behind head from a schema-
+        # changing merge -- route that through the same drift check as the
+        # AUTO_CREATE_TABLES=false path below instead of blindly re-stamping.
+        is_fresh = not sa_inspect(database.engine).get_table_names()
+        if is_fresh:
+            Base.metadata.create_all(bind=database.engine)
+            stamp_head(database.engine)
+        else:
+            ensure_schema_in_sync(database.engine, app_env=settings.app_env)
+            Base.metadata.create_all(bind=database.engine)
+    else:
+        ensure_schema_in_sync(database.engine, app_env=settings.app_env)
     worker_handle = _start_analysis_worker()
     try:
         yield
