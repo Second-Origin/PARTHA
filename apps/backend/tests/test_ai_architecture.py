@@ -36,7 +36,6 @@ def _record(root: Path) -> RepositoryRecord:
         size=total_size,
         file_count=meta.total_files,
         status="completed",
-        data_source="real",
         analysis_stage="completed",
         analysis_progress=100,
         uploaded_at=datetime.now(UTC),
