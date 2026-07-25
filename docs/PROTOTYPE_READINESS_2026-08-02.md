@@ -66,7 +66,7 @@ rate-limit tests, both now executed. Delta: −4 (`/ai/stream` tests removed wit
 +2 (#150 bounding), +1 (dependency provenance), +9 (revision manifest), +3 (prototype
 journey), +4 (previously skipped) = **710**.
 
-Without services (`pytest` alone): **703 passed, 4 skipped** — the same 4, each skipping with
+Without services (`pytest` alone): **706 passed, 4 skipped** — the same 4, each skipping with
 an explicit reason naming the missing environment variable (`PARTHA_TEST_PG_URL`,
 `PARTHA_TEST_REDIS_URL`).
 
@@ -76,12 +76,12 @@ an explicit reason naming the missing environment variable (`PARTHA_TEST_PG_URL`
 Test Files  26 passed (26)
      Tests  143 passed (143)
 
-Statements   : 45.94%   Branches : 38.25%
-Functions    : 39.68%   Lines    : 47.88%
+Statements   : 46.02%   Branches : 38.46%
+Functions    : 39.84%   Lines    : 47.91%
 ```
 
 Baseline was 119 tests at 35.94 / 30.71 / 30.75 / 37.32. Thresholds raised from
-`1.5 / 0.25 / 2 / 1.5` to `45 / 37 / 39 / 47`.
+`1.5 / 0.25 / 2 / 1.5` to `45 / 37 / 39 / 47`, which the current run clears.
 
 | Check | Result |
 |---|---|
@@ -320,7 +320,7 @@ PARTHA_VISUAL_SCREENSHOT_DIR=docs/screenshots/architecture \
    download; it is an explicit local gate.
 6. **Docker is unavailable on the development machine.** Compose evidence is CI-only.
 7. **Engineering Review and Insights are unavailable**, not fixed.
-8. **Frontend coverage is 45.94%.** Many pages and hooks remain unexecuted.
+8. **Frontend coverage is 46.02%.** Many pages and hooks remain unexecuted.
 9. **Lockfile inconsistency.** The workspace root declares workspaces but has no lockfile, so a
    plain `npm audit` fails `ENOLOCK`; everything uses `--prefix apps/frontend`. The monorepo
    dependency layout was deliberately left alone.
