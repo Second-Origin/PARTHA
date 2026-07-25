@@ -366,13 +366,6 @@ export interface AiQueryResponse {
   suggestions?: string[];
 }
 
-export interface AiStreamChunk {
-  type: 'content' | 'citation' | 'done' | 'error';
-  content?: string;
-  citation?: AiCitation;
-  error?: string;
-}
-
 export type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'openrouter' | 'ollama';
 
 export interface AiProviderConfig {

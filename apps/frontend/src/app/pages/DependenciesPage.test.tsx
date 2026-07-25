@@ -75,7 +75,7 @@ const dependencies: ReturnType<typeof useDependencies> = {
   error: null,
   empty: false,
   success: true,
-  source: 'real' as const,
+  source: 'upload' as const,
   emptyReason: null,
   graph,
   retry: vi.fn(),

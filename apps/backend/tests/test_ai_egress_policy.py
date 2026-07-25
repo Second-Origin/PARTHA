@@ -761,7 +761,7 @@ def test_persisted_unsafe_configuration_and_all_ai_routes_cannot_bypass_policy(c
     )
     assert test_response.status_code == 422
 
-    for path in ("/ai/query", "/ai/stream"):
+    for path in ("/ai/query",):
         response = client.post(path, json={"repositoryId": repository_id, "query": "Summarize"}, headers=auth["headers"])
         assert response.status_code == 422
         assert "unapproved.example" not in response.text

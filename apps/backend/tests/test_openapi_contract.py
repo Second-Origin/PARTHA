@@ -56,7 +56,6 @@ EXPECTED_RESPONSES = {
     ("PUT", "/ai/config"): {200, 401, 422, 429, 500},
     ("POST", "/ai/test"): {200, 401, 422, 429, 502, 500},
     ("POST", "/ai/query"): {200, 401, 404, 422, 429, 502, 500},
-    ("POST", "/ai/stream"): {200, 401, 404, 422, 429, 502, 500},
     ("POST", "/documentation/generate"): {200, 401, 404, 422, 429, 500},
     ("POST", "/export"): {200, 401, 404, 409, 422, 429, 500},
     ("GET", "/health"): {200, 500},
@@ -72,7 +71,6 @@ BODY_MEDIA_TYPES = {
     ("PUT", "/ai/config"): "application/json",
     ("POST", "/ai/test"): "application/json",
     ("POST", "/ai/query"): "application/json",
-    ("POST", "/ai/stream"): "application/json",
     ("POST", "/documentation/generate"): "application/json",
     ("POST", "/export"): "application/json",
 }
@@ -188,7 +186,7 @@ def test_openapi_has_success_examples_except_for_no_content_deletes(client):
             assert "content" not in response, f"{key} must not document a body for 204"
             continue
 
-        media_type = "text/event-stream" if key == ("POST", "/ai/stream") else "text/plain" if key == ("GET", "/metrics") else "application/json"
+        media_type = "text/plain" if key == ("GET", "/metrics") else "application/json"
         media = _response_media(operation, success_status, media_type)
         assert media.get("schema"), f"{key} lacks a success response schema"
         assert media.get("example") is not None, (

@@ -32,7 +32,7 @@ const baseAnalysis = {
   error: null,
   empty: false,
   success: false,
-  source: 'real' as const,
+  source: 'upload' as const,
   retry: vi.fn(),
   refresh: vi.fn(),
   cancel: vi.fn().mockResolvedValue(undefined),

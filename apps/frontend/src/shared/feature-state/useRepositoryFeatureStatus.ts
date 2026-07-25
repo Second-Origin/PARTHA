@@ -26,7 +26,7 @@ export function useRepositoryFeatureStatus() {
     error: null,
     empty: status === 'empty',
     success: status === 'success',
-    source: activeRepository?.dataSource || null,
+    source: activeRepository?.source || null,
     emptyReason,
     retry: () => undefined,
     refresh: () => undefined,
