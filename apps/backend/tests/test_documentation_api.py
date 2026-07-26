@@ -45,6 +45,26 @@ def _generate(auth_client, repository_id: str, fmt: str):
     return auth_client.post("/documentation/generate", json={"repositoryId": repository_id, "format": fmt})
 
 
+def _upload_and_analyse(auth_client, files: dict[str, str]) -> str:
+    response = auth_client.post(
+        "/repositories/upload",
+        files={"file": ("architecture.zip", _zip_bytes(files), "application/octet-stream")},
+    )
+    assert response.status_code == 201, response.text
+    repository_id = response.json()["id"]
+    assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+    assert run_analysis_jobs() == 1
+    return repository_id
+
+
+def _markdown_section(markdown: str, heading: str) -> str:
+    marker = f"## {heading}"
+    start = markdown.index(marker)
+    rest = markdown[start + len(marker) :]
+    next_marker = rest.find("\n## ")
+    return rest if next_marker == -1 else rest[:next_marker]
+
+
 def test_documentation_markdown_has_structured_headings(auth_client):
     repository_id = _import_sample(auth_client)
 
@@ -95,6 +115,65 @@ def test_documentation_returns_404_without_a_sealed_snapshot(auth_client):
 
     error = assert_error_response(response, 404, "not_found")
     assert "sealed Repository Intelligence snapshot" in error.message
+
+
+def test_documentation_architecture_groups_modules_into_layers_from_snapshot_facts(auth_client):
+    repository_id = _upload_and_analyse(
+        auth_client,
+        {
+            "src/controllers/user_controller.ts": (
+                "import { getUser } from '../services/user_service';\n"
+                "export const handler = () => getUser();\n"
+            ),
+            "src/services/user_service.ts": "export function getUser() { return 1; }\n",
+        },
+    )
+
+    response = _generate(auth_client, repository_id, "markdown")
+
+    assert response.status_code == 200
+    architecture = _markdown_section(response.json()["content"], "Architecture")
+    assert "Presentation" in architecture
+    assert "Business Logic" in architecture
+    assert "Presentation → Business Logic: 1 observed relationship(s)" in architecture
+
+
+def test_documentation_architecture_reports_shared_layer_for_unclassified_repository(auth_client):
+    repository_id = _upload_and_analyse(
+        auth_client,
+        {
+            "assets/logo.svg": "<svg></svg>\n",
+            "data/sample.csv": "a,b\n1,2\n",
+        },
+    )
+
+    response = _generate(auth_client, repository_id, "markdown")
+
+    assert response.status_code == 200
+    architecture = _markdown_section(response.json()["content"], "Architecture")
+    assert "Shared" in architecture
+    assert "No cross-layer relationships observed in the supported snapshot facts." in architecture
+
+
+def test_documentation_deployment_section_matches_real_deployment_yaml_only(auth_client):
+    repository_id = _upload_and_analyse(
+        auth_client,
+        {
+            "docker-compose.yml": "services:\n  api:\n    image: sample\n",
+            ".github/workflows/ci.yml": "name: CI\non: push\n",
+            "Dockerfile": "FROM python:3.12\n",
+            "config/app.yaml": "debug: true\n",
+        },
+    )
+
+    response = _generate(auth_client, repository_id, "markdown")
+
+    assert response.status_code == 200
+    deployment = _markdown_section(response.json()["content"], "Deployment")
+    assert "docker-compose.yml" in deployment
+    assert ".github/workflows/ci.yml" in deployment
+    assert "Dockerfile" in deployment
+    assert "config/app.yaml" not in deployment
 
 
 def test_documentation_is_owner_scoped(auth_client, make_auth_headers):

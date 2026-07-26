@@ -8,6 +8,7 @@ temp directory and confirm the loader rejects each condition Issue #94 lists.
 from __future__ import annotations
 
 import json
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -38,6 +39,21 @@ def test_thresholds_load_with_exact_fractions():
     assert thresholds.determinism == 1
     assert 0 < thresholds.precision <= 1
     assert 0 < thresholds.recall <= 1
+
+
+def test_committed_recall_threshold_matches_precision_bar():
+    """Issue #193: recall must not regress below the harmonized 0.95 bar.
+
+    Recall started at a looser provisional 0.90 (Issue #94) while precision was
+    already enforced at 0.95. Real extraction now clears 0.95 recall on the full
+    corpus, so the acceptance bar is raised to match; this guards against a
+    future PR quietly lowering it back without the Issue #94 sign-off the
+    threshold file requires.
+    """
+
+    thresholds = load_thresholds(paths.THRESHOLDS_PATH)
+    assert thresholds.precision >= Fraction(95, 100)
+    assert thresholds.recall >= Fraction(95, 100)
 
 
 def _base_manifest() -> dict:

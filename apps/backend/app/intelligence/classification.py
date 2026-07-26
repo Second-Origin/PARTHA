@@ -55,6 +55,42 @@ _AUTH_DEPENDENCY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+#: Presentation-only grouping of a ``classified_as`` role into an architectural
+#: layer. This is not a snapshot fact: it is a heuristic re-labelling of an
+#: already-heuristic role, shared by every consumer that groups modules into
+#: layers (Architecture, Documentation) so they cannot disagree about what
+#: "presentation" or "infrastructure" means for the same role.
+_LAYER_BY_ROLE = {
+    "entrypoint": "presentation",
+    "controller": "presentation",
+    "route": "presentation",
+    "service": "business-logic",
+    "model": "domain",
+    "dto": "domain",
+    "interface": "domain",
+    "enum": "domain",
+    "repository": "infrastructure",
+    "configuration": "infrastructure",
+    "test": "infrastructure",
+    "middleware": "infrastructure",
+}
+
+#: Display order for layers; anything absent (e.g. "external") sorts last.
+LAYER_ORDER: dict[str, int] = {
+    "presentation": 0,
+    "business-logic": 1,
+    "domain": 2,
+    "infrastructure": 3,
+    "shared": 4,
+    "external": 5,
+}
+
+
+def layer_for_role(role: str | None) -> str:
+    """Heuristic architectural layer for a ``classified_as`` role, or ``"shared"``."""
+
+    return _LAYER_BY_ROLE.get(role or "", "shared")
+
 
 def _file_role(path: str) -> str | None:
     for pattern, role in _FILE_RULES:
