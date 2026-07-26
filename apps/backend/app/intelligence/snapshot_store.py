@@ -2,8 +2,8 @@
 
 This is the persistence boundary for the ``ri.v1`` storage contract (#88,
 RFC-0001 §11). It does **not** produce facts: extraction, resolution, and
-classification remain the responsibility of producers (#89-#91) behind the
-``RepositoryIntelligenceEngine`` boundary. The store accepts already-produced
+classification remain the responsibility of the extraction, resolution, and
+classification producers (#89-#91). The store accepts already-produced
 facts, enforces the RFC invariants, seals the snapshot in one transaction, and
 guarantees immutability afterwards.
 

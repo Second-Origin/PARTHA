@@ -1,8 +1,10 @@
 """Read-only, owner-scoped queries over sealed ``ri.v1`` snapshots (#92)."""
 
 from collections import defaultdict
+from collections import Counter
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
@@ -79,6 +81,68 @@ class ArchitectureSnapshotFacts:
     edge_evidence: dict[int, list[RiEvidence]]
     diagnostics: list[RiDiagnostic]
     covered_paths: set[str]
+
+
+@dataclass(frozen=True)
+class SnapshotFileFact:
+    path: str
+    language: str | None
+    role: str | None
+    role_confidence: str | None
+
+
+@dataclass(frozen=True)
+class SnapshotDependencyDeclaration:
+    version: str | None
+    dependency_type: str | None
+    manifest_path: str | None
+    workspace_path: str | None
+    start_line: int | None
+    end_line: int | None
+    extractor: str | None
+    extractor_version: str | None
+
+
+@dataclass(frozen=True)
+class SnapshotDependencyFact:
+    stable_key: str
+    name: str
+    ecosystem: str | None
+    declarations: tuple[SnapshotDependencyDeclaration, ...]
+
+
+@dataclass(frozen=True)
+class SnapshotRouteFact:
+    path: str
+    evidence_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SnapshotModuleFact:
+    name: str
+    role: str
+    paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ProductSnapshotProjection:
+    """Immutable, bounded projection shared by Documentation and free-form AI."""
+
+    snapshot_id: str
+    schema_version: str
+    repository_id: str
+    revision_kind: str
+    revision_value: str
+    revision_ref: str | None
+    canonical_graph_hash: str
+    primary_language: str
+    frameworks: tuple[str, ...]
+    entry_points: tuple[str, ...]
+    modules: tuple[SnapshotModuleFact, ...]
+    files: tuple[SnapshotFileFact, ...]
+    dependencies: tuple[SnapshotDependencyFact, ...]
+    routes: tuple[SnapshotRouteFact, ...]
+    diagnostics: tuple[tuple[str, str, str | None], ...]
 
 
 class SnapshotQueryService:
@@ -313,6 +377,216 @@ class SnapshotQueryService:
             edge_evidence=self._evidence_for(snapshot, "edge_ref", [edge.id for edge in edges]),
             diagnostics=diagnostics,
             covered_paths=covered_paths,
+        )
+
+    def product_projection(self, repository_id: str) -> ProductSnapshotProjection:
+        """Facts used by product documentation and free-form AI.
+
+        Resolution is deliberately current-revision-only. The query reads only
+        file/dependency nodes, file role assertions, route observations and
+        diagnostics. Growing id sets are batched before entering ``IN`` clauses.
+        """
+
+        snapshot = self.require_sealed_snapshot_for_current_revision(repository_id)
+        nodes = list(
+            self.db.scalars(
+                select(RiNode)
+                .where(
+                    RiNode.snapshot_id == snapshot.snapshot_id,
+                    RiNode.node_kind.in_(("file", "dependency")),
+                )
+                .order_by(RiNode.node_kind, RiNode.stable_key, RiNode.id)
+            ).all()
+        )
+        assertions = list(
+            self.db.scalars(
+                select(RiAssertion)
+                .where(
+                    RiAssertion.snapshot_id == snapshot.snapshot_id,
+                    RiAssertion.subject_kind == "file",
+                    RiAssertion.predicate == "classified_as",
+                )
+                .order_by(RiAssertion.subject_key, RiAssertion.assertion_id, RiAssertion.id)
+            ).all()
+        )
+        roles: dict[str, tuple[str, str | None]] = {}
+        for assertion in assertions:
+            value = assertion.value or {}
+            classification = value.get("classification")
+            if isinstance(classification, str) and classification:
+                confidence = value.get("confidence")
+                roles[assertion.subject_key] = (
+                    classification,
+                    confidence if isinstance(confidence, str) else None,
+                )
+
+        files = tuple(
+            SnapshotFileFact(
+                path=node.stable_key.removeprefix("file:"),
+                language=node.language,
+                role=roles.get(node.stable_key, (None, None))[0],
+                role_confidence=roles.get(node.stable_key, (None, None))[1],
+            )
+            for node in nodes
+            if node.node_kind == "file" and node.stable_key.startswith("file:")
+        )
+        dependencies = tuple(
+            self._project_dependency(node)
+            for node in nodes
+            if node.node_kind == "dependency"
+        )
+        language_counts = Counter(file.language for file in files if file.language)
+        primary_language = (
+            {"python": "Python", "typescript": "TypeScript"}.get(
+                language_counts.most_common(1)[0][0],
+                language_counts.most_common(1)[0][0].title(),
+            )
+            if language_counts
+            else "Unknown"
+        )
+        framework_by_dependency = {
+            "react": "React",
+            "next": "Next.js",
+            "vue": "Vue",
+            "fastapi": "FastAPI",
+            "django": "Django",
+            "flask": "Flask",
+        }
+        dependency_names = {item.name.lower() for item in dependencies}
+        frameworks = tuple(
+            sorted(
+                framework
+                for name, framework in framework_by_dependency.items()
+                if name in dependency_names
+            )
+        )
+        entry_points = tuple(sorted(file.path for file in files if file.role == "entrypoint"))
+        modules = self._project_modules(files)
+
+        route_observations = list(
+            self.db.scalars(
+                select(RiObservation)
+                .where(
+                    RiObservation.snapshot_id == snapshot.snapshot_id,
+                    RiObservation.observed_kind == "route",
+                )
+                .order_by(
+                    RiObservation.subject_key,
+                    RiObservation.referent_text,
+                    RiObservation.observation_id,
+                    RiObservation.id,
+                )
+            ).all()
+        )
+        route_evidence = self._evidence_for(
+            snapshot,
+            "observation_ref",
+            [observation.id for observation in route_observations],
+        )
+        routes = tuple(
+            SnapshotRouteFact(
+                path=observation.referent_text or "Not available",
+                evidence_paths=tuple(
+                    sorted({item.path for item in route_evidence.get(observation.id, [])})
+                ),
+            )
+            for observation in route_observations
+        )
+        diagnostics = tuple(
+            (row.code, row.message, row.path)
+            for row in self.db.scalars(
+                select(RiDiagnostic)
+                .where(RiDiagnostic.snapshot_id == snapshot.snapshot_id)
+                .order_by(
+                    RiDiagnostic.path,
+                    RiDiagnostic.span_start_line,
+                    RiDiagnostic.code,
+                    RiDiagnostic.id,
+                )
+            ).all()
+        )
+        return ProductSnapshotProjection(
+            snapshot_id=snapshot.snapshot_id,
+            schema_version=snapshot.schema_version,
+            repository_id=snapshot.repository_id,
+            revision_kind=snapshot.revision_kind,
+            revision_value=snapshot.revision_value,
+            revision_ref=snapshot.revision_ref,
+            canonical_graph_hash=snapshot.canonical_graph_hash or "",
+            primary_language=primary_language,
+            frameworks=frameworks,
+            entry_points=entry_points,
+            modules=modules,
+            files=files,
+            dependencies=dependencies,
+            routes=routes,
+            diagnostics=diagnostics,
+        )
+
+    @staticmethod
+    def _project_modules(files: tuple[SnapshotFileFact, ...]) -> tuple[SnapshotModuleFact, ...]:
+        grouped: dict[str, list[SnapshotFileFact]] = defaultdict(list)
+        for file in files:
+            parts = [part for part in file.path.strip("/").split("/") if part]
+            if file.role in {"controller", "route"}:
+                key = "api"
+            elif file.role in {"service", "repository", "middleware", "configuration", "test", "documentation"}:
+                key = file.role
+            elif file.role in {"model", "dto", "interface", "enum"}:
+                key = "domain"
+            elif parts and parts[0] in {"app", "src", "backend", "frontend", "apps"} and len(parts) > 1:
+                key = parts[1].lower()
+            else:
+                key = parts[0].lower() if parts else "repository"
+            grouped[key].append(file)
+        result: list[SnapshotModuleFact] = []
+        for key, members in sorted(grouped.items()):
+            meaningful_roles = [
+                item.role
+                for item in members
+                if item.role not in (None, "unknown", "documentation", "test")
+            ]
+            role = (
+                Counter(meaningful_roles).most_common(1)[0][0]
+                if meaningful_roles
+                else (members[0].role or "unknown")
+            )
+            result.append(
+                SnapshotModuleFact(
+                    name=key.replace("-", " ").title(),
+                    role=role,
+                    paths=tuple(sorted(item.path for item in members)),
+                )
+            )
+        return tuple(result)
+
+    @staticmethod
+    def _project_dependency(node: RiNode) -> SnapshotDependencyFact:
+        properties: dict[str, Any] = node.properties or {}
+        raw_declarations = properties.get("declarations")
+        if not isinstance(raw_declarations, list):
+            raw_declarations = [properties]
+        declarations: list[SnapshotDependencyDeclaration] = []
+        for raw in raw_declarations:
+            if not isinstance(raw, dict):
+                continue
+            declarations.append(
+                SnapshotDependencyDeclaration(
+                    version=raw.get("version") if isinstance(raw.get("version"), str) else None,
+                    dependency_type=raw.get("dependency_type") if isinstance(raw.get("dependency_type"), str) else None,
+                    manifest_path=raw.get("manifest_path") if isinstance(raw.get("manifest_path"), str) else None,
+                    workspace_path=raw.get("workspace_path") if isinstance(raw.get("workspace_path"), str) else None,
+                    start_line=raw.get("start_line") if isinstance(raw.get("start_line"), int) else None,
+                    end_line=raw.get("end_line") if isinstance(raw.get("end_line"), int) else None,
+                    extractor=raw.get("extractor") if isinstance(raw.get("extractor"), str) else None,
+                    extractor_version=raw.get("extractor_version") if isinstance(raw.get("extractor_version"), str) else None,
+                )
+            )
+        return SnapshotDependencyFact(
+            stable_key=node.stable_key,
+            name=node.name or node.stable_key,
+            ecosystem=properties.get("ecosystem") if isinstance(properties.get("ecosystem"), str) else None,
+            declarations=tuple(declarations),
         )
 
     def symbols(self, snapshot_id: str, *, offset: int, limit: int) -> tuple[RiSnapshot, list[RiNode], int]:

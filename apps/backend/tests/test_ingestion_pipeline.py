@@ -87,7 +87,7 @@ def test_zip_upload_persists_repository_and_analysis_completes(auth_client):
 
     with SessionLocal() as session:
         record = session.get(RepositoryRecord, repository["id"])
-        assert "intelligence" in (record.repo_metadata or {})
+        assert "intelligence" not in (record.repo_metadata or {})
 
     status_response = auth_client.get(f"/analysis/{repository['id']}/status")
     assert status_response.status_code == 200

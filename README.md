@@ -60,7 +60,7 @@ Statuses below were checked against the implementation, not against prior docume
 | Repository explorer and file preview | **Implemented** | File tree, text and image preview, binary detection, truncation of large files. |
 | Documentation and report export | **Implemented** | JSON, Markdown, HTML, and PDF through a shared report pipeline. |
 | Authentication and frontend session flow | **Implemented** | Email/password with Argon2, short-lived access tokens, rotating refresh tokens with reuse detection. All frontend routes are behind an auth guard. |
-| Repository Intelligence | **Implemented but limited** | A durable analysis job preserves a legacy compatibility model and seals normalized, revision-addressed Python/TypeScript facts with evidence. Architecture, authentication explanation, Engineering Review, Insights, and Dependency Graph consume the sealed snapshot. |
+| Repository Intelligence | **Implemented but limited** | A durable analysis job seals normalized, revision-addressed Python/TypeScript facts with evidence. Every product reader, including Documentation and free-form AI context, consumes the current revision's sealed snapshot. Historical legacy JSON may remain stored but is ignored. |
 | Architecture output | **Implemented but limited** | Snapshot-backed nodes and relationships in a readable interactive graph. Module and layer classification remains a disclosed heuristic. |
 | Dependency inventory | **Implemented but limited** | Snapshot-bound direct declarations from `package.json`, `requirements.txt`, and `pyproject.toml`, including a package declared in more than one manifest. No lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. |
 | Engineering review | **Implemented but limited** | Deterministic `engineering-review.v2` findings only when the selected sealed snapshot supplies an exact fact and source span. Unassessed categories stay explicit; no score, grade, percentage, or invented roadmap is produced. |
@@ -72,7 +72,7 @@ Statuses below were checked against the implementation, not against prior docume
 | Asynchronous / incremental processing | **Partially implemented** | Import and initial file-tree parsing remain synchronous. Analysis runs in a durable, cancellable background job with progress, bounded retry, and stale-worker recovery; incremental re-analysis is not implemented. |
 | Change-impact analysis | **Not implemented** | — |
 | Vulnerability and outdated-dependency scanning | **Not implemented** | The API exposes explicit `not_computed` assessment statuses. It emits no clean result or count because no scanning is performed. |
-| Persistent semantic knowledge graph | **Implemented but limited** | Analysis seals normalized `ri.v1` snapshot tables with provenance and query APIs for Python/TypeScript facts. Several product consumers still use the legacy JSON compatibility model. |
+| Persistent semantic knowledge graph | **Implemented but limited** | Analysis seals normalized `ri.v1` snapshot tables with provenance and query APIs for Python/TypeScript facts. The sealed current-revision snapshot is the sole product read model; no snapshot means unavailable/404 with no fallback. |
 
 A capability is listed as implemented only where the behaviour exists in code — not because a model, an API field, a class name, or an issue describes it.
 
@@ -87,7 +87,7 @@ Two terms PARTHA uses precisely, because the difference decides how far a claim 
 
 **PARTHA currently provides partial, surface-dependent evidence and provenance.** Normalized `ri.v1` facts from supported Python and TypeScript extraction carry a repository revision, fact identity, path, line span, and extractor version. Architecture, the authentication explanation, Engineering Review, and Insights bind their output to one sealed snapshot. Review findings link to the exact stored fact/span; the Explorer verifies that destination and stored source-byte hash before displaying a trusted revision badge.
 
-Legacy compatibility facts and several consumers still lack that traceability. AI receives no source content or line numbers and returns no citations. Extraction covers only documented syntax, and role classifications remain explicitly heuristic. Treat inferred output as a lead to verify, not a guarantee.
+Free-form AI receives snapshot-backed structure and observed paths, but no source content or line numbers, so provider answers return no automatic citations. Extraction covers only documented syntax, and role classifications remain explicitly heuristic. Treat inferred output as a lead to verify, not a guarantee.
 
 ---
 
@@ -251,8 +251,8 @@ complete product maturity.
 
 - **Not yet hardened for public multi-tenant use.** Authentication and owner isolation are enforced across the backend routes, provider keys are encrypted at rest, and AI provider egress is centrally constrained, but PARTHA has not been operated as a hardened multi-tenant deployment. It is not production-ready and should not be exposed to the public internet without further review. Outside `development`/`test`, set `AUTH_SECRET_KEY` and `AI_ENCRYPTION_KEY` (a Fernet key); the backend refuses to start without them. Production also needs an independent network egress control; application validation is not a firewall.
 - **Extraction is heuristic.** File roles, modules, and layers are inferred from paths and filenames; symbols come from regular expressions. Expect wrong answers on projects that do not follow common conventions, and do not treat heuristic output as guaranteed fact.
-- **Evidence and provenance are partial at the product layer.** Architecture, Engineering Review, Insights, and Dependency Graph bind output to sealed snapshots and expose the provenance they use. Documentation, exports, and AI answers do not all consume that model yet.
-- **The persistent graph is not the only read model yet.** Durable analysis seals queryable `ri.v1` snapshots, while Documentation, exports, and AI still read serialized legacy intelligence from the repository row.
+- **Evidence and provenance are partial at the product layer.** Every repository-derived product response is bound to the current revision's sealed snapshot, but Documentation and free-form AI expose structural facts rather than source quotations; AI answers have no automatic citations.
+- **The persistent graph is the sole product read model.** Durable analysis seals queryable `ri.v1` snapshots. Missing or stale snapshots return 404 without reading repository files or mutable metadata. Historical legacy JSON may remain stored but is ignored.
 - **Analysis is whole-repository.** It now runs as a cancellable background job, but there is no incremental re-analysis.
 - **No change-impact analysis, and no vulnerability or outdated-dependency scanning.**
 - **AI answers are not evidence-backed.** They are grounded in repository structure and file paths only, with no citations. Treat them as a hypothesis to verify.

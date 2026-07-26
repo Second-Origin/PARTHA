@@ -56,6 +56,11 @@ class AiOrchestrator:
         record = self.repository.get_for_owner(request.repository_id, self.owner_id)
         if not record:
             raise NotFoundError("Repository not found.", {"repositoryId": request.repository_id})
+        selected_file = request.context.selected_file if request.context else None
+        # Resolve the owner-scoped current-revision snapshot before provider
+        # configuration or invocation. Missing/stale analysis is a 404, not a
+        # misleading provider error.
+        repository_context = self.context_builder.build(record, selected_file)
         config = self.config_store.read_config()
         if config is None:
             raise ValidationServiceError("AI provider is not configured. Open Settings and save a provider first.")
@@ -64,8 +69,6 @@ class AiOrchestrator:
                 "AI provider API key is missing. Open Settings and save your provider API key."
             )
 
-        selected_file = request.context.selected_file if request.context else None
-        repository_context = self.context_builder.build(record, selected_file)
         prompt = self.prompt_builder.build(repository_context, request.query)
         provider = self.provider_factory.resolve(config)
         provider_response = await provider.complete(config, prompt)

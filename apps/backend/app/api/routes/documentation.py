@@ -22,6 +22,12 @@ _RESPONSE_EXAMPLE = {
     "content": "# Example service\\n\\n## Overview\\n\\nGenerated documentation.",
     "format": "markdown",
     "generatedAt": "2026-07-17T00:00:00Z",
+    "source": "ri.v1",
+    "snapshotId": "snap_example",
+    "snapshotSchemaVersion": "ri.v1",
+    "revisionKind": "git",
+    "revisionValue": "0123456789abcdef0123456789abcdef01234567",
+    "revisionRef": "refs/heads/main",
 }
 
 

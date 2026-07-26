@@ -20,14 +20,11 @@ If your feature needs a repository fact that does not exist yet, the answer is a
 
 ## What Repository Intelligence currently means
 
-Production analysis now has two deliberate outputs. A durable job builds the
-`RepositoryIntelligence` Pydantic model
-([`app/intelligence/models.py`](../../apps/backend/app/intelligence/models.py))
-through `RepositoryIntelligenceEngine`
-([`app/intelligence/engine.py`](../../apps/backend/app/intelligence/engine.py))
-and serializes it onto the repository row for legacy consumers. The same job
-also runs the evidence-backed Python and TypeScript extractors, resolves stored
-observations, and seals a normalized `ri.v1` snapshot.
+Production analysis has one authoritative output. A durable job runs the
+evidence-backed Python, TypeScript, and dependency-manifest extractors, resolves
+stored observations, classifies explicitly heuristic roles, and seals a
+normalized `ri.v1` snapshot. It no longer builds or writes the legacy mutable
+`RepositoryIntelligence` JSON model.
 
 The `ri.v1` persistence boundary includes first-class repository revision
 columns, normalized snapshot/fact/provenance tables, deterministic canonical
@@ -51,19 +48,15 @@ snapshot, with no legacy-metadata fallback for either consumer.
 flowchart LR
     Root["Repository on disk<br/>extracted archive or clone"]
     Parser["RepositoryParser<br/>file tree + metadata"]
-    Engine["RepositoryIntelligenceEngine.build()"]
-    Model["RepositoryIntelligence"]
-    Store[("repositories.repo_metadata<br/>legacy intelligence JSON")]
     Revision[("repositories.revision_*<br/>immutable source identity")]
-    Snapshot[("ri_* tables<br/>available persistence boundary")]
+    Snapshot[("ri_* tables<br/>sole product read model")]
     Consumers["Consumers"]
 
     Root --> Parser
     Root --> Revision
     Revision --> Job["Durable analysis job"]
     Root --> Job
-    Job --> Snapshot
-    Job --> Engine --> Model --> Store
+    Job --> Snapshot --> Consumers
     Store -->|"from_record()"| Consumers
 ```
 
@@ -71,10 +64,10 @@ flowchart LR
 
 ## Where parsing happens
 
-The legacy product path reads repository source from disk in exactly two places:
+Repository source enters the intelligence pipeline in two bounded phases:
 
-1. **`RepositoryParser`** walks the extracted tree and produces `FileTreeNode[]` plus `RepositoryMeta` (languages, framework guess, entry point, counts, README/license presence).
-2. **`RepositoryIntelligenceEngine`** reads individual file contents during `build()` — capped at 512 KB per file — to extract imports, exports, routes, and technology hints. Its dependency bridge selects supported manifests from the `RepositoryParser` file inventory and passes their bytes to the canonical `DependencyManifestExtractor`; it does not walk the repository or reimplement manifest parsing.
+1. **`RepositoryParser`** walks the extracted tree during import and persists a path inventory plus basic import metadata.
+2. **`AnalysisWorker`** reads the persisted inventory's source paths under the shared size/path policy and supplies bytes to `ExtractionPipeline`. The Python, TypeScript, and dependency-manifest extractors never walk the tree themselves.
 
 There is one further direct read that is **not** parsing: `RepositoryService.read_file` serves the explorer's file preview. It is a path-checked read for display only and feeds no analysis.
 
@@ -89,8 +82,7 @@ dispatching those bytes through each extractor's real `supports()` method.
 Both emit normalized nodes, observations, diagnostics, and line evidence through
 the `ExtractionResult` contract. Their declared support and blind spots live in
 `app/extraction/support_matrix.py`. Durable analysis stores their output in a
-sealed normalized snapshot; the legacy regex model remains alongside it for
-consumers that have not migrated.
+sealed normalized snapshot. Historical legacy JSON is not produced or consumed.
 
 ---
 
@@ -98,13 +90,12 @@ consumers that have not migrated.
 
 | Field | Contents | How it is derived |
 | --- | --- | --- |
-| `metadata` | Parser repository metadata. | From `RepositoryParser`. |
-| `discovery` | Primary language, language counts, frameworks, package managers, config/env/Docker/CI files, entry points, build systems, database technologies, cloud providers, statistics. | Filename matching, dependency-name lookup tables, and substring scans of file text. |
-| `files` | Per-file: path, module, language, extension, size, role, imports, exports, API routes, symbols, technologies. | Regex over file text; role from path/filename conventions. |
-| `modules` | Grouped modules with role, layer, path prefix, files, symbols, dependencies. | Files grouped by a derived `module_id`; role is the most common file role; layer is a lookup from role. |
-| `symbols` | Functions, classes, interfaces, types, enums, constants, routes. | Regex per language. **Python and TypeScript/JavaScript only.** |
-| `dependencies` | Logical direct dependency plus every declared version/specifier, type, ecosystem, workspace/manifest path, exact declaration span, and extractor identity. | Supported `package.json`, `requirements.txt`, and `pyproject.toml` files at accepted root or nested workspace paths. |
-| `graph` | Serializable nodes and relationships. | Assembled from the above. |
+| `file` nodes | Observed normalized paths, supported language, content hash. | Repository inventory producer. |
+| `symbol` and `module` nodes | Supported Python and TypeScript/JavaScript syntax facts. | AST/tree-sitter extractors with stored evidence spans. |
+| `classified_as` assertions | File and symbol roles. | Explicit path/name heuristics, stored as inferred with heuristic confidence. |
+| `dependency` nodes | Logical direct dependency plus every declared version/specifier, type, ecosystem, workspace/manifest path, exact declaration span, and extractor identity. | Supported `package.json`, `requirements.txt`, and `pyproject.toml` files at accepted root or nested workspace paths. |
+| observations and resolved edges | Imports, calls, routes, dependency declarations, and supported relationships. | Syntax/manifest observations resolved only against stored snapshot facts. |
+| diagnostics and evidence | Unsupported/malformed/unresolved states plus exact stored spans where available. | Producers and resolver; missing facts are never manufactured. |
 
 ### Deterministic vs. heuristic
 
@@ -133,11 +124,10 @@ This distinction matters, and consumers must respect it.
 ## How it is persisted today
 
 Import stores revision identity, parser metadata, and the file tree. After the
-client submits analysis, the durable worker builds and stores both compatibility
-intelligence and the normalized snapshot:
+client submits analysis, the durable worker builds and stores the normalized
+snapshot:
 
 ```text
-repositories.repo_metadata["intelligence"]   -- entire model, JSON
 repositories.revision_kind/value/ref          -- first-class immutable revision identity
 repositories.file_tree                       -- parsed tree, JSON
 ri_snapshots + ri_* fact tables               -- normalized ri.v1 persistence boundary
@@ -145,7 +135,9 @@ ri_snapshots + ri_* fact tables               -- normalized ri.v1 persistence bo
 
 The repository API returns `revision: {kind,value,ref}` and retains `commitSha` only as a compatibility alias of `revision.value`. New imports do not stash `commitSha` inside mutable metadata. A new Git commit or changed upload hash creates a new repository record; the same source at the same immutable revision remains a duplicate.
 
-Consumers still call `RepositoryIntelligenceEngine.from_record(record)`, which returns the legacy model if present and **rebuilds it from disk as a fallback** if it is missing or fails validation. That compatibility path is not an `ri.v1` snapshot producer: its regex facts have no valid spans or versioned provenance and are never promoted to `observed`, `resolved`, or `inferred` rows.
+Historical `repo_metadata["intelligence"]` values may remain in existing rows,
+but executable product code ignores them. There is no destructive rewrite and
+no filesystem or legacy-engine fallback.
 
 `SnapshotStore` fixes the complete semantic identity before a build, enforces
 same-snapshot foreign keys and provenance, validates derivation chains, computes
@@ -154,8 +146,9 @@ mutation. The query API exposes sealed snapshot metadata, symbols, stored
 resolved relationships, inferred assertions, file facts, and evidence spans.
 Architecture, the authentication explanation, Engineering Review, Insights, and
 Dependency Graph (#158) build entirely from owner-scoped persisted-fact
-queries. Documentation and free-form AI context remain on the legacy model and
-are classified as Preview.
+queries. Documentation and free-form AI context share a bounded immutable
+projection over the owner-scoped sealed snapshot for the repository's current
+revision. Missing or stale snapshots return the standard 404.
 
 The architecture read is bounded to what the response actually renders (#133):
 the relationship predicates Architecture draws, the resolution diagnostics it
@@ -192,9 +185,9 @@ Each relationship carries an `evidence` list — which currently holds **file pa
 | Engineering review | `app/review/` | exclusively one sealed snapshot — diagnostics promoted only when an exact same-snapshot fact and evidence span exist; manifest identity; no legacy read and no scores. |
 | Repository insights | `app/insights/` | exclusively one sealed snapshot — defined node, relationship, evidence, diagnostic, language, coverage, and extractor counts; no legacy read. |
 | Dependency graph (#158) | `app/graph/` | exclusively one sealed snapshot — `dependency` nodes and resolved `depends_on` edges, with declarations merged across manifests (#156); no legacy read. |
-| Documentation | `app/services/documentation_service.py` | legacy engine: discovery, files, routes, architecture, dependencies |
-| AI | `app/ai/repository_context.py` | legacy engine: discovery, modules, dependencies, file paths |
-| Reports and exports | `app/reports/` | existing analysis and documentation output |
+| Documentation | `app/services/documentation_service.py` | current-revision sealed projection: observed paths/languages, heuristic roles/modules, routes, dependencies/declarations, diagnostics, and snapshot identity |
+| AI | `app/ai/repository_context.py` | the same sealed projection; structural facts only, with no source-file contents or fabricated citations |
+| Reports and exports | `app/reports/` | snapshot-backed analysis and Documentation output |
 
 ### What consumers are forbidden from doing
 
@@ -226,24 +219,23 @@ and current source bytes against the sealed file fact. Review diagnostics
 without that support are counted as omitted and never presented as findings.
 Insights counts stored rows and never turns absence into a positive claim.
 
-Legacy product paths still consume the compatibility model. Specifically:
-
-- **No line spans.** `SourceSymbol` has `id`, `name`, `kind`, `file_path`, and `exported`. It has **no start or end line**. Nothing in the model records where in a file a fact was found.
-- **No extraction method on the fact.** A consumer cannot tell whether a given fact was matched deterministically or inferred heuristically. That distinction lives in this document, not in the data.
-- **Revision identity is now exact at the repository boundary.** GitHub imports store a 40-character commit plus resolved ref; uploads store a `sha256:` archive identity. Legacy JSON facts still are not individually revision-addressed, while conforming snapshot rows are.
+Every product path now consumes the sealed model. GitHub imports store a
+40-character commit plus resolved ref; uploads store a `sha256:` archive
+identity. Consumers require that exact current revision and never select an
+arbitrary older "latest" snapshot.
 
 The honest summary: **durable analysis populates an immutable snapshot with exact
 revision identity, spans, producer versions, and derivations. Architecture,
-authentication, Review, and Insights use it; Preview surfaces disclose when
-they do not.** If no job has completed, snapshot-backed surfaces return an
-honest unavailable/empty state rather than falling back to legacy facts.
+authentication, Review, Insights, Documentation, exports, and free-form AI
+context use it.** If no matching job has completed, surfaces return an honest
+404/unavailable state rather than falling back to legacy facts.
 
 This is why AI answers carry no citations. The AI context builder deliberately emits an empty citation list and sends the provider **no source content and no line numbers** — fabricating `1:1` placeholder citations would misrepresent a structural answer as line-level evidence. See [`app/ai/repository_context.py`](../../apps/backend/app/ai/repository_context.py).
 
 Normalized snapshot facts, authentication explanations, and Review findings
 have revision-, fact-, extractor-, and line-addressed evidence. Insights metrics
-carry snapshot identity and exact definitions. AI and legacy compatibility
-consumers remain uncited.
+carry snapshot identity and exact definitions. Free-form AI remains uncited
+because provider prose cannot be deterministically mapped to stored facts.
 
 ---
 
@@ -251,14 +243,14 @@ consumers remain uncited.
 
 - **Symbols:** syntax-derived for supported Python and TS/JS constructs, with line spans but limited signatures/nesting and deliberately conservative cross-file resolution.
 - **Line spans:** emitted by the Python and TypeScript extractors, stored by durable analysis, and returned unchanged from sealed snapshots.
-- **Graph production and consumption:** durable jobs populate normalized immutable graph tables through syntax-aware producers. Architecture, the authentication explanation, Engineering Review, Insights, and Dependency Graph (#158) consume sealed facts exclusively; Documentation and AI still read the legacy JSON blob and are disclosed as Preview.
+- **Graph production and consumption:** durable jobs populate normalized immutable graph tables through syntax-aware producers. Every product surface consumes sealed facts exclusively. Documentation and free-form AI use a bounded structural projection and do not receive source contents.
 - **Relationships:** four of the eight legacy-model-declared types are never emitted. An import edge resolves to a declared dependency when the name matches and otherwise creates an `external:` node — there is no real module resolution. The `ri.v1` resolver additionally emits an `injects` predicate (#95) for a FastAPI `Depends(name)` argument, resolved the same way a direct call is — through same-file definitions or explicit import bindings only, never a repository-wide same-name guess.
 - **Role classification (`classified_as` assertions, #95):** a small, explicit rule set — filename/path substring matching for files, and class-name suffix matching (`Service`, `Repository`, `Controller`, `Model`, `Middleware`, `Dto`) for symbols, plus a name-pattern heuristic (`auth`, `current_user`, `token`, `verify`, …) applied only to functions that are the object of a resolved `injects` edge. Always `truth_class="inferred"`, never presented as a guaranteed fact. It does not understand base classes, decorators beyond `Depends()`, or any framework's actual dependency-injection semantics — a differently named auth guard, or one injected some other way, is simply not classified, not misclassified.
 - **Authentication subgraph selection (#95):** the classifier and the resolved graph together only produce *candidate* facts; `AuthenticationExplanationService` additionally requires graph connectivity before any of them is claimed as authentication. A route is included only when its resolved `routes_to` handler has a resolved `injects` edge to a symbol explicitly classified `auth_dependency`; a service or model is included only when it lies on a resolved `calls` path from that guard (a breadth-first walk that keeps only edges on a path to a `service`/`model`-classified symbol, discarding everything else the guard happens to call). This is why an unrelated `/health` route, a generic `Depends(get_database)`, or a same-suffix `PaymentService`/`AuditModel` that the guard never calls are never claimed as authentication even though the classifier still labels them `service`/`model` for Architecture's module grouping — a name match alone is never sufficient. The response also returns `chains`: one ordered route -> handler -> guard -> (service/model) path per qualifying route, so a consumer does not have to reconstruct the flow from the flat `relationships` list.
 - **Evidence navigation (#95, #154):** authentication and Engineering Review citations link to the existing repository Explorer with `snapshotId`, `factId`, path, and line span. The Explorer calls the owner-scoped `GET /analysis/{repositoryId}/evidence` endpoint, which returns source only when the exact fact/span exists and the current source bytes match the SHA-256 sealed on the snapshot's file fact; otherwise it displays an explicit unavailable state. The same Monaco-based `CodePreview` is reused rather than adding a second viewer.
 - **Revision identity:** first-class and immutable per imported repository revision. Snapshot history can be retained, but diff/query APIs and product re-analysis orchestration are not implemented.
 - **Dependencies:** three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The dependency API reports both assessments as explicit `not_computed` statuses; it emits no clean result or count without a scanner.
-- **Dependency inventory:** only direct declarations from accepted `package.json`, `pyproject.toml`, and `requirements.txt` paths are reported. The parser inventory excludes `.git`, dependency/install directories, build output, virtual environments, caches, vendor paths, and generated paths; lockfiles are not read. Each candidate is size-checked and read with the existing 512 KiB source budget before being processed individually; oversized manifests produce `RI-LIMIT-SKIP` rather than being retained in memory. Multiple workspace declarations remain attached to one logical dependency, including conflicts rather than an arbitrarily selected version. A malformed supported manifest produces a safe `RI-SRC-MALFORMED` diagnostic in the dependency response while valid manifests continue to contribute declarations. No transitive resolution, vulnerability scanning, or outdated-version scanning is implemented. This holds for the sealed `ri.v1` snapshot's dependency nodes as well as the legacy engine (#156): `AnalysisWorker` merges same-producer dependency nodes that share a stable key into one node with a `declarations` list before persistence, specifically so a package declared in more than one manifest — an ordinary monorepo shape — does not fail sealing for the whole repository.
+- **Dependency inventory:** only direct declarations from accepted `package.json`, `pyproject.toml`, and `requirements.txt` paths are reported. The parser inventory excludes `.git`, dependency/install directories, build output, virtual environments, caches, vendor paths, and generated paths; lockfiles are not read. Each candidate is size-checked and read with the existing 512 KiB source budget before being processed individually; oversized manifests produce `RI-LIMIT-SKIP` rather than being retained in memory. Multiple workspace declarations remain attached to one logical dependency, including conflicts rather than an arbitrarily selected version. A malformed supported manifest produces a safe `RI-SRC-MALFORMED` diagnostic while valid manifests continue to contribute declarations. No transitive resolution, vulnerability scanning, or outdated-version scanning is implemented. `AnalysisWorker` merges same-producer dependency nodes that share a stable key into one node with a `declarations` list before persistence, specifically so a package declared in more than one manifest — an ordinary monorepo shape — does not fail sealing for the whole repository.
 - **Languages:** meaningful extraction covers Python and TypeScript/JavaScript. Other languages get file-tree and metadata treatment only.
 - **File size cap:** files over 512 KB are read as empty during extraction, so their contents contribute nothing.
 - **Build cost:** the whole repository is re-analysed from scratch in a background job; incremental analysis is not implemented.

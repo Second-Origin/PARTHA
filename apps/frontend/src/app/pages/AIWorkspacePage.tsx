@@ -10,7 +10,7 @@ import { cn } from '@/shared/utils/cn';
 // Kept identical to the `limitation` recorded for this surface in the
 // product-surface registry, which is what classifies it as Preview.
 const AI_WORKSPACE_LIMITATION =
-  'Evidence-backed answers currently cover authentication and are derived only from the sealed snapshot for the selected revision. Free-form questions need a configured AI provider and use the legacy repository context.';
+  'Free-form questions require a configured AI provider. They receive sealed-snapshot structural facts, heuristic roles, and observed paths, but no source-file contents; provider answers therefore have no automatic citations.';
 
 export function AIWorkspacePage() {
   const navigate = useNavigate();

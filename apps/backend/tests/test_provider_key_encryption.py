@@ -12,6 +12,7 @@ import zipfile
 
 from sqlalchemy import select
 
+from tests.analysis_helpers import run_analysis_jobs
 from tests.api_assertions import assert_error_response
 from tests.conftest import register_user
 
@@ -202,6 +203,8 @@ def test_saving_without_key_carries_the_existing_key_forward(client):
 def test_ai_query_without_provider_config_returns_a_clear_error(client):
     auth = register_user(client, "noai@example.com")
     repository_id = _upload_sample(client, auth["headers"])
+    assert client.post(f"/analysis/{repository_id}/start", headers=auth["headers"]).status_code == 200
+    assert run_analysis_jobs() == 1
 
     response = client.post(
         "/ai/query",

@@ -426,6 +426,12 @@ export interface GenerateDocResponse {
   content: string;
   format: 'markdown' | 'html';
   generatedAt: string;
+  source: 'ri.v1';
+  snapshotId: string;
+  snapshotSchemaVersion: 'ri.v1';
+  revisionKind: 'git' | 'upload';
+  revisionValue: string;
+  revisionRef?: string | null;
 }
 
 // Auth

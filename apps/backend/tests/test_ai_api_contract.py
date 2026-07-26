@@ -4,6 +4,7 @@ import zipfile
 from app.ai.providers.registry import ProviderRegistry
 from app.ai.types import AiProviderConfig, AiProviderResponse, PromptBundle
 from app.api.deps import get_provider_registry
+from tests.analysis_helpers import run_analysis_jobs
 from tests.api_assertions import assert_error_response
 
 
@@ -87,6 +88,8 @@ def test_ai_query_endpoint_preserves_public_response_contract(auth_client):
         )
         assert upload_response.status_code == 201
         repository_id = upload_response.json()["id"]
+        assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+        assert run_analysis_jobs() == 1
 
         config_response = auth_client.put(
             "/ai/config",
@@ -99,7 +102,7 @@ def test_ai_query_endpoint_preserves_public_response_contract(auth_client):
             json={
                 "repositoryId": repository_id,
                 "query": "Summarize this repository",
-                "context": {"selectedFile": "/src/app.ts"},
+                "context": {"selectedFile": "src/app.ts"},
             },
         )
 
@@ -118,3 +121,60 @@ def test_ai_query_endpoint_preserves_public_response_contract(auth_client):
         assert message["citations"] is None
     finally:
         auth_client.app.dependency_overrides.pop(get_provider_registry, None)
+
+
+def test_ai_query_resolves_snapshot_before_provider_configuration(auth_client):
+    upload = auth_client.post(
+        "/repositories/upload",
+        files={
+            "file": (
+                "no-snapshot.zip",
+                _zip_bytes({"sample/src/app.ts": b"export const answer = 42;\n"}),
+                "application/octet-stream",
+            )
+        },
+    )
+    repository_id = upload.json()["id"]
+
+    before_analysis = auth_client.post(
+        "/ai/query",
+        json={"repositoryId": repository_id, "query": "Summarize"},
+    )
+    assert_error_response(before_analysis, 404, "not_found")
+
+    assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+    assert run_analysis_jobs() == 1
+    after_analysis = auth_client.post(
+        "/ai/query",
+        json={"repositoryId": repository_id, "query": "Summarize"},
+    )
+    error = assert_error_response(after_analysis, 422, "validation_error")
+    assert "provider is not configured" in error.message.lower()
+
+
+def test_ai_query_rejects_a_selected_file_absent_from_the_snapshot(auth_client):
+    upload = auth_client.post(
+        "/repositories/upload",
+        files={
+            "file": (
+                "selected-file.zip",
+                _zip_bytes({"sample/src/app.ts": b"export const answer = 42;\n"}),
+                "application/octet-stream",
+            )
+        },
+    )
+    repository_id = upload.json()["id"]
+    assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+    assert run_analysis_jobs() == 1
+
+    response = auth_client.post(
+        "/ai/query",
+        json={
+            "repositoryId": repository_id,
+            "query": "Explain it",
+            "context": {"selectedFile": "src/missing.ts"},
+        },
+    )
+
+    error = assert_error_response(response, 422, "validation_error")
+    assert error.details["selectedFile"] == "src/missing.ts"

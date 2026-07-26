@@ -1,10 +1,8 @@
 """Durable analysis-job execution (#93).
 
 ``AnalysisWorker`` claims one queued ``analysis_jobs`` row at a time and runs the
-full analysis off the request path: the legacy ``RepositoryIntelligenceEngine``
-build (which other consumers still read via ``repo_metadata['intelligence']``)
-followed by the evidence-backed extraction pipeline that seals a Repository
-Intelligence snapshot.
+full analysis off the request path through the evidence-backed extraction
+pipeline that seals the repository's authoritative ``ri.v1`` snapshot.
 
 ``run_once`` is the primary unit both the background loop in ``app.main`` and the
 test-suite drive; it is synchronous and deterministic. It claims at most one job
@@ -50,7 +48,6 @@ from app.extraction.python import PythonExtractor
 from app.extraction.typescript import TypeScriptExtractor
 from app.intelligence import canonical
 from app.intelligence.classification import RoleClassifier
-from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.intelligence.resolution import RelationshipResolver
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
 from app.models.analysis_job import AnalysisJob
@@ -126,7 +123,6 @@ class AnalysisWorker:
             max(lease_seconds / 3, 0.1), 5.0
         )
         self._shutdown = threading.Event()
-        self.intelligence = RepositoryIntelligenceEngine()
 
     # -- public API ----------------------------------------------------------
 
@@ -258,8 +254,7 @@ class AnalysisWorker:
             record=session.get(RepositoryRecord, job.repository_id),
         )
         stages = (
-            ("reading-structure", 25, self._stage_legacy),
-            ("extracting-modules", 50, self._stage_open_snapshot),
+            ("extracting-modules", 35, self._stage_open_snapshot),
             ("building-dependency-graph", 75, self._stage_extract),
             ("preparing-architecture", 90, self._stage_seal),
         )
@@ -308,27 +303,6 @@ class AnalysisWorker:
                 return
             yield ctx
 
-    def _stage_legacy(self, ctx: _StageContext) -> None:
-        """Run the legacy intelligence build, preserved verbatim from AnalysisService.
-
-        ``from_record`` + ``persist`` populate ``repo_metadata['intelligence']``,
-        which the architecture/dependencies/review read endpoints still consume
-        directly; this behaviour is unchanged, only moved off the request path.
-        """
-
-        record = self._require_record(ctx)
-        # Known limitation: these legacy repository fields use their historical
-        # ladder and can briefly diverge from the durable job stage/progress.
-        record.status = "analysing"
-        record.analysis_stage = "preparing-architecture"
-        record.analysis_progress = 80
-        repository_intelligence = self.intelligence.from_record(
-            record,
-            check_cancelled=lambda: self._check_heartbeat(ctx),
-        )
-        self._check_heartbeat(ctx)
-        self.intelligence.persist(record, repository_intelligence)
-
     def _stage_open_snapshot(self, ctx: _StageContext) -> None:
         """Open (or reuse) the snapshot for this job's exact semantic identity.
 
@@ -340,6 +314,9 @@ class AnalysisWorker:
         """
 
         record = self._require_record(ctx)
+        record.status = "analysing"
+        record.analysis_stage = "extracting-modules"
+        record.analysis_progress = 35
         revision = self._require_revision(record)
         ctx.store = SnapshotStore(ctx.session)
         snapshot, reused = ctx.store.get_or_reuse(
@@ -958,10 +935,7 @@ class AnalysisWorker:
         the order files happened to be read in.
 
         Scoped to this worker's single repository-wide ``pipeline.run()``
-        call; ``ExtractionPipeline`` itself is unchanged. The legacy
-        ``RepositoryIntelligenceEngine`` dependency bridge calls the pipeline
-        once per file and merges declarations downstream itself, so it does
-        not see or need this.
+        call; ``ExtractionPipeline`` itself is unchanged.
         """
 
         groups: dict[str, list[tuple[ProducedExtraction, ExtractedNode]]] = defaultdict(list)

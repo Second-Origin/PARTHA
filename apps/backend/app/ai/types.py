@@ -37,6 +37,14 @@ class RepositoryIdentity:
 
 
 @dataclass(frozen=True)
+class SnapshotIdentity:
+    id: str
+    schema_version: str
+    revision_kind: str
+    revision_value: str
+
+
+@dataclass(frozen=True)
 class ModuleContext:
     name: str
     role: str
@@ -77,6 +85,7 @@ class SelectedFileContext:
 @dataclass(frozen=True)
 class RepositoryContext:
     repository: RepositoryIdentity
+    snapshot: SnapshotIdentity
     architecture: ArchitectureContext
     dependencies: tuple[DependencyContext, ...]
     documentation: DocumentationContext

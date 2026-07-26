@@ -2,6 +2,14 @@
 
 FastAPI backend for repository ingestion, Repository Intelligence, architecture and dependency analysis, engineering review, documentation generation, exports, and AI orchestration.
 
+All repository-derived product reads resolve an owner-scoped sealed `ri.v1`
+snapshot matching the repository's current revision. Documentation, exports,
+and free-form AI context do not read legacy JSON or rebuild from repository
+files. A missing or stale snapshot is unavailable (404), with no fallback.
+Historical `repo_metadata["intelligence"]` values may remain stored but are
+ignored. Free-form AI additionally requires a configured provider and receives
+no source-file contents.
+
 This app lives at `apps/backend` in the PARTHA monorepo. For contributor workflow and engineering rules, see the root [CONTRIBUTING.md](../../CONTRIBUTING.md). For what the engine actually extracts, see [Repository Intelligence](../../docs/architecture/REPOSITORY_INTELLIGENCE.md).
 
 ## Local development
