@@ -3,179 +3,132 @@
 </p>
 
 <p align="center">
-  <a href="#getting-started">Getting started</a>
+  <a href="#try-the-core-workflow">Try the workflow</a>
   ·
-  <a href="#what-currently-works">What works</a>
+  <a href="#what-works-today">What works</a>
   ·
-  <a href="#how-the-system-works">How it works</a>
+  <a href="#one-repository-model-many-consumers">How it works</a>
   ·
-  <a href="#limitations">Limitations</a>
+  <a href="#run-partha-locally">Run locally</a>
+  ·
+  <a href="#limitations-and-security">Limitations</a>
   ·
   <a href="docs/README.md">Docs</a>
-  ·
-  <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 <p align="center">
-  <img alt="License" src="https://img.shields.io/github/license/Second-Origin/PARTHA">
-  <img alt="Python 3.12-3.13" src="https://img.shields.io/badge/Python-3.12--3.13-3776AB?logo=python&logoColor=white">
-  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white">
-  <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=111">
-  <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white">
+  <img alt="Apache 2.0 license" src="https://img.shields.io/github/license/Second-Origin/PARTHA">
+  <img alt="Python 3.12–3.13" src="https://img.shields.io/badge/Python-3.12--3.13-3776AB?logo=python&logoColor=white">
+  <img alt="Node.js 22" src="https://img.shields.io/badge/Node.js-22-5FA04E?logo=nodedotjs&logoColor=white">
 </p>
 
----
+**PARTHA turns a repository revision into one sealed, queryable model and uses it to explain architecture, dependencies, review findings, insights, and documentation without letting each feature invent its own interpretation.**
 
-## What PARTHA is
+> **Current stage: advanced prototype / pre-alpha.** PARTHA runs locally and its flagship workflow is usable, but it is not a beta, a production SaaS, or a hardened public multi-tenant deployment.
 
-**A self-hosted Repository Intelligence Platform for private and evolving codebases.**
+PARTHA is for technical founders, staff and platform engineers, and engineering leads who need an inspectable starting point for understanding a codebase they did not write—or no longer fully trust their mental model of.
 
-PARTHA parses a repository once into a shared layer of repository facts, and has every surface — architecture, dependencies, reviews, documentation, exports, and optional AI — read from that one layer rather than deriving its own.
+## From scattered code to shared understanding
 
-> **Repository Intelligence is the shared repository-understanding layer. AI is an optional downstream consumer of it, never an independent interpreter of the repository.**
+Understanding an unfamiliar or fast-moving codebase usually means reconstructing the same facts repeatedly: entry points from folders, dependencies from manifests, boundaries from imports, and risk from partial tooling. Documentation, static analysis, and AI can each build a different private interpretation—and those interpretations drift.
 
-The purpose, stated at the level it is actually being pursued: build *persistent* understanding of a repository as it evolves, reuse that understanding across every surface, and make repository claims progressively more checkable. PARTHA is early. What follows describes what exists, not what is intended.
+PARTHA takes a different approach. A bounded extraction pipeline turns the selected repository revision into a persistent Repository Intelligence snapshot. Architecture, Dependency Graph, Engineering Review, Insights, Documentation, exports, and optional AI all consume that shared model.
 
-> **Status: early development.** PARTHA runs locally and is useful for exploring a repository. It is **not production-ready**. Authentication and owner isolation are now enforced across the backend routes, but the system has not been hardened or operated as a multi-tenant deployment, so it should still be run in a trusted environment.
+The result is a codebase view that is:
 
-## The problem
+- **consistent across surfaces** — one stored fact model, not a parser per feature;
+- **revision-bound** — a Git commit or uploaded-archive hash identifies the source;
+- **inspectable** — supported facts carry extractor and source evidence;
+- **honest about gaps** — unavailable or uncomputed assessments stay explicit.
 
-- **Architecture is implicit.** Module boundaries, layering, and entry points live in folder conventions and framework idioms, not in anything you can read.
-- **Dependencies are scattered** across manifests, imports, config, and container files.
-- **Documentation goes stale**, and nobody can tell which parts still hold.
-- **AI explanations are hard to trust** when the assistant reads raw files and guesses, giving you no way to check its answer.
+## Try the core workflow
 
-The common failure is that each tool re-derives its own private understanding of the repository, and they quietly disagree. PARTHA's answer is to derive it once, in one place, and make everything else a consumer.
+For the shortest path to value, [run PARTHA locally](#run-partha-locally) and use a real repository with Python or TypeScript/JavaScript code.
 
----
+1. **Add a repository.** Upload a ZIP, TAR, TAR.GZ, or TGZ archive, or import a **public GitHub** repository over HTTPS.
+2. **Run analysis.** PARTHA starts a durable, cancellable background job and seals a snapshot for that exact repository revision.
+3. **Inspect the codebase from several angles.**
+   - **Architecture** maps snapshot-backed modules and relationships in an interactive graph.
+   - **Dependency Graph** inventories supported direct declarations and their manifest locations.
+   - **Engineering Review** publishes only findings supported by stored evidence and keeps unassessed categories visible.
+   - **Insights** reports defined snapshot-local counts, ratios, diagnostics, languages, and extractor coverage.
+   - **Evidence Explorer** opens supported findings at the verified source span.
+4. **Share the result.** Generate structural documentation or export Review, Documentation, Architecture, and Dependencies as JSON, Markdown, HTML, or PDF.
 
-## What currently works
+Across those surfaces, PARTHA keeps the repository revision, snapshot identity, and canonical graph hash aligned. A missing or stale snapshot produces an unavailable state instead of silently falling back to another interpretation.
 
-Statuses below were checked against the implementation, not against prior documentation.
+## What works today
 
-| Capability | Status | Notes |
+Statuses describe executable behaviour on the current `dev` branch:
+
+| Capability | Assessment | Current boundary |
 | --- | --- | --- |
-| Archive upload (`.zip`, `.tar.gz`, `.tgz`) | **Implemented** | Size caps; path-traversal and symlink escape rejected; empty and invalid archives rejected. |
-| Public GitHub import | **Implemented** | Shallow clone of public HTTPS GitHub URLs, with clone timeout and size cap. Records the HEAD commit. Private repositories and other hosts are not supported. |
-| Repository explorer and file preview | **Implemented** | File tree, text and image preview, binary detection, truncation of large files. |
-| Documentation and report export | **Implemented** | JSON, Markdown, HTML, and PDF through a shared report pipeline. |
-| Authentication and frontend session flow | **Implemented** | Email/password with Argon2, short-lived access tokens, rotating refresh tokens with reuse detection. All frontend routes are behind an auth guard. |
-| Repository Intelligence | **Implemented but limited** | A durable analysis job seals normalized, revision-addressed Python/TypeScript facts with evidence. Every product reader, including Documentation and free-form AI context, consumes the current revision's sealed snapshot. Historical legacy JSON may remain stored but is ignored. |
-| Architecture output | **Implemented but limited** | Snapshot-backed nodes and relationships in a readable interactive graph. Module and layer classification remains a disclosed heuristic. |
-| Dependency inventory | **Implemented but limited** | Snapshot-bound direct declarations from `package.json`, `requirements.txt`, and `pyproject.toml`, including a package declared in more than one manifest. No lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. |
-| Engineering review | **Implemented but limited** | Deterministic `engineering-review.v2` findings only when the selected sealed snapshot supplies an exact fact and source span. Unassessed categories stay explicit; no score, grade, percentage, or invented roadmap is produced. |
-| Repository insights | **Implemented but limited** | Defined counts, ratios, diagnostics, language and extractor breakdowns from one sealed snapshot. Trend and change-over-time metrics are explicitly unavailable. |
-| AI provider integration | **Implemented but limited** | Several providers behind one abstraction. Provider configuration is per-user, with the API key encrypted at rest and injected per request; outbound destinations are centrally allowlisted and DNS-pinned. See [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md). |
-| Authorization and owner isolation | **Implemented** | All repository, analysis, AI, documentation, and export routes require authentication and are owner-scoped in the service layer; a non-owner request returns 404. Rate-limit budgets are keyed per authenticated user. |
-| Evidence-backed authentication explanation | **Implemented but limited** | A deterministic Python/FastAPI authentication subgraph cites snapshot-, fact-, revision-, and line-addressed source. Classification remains heuristic and unsupported patterns are reported as gaps. |
-| Grounded AI answers | **Not implemented** | No source content or line numbers are sent to providers, and no AI citations are returned. |
-| Asynchronous / incremental processing | **Partially implemented** | Import and initial file-tree parsing remain synchronous. Analysis runs in a durable, cancellable background job with progress, bounded retry, and stale-worker recovery; incremental re-analysis is not implemented. |
-| Change-impact analysis | **Not implemented** | — |
-| Vulnerability and outdated-dependency scanning | **Not implemented** | The API exposes explicit `not_computed` assessment statuses. It emits no clean result or count because no scanning is performed. |
-| Persistent semantic knowledge graph | **Implemented but limited** | Analysis seals normalized `ri.v1` snapshot tables with provenance and query APIs for Python/TypeScript facts. The sealed current-revision snapshot is the sole product read model; no snapshot means unavailable/404 with no fallback. |
+| Archive upload and public GitHub import | **Implemented** | ZIP/TAR-family archives and shallow public GitHub HTTPS clones; size and path-safety limits apply. Private GitHub cloning and other repository hosts are not supported. |
+| Repository explorer | **Implemented** | Owner-scoped file tree plus bounded text/image preview, binary detection, and truncation. |
+| Authentication and owner isolation | **Implemented** | Email/password, Argon2, short-lived access tokens, rotating refresh tokens with reuse detection. Protected resources are owner-scoped; non-owner access returns 404. |
+| Analysis lifecycle | **Implemented** | Database-backed, cancellable job with progress, bounded retry, lease renewal, and stale-worker recovery. |
+| Repository Intelligence | **Implemented, limited** | Immutable, revision-addressed `ri.v1` snapshots with normalized facts, evidence, query APIs, and a total canonical graph hash. Semantic extraction is strongest for supported Python and TypeScript/JavaScript constructs. |
+| Architecture and authentication explanation | **Implemented, limited** | Interactive snapshot-backed graph. Module/layer classification is heuristic. The cited authentication subgraph covers supported Python/FastAPI patterns only. |
+| Dependency Graph | **Implemented, limited** | Direct declarations from `package.json`, `requirements.txt`, and `pyproject.toml`, including repeated workspace declarations and exact manifest spans. No lockfiles or transitive resolution. |
+| Engineering Review | **Implemented, limited** | `engineering-review.v2`; evidence-addressed findings and explicit category states. No overall score, grade, health percentage, vulnerability result, or generated roadmap. |
+| Repository Insights | **Implemented, limited** | `repository-insights.v1`; defined counts, ratios, diagnostics, language breakdowns, and extraction coverage from one snapshot. No change-over-time claims. |
+| Documentation and report export | **Implemented, limited** | Documentation uses current-revision structural facts. Review, Documentation, Architecture, and Dependencies export through one JSON/Markdown/HTML/PDF pipeline. |
+| AI provider integration | **Implemented, limited** | Per-user configuration for supported providers, encrypted API keys, and constrained outbound destinations. Free-form answers receive structural facts and observed paths—not source bytes or line spans—and return no automatic citations. |
+| Asynchronous processing | **Partially implemented** | Analysis runs off the request path. Import, extraction of the initial archive/clone, and file-tree parsing remain synchronous; one in-process worker handles analysis jobs. |
+| Incremental re-analysis and revision comparison | **Not implemented / not assessed** | The full repository is analysed again; no snapshot-to-snapshot product workflow is available. |
+| Change-impact or blast-radius analysis | **Not implemented / not assessed** | No product result is emitted. |
+| Vulnerability and outdated-dependency scanning | **Not implemented / not assessed** | Dependency responses report explicit `not_computed` states; Review keeps vulnerability scanning `not_assessed`. No clean bill of health or zero count is fabricated. |
+| Grounded, cited free-form AI answers | **Not implemented / not assessed** | Provider answers are intentionally uncited because providers do not receive source content or line numbers. |
 
-A capability is listed as implemented only where the behaviour exists in code — not because a model, an API field, a class name, or an issue describes it.
+**Implemented, limited** means the workflow exists but has a disclosed coverage or trust boundary. **Partially implemented** means only part of the end-to-end behaviour exists. **Not implemented / not assessed** means PARTHA does not manufacture an answer.
 
----
+## One repository model, many consumers
 
-## Evidence and provenance
-
-Two terms PARTHA uses precisely, because the difference decides how far a claim can be trusted.
-
-- **Evidence** is the source artifact supporting a repository fact: a file, declaration, import, route, or configuration entry.
-- **Provenance** identifies where the fact came from: repository revision, path, symbol, line span, and extraction method.
-
-**PARTHA currently provides partial, surface-dependent evidence and provenance.** Normalized `ri.v1` facts from supported Python and TypeScript extraction carry a repository revision, fact identity, path, line span, and extractor version. Architecture, the authentication explanation, Engineering Review, and Insights bind their output to one sealed snapshot. Review findings link to the exact stored fact/span; the Explorer verifies that destination and stored source-byte hash before displaying a trusted revision badge.
-
-Free-form AI receives snapshot-backed structure and observed paths, but no source content or line numbers, so provider answers return no automatic citations. Extraction covers only documented syntax, and role classifications remain explicitly heuristic. Treat inferred output as a lead to verify, not a guarantee.
-
----
-
-## How the system works
-
-A repository is parsed once at ingestion. Repository Intelligence is built from that parse, persisted, and read back by every surface.
+Repository Intelligence is PARTHA's single repository-understanding boundary. Repository source enters one bounded import and extraction path; product consumers query the resulting sealed snapshot rather than opening files or constructing parallel facts.
 
 ```mermaid
 flowchart LR
-    Input["Repository input<br/>archive · public GitHub clone"]
-    Ingest["Ingestion and parsing<br/>storage · repository parser"]
-    RI["Repository Intelligence<br/>shared repository-understanding layer"]
-    Consumers["Architecture · Dependencies<br/>Reviews · Documentation · Exports"]
-    AI["AI<br/>optional consumer"]
+    Input["Repository input<br/>archive · public GitHub"]
+    Import["Import<br/>safe storage · revision identity · file inventory"]
+    Analyse["Durable analysis<br/>Python · TypeScript/JavaScript · manifests"]
+    RI[("Sealed ri.v1 snapshot<br/>facts · evidence · diagnostics · canonical hash")]
+    Product["Architecture · Dependencies · Review<br/>Insights · Documentation · Exports"]
+    AI["AI provider<br/>optional · structural context only"]
 
-    Input --> Ingest --> RI --> Consumers
+    Input --> Import --> Analyse --> RI --> Product
     RI -.-> AI
 ```
 
-Consumers transform Repository Intelligence into their own response shapes. None of them opens repository files or re-parses the tree, and the export pipeline is a second-order consumer that renders analysis output that already exists.
+The architectural rule is deliberately strict:
 
-> **The rule.** If a feature needs a repository fact, add reusable extraction to `app/intelligence/`. Do not build a second parser inside a consumer.
+> If a feature needs a repository fact, reusable extraction belongs in `apps/backend/app/intelligence/`. A consumer must never build a second parser. AI is an optional downstream consumer of Repository Intelligence, never an independent interpreter of the repository.
 
-### Runtime shape
+### Evidence, provenance, and integrity
 
-```mermaid
-flowchart LR
-    UI["Frontend<br/>React · Vite · TypeScript"]
-    API["REST API<br/>FastAPI"]
-    RI["Repository Intelligence"]
-    DB[("SQLite local<br/>PostgreSQL via Compose")]
-    Disk[("Local filesystem")]
+PARTHA separates three ideas that are often blurred together:
 
-    UI --> API --> RI
-    RI --> DB
-    RI --> Disk
-```
+- **Evidence** is the stored source artifact supporting a fact, such as a file, declaration, import, route, or configuration entry.
+- **Provenance** records where a supported fact came from: revision, path, line span, extractor, and fact identity.
+- **Integrity** is represented by the snapshot's canonical graph hash and revision manifest. The digest detects content differences inside this deployment; it is **not** a digital signature or proof of authorship.
 
-Deeper detail lives in [System Overview](docs/architecture/SYSTEM_OVERVIEW.md) and [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md).
+Coverage is surface-dependent. Supported Python and TypeScript/JavaScript facts can carry exact spans; Dependency declarations, the authentication explanation, and Review findings expose targeted evidence. Documentation uses structural facts, and free-form AI receives no source bytes or line numbers, so its prose has no automatic citations.
 
----
+Read [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) for the complete extraction boundary and [System Overview](docs/architecture/SYSTEM_OVERVIEW.md) for the runtime architecture.
 
-## Repository structure
+## Run PARTHA locally
 
-```text
-PARTHA/
-├── apps/
-│   ├── backend/              FastAPI backend
-│   │   ├── app/
-│   │   │   ├── api/          Routes and dependency wiring
-│   │   │   ├── intelligence/ Repository Intelligence engine and models
-│   │   │   ├── parsers/      File-tree parser
-│   │   │   ├── analysis/     Architecture modelling (consumer)
-│   │   │   ├── graph/        Dependency graph construction (consumer)
-│   │   │   ├── review/       Engineering review (consumer)
-│   │   │   ├── ai/           Orchestration, context, prompts, providers (consumer)
-│   │   │   ├── reports/      Report model, renderers, export service
-│   │   │   ├── auth/         Password hashing, tokens, auth service
-│   │   │   ├── core/         Config, database, logging, rate limiting, security headers
-│   │   │   ├── models/       SQLAlchemy models
-│   │   │   └── storage/      Local repository and upload storage
-│   │   ├── alembic/          Database migrations
-│   │   └── tests/            Backend tests
-│   └── frontend/             React frontend
-│       └── src/
-│           ├── app/          Shell, router, pages, stores
-│           ├── features/     Domain features
-│           └── shared/       API clients, UI, config, types, utilities
-├── docs/                     Public documentation
-├── packages/                 Reserved for future shared packages
-├── scripts/                  Local workflow helpers
-└── docker-compose.yml        Local development stack
-```
+### Prerequisites
 
----
+| Tool | Version | Needed for |
+| --- | --- | --- |
+| Python | 3.12 or 3.13 | Backend |
+| Node.js | 22 | Frontend and workflow scripts |
+| Git | Recent version | Checkout and public GitHub import |
+| Docker | Optional | PostgreSQL/Redis Compose stack |
 
-## Getting started
+### 1. Start the backend
 
-| Tool | Version |
-| --- | --- |
-| Python | 3.12 or 3.13 |
-| Node.js | 22 |
-| Git | Required for GitHub repository import |
-| Docker | Optional, for the local Compose stack |
-
-### Backend
-
-The backend defaults to SQLite and local filesystem storage, so it starts with no PostgreSQL and no Redis.
+The default development configuration uses SQLite, an in-memory rate limiter, and local filesystem storage. No `.env` file is required.
 
 ```bash
 git clone https://github.com/Second-Origin/PARTHA.git
@@ -190,88 +143,91 @@ cd ../..
 npm run dev:backend
 ```
 
-The API is then on `http://localhost:8000` — OpenAPI docs at `/docs`, readiness at `/ready`.
+The API starts at `http://localhost:8000`; OpenAPI is at `/docs` and readiness is at `/ready`.
 
-No `.env` file is required for local development: every setting has a working default. Copy `apps/backend/.env.example` only when you want to change one.
+### 2. Start the frontend
 
-### Frontend
+In a second terminal:
 
 ```bash
+cd PARTHA
 npm ci --prefix apps/frontend
 npm run dev:frontend
 ```
 
-The app is then on `http://localhost:5173` and expects the backend on `http://localhost:8000`. Register an account through the UI, then sign in.
+Open `http://localhost:5173`, register a local account, add a repository, and start analysis.
 
-### Docker Compose (local development only)
+### Optional: local Compose stack
 
-Compose runs the API against PostgreSQL and Redis for local development. It is not deployment guidance.
-
-The API provider egress policy defaults to `hosted`, which does not enable a
-tenant-configurable local endpoint. A trusted local or internal Ollama endpoint
-requires explicit administrator-owned `AI_EGRESS_MODE=self_hosted`, exact base
-URL, and CIDR settings. Compose isolates PostgreSQL and Redis on an internal
-data network, but it cannot enforce an exact API destination allowlist; hosted
-and shared deployments still require a firewall, egress proxy, cloud rule, or
-service-mesh policy. See [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md).
+Compose runs the API with PostgreSQL and Redis for local development. It is not production deployment guidance.
 
 ```bash
-npm run docker:config     # validate the Compose file
-npm run docker:up         # start the local stack
-npm run docker:validate   # start, wait for /ready, tear down
+npm run docker:config
+npm run docker:up
 ```
 
-Run the frontend separately with `npm run dev:frontend`.
+Run the frontend separately with `npm run dev:frontend`. See the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md) before configuring any custom or local provider endpoint.
 
----
+## Verification
 
-## Testing
+Run checks relevant to your change:
 
 ```bash
-npm run test:backend                  # backend tests (pytest)
-npm --prefix apps/frontend run test   # frontend tests (vitest)
-npm run lint:frontend                 # eslint
-npm run build:frontend                # tsc -b && vite build
-npm run test:prototype                # disposable fixtures + Playwright journeys
+# Backend (avoids an inherited PYTHONPATH selecting the wrong environment)
+cd apps/backend
+PYTHONPATH= .venv/bin/python -m pytest
+cd ../..
+
+# Frontend
+npm --prefix apps/frontend run test
+npm run lint:frontend
+npm run build:frontend
+
+# Disposable fixtures and browser journeys
+npm run test:prototype
+
+# Compose configuration and /ready lifecycle
+npm run docker:validate
 ```
 
-`npm run build` runs the frontend build and the backend tests; it does not run
-frontend lint, Vitest, or the prototype browser journeys, so run those
-separately. CI runs all of the above plus the disposable Playwright acceptance
-job and a Docker Compose check.
+The prototype browser suite exercises defined Architecture, Engineering Review, Insights, evidence, and responsive-accessibility journeys. Passing it verifies those journeys; it does not imply complete product maturity.
 
-The executable prototype acceptance suite exercises the review-ready
-Architecture, Engineering Review, and Insights journeys against disposable
-analyzed repositories. Passing tests demonstrate those defined journeys, not
-complete product maturity.
+## Limitations and security
 
----
+### Product limitations
 
-## Limitations
+- **Pre-alpha, trusted-environment use.** PARTHA has not been operated or hardened as a public multi-tenant service.
+- **Narrow semantic coverage.** Supported Python and TypeScript/JavaScript constructs receive the deepest extraction. Other languages primarily contribute file inventory. Role, module, layer, framework, and entry-point classifications can be heuristic.
+- **Narrow dependency coverage.** Only direct declarations in three manifest formats are extracted. Lockfiles, transitive dependencies, vulnerability scanning, and outdated-version scanning are not implemented.
+- **No repository evolution workflow.** Analysis is whole-repository; incremental analysis, revision comparison, churn/trend analysis, and change impact are unavailable.
+- **Surface-dependent evidence.** A sealed snapshot does not make every product sentence line-cited. In particular, generated structural documentation and free-form AI have stricter evidence limits.
+- **In-process execution.** A daemon worker thread inside the API process handles one analysis job at a time; there is no separate worker service or external job queue.
 
-- **Not yet hardened for public multi-tenant use.** Authentication and owner isolation are enforced across the backend routes, provider keys are encrypted at rest, and AI provider egress is centrally constrained, but PARTHA has not been operated as a hardened multi-tenant deployment. It is not production-ready and should not be exposed to the public internet without further review. Outside `development`/`test`, set `AUTH_SECRET_KEY` and `AI_ENCRYPTION_KEY` (a Fernet key); the backend refuses to start without them. Production also needs an independent network egress control; application validation is not a firewall.
-- **Extraction is heuristic.** File roles, modules, and layers are inferred from paths and filenames; symbols come from regular expressions. Expect wrong answers on projects that do not follow common conventions, and do not treat heuristic output as guaranteed fact.
-- **Evidence and provenance are partial at the product layer.** Every repository-derived product response is bound to the current revision's sealed snapshot, but Documentation and free-form AI expose structural facts rather than source quotations; AI answers have no automatic citations.
-- **The persistent graph is the sole product read model.** Durable analysis seals queryable `ri.v1` snapshots. Missing or stale snapshots return 404 without reading repository files or mutable metadata. Historical legacy JSON may remain stored but is ignored.
-- **Analysis is whole-repository.** It now runs as a cancellable background job, but there is no incremental re-analysis.
-- **No change-impact analysis, and no vulnerability or outdated-dependency scanning.**
-- **AI answers are not evidence-backed.** They are grounded in repository structure and file paths only, with no citations. Treat them as a hypothesis to verify.
+### Security guidance
 
----
+All non-auth product routes require authentication, repository access is owner-scoped, provider API keys are Fernet-encrypted at rest, and AI egress is validated against a deployment-owned allowlist with DNS pinning. These controls are meaningful, but they are not a claim of production hardening.
 
-## Contributing and security
+Outside `development` and `test`, the backend requires:
 
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — the contribution rules: fork-first workflow, claiming an issue, branch naming, rebasing, pull requests, and the Definition of Ready and Done. Read it before opening a PR.
-- **[SECURITY.md](SECURITY.md)** — report a vulnerability privately. Never open a public issue for one.
-- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** — expected conduct.
-- **[docs/README.md](docs/README.md)** — documentation index.
+- `AUTH_SECRET_KEY` with at least 32 characters;
+- `AI_ENCRYPTION_KEY` containing a valid Fernet key;
+- independent network egress controls for AI providers.
 
-Before changing analysis behaviour, read [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md). That boundary is the one architectural rule this project will not bend on.
+Do not expose the development configuration directly to the public internet. Review [SECURITY.md](SECURITY.md) and the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md) before any shared deployment. Report vulnerabilities privately—never in a public issue.
 
-Current behaviour belongs in documentation. Future work belongs in GitHub issues.
+## Documentation and contributing
 
----
+- [Documentation index](docs/README.md) — current public documentation and reading paths.
+- [System Overview](docs/architecture/SYSTEM_OVERVIEW.md) — components, runtime flow, persistence, and trust boundaries.
+- [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) — extraction, snapshot, consumer, and evidence rules.
+- [Accepted `ri.v1` RFC](docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md) — the versioned snapshot contract.
+- [Prototype readiness evidence](docs/PROTOTYPE_READINESS_2026-08-02.md) — executable journeys, fixtures, assessment boundaries, and screenshots.
+- [Backend guide](apps/backend/README.md) and [frontend guide](apps/frontend/README.md) — area-specific setup and commands.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — fork-first workflow, issue claiming, branch conventions, validation, and pull-request requirements.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — expected conduct.
+
+Before changing analysis, parsing, or AI-grounding behaviour, read [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) in full. Current behaviour belongs in documentation; future work belongs in GitHub issues.
 
 ## License
 
-PARTHA is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for the full text.
+PARTHA is available under the [Apache License 2.0](LICENSE).
