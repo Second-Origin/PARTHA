@@ -1,13 +1,40 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDependencies } from '@/features/dependencies/hooks/useDependencies';
-import type { DependencyDiagnostic, DependencyGraphResponse } from '@/shared/services/api/types';
+import { architectureService } from '@/shared/services/api/architecture';
+import type { DependencyDiagnostic, DependencyGraphResponse, RevisionManifestResponse } from '@/shared/services/api/types';
 import { DependenciesPage } from './DependenciesPage';
 
 vi.mock('@/features/dependencies/hooks/useDependencies', () => ({
   useDependencies: vi.fn(),
 }));
+
+vi.mock('@/shared/services/api/architecture', () => ({
+  architectureService: { getRevisionManifest: vi.fn() },
+}));
+
+const revisionManifest: RevisionManifestResponse = {
+  manifest: {
+    schemaVersion: 'revision-manifest.v1',
+    repositoryId: 'repo-1',
+    revisionKind: 'upload',
+    revisionValue: `sha256:${'0'.repeat(64)}`,
+    revisionRef: null,
+    snapshotId: 'snap_example',
+    snapshotSchemaVersion: 'ri.v1',
+    extractors: [{ name: 'dependency-manifest', version: '1.2.0' }],
+    producerSetHash: `sha256:${'1'.repeat(64)}`,
+    configHash: `sha256:${'2'.repeat(64)}`,
+    canonicalGraphHash: `sha256:${'3'.repeat(64)}`,
+    createdAt: '2026-07-25T00:00:00Z',
+    sealedAt: '2026-07-25T00:00:05Z',
+  },
+  manifestDigest: `sha256:${'4'.repeat(64)}`,
+  verificationMethod: 'sha256-canonical-json',
+  verificationState: 'verified',
+  verificationNote: 'This digest is a SHA-256 over the canonical JSON encoding of the manifest fields above.',
+};
 
 const graph: DependencyGraphResponse = {
   schemaVersion: 'dependency-graph.v2',
@@ -124,6 +151,7 @@ function diagnostic(severity: DependencyDiagnostic['severity']): DependencyDiagn
 describe('DependenciesPage', () => {
   beforeEach(() => {
     mockDependencies();
+    vi.mocked(architectureService.getRevisionManifest).mockResolvedValue(revisionManifest);
   });
 
   it('shows uncomputed assessments without clean badges or numeric fallbacks', () => {
@@ -136,14 +164,21 @@ describe('DependenciesPage', () => {
     expect(screen.queryByText('outdated')).not.toBeInTheDocument();
   });
 
-  it('renders the sealed snapshot identity, consistent with Architecture/Review', () => {
+  it('keeps the sealed snapshot identity one click away instead of on the landing strip (#176)', async () => {
     renderPage();
 
-    expect(screen.getByText('Snapshot')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('revision-manifest')).toBeInTheDocument());
+    // Collapsed by default: the snapshot id stays visible, but the hashes do not.
     expect(screen.getByText('snap_example')).toBeInTheDocument();
-    expect(screen.getByText('Canonical graph hash')).toBeInTheDocument();
-    expect(screen.getByText(graph.canonicalGraphHash)).toBeInTheDocument();
+    expect(screen.queryByText(revisionManifest.manifestDigest)).not.toBeInTheDocument();
+    expect(screen.queryByText(revisionManifest.manifest.canonicalGraphHash!)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /details/i }));
+
     expect(screen.getByText('Manifest digest')).toBeInTheDocument();
+    expect(screen.getByText(revisionManifest.manifestDigest)).toBeInTheDocument();
+    expect(screen.getByText('Canonical graph hash')).toBeInTheDocument();
+    expect(screen.getByText(revisionManifest.manifest.canonicalGraphHash!)).toBeInTheDocument();
   });
 
   it('shows an empty inventory instead of a search-miss message', () => {

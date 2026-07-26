@@ -10,6 +10,7 @@ import { FindingCard } from '@/features/review/components/FindingCard';
 import { FindingDetail } from '@/features/review/components/FindingDetail';
 import { ReviewFilters } from '@/features/review/components/ReviewFilters';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
+import { RevisionManifestPanel } from '@/features/architecture/components/RevisionManifestPanel';
 import type { ReviewAssessmentState, ReviewSeverity } from '@/shared/types/review';
 
 const STATE_LABEL: Record<ReviewAssessmentState, string> = {
@@ -102,12 +103,9 @@ export function EngineeringReviewPage() {
         categories without sufficient evidence are marked Not assessed.
       </div>
 
-      <section aria-label="Review identity" className="mb-6 grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Identity label="Snapshot" value={review.snapshotId} />
-        <Identity label="Snapshot schema" value={review.snapshotSchemaVersion} />
-        <Identity label="Manifest digest" value={review.manifestDigest} />
-        <Identity label="Canonical graph hash" value={review.canonicalGraphHash} />
-      </section>
+      <div className="mb-6">
+        <RevisionManifestPanel repositoryId={review.repositoryId} />
+      </div>
 
       <section className="mb-6 rounded-xl border border-border bg-card p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -203,15 +201,6 @@ export function EngineeringReviewPage() {
           />
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-function Identity({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="truncate font-mono text-xs text-foreground" title={value}>{value}</p>
     </div>
   );
 }

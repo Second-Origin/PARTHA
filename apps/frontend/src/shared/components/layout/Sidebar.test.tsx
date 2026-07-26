@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useAppStore } from '@/app/store/useAppStore';
 import { useAuthStore } from '@/app/store/useAuthStore';
+import { primaryNavigationSurfaces } from '@/app/routes/productSurfaces';
 import { Sidebar } from './Sidebar';
 
 const initialAppState = useAppStore.getState();
@@ -77,6 +78,34 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument();
     expect(architecture).toHaveFocus();
     expect(architecture).toHaveAttribute('href', '/architecture');
+  });
+
+  it('groups secondary surfaces under "More" with reduced weight, without removing them (#176)', () => {
+    renderSidebar();
+
+    const flagship = primaryNavigationSurfaces.filter((item) => item.navGroup === 'flagship');
+    const secondary = primaryNavigationSurfaces.filter((item) => item.navGroup === 'secondary');
+    expect(flagship.map((item) => item.label)).toEqual(['Dashboard', 'Repositories', 'Upload Repository', 'Architecture']);
+    expect(secondary.length).toBeGreaterThan(0);
+
+    const moreLabel = screen.getByText('More');
+    expect(moreLabel).toBeInTheDocument();
+
+    // Every secondary surface is still a real, reachable, focusable link --
+    // "reduce emphasis" never means "hide" or "remove".
+    for (const item of secondary) {
+      const link = screen.getByRole('link', { name: item.label });
+      expect(link).toHaveAttribute('href', item.path);
+    }
+
+    // The "More" heading sits after every flagship link and before every
+    // secondary one, and secondary links read with a lighter font weight.
+    const dashboardLink = screen.getByRole('link', { name: 'Dashboard' });
+    const firstSecondaryLink = screen.getByRole('link', { name: secondary[0].label });
+    expect(dashboardLink.compareDocumentPosition(moreLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(moreLabel.compareDocumentPosition(firstSecondaryLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(firstSecondaryLink.className).toContain('font-normal');
+    expect(dashboardLink.className).toContain('font-medium');
   });
 
   it('marks only the active route with aria-current', () => {

@@ -6,6 +6,7 @@ import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { useDependencies } from '@/features/dependencies/hooks/useDependencies';
+import { RevisionManifestPanel } from '@/features/architecture/components/RevisionManifestPanel';
 import type { DependencyAssessment } from '@/shared/services/api/types';
 
 export function DependenciesPage() {
@@ -121,12 +122,9 @@ export function DependenciesPage() {
         <DataSourceBadge source={dependencies.source} />
       </PageHeader>
 
-      <section aria-label="Snapshot identity" className="mb-6 grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Identity label="Snapshot" value={graph.snapshotId} />
-        <Identity label="Snapshot schema" value={graph.snapshotSchemaVersion} />
-        <Identity label="Manifest digest" value={graph.manifestDigest} />
-        <Identity label="Canonical graph hash" value={graph.canonicalGraphHash} />
-      </section>
+      <div className="mb-6">
+        <RevisionManifestPanel repositoryId={activeRepository.id} />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         <Stat label="Dependencies" value={graph.totalDependencies} />
@@ -224,15 +222,6 @@ function Stat({ label, value }: { label: string; value: number | string }) {
     <div className="rounded-xl border border-border bg-card p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
-    </div>
-  );
-}
-
-function Identity({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="truncate font-mono text-xs text-foreground" title={value}>{value}</p>
     </div>
   );
 }
