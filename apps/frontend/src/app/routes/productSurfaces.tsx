@@ -15,11 +15,20 @@ import type { RouteObject } from 'react-router-dom';
 
 export type DeliveryPhase = 0 | 1 | 2 | 3 | 'not-scheduled';
 
+/**
+ * `flagship`: the core upload -> analyse -> understand-the-structure loop.
+ * `secondary`: fully functional and reachable, just visually quieter in
+ * navigation (#176) -- these no longer compete with the flagship surfaces for
+ * top-of-sidebar attention, but nothing is hidden or removed.
+ */
+export type NavGroup = 'flagship' | 'secondary';
+
 interface ProductSurfaceBase {
   id: string;
   label: string;
   path: string;
   phase: DeliveryPhase;
+  navGroup: NavGroup;
 }
 
 interface ReadyProductSurface extends ProductSurfaceBase {
@@ -65,6 +74,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/',
     icon: LayoutDashboard,
     phase: 0,
+    navGroup: 'flagship',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {
@@ -78,6 +88,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/repositories',
     icon: FolderGit2,
     phase: 0,
+    navGroup: 'flagship',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {
@@ -91,6 +102,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/upload',
     icon: Upload,
     phase: 0,
+    navGroup: 'flagship',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {
@@ -104,6 +116,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/architecture',
     icon: Network,
     phase: 0,
+    navGroup: 'flagship',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {
@@ -121,6 +134,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/dependencies',
     icon: GitBranch,
     phase: 0,
+    navGroup: 'secondary',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {
@@ -134,6 +148,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/settings',
     icon: Settings,
     phase: 0,
+    navGroup: 'secondary',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {
@@ -152,6 +167,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/ai-workspace',
     icon: MessageSquareText,
     phase: 3,
+    navGroup: 'secondary',
     readiness: 'preview',
     primaryNavigation: true,
     limitation:
@@ -170,6 +186,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/review',
     icon: ShieldCheck,
     phase: 3,
+    navGroup: 'secondary',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {
@@ -185,6 +202,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/documentation',
     icon: FileText,
     phase: 3,
+    navGroup: 'secondary',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {
@@ -201,6 +219,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/insights',
     icon: BarChart3,
     phase: 'not-scheduled',
+    navGroup: 'secondary',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {

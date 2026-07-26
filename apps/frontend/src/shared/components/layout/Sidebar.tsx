@@ -5,7 +5,60 @@ import { ChevronLeft, Hexagon } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useAppStore } from '@/app/store/useAppStore';
 import { useAuthStore } from '@/app/store/useAuthStore';
-import { primaryNavigationSurfaces } from '@/app/routes/productSurfaces';
+import { primaryNavigationSurfaces, type NavigableProductSurface } from '@/app/routes/productSurfaces';
+
+const flagshipNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'flagship');
+const secondaryNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'secondary');
+
+/** One sidebar row. `muted` reduces (never removes) a secondary surface's visual weight (#176). */
+function NavLink({
+  item,
+  isActive,
+  isMobile,
+  sidebarCollapsed,
+  onNavigate,
+  muted = false,
+}: {
+  item: NavigableProductSurface;
+  isActive: boolean;
+  isMobile: boolean;
+  sidebarCollapsed: boolean;
+  onNavigate: () => void;
+  muted?: boolean;
+}) {
+  return (
+    <Link
+      to={item.path}
+      onClick={() => {
+        if (isMobile) onNavigate();
+      }}
+      aria-label={item.label}
+      aria-current={isActive ? 'page' : undefined}
+      className={cn(
+        'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors',
+        muted ? 'font-normal' : 'font-medium',
+        isActive
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+          : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+      )}
+    >
+      <item.icon className={cn('shrink-0', muted ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
+      <AnimatePresence>
+        {(isMobile || !sidebarCollapsed) && (
+          <motion.span
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="whitespace-nowrap"
+          >
+            {item.label}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </Link>
+  );
+}
 
 export function Sidebar() {
   const location = useLocation();
@@ -133,41 +186,45 @@ export function Sidebar() {
       </div>
 
       <nav aria-label="Primary navigation" className="flex-1 space-y-1 px-2 py-2 overflow-y-auto scrollbar-thin">
-        {primaryNavigationSurfaces.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              onClick={() => {
-                if (isMobile) setMobileSidebarOpen(false);
-              }}
-              aria-label={item.label}
-              aria-current={isActive ? 'page' : undefined}
-              className={cn(
-                'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+        {flagshipNavigationSurfaces.map((item) => (
+          <NavLink
+            key={item.path}
+            item={item}
+            isActive={location.pathname === item.path}
+            isMobile={isMobile}
+            sidebarCollapsed={sidebarCollapsed}
+            onNavigate={() => setMobileSidebarOpen(false)}
+          />
+        ))}
+
+        {secondaryNavigationSurfaces.length > 0 && (
+          <>
+            <AnimatePresence>
+              {(isMobile || !sidebarCollapsed) && (
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="px-2.5 pb-1 pt-3 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70"
+                >
+                  More
+                </motion.p>
               )}
-            >
-              <item.icon className="h-4 w-4 shrink-0" />
-              <AnimatePresence>
-                {(isMobile || !sidebarCollapsed) && (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="whitespace-nowrap"
-                  >
-                    {item.label}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </Link>
-          );
-        })}
+            </AnimatePresence>
+            {secondaryNavigationSurfaces.map((item) => (
+              <NavLink
+                key={item.path}
+                item={item}
+                isActive={location.pathname === item.path}
+                isMobile={isMobile}
+                sidebarCollapsed={sidebarCollapsed}
+                onNavigate={() => setMobileSidebarOpen(false)}
+                muted
+              />
+            ))}
+          </>
+        )}
       </nav>
 
       <div className="border-t border-sidebar-border p-2">

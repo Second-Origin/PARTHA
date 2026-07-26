@@ -22,6 +22,7 @@ import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { Badge } from '@/shared/components/ui/Badge';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 import { RepositoryExplorer } from '@/features/explorer/components/RepositoryExplorer';
+import { RepositoryOutcomeSummary } from '@/features/repositories/components/RepositoryOutcomeSummary';
 import { useRepositoryDetail } from '@/features/repositories/hooks/useRepositoryDetail';
 import { useRepositoryTree } from '@/features/repositories/hooks/useRepositoryTree';
 import { repositoryStatusVariant } from '@/features/repositories/status';
@@ -85,6 +86,8 @@ export function RepositoryDetailPage() {
         </div>
       ) : repo.status === 'completed' && repo.meta ? (
         <>
+          <RepositoryOutcomeSummary repository={repo} />
+
           <div className="flex items-center gap-1 border-b border-border mb-6">
             {tabs.map((tab) => (
               <button
