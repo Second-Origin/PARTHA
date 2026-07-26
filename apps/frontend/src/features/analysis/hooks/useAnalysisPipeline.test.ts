@@ -382,5 +382,36 @@ describe('useAnalysisPipeline', () => {
       expect(hook.result.current.error).toBe('Extraction crashed.');
       expect(hook.result.current.connectionStatus).toBe('connected');
     });
+
+    it('stops polling once a terminal status is observed instead of scheduling another request', async () => {
+      vi.useFakeTimers();
+      const fetchStatus = vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
+        repositoryId: repository.id,
+        status: 'completed',
+        jobId: 'job-1',
+        stage: 'completed',
+        progress: 100,
+        startedAt: '2026-07-22T08:00:01Z',
+        completedAt: '2026-07-22T08:00:02Z',
+        error: null,
+      });
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.jobStatus).toBe('completed');
+      const callsAtCompletion = fetchStatus.mock.calls.length;
+
+      // Advancing well past the poll interval must not trigger another
+      // request -- the loop stops itself on a terminal status rather than
+      // relying on the surrounding effect to tear it down.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500 * 5);
+      });
+      expect(fetchStatus.mock.calls.length).toBe(callsAtCompletion);
+    });
+
   });
 });
