@@ -137,7 +137,7 @@ page, and fails the job when the benchmark is below threshold.
 - support-matrix drift, duplicate/cross-fixture facts, invalid citations, bad
   precision/recall, and nondeterminism fail the build.
 
-This benchmark does not claim the legacy product ingestion path has migrated to
-the normalized snapshot graph. That orchestration and consumer cutover remain
-separate work; see
+Durable product analysis uses the same extractors, support matrices, resolver,
+and normalized snapshot contract exercised here. Product behavior and current
+limitations are documented in
 [`docs/architecture/REPOSITORY_INTELLIGENCE.md`](../../../../docs/architecture/REPOSITORY_INTELLIGENCE.md).

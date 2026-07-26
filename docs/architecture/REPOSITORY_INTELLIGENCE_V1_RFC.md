@@ -11,15 +11,15 @@
 | **Approval evidence** | [Issue #86 approval comment](https://github.com/Second-Origin/PARTHA/issues/86#issuecomment-4990687780) and [PR #101 approval review](https://github.com/Second-Origin/PARTHA/pull/101#pullrequestreview-4712687647) |
 | **Approval / ratification date** | 2026-07-16 |
 | **Created** | 2026-07-15 |
-| **Last updated** | 2026-07-16 |
+| **Last updated** | 2026-07-26 |
 | **Status** | **Accepted** |
 | **Supersedes** | — |
 | **Superseded by** | — |
 
 > **This RFC records the accepted architectural contract; it is not application code.** Acceptance
 > does not by itself implement snapshots, persistence, extractors, resolvers, queries, jobs,
-> migrations, or consumer migration. Downstream implementation is tracked in issues
-> [#87–#95](https://github.com/Second-Origin/PARTHA/issues/87); see
+> migrations, or consumer migration. Downstream implementation was tracked in issues
+> [#87–#95](https://github.com/Second-Origin/PARTHA/issues/87) and subsequent migration work; see
 > [§16, Dependency gate](#16-dependency-gate) and [§17, implementation status](#17-current-behavior-vs-accepted-contract-vs-implementation-status).
 
 ---
@@ -793,7 +793,7 @@ cross-snapshot references are forbidden.
 | **Resolver** (`import-resolver`, `route-resolver`, `reference-resolver`) | | ✔ | | |
 | **Classifier / inference** (architecture/layer classification) | | | ✔ (assertion only) | |
 | **Narrative generator** (AI answer, doc prose) | | | | ✔ (never in graph) |
-| **Legacy regex engine** (today's [`engine.py`](../../apps/backend/app/intelligence/engine.py)) | | | | see [§10.3](#103-legacy-regex-intelligence) — **not** `observed` |
+| **Historical legacy regex engine** | | | | see [§10.3](#103-legacy-regex-intelligence) — **not** `observed` |
 
 The forbidden cells are load-bearing: an extractor MUST NOT emit `resolved` or `inferred`; a
 resolver MUST NOT emit `observed` (it did not read a source span — it read stored facts); no
@@ -867,7 +867,7 @@ Codes are stable strings. The `ri.v1` baseline set (extensible as a compatible a
 | duplicate symbol | `RI-KEY-DUP-SYMBOL` | Overload/duplicate name resolved via `#<n>` discriminator (informational). |
 | binary source | `RI-SRC-BINARY` | A non-empty file contains a NUL byte and is excluded from line-addressed extraction ([§6.2](#62-line-and-span-rules-decided-not-optional)). |
 | malformed source | `RI-SRC-MALFORMED` | Source could not be parsed (syntax error, invalid encoding). |
-| resource-limit skip | `RI-LIMIT-SKIP` | An input skipped by a resource budget (file too large, count cap — cf. today's 512 KB cap in [`engine.py`](../../apps/backend/app/intelligence/engine.py#L168) and #93 budgets). |
+| resource-limit skip | `RI-LIMIT-SKIP` | An input skipped by a resource budget (file too large, count cap — cf. the 512 KiB default in [`pipeline.py`](../../apps/backend/app/extraction/pipeline.py#L31) and #93 budgets). |
 | path escape | `RI-SEC-PATH-ESCAPE` | A path escapes the repository root ([§4.2](#42-path-normalization-applies-to-every-path-in-a-stable-key-or-evidence-record)). |
 | internal failure | `RI-INT-FAILURE` | An unexpected internal extractor/resolver failure. |
 
@@ -998,9 +998,9 @@ snapshot is never rewritten to `ri.v2`; it remains a valid `ri.v1` artifact and 
 
 ### 10.3 Legacy regex intelligence
 
-The current `repo_metadata["intelligence"]` blob (produced by today's regex
-[`engine.py`](../../apps/backend/app/intelligence/engine.py), carrying **no line spans**) is handled
-as follows — this is a decision the RFC must not leave open:
+The historical `repo_metadata["intelligence"]` blob (produced by the removed
+legacy regex engine and carrying **no line spans**) is handled as follows —
+this is a decision the RFC must not leave open:
 
 - **Legacy regex facts are NOT promoted to `observed`.** They have no valid spans and no
   extractor/version provenance; per [§6.2](#62-line-and-span-rules-decided-not-optional) and
@@ -1232,8 +1232,8 @@ graph hash ([§12.2](#122-what-is-hashed)), so it MUST be computed by exactly th
 1. **Included (output-affecting) configuration only.** `config_hash` covers configuration that can
    change graph output, for example: enabled-producer selection and pipeline order; extractor,
    resolver, and classifier support-matrix options; resource limits that change *what is extracted*
-   (max file size, file-count caps, per-file node caps — cf. the current 512 KB cap in
-   [`engine.py`](../../apps/backend/app/intelligence/engine.py#L168)); and any language/parse options
+   (max file size, file-count caps, per-file node caps — cf. the current 512 KiB default in
+   [`pipeline.py`](../../apps/backend/app/extraction/pipeline.py#L31)); and any language/parse options
    that alter emitted facts.
 2. **Excluded operational settings.** Configuration that cannot change graph output MUST be excluded:
    database URL, storage path, worker/queue concurrency, timeouts and retry counts (#93), log level,
@@ -1701,10 +1701,11 @@ update records that approval in the contract:
 - **#94 scoring and provenance validation depend on the accepted contract** (they need the
   evidence-record definition in [§6](#6-provenance-contract) and the canonical hash in
   [§12](#12-canonical-graph-hash)).
-- **Contract acceptance and implementation status are distinct.** Approval permits downstream work;
-  it does not make that work current product behavior. PR #102 implemented #87/#88, and PR #103
-  implemented the standalone #89/#90 extractors. Product orchestration and consumer migration
-  remain separate downstream work.
+- **Contract acceptance and implementation status are distinct.** Approval permitted downstream
+  work; it did not make that work current product behavior. The durable pipeline and product
+  consumer migration have since landed, while
+  [§17](#17-current-behavior-vs-accepted-contract-vs-implementation-status) remains the authority
+  for implemented and outstanding contract capabilities.
 
 Dependency order (from the #86 comment): #87 → #88 → {#89, #90} → #91 → #92 → #93 (on #88); #94 in
 parallel (fixtures early, scoring after approval); #95 last (on #92 and #94).
@@ -1735,11 +1736,12 @@ behavior.** RFC-0001 is **Accepted** — independently ratified by
 [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) on 2026-07-16
 ([§1](#1-status-and-approval)); acceptance records the governing contract, not a claim of
 implementation. The #87 revision identity and #88 immutable snapshot-persistence boundary are
-implemented against that accepted contract, as the status column records. The #89/#90 producers
-and #94 benchmark plus #91 deterministic resolution, #92 sealed-snapshot queries,
-and #93 durable job population are implemented; broader consumer migration
-remains downstream work. No existing documentation is rewritten by
-this RFC to imply otherwise.
+implemented against that accepted contract, as the status column records. The
+#89/#90 producers, #94 benchmark, #91 deterministic resolution, #92
+sealed-snapshot queries, #93 durable job population, and subsequent
+product-consumer migration are implemented. The unimplemented evidence-backed
+AI output row remains an explicit gap. No normative requirement is weakened by
+this implementation-status update.
 
 ---
 
@@ -1791,10 +1793,10 @@ this RFC to imply otherwise.
 
 ## 19. References
 
-- [`apps/backend/app/intelligence/models.py`](../../apps/backend/app/intelligence/models.py) — current serialized model; `SourceSymbol` has no span.
-- [`apps/backend/app/intelligence/engine.py`](../../apps/backend/app/intelligence/engine.py) — current regex extraction.
-- [`apps/backend/app/extraction/typescript.py`](../../apps/backend/app/extraction/typescript.py) — syntax-aware TypeScript producer; production ingestion integration remains downstream work.
-- [`apps/backend/app/services/repository_service.py`](../../apps/backend/app/services/repository_service.py) — `_metadata_with_intelligence`, `_content_hash_for_upload`, and service use of the owner-scoped repository accessor.
+- [`apps/backend/app/intelligence/models.py`](../../apps/backend/app/intelligence/models.py) — retained historical compatibility types; not the product read model.
+- [`apps/backend/app/extraction/typescript.py`](../../apps/backend/app/extraction/typescript.py) — syntax-aware TypeScript producer used by durable analysis.
+- [`apps/backend/app/extraction/pipeline.py`](../../apps/backend/app/extraction/pipeline.py) — repository-level source policy and producer dispatch.
+- [`apps/backend/app/services/repository_service.py`](../../apps/backend/app/services/repository_service.py) — immutable revision identity and service use of the owner-scoped repository accessor.
 - [`apps/backend/app/repositories/repository_repository.py`](../../apps/backend/app/repositories/repository_repository.py) — owner-scoped `RepositoryRepository.get_for_owner`.
 - [`apps/backend/app/github/client.py`](../../apps/backend/app/github/client.py) — `read_head_commit` (`git rev-parse HEAD`).
 - [Repository Intelligence](REPOSITORY_INTELLIGENCE.md) — current deterministic-vs-heuristic behavior; the informal ancestor of the truth classes.

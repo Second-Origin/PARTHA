@@ -153,7 +153,7 @@ PARTHA_Defensible_Repository_Intelligence_Roadmap_2026_2027.html
 /confidential/
 
 # Playwright browser-review artifacts (reports, traces, failure shots).
-# Accepted evidence is committed under docs/screenshots/architecture/ instead.
+# Keep generated visual evidence out of the public documentation tree.
 apps/frontend/test-results/
 apps/frontend/e2e-report/
 apps/frontend/playwright-report/

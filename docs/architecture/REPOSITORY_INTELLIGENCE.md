@@ -104,18 +104,23 @@ This distinction matters, and consumers must respect it.
 **Deterministic** — the same repository always yields the same answer, and the answer is a fact about the bytes on disk:
 
 - file paths, names, extensions, sizes, and the file tree;
-- file counts and folder counts;
-- presence of README, license, Dockerfiles, CI workflow files, env files;
+- supported Python and TypeScript/JavaScript modules, symbols, imports, calls,
+  route declarations, and implementation relationships, with source spans;
 - dependency names and version specifiers **as declared in** the three supported manifests, including accepted nested workspaces;
-- literal import statements and route decorator strings matched by the regexes.
+- resolved graph edges and unresolved/ambiguous diagnostics produced from stored
+  observations under the published resolution rules;
+- primary language and recognized framework labels derived from observed file
+  languages and declared direct dependencies.
 
 **Heuristic** — an inference that can be wrong, and is wrong on projects that do not follow common conventions:
 
-- **file role** (`service`, `route`, `model`, `repository`, …) — inferred from path segments and filename substrings. A file whose path merely contains `test` is classified as a test.
-- **module grouping and layer** — derived from role and the first meaningful path segment, not from any real module system.
-- **symbols** — regex matches. They will match text inside comments and strings, and will miss anything the pattern does not anticipate (decorated definitions, nested classes, arrow-function exports, non-Python/TS languages entirely).
-- **frameworks, database technologies, cloud providers** — substring scans over file text. The word `redis` in a comment is enough to report Redis.
-- **primary language and entry point** — parser guesses.
+- **file and symbol role** (`service`, `route`, `model`, `repository`, …) —
+  inferred from explicit path/name rules and stored as `classified_as`
+  assertions with `truth_class="inferred"`;
+- **module grouping and architectural layer** — presentation projections derived
+  from those inferred roles and path segments;
+- **entry points and architecture pattern labels** — projections over inferred
+  roles and a bounded framework mapping, not universal semantic conclusions.
 
 **Never present a heuristic output as a deterministic fact** — not in the UI, not in generated documentation, not in a review finding, and not in an AI answer.
 
@@ -166,13 +171,18 @@ API pagination.
 
 ## The knowledge graph
 
-Node types: `repository`, `module`, `file`, `symbol`, `dependency`.
+Node kinds currently persisted are `repository`, `module`, `file`, `symbol`,
+and `dependency`.
 
-Relationship types declared in the model: `contains`, `imports`, `exports`, `depends_on`, `calls`, `extends`, `implements`, `references`.
+The resolver can emit `contains`, `defines`, `imports`, `calls`, `implements`,
+`routes_to`, `depends_on`, and `injects`. A consumer must request only the
+predicates it needs through the snapshot query layer; the Architecture response,
+for example, intentionally renders a bounded subset.
 
-**Only the first four are ever emitted.** `calls`, `extends`, `implements`, and `references` exist in the type union, but nothing produces them. Their presence in the model is not a guarantee that the data exists — do not build a feature that assumes they are populated.
-
-Each relationship carries an `evidence` list — which currently holds **file paths only**, not line spans.
+Edges are backed by snapshot evidence records carrying normalized paths and
+inclusive line spans where the producer can provide them. Unresolved or
+ambiguous observations remain diagnostics instead of being converted into
+speculative edges.
 
 ---
 
@@ -198,20 +208,21 @@ Each relationship carries an `evidence` list — which currently holds **file pa
 - Letting an AI provider read repository files or call the engine directly.
 - Presenting a heuristic output as a deterministic fact.
 
-A consumer's job is to transform `RepositoryIntelligence` into a response shape. That is all.
+A consumer's job is to transform an owner-scoped sealed-snapshot query or its
+bounded projection into a response shape. That is all.
 
 ---
 
 ## Evidence and provenance
 
-Two terms with distinct meanings. PARTHA uses them precisely, and supports neither of them completely.
+Two terms with distinct meanings. PARTHA uses them precisely:
 
 - **Evidence** — the source artifact that supports a repository fact: a file, a declaration, an import, a route, or a configuration entry.
 - **Provenance** — the information identifying *where a fact came from*: the revision, file, symbol, line span, and extraction method.
 
 ### What exists today
 
-**Evidence: partial and explicit.** Snapshot facts carry exact revision,
+Snapshot facts carry exact revision,
 extractor, fact, path, and inclusive line-span identity. Architecture renders
 those relationships. Authentication and Engineering Review citations open
 through the owner-scoped evidence endpoint, which verifies the exact fact/span
@@ -244,7 +255,14 @@ because provider prose cannot be deterministically mapped to stored facts.
 - **Symbols:** syntax-derived for supported Python and TS/JS constructs, with line spans but limited signatures/nesting and deliberately conservative cross-file resolution.
 - **Line spans:** emitted by the Python and TypeScript extractors, stored by durable analysis, and returned unchanged from sealed snapshots.
 - **Graph production and consumption:** durable jobs populate normalized immutable graph tables through syntax-aware producers. Every product surface consumes sealed facts exclusively. Documentation and free-form AI use a bounded structural projection and do not receive source contents.
-- **Relationships:** four of the eight legacy-model-declared types are never emitted. An import edge resolves to a declared dependency when the name matches and otherwise creates an `external:` node — there is no real module resolution. The `ri.v1` resolver additionally emits an `injects` predicate (#95) for a FastAPI `Depends(name)` argument, resolved the same way a direct call is — through same-file definitions or explicit import bindings only, never a repository-wide same-name guess.
+- **Relationships:** resolution is deliberately conservative. An import edge
+  resolves to a local module or declared dependency when supported; otherwise
+  the observation remains unresolved and no external placeholder is invented.
+  `calls`, `implements`, `routes_to`, and
+  `injects` are limited to the syntax and binding rules in
+  [the resolution contract](REPOSITORY_INTELLIGENCE_RESOLUTION.md). A FastAPI
+  `Depends(name)` argument resolves through same-file definitions or explicit
+  import bindings only, never a repository-wide same-name guess.
 - **Role classification (`classified_as` assertions, #95):** a small, explicit rule set — filename/path substring matching for files, and class-name suffix matching (`Service`, `Repository`, `Controller`, `Model`, `Middleware`, `Dto`) for symbols, plus a name-pattern heuristic (`auth`, `current_user`, `token`, `verify`, …) applied only to functions that are the object of a resolved `injects` edge. Always `truth_class="inferred"`, never presented as a guaranteed fact. It does not understand base classes, decorators beyond `Depends()`, or any framework's actual dependency-injection semantics — a differently named auth guard, or one injected some other way, is simply not classified, not misclassified.
 - **Authentication subgraph selection (#95):** the classifier and the resolved graph together only produce *candidate* facts; `AuthenticationExplanationService` additionally requires graph connectivity before any of them is claimed as authentication. A route is included only when its resolved `routes_to` handler has a resolved `injects` edge to a symbol explicitly classified `auth_dependency`; a service or model is included only when it lies on a resolved `calls` path from that guard (a breadth-first walk that keeps only edges on a path to a `service`/`model`-classified symbol, discarding everything else the guard happens to call). This is why an unrelated `/health` route, a generic `Depends(get_database)`, or a same-suffix `PaymentService`/`AuditModel` that the guard never calls are never claimed as authentication even though the classifier still labels them `service`/`model` for Architecture's module grouping — a name match alone is never sufficient. The response also returns `chains`: one ordered route -> handler -> guard -> (service/model) path per qualifying route, so a consumer does not have to reconstruct the flow from the flat `relationships` list.
 - **Evidence navigation (#95, #154):** authentication and Engineering Review citations link to the existing repository Explorer with `snapshotId`, `factId`, path, and line span. The Explorer calls the owner-scoped `GET /analysis/{repositoryId}/evidence` endpoint, which returns source only when the exact fact/span exists and the current source bytes match the SHA-256 sealed on the snapshot's file fact; otherwise it displays an explicit unavailable state. The same Monaco-based `CodePreview` is reused rather than adding a second viewer.
@@ -260,7 +278,7 @@ because provider prose cannot be deterministically mapped to stored facts.
 ## Contributing to the engine
 
 1. Add observed syntax facts to the shared extraction contract and the relevant
-   extractor; keep heuristic legacy fields in `app/intelligence/models.py`.
+   extractor; represent heuristic conclusions as explicit inferred assertions.
 2. Update the published support matrix and focused extractor tests.
 3. Add or update an independently authored benchmark fixture and golden manifest.
 4. Consume the normalized fact only through the Repository Intelligence query

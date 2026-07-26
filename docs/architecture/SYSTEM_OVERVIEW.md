@@ -110,15 +110,15 @@ sequenceDiagram
     API->>DB: insert queued analysis_jobs row
     API-->>UI: queued + job id
     Worker->>DB: claim job + renew lease by stage
-    Worker->>RI: build legacy compatibility model
-    Worker->>DB: persist legacy model + seal normalized ri.v1 snapshot
+    Worker->>RI: extract and resolve repository facts
+    Worker->>DB: persist and seal normalized ri.v1 snapshot
 ```
 
 Clone/archive extraction and initial file-tree parsing run synchronously during
 import. `POST /analysis/{id}/start` durably enqueues the analysis and returns
 immediately. A daemon worker thread in the API process claims jobs from the
 database, reports progress at completed stage boundaries, seals the normalized
-snapshot, and preserves the legacy compatibility model for unmigrated consumers.
+snapshot, and serves every product consumer from that immutable read model.
 
 ---
 
@@ -128,8 +128,8 @@ snapshot, and preserves the legacy compatibility model for unmigrated consumers.
 | --- | --- | --- |
 | Relational DB | `users`, `refresh_tokens`, `repositories`, `analysis_jobs`, `ai_provider_configs`, and normalized `ri_*` snapshot tables | SQLite by default for local development; PostgreSQL under Docker Compose. Analysis jobs and their worker leases are durable database state. |
 | `repositories.revision_kind`, `revision_value`, `revision_ref` | Exact imported source identity: Git commit + resolved ref, or upload archive hash. | `revision_value` is indexed and immutable; a moving branch name is metadata, never identity. |
-| `repositories.repo_metadata` (JSON column) | Parser metadata and the **legacy/unverified** serialized Repository Intelligence under the `intelligence` key. | New imports no longer stash `commitSha` here. Existing legacy facts are retained for compatibility and are not copied into `ri.v1` observed facts. |
-| `ri_snapshots`, `ri_nodes`, `ri_edges`, `ri_assertions`, `ri_observations`, `ri_evidence`, `ri_derivations`, `ri_diagnostics` | Revision-addressed normalized `ri.v1` artifacts, provenance, lifecycle state, and canonical hash. | Durable analysis runs the Python/TypeScript producers and resolver, then seals a snapshot. Architecture, authentication explanation, Engineering Review, and Insights consume it. |
+| `repositories.repo_metadata` (JSON column) | Import/parser metadata; historical rows may also retain a **legacy/unverified** `intelligence` value. | New analysis does not write the legacy value, and executable product consumers ignore it. New imports no longer stash `commitSha` here. |
+| `ri_snapshots`, `ri_nodes`, `ri_edges`, `ri_assertions`, `ri_observations`, `ri_evidence`, `ri_derivations`, `ri_diagnostics` | Revision-addressed normalized `ri.v1` artifacts, provenance, lifecycle state, and canonical hash. | Durable analysis runs the Python/TypeScript/manifest producers and resolver, then seals a snapshot. Architecture, authentication explanation, Dependencies, Engineering Review, Insights, Documentation, exports, and AI context consume it. |
 | `repositories.file_tree` (JSON column) | The parsed file tree. | Serves the explorer. |
 | `ai_provider_configs` | One row per user: provider, model, base URL, and the **Fernet-encrypted** API key plus its last four characters. | Owner-scoped; the plaintext key is never stored or returned. A stored endpoint remains unusable unless it satisfies the current deployment egress policy. |
 | Filesystem (`STORAGE_PATH`) | Extracted archives and cloned repositories; uploaded archives (deleted after extraction). | Repository source is read from here on demand for file preview. |

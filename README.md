@@ -223,7 +223,6 @@ Do not expose the development configuration directly to the public internet. Rev
 - [System Overview](docs/architecture/SYSTEM_OVERVIEW.md) — components, runtime flow, persistence, and trust boundaries.
 - [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) — extraction, snapshot, consumer, and evidence rules.
 - [Accepted `ri.v1` RFC](docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md) — the versioned snapshot contract.
-- [Prototype readiness evidence](docs/PROTOTYPE_READINESS_2026-08-02.md) — executable journeys, fixtures, assessment boundaries, and screenshots.
 - [Backend guide](apps/backend/README.md) and [frontend guide](apps/frontend/README.md) — area-specific setup and commands.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — fork-first workflow, issue claiming, branch conventions, validation, and pull-request requirements.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — expected conduct.
