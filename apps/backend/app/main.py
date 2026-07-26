@@ -5,11 +5,12 @@ import logging
 from time import perf_counter
 from typing import Literal
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import text
 
+from app.api.deps import get_current_user
 from app.api.router import api_router
 from app.core import database
 from app.core.config import get_settings
@@ -18,6 +19,7 @@ from app.core.logging import configure_logging
 from app.core.observability import new_request_id, reset_request_id, runtime_metrics, set_request_id
 from app.models import RepositoryRecord  # noqa: F401 - imported so metadata includes model
 from app.models.base import Base
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +137,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload)
 
     @app.get("/metrics", tags=["system"], response_class=PlainTextResponse)
-    def metrics() -> str:
+    def metrics(current_user: User = Depends(get_current_user)) -> str:
         return runtime_metrics.render_prometheus()
 
     return app
