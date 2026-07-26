@@ -1,6 +1,7 @@
 import posixpath
 from collections import Counter, defaultdict
 
+from app.intelligence.classification import LAYER_ORDER, layer_for_role
 from app.intelligence.query_service import (
     ARCHITECTURE_DIAGNOSTIC_CODES,
     ARCHITECTURE_RELATIONSHIP_EDGE_TYPES,
@@ -210,7 +211,7 @@ class ArchitectureAnalyzer:
                     id=module_id,
                     name=module_id.replace("module:", "").replace("-", " ").title(),
                     role=dominant,  # type: ignore[arg-type]
-                    layer=self._layer_for_role(dominant),
+                    layer=layer_for_role(dominant),
                     path_prefix=self._path_prefix(paths),
                     files=sorted(paths),
                     symbols=[],
@@ -241,18 +242,6 @@ class ArchitectureAnalyzer:
         if parts and parts[0] in {"app", "src", "backend", "frontend", "apps"} and len(parts) > 1:
             return f"module:{parts[1].lower()}"
         return f"module:{parts[0].lower() if parts else 'repository'}"
-
-    @staticmethod
-    def _layer_for_role(role: str | None) -> str:
-        if role in {"entrypoint", "controller", "route"}:
-            return "presentation"
-        if role == "service":
-            return "business-logic"
-        if role in {"model", "dto", "interface", "enum"}:
-            return "domain"
-        if role in {"repository", "configuration", "test", "middleware"}:
-            return "infrastructure"
-        return "shared"
 
     @staticmethod
     def _path_prefix(paths: list[str]) -> str:
@@ -628,13 +617,12 @@ class ArchitectureAnalyzer:
         return not directory or path == directory or path.startswith(f"{directory}/")
 
     def _layers_for_nodes(self, nodes: list[ArchNode]) -> list[ArchLayer]:
-        order = {"presentation": 0, "business-logic": 1, "domain": 2, "infrastructure": 3, "shared": 4, "external": 5}
         layers: dict[str, list[str]] = {}
         for node in nodes:
             layers.setdefault(node.layer, []).append(node.id)
         return [
-            ArchLayer(id=layer, name=layer.replace("-", " ").title(), order=order.get(layer, 99), nodes=node_ids)
-            for layer, node_ids in sorted(layers.items(), key=lambda item: order.get(item[0], 99))
+            ArchLayer(id=layer, name=layer.replace("-", " ").title(), order=LAYER_ORDER.get(layer, 99), nodes=node_ids)
+            for layer, node_ids in sorted(layers.items(), key=lambda item: LAYER_ORDER.get(item[0], 99))
         ]
 
     def _architecture_type(self, frameworks: list[str]) -> str:

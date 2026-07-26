@@ -10,6 +10,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError, UnsupportedSchemaVersionError
+from app.intelligence.classification import layer_for_role
 from app.models.snapshot import (
     RiAssertion,
     RiDerivation,
@@ -122,6 +123,22 @@ class SnapshotModuleFact:
     name: str
     role: str
     paths: tuple[str, ...]
+    layer: str = "shared"
+
+
+@dataclass(frozen=True)
+class SnapshotFileRelationshipFact:
+    """A resolved, file-to-file architecture edge (RFC-0001 relationship kinds).
+
+    Restricted to file/file endpoints: symbol- and dependency-scoped edges need
+    module resolution that only the Architecture consumer performs, so widening
+    this to every ``ARCHITECTURE_RELATIONSHIP_EDGE_TYPES`` predicate would
+    silently drop most of them rather than mis-attribute them.
+    """
+
+    subject_path: str
+    predicate: str
+    object_path: str
 
 
 @dataclass(frozen=True)
@@ -143,6 +160,7 @@ class ProductSnapshotProjection:
     dependencies: tuple[SnapshotDependencyFact, ...]
     routes: tuple[SnapshotRouteFact, ...]
     diagnostics: tuple[tuple[str, str, str | None], ...]
+    file_relationships: tuple[SnapshotFileRelationshipFact, ...] = ()
 
 
 class SnapshotQueryService:
@@ -505,6 +523,26 @@ class SnapshotQueryService:
                 )
             ).all()
         )
+        relationship_edges = list(
+            self.db.scalars(
+                select(RiEdge)
+                .where(
+                    RiEdge.snapshot_id == snapshot.snapshot_id,
+                    RiEdge.predicate.in_(ARCHITECTURE_RELATIONSHIP_EDGE_TYPES),
+                    RiEdge.subject_kind == "file",
+                    RiEdge.object_kind == "file",
+                )
+                .order_by(RiEdge.subject_key, RiEdge.predicate, RiEdge.object_key, RiEdge.edge_id, RiEdge.id)
+            ).all()
+        )
+        file_relationships = tuple(
+            SnapshotFileRelationshipFact(
+                subject_path=edge.subject_key.removeprefix("file:"),
+                predicate=edge.predicate,
+                object_path=edge.object_key.removeprefix("file:"),
+            )
+            for edge in relationship_edges
+        )
         return ProductSnapshotProjection(
             snapshot_id=snapshot.snapshot_id,
             schema_version=snapshot.schema_version,
@@ -519,6 +557,7 @@ class SnapshotQueryService:
             modules=modules,
             files=files,
             dependencies=dependencies,
+            file_relationships=file_relationships,
             routes=routes,
             diagnostics=diagnostics,
         )
@@ -556,6 +595,7 @@ class SnapshotQueryService:
                     name=key.replace("-", " ").title(),
                     role=role,
                     paths=tuple(sorted(item.path for item in members)),
+                    layer=layer_for_role(role),
                 )
             )
         return tuple(result)
