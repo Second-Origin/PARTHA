@@ -86,7 +86,7 @@ thresholds (`config/thresholds.json`) are the enforced acceptance bar from Issue
 | Metric | Threshold | Enforced today? |
 | --- | --- | --- |
 | precision | ≥ 0.95 | **yes** |
-| recall | ≥ 0.90 | **yes** |
+| recall | ≥ 0.95 | **yes** |
 | provenance validity | = 1.00 | **yes** |
 | determinism | = 1.00 | **yes** |
 
