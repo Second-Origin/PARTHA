@@ -111,16 +111,17 @@ Before starting, you must:
 
 1. Read the complete issue.
 2. Read its comments, linked issues, dependencies, and acceptance criteria.
-3. Confirm it is open and not already assigned.
-4. Comment on the issue stating that you want to work on it.
-5. Wait for assignment or an explicit maintainer acknowledgement.
+3. Confirm it is open and not already assigned to someone else.
+4. Comment on the issue stating **why** you want to work on it and requesting to be assigned.
+5. Start working — you do **not** need to wait for a maintainer to acknowledge before you begin. The comment itself is the claim; the maintainer will assign you on GitHub when able.
 6. Ask for clarification if the acceptance criteria are not testable, **before** you implement anything.
 
-If you cannot assign yourself because of GitHub permissions, commenting and receiving a maintainer acknowledgement **is** the claim mechanism.
+If you cannot assign yourself because of GitHub permissions, your comment is the claim mechanism — post it, then begin.
+
+You must not begin substantial work on an issue that is already assigned to someone else. If one is, pick a different issue.
 
 You must not begin substantial work on:
 
-- an issue assigned to someone else
 - an obsolete issue
 - an issue whose scope is disputed
 - an issue blocked by unmerged prerequisite work
