@@ -100,7 +100,7 @@ sequenceDiagram
     UI->>API: POST /repositories/upload (archive)<br/>or POST /repositories/github (URL)
     API->>Repo: import
     Repo->>Store: save + extract archive, or shallow-clone
-    Note over Store: path traversal and symlink escape rejected;<br/>upload and clone size caps enforced
+    Note over Store: path traversal and symlink escape rejected on upload;<br/>upload and clone size caps enforced
     Store-->>Repo: repository root on disk
     Repo->>Parser: parse(root)
     Parser-->>Repo: FileTreeNode[] + RepositoryMeta + size
@@ -220,7 +220,7 @@ flowchart TB
     end
 
     subgraph Backend["Backend process — trusted"]
-        Validate["Validation<br/>URL allowlist · branch charset · size caps<br/>path traversal + symlink rejection"]
+        Validate["Validation<br/>URL allowlist · branch charset · size caps<br/>path traversal + symlink rejection (upload)"]
         Engine["Parse + Repository Intelligence"]
     end
 
@@ -237,7 +237,7 @@ flowchart TB
     Engine -->|"redacted; never repository content"| Logs
 ```
 
-- **Uploaded archives and cloned repositories are untrusted input.** Extraction rejects path traversal and symlink escape; upload and clone sizes are capped; only allowlisted archive suffixes are accepted. Repository *content* is never executed — it is only read as text.
+- **Uploaded archives and cloned repositories are untrusted input.** Upload extraction rejects path traversal and symlink escape; upload and clone sizes are capped; only allowlisted archive suffixes are accepted. The GitHub clone tree walk currently follows symlinks (filesystem-disclosure + recursion risk) — clone-path symlink hardening is tracked in #182. Repository *content* is never executed — it is only read as text.
 - **Repository source never leaves the process.** The AI context builder passes structure and metadata only: languages, frameworks, modules, dependency names, and file paths. No file contents and no line numbers are sent to any provider, and the system prompt explicitly tells the model not to claim line numbers or quote code it was not given.
 - **Logs are redacted.** Keys containing `api_key`, `apikey`, `authorization`, `password`, `secret`, or `token` are redacted from structured log extras. Repository contents and credentials must never be logged.
 - **The authenticated-user boundary is enforced.** Every non-public route requires a valid token, and every repository lookup is owner-scoped in the service layer, so a caller sees only their own data. Provider API keys are encrypted at rest and injected per user. Provider destinations are selected by a deployment-owned egress policy, not by a tenant: configured endpoints must match an exact allowlist, DNS answers are checked again immediately before the request and pinned to the connection, redirects are denied, and policy errors omit destination details. Rate-limit budgets are keyed on the validated user id for authenticated requests (falling back to the client IP otherwise), so one user cannot spend another's budget. See [AI provider egress policy](../security/AI_PROVIDER_EGRESS.md).
