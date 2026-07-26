@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { MainLayout } from '@/shared/components/layout/MainLayout';
 import { RequireAuth } from './RequireAuth';
 import { productSurfaceRoutes } from './productSurfaces';
@@ -26,6 +26,12 @@ export function createAppRouter() {
           element: <MainLayout />,
           children: [
             {
+              // Dashboard's registered path is `/` (see productSurfaces); this
+              // alias keeps the plainer, commonly-guessed URL from 404ing.
+              path: '/dashboard',
+              element: <Navigate to="/" replace />,
+            },
+            {
               path: '/repositories/:id',
               lazy: async () => {
                 const { RepositoryDetailPage } = await import('@/app/pages/RepositoryDetailPage');
@@ -39,7 +45,25 @@ export function createAppRouter() {
                 return { Component: AnalysisPipelinePage };
               },
             },
+            {
+              path: '/analysis/:id/architecture',
+              lazy: async () => {
+                const { AnalysisArchitectureRedirect } = await import('@/app/pages/AnalysisArchitectureRedirect');
+                return { Component: AnalysisArchitectureRedirect };
+              },
+            },
             ...productSurfaceRoutes,
+            {
+              // Catch-all: an unmatched path previously fell through to react-router's
+              // default error boundary ("Unexpected Application Error! 404 Not Found")
+              // instead of a page. This still sits behind RequireAuth, so an
+              // unauthenticated visitor to a bogus path is redirected to /login first.
+              path: '*',
+              lazy: async () => {
+                const { NotFoundPage } = await import('@/app/pages/NotFoundPage');
+                return { Component: NotFoundPage };
+              },
+            },
           ],
         },
       ],

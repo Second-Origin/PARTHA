@@ -43,6 +43,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
 
   const repository = repositories.find((repo) => repo.id === repositoryId) || null;
   const repositoryStatus = repository?.status;
+  const repositoryErrorMessage = repository?.errorMessage;
 
   useEffect(() => {
     pollingGenerationRef.current += 1;
@@ -99,21 +100,20 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
     setRefreshKey((key) => key + 1);
   }, []);
 
-  // Known limitation: repository identity changes on each poll, so the interval is recreated.
   useEffect(() => {
-    if (!repositoryId || !repository) {
+    if (!repositoryId || !repositoryStatus) {
       setStatus('empty');
       return;
     }
 
-    if (repository.status === 'completed') {
+    if (repositoryStatus === 'completed') {
       setStatus('success');
       return;
     }
 
-    if (repository.status === 'error') {
+    if (repositoryStatus === 'error') {
       setStatus('error');
-      setError(repository.errorMessage || 'Analysis failed.');
+      setError(repositoryErrorMessage || 'Analysis failed.');
       return;
     }
 
@@ -176,6 +176,13 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
           // A job the API itself reports as failed is a real, terminal outcome --
           // render it immediately, distinct from a dropped connection below.
           applyJobResponse(response);
+
+          // Stop the loop here instead of relying on the surrounding effect to
+          // tear it down on the next render: the poll loop owns its own
+          // lifecycle, so a terminal outcome never schedules another request.
+          if (response.status === 'completed' || response.status === 'failed' || response.status === 'cancelled') {
+            return;
+          }
         } catch (caught) {
           if (cancelled) return;
 
@@ -215,7 +222,7 @@ export function useAnalysisPipeline(repositoryId: string | undefined) {
     applyJobResponse,
     failAnalysis,
     refreshKey,
-    repository,
+    repositoryErrorMessage,
     repositoryId,
     repositoryStatus,
     jobStatus,
