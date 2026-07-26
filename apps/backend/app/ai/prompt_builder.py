@@ -9,7 +9,8 @@ class PromptBuilder:
             system_prompt=(
                 f"You are PARTHA's repository assistant for {repository_name}. "
                 "The context below describes the repository's structure and metadata "
-                "only (languages, frameworks, modules, dependencies, file paths). It does "
+                "only (languages, frameworks, modules, dependencies, file paths). Module "
+                "roles are explicitly heuristic classifications. It does "
                 "NOT include source-file contents or line numbers. "
                 "Answer from this context when possible, refer to files by path, and do "
                 "not claim specific line numbers or quote code you were not given. "
@@ -23,10 +24,15 @@ class PromptBuilder:
     def render_repository_context(self, repository_context: RepositoryContext) -> str:
         architecture = repository_context.architecture
         context_lines = [
+            f"Snapshot: {repository_context.snapshot.id} ({repository_context.snapshot.schema_version})",
+            (
+                "Repository revision: "
+                f"{repository_context.snapshot.revision_kind}:{repository_context.snapshot.revision_value}"
+            ),
             f"Primary language: {architecture.primary_language}",
             f"Frameworks: {', '.join(architecture.frameworks) if architecture.frameworks else 'Not detected'}",
             f"Entry points: {', '.join(architecture.entry_points) if architecture.entry_points else 'Not found'}",
-            "Modules:",
+            "Modules (roles are heuristic classifications):",
             *[
                 f"- {module.name} ({module.role}, {module.file_count} files)"
                 for module in architecture.modules

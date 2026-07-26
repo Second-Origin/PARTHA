@@ -284,7 +284,7 @@ def test_bounded_retry_requeues_with_backoff_then_fails(session_factory, tmp_pat
     def _boom(ctx):
         raise RuntimeError("stage exploded")
 
-    monkeypatch.setattr(worker, "_stage_legacy", _boom)
+    monkeypatch.setattr(worker, "_stage_open_snapshot", _boom)
 
     # Attempt 1: fails, re-queued with a future next_attempt_at.
     assert worker.run_once() is True
@@ -435,7 +435,6 @@ def test_cancellation_after_snapshot_seal_is_immediately_completed(session_facto
         assert job.id == submitted.id
 
         stages = worker._execute_stages(session, job)
-        next(stages)  # legacy
         next(stages)  # snapshot opened
         next(stages)  # extraction
         next(stages)  # snapshot sealed, job still running
@@ -491,11 +490,14 @@ def test_heartbeat_keeps_a_long_stage_from_being_reclaimed(
         heartbeat_interval_seconds=0.02,
     )
 
-    def _long_stage(_ctx):
+    original_open_snapshot = worker._stage_open_snapshot
+
+    def _long_stage(ctx):
         entered.set()
         assert release.wait(timeout=3)
+        original_open_snapshot(ctx)
 
-    monkeypatch.setattr(worker, "_stage_legacy", _long_stage)
+    monkeypatch.setattr(worker, "_stage_open_snapshot", _long_stage)
     thread = threading.Thread(target=worker.run_once)
     thread.start()
     assert entered.wait(timeout=3)
@@ -610,7 +612,7 @@ def test_heartbeat_ownership_loss_abandons_stage_writes(
         assert release.wait(timeout=3)
 
     monkeypatch.setattr(worker, "_heartbeat_once", _observe_heartbeat)
-    monkeypatch.setattr(worker, "_stage_legacy", _long_stage)
+    monkeypatch.setattr(worker, "_stage_open_snapshot", _long_stage)
     thread = threading.Thread(target=worker.run_once)
     thread.start()
     assert entered.wait(timeout=3)
@@ -637,7 +639,7 @@ def test_heartbeat_ownership_loss_abandons_stage_writes(
         assert reader.scalar(select(func.count()).select_from(RiSnapshot)) == 0
 
 
-def test_cancellation_interrupts_in_flight_legacy_analysis(session_factory, tmp_path):
+def test_cancellation_interrupts_in_flight_snapshot_extraction(session_factory, tmp_path):
     with session_factory() as session:
         owner = _owner(session)
         record = _repository_with_sources(session, owner, tmp_path / "repo")
@@ -646,7 +648,6 @@ def test_cancellation_interrupts_in_flight_legacy_analysis(session_factory, tmp_
         AnalysisJobService(session, owner_id).submit(record_id)
 
     entered = threading.Event()
-    persisted = threading.Event()
     worker = AnalysisWorker(
         session_factory,
         worker_id="worker-a",
@@ -654,17 +655,13 @@ def test_cancellation_interrupts_in_flight_legacy_analysis(session_factory, tmp_
         heartbeat_interval_seconds=0.02,
     )
 
-    class _InterruptibleIntelligence:
-        def from_record(self, _record, *, check_cancelled):
-            entered.set()
-            while True:
-                check_cancelled()
-                time.sleep(0.005)
+    def _interruptible_sources(_record, ctx):
+        entered.set()
+        while True:
+            worker._check_heartbeat(ctx)
+            time.sleep(0.005)
 
-        def persist(self, _record, _intelligence):
-            persisted.set()
-
-    worker.intelligence = _InterruptibleIntelligence()
+    worker._read_sources = _interruptible_sources  # type: ignore[method-assign]
     thread = threading.Thread(target=worker.run_once)
     thread.start()
     assert entered.wait(timeout=3)
@@ -675,7 +672,6 @@ def test_cancellation_interrupts_in_flight_legacy_analysis(session_factory, tmp_
 
     thread.join(timeout=5)
     assert not thread.is_alive()
-    assert not persisted.is_set()
 
     with session_factory() as reader:
         job = reader.scalars(
@@ -683,7 +679,9 @@ def test_cancellation_interrupts_in_flight_legacy_analysis(session_factory, tmp_
         ).one()
         assert job.status == "cancelled"
         assert reader.get(RepositoryRecord, record_id).status == "cancelled"
-        assert reader.scalar(select(func.count()).select_from(RiSnapshot)) == 0
+        snapshots = list(reader.scalars(select(RiSnapshot)))
+        assert len(snapshots) == 1
+        assert snapshots[0].state == "failed"
 
 
 def test_sweep_stale_requeues_and_fails_orphaned_building_snapshot(session_factory, tmp_path):
@@ -870,7 +868,7 @@ def test_exception_from_reclaimed_attempt_does_not_overwrite_replacement(
         def _boom(_ctx):
             raise RuntimeError("old attempt failed locally")
 
-        monkeypatch.setattr(worker_a, "_stage_legacy", _boom)
+        monkeypatch.setattr(worker_a, "_stage_open_snapshot", _boom)
         assert list(worker_a._execute_stages(session_a, job_a)) == []
 
         with session_factory() as verification:

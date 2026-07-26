@@ -1,8 +1,8 @@
 """Turn existing analysis reports into downloadable JSON / Markdown / HTML / PDF.
 
 The service only consumes data from the existing analysis and documentation
-builders (which read the Repository Intelligence Engine); it never re-analyses a
-repository. Content is returned inline so the API stays JSON and is testable:
+builders (which read the current revision's sealed ``ri.v1`` snapshot); it
+never re-analyses a repository. Content is returned inline so the API stays JSON and is testable:
 text formats as UTF-8, PDF as base64.
 """
 

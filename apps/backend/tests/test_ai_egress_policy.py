@@ -29,6 +29,7 @@ from app.core.crypto import build_provider_cipher
 from app.core.exceptions import ExternalServiceError, ValidationServiceError
 from app.core.logging import configure_logging
 from app.models.ai_provider_config import AiProviderConfigRecord
+from tests.analysis_helpers import run_analysis_jobs
 from tests.conftest import register_user
 
 
@@ -752,6 +753,8 @@ def test_redirects_are_not_followed_and_only_one_request_is_sent(status_code: in
 def test_persisted_unsafe_configuration_and_all_ai_routes_cannot_bypass_policy(client):
     auth = register_user(client, "egress-routes@example.com")
     repository_id = _upload_sample(client, auth["headers"])
+    assert client.post(f"/analysis/{repository_id}/start", headers=auth["headers"]).status_code == 200
+    assert run_analysis_jobs() == 1
     _insert_unsafe_ollama_config(auth["user"]["id"])
 
     test_response = client.post(

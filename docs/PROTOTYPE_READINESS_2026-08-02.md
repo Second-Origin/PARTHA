@@ -19,8 +19,8 @@ behaviour on `revamp-architecture`, not a future product plan.
 | Engineering Review | Ready, limited | sealed `ri.v1` snapshot | `engineering-review.v2`; evidence-backed findings only; explicit category states; no score, grade, percentage, roadmap, or vulnerability scan |
 | Insights | Ready, limited | sealed `ri.v1` snapshot | `repository-insights.v1`; defined snapshot-local counts and ratios only; no trend claims without history |
 | Dependency Graph | Ready, limited | sealed `ri.v1` snapshot | `dependency-graph.v2` (#158); direct declarations only, merged across manifests (#156); vulnerability/outdated assessment not computed |
-| AI Workspace | **Preview** | mixed snapshot/legacy context | The built-in authentication explanation is cited from the sealed snapshot; free-form provider answers use legacy structure metadata and return no citations |
-| Documentation | **Preview** | legacy heuristic analysis | Not bound to a sealed snapshot |
+| AI Workspace | **Preview** | sealed `ri.v1` snapshot | The built-in authentication explanation is cited; free-form answers require a configured provider, receive structural facts but no source contents, and return no automatic citations |
+| Documentation | Ready, limited | sealed `ri.v1` snapshot | Current-revision structural facts and observed paths; heuristic roles are labelled; no source-content fallback |
 | Settings | Ready, limited | user configuration | Unavailable controls say so; no fabricated configuration |
 
 Engineering Review and Insights are primary navigation destinations. They are not deferred and
@@ -193,7 +193,7 @@ The PR description records the exact final counts and check URLs for the pushed 
   security assessment. No vulnerability scanner runs.
 - Insights is a snapshot inventory. There is no revision-history comparison, trend analysis,
   contributor analysis, churn, complexity, or health score.
-- AI Workspace and Documentation remain Preview legacy consumers.
+- AI Workspace remains Preview because free-form answers require an external provider and cannot automatically cite provider prose. Documentation is current-revision snapshot-backed.
 - The manifest digest proves content integrity against this deployment’s stored snapshot. It
   does not prove authorship and is not a signature.
 - AI receives no source content or line numbers and returns no citations.
@@ -205,8 +205,8 @@ The work is additive and has no destructive data migration. Revert the issue-lin
 reverse order. If only Review/Insights must be removed, revert their route/dependency wiring,
 frontend surfaces, and schemas together; leaving a UI or report consumer on the old contract is
 not a valid partial rollback. Preview classifications live in
-`apps/frontend/src/app/routes/productSurfaces.tsx` and must remain visible if those legacy
-surfaces stay reachable.
+`apps/frontend/src/app/routes/productSurfaces.tsx`; AI Workspace remains visibly
+limited by provider and citation requirements.
 
 Administrator direction on 25 July 2026 explicitly rejected deferring Review and Insights.
 Rollback must not silently restore a deferred placeholder or the legacy score-based Review.

@@ -418,34 +418,6 @@ def test_authentication_explanation_is_owner_scoped(auth_client, make_auth_heade
     assert response.status_code == 404
 
 
-def test_authentication_explanation_never_calls_legacy_intelligence_engine(auth_client, monkeypatch):
-    """Proof that the old inference path is absent, not merely unused: forcing
-    the legacy engine to raise must not affect the authentication explanation
-    or the migrated architecture endpoint, because neither calls it."""
-
-    from app.intelligence.engine import RepositoryIntelligenceEngine
-
-    # The upload + durable-analysis stages legitimately still use the legacy
-    # engine (dependency graph, review, documentation, AI remain its readers
-    # per docs/architecture/REPOSITORY_INTELLIGENCE.md); only patch it out
-    # *after* that setup, to isolate the two migrated read endpoints below.
-    repository = _upload(auth_client, _AUTH_SOURCES)
-    _persist_snapshot(repository["id"], _AUTH_SOURCES)
-
-    def _boom(self, record):
-        raise AssertionError("RepositoryIntelligenceEngine.load must not be called by the migrated consumer")
-
-    monkeypatch.setattr(RepositoryIntelligenceEngine, "load", _boom)
-    monkeypatch.setattr(RepositoryIntelligenceEngine, "from_record", _boom)
-
-    auth_response = auth_client.get(f"/analysis/{repository['id']}/architecture/authentication")
-    assert auth_response.status_code == 200, auth_response.text
-    assert auth_response.json()["status"] == "ready"
-
-    architecture_response = auth_client.get(f"/analysis/{repository['id']}/architecture")
-    assert architecture_response.status_code == 200, architecture_response.text
-
-
 def test_authentication_explanation_evidence_binds_to_exact_snapshot(auth_client):
     """Re-persisting a new snapshot for the same repository must not let an old
     snapshot's facts leak into the current explanation (#95 wrong-revision

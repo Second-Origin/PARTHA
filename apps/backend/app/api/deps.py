@@ -27,7 +27,6 @@ from app.github.client import GitHubClient
 from app.graph.dependency_graph import DependencyGraphBuilder
 from app.analysis.manifest import RevisionManifestService
 from app.insights.service import RepositoryInsightsBuilder
-from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.intelligence.query_service import SnapshotQueryService
 from app.models.repository import RepositoryRecord
 from app.models.user import User
@@ -87,10 +86,6 @@ def get_github_client(settings: Settings = Depends(get_settings)) -> GitHubClien
 
 def get_repository_parser() -> RepositoryParser:
     return RepositoryParser()
-
-
-def get_repository_intelligence_engine() -> RepositoryIntelligenceEngine:
-    return RepositoryIntelligenceEngine()
 
 
 def get_snapshot_query_service(
@@ -207,9 +202,9 @@ def get_ai_config_store(
 
 
 def get_repository_context_builder(
-    intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
+    snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
 ) -> RepositoryContextBuilder:
-    return RepositoryContextBuilder(intelligence)
+    return RepositoryContextBuilder(snapshots)
 
 
 def get_prompt_builder() -> PromptBuilder:
@@ -282,16 +277,12 @@ def get_ai_service(
 
 def get_documentation_service(
     repository: RepositoryRepository = Depends(get_repository_repository),
-    architecture: ArchitectureAnalyzer = Depends(get_architecture_analyzer),
-    dependencies: DependencyGraphBuilder = Depends(get_dependency_graph_builder),
-    intelligence: RepositoryIntelligenceEngine = Depends(get_repository_intelligence_engine),
+    snapshots: SnapshotQueryService = Depends(get_snapshot_query_service),
     current_user: User = Depends(get_current_user),
 ) -> DocumentationService:
     return DocumentationService(
         repository=repository,
-        architecture=architecture,
-        dependencies=dependencies,
-        intelligence=intelligence,
+        snapshots=snapshots,
         owner_id=current_user.id,
     )
 

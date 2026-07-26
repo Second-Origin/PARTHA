@@ -1,9 +1,7 @@
 from datetime import UTC, datetime
 
-from app.analysis.architecture import ArchitectureAnalyzer
 from app.core.exceptions import NotFoundError
-from app.graph.dependency_graph import DependencyGraphBuilder
-from app.intelligence.engine import RepositoryIntelligenceEngine
+from app.intelligence.query_service import ProductSnapshotProjection, SnapshotQueryService
 from app.repositories.repository_repository import RepositoryRepository
 from app.reports.renderers import render_html, render_markdown
 from app.reports.report_document import ReportDocument, Section
@@ -16,24 +14,33 @@ class DocumentationService:
     def __init__(
         self,
         repository: RepositoryRepository,
-        architecture: ArchitectureAnalyzer,
-        dependencies: DependencyGraphBuilder,
+        snapshots: SnapshotQueryService,
         owner_id: str,
-        intelligence: RepositoryIntelligenceEngine | None = None,
     ) -> None:
         self.repository = repository
-        self.architecture = architecture
-        self.dependencies = dependencies
+        self.snapshots = snapshots
         self.owner_id = owner_id
-        self.intelligence = intelligence or RepositoryIntelligenceEngine()
 
     def generate(self, request: GenerateDocRequest) -> GenerateDocResponse:
-        document = self._document(self._get_record(request.repository_id), request.sections)
+        record = self._get_record(request.repository_id)
+        projection = self.snapshots.product_projection(record.id)
+        document = self._document(record, projection, request.sections)
         content = render_html(document) if request.format == "html" else render_markdown(document)
-        return GenerateDocResponse(content=content, format=request.format, generated_at=datetime.now(UTC))
+        return GenerateDocResponse(
+            content=content,
+            format=request.format,
+            generated_at=datetime.now(UTC),
+            source="ri.v1",
+            snapshot_id=projection.snapshot_id,
+            snapshot_schema_version=projection.schema_version,
+            revision_kind=projection.revision_kind,
+            revision_value=projection.revision_value,
+            revision_ref=projection.revision_ref,
+        )
 
     def build_document(self, repository_id: str) -> ReportDocument:
-        return self._document(self._get_record(repository_id), None)
+        record = self._get_record(repository_id)
+        return self._document(record, self.snapshots.product_projection(record.id), None)
 
     def _get_record(self, repository_id: str):
         # Owner-scoped: another user's repository id resolves to None, yielding
@@ -43,35 +50,42 @@ class DocumentationService:
             raise NotFoundError("Repository not found.", {"repositoryId": repository_id})
         return record
 
-    def _document(self, record, sections: list[str] | None) -> ReportDocument:
+    def _document(
+        self,
+        record,
+        projection: ProductSnapshotProjection,
+        sections: list[str] | None,
+    ) -> ReportDocument:
         selected = set(sections or DEFAULT_SECTIONS)
-        repository_intelligence = self.intelligence.from_record(record)
-        discovery = repository_intelligence.discovery
-        files = [file.path for file in repository_intelligence.files]
+        files = [file.path for file in projection.files]
         report_sections: list[Section] = []
 
         if "overview" in selected:
+            source_files = sum(file.language is not None for file in projection.files)
             report_sections.append(
                 Section(
                     heading="Overview",
                     fields=[
                         ("Source", record.source),
-                        ("Primary language", discovery.primary_language),
-                        ("Frameworks", ", ".join(discovery.frameworks) if discovery.frameworks else "Not detected"),
-                        ("Files", str(discovery.statistics.total_files)),
-                        ("Source files", str(discovery.statistics.source_files)),
-                        ("Entry point", ", ".join(discovery.entry_points) if discovery.entry_points else "Not found"),
+                        ("Primary language", projection.primary_language),
+                        ("Frameworks", ", ".join(projection.frameworks) if projection.frameworks else "Not detected"),
+                        ("Observed files", str(len(projection.files))),
+                        ("Observed supported-language files", str(source_files)),
+                        ("Entry point", ", ".join(projection.entry_points) if projection.entry_points else "Not detected"),
                     ],
                 )
             )
 
         if "architecture" in selected:
-            architecture = self.architecture.build_architecture(record)
             report_sections.append(
                 Section(
                     heading="Architecture",
-                    fields=[("Pattern", architecture.architecture_type)],
-                    bullets=[f"{layer.name}: {len(layer.nodes)} module(s)" for layer in architecture.detected_layers],
+                    fields=[("Basis", "Modules are deterministic groupings of observed paths; roles are heuristic classifications.")],
+                    bullets=[
+                        f"{module.name}: {module.role} (heuristic), {len(module.paths)} observed file(s)"
+                        for module in projection.modules
+                    ]
+                    or ["No modules detected."],
                 )
             )
 
@@ -79,45 +93,91 @@ class DocumentationService:
             report_sections.append(Section(heading="Folder Structure", bullets=files[:80] or ["No files detected."]))
 
         if "api" in selected:
-            api_files = [file.path for file in repository_intelligence.files if file.role in {"route", "controller"} or file.api_routes]
-            api_routes = [route for file in repository_intelligence.files for route in file.api_routes]
+            api_files = sorted(
+                {
+                    file.path
+                    for file in projection.files
+                    if file.role in {"route", "controller"}
+                }
+                | {path for route in projection.routes for path in route.evidence_paths}
+            )
             report_sections.append(
                 Section(
                     heading="API",
                     bullets=[f"File: {path}" for path in api_files[:30]]
-                    + [f"Route: {route}" for route in api_routes[:30]]
-                    or ["No API files detected."],
+                    + [f"Observed route: {route.path}" for route in projection.routes[:30]]
+                    or ["No routes detected in the supported snapshot facts."],
                 )
             )
 
         if "environment" in selected:
+            environment_files = sorted(
+                path
+                for path in files
+                if path.rsplit("/", 1)[-1].lower().startswith(".env")
+                or path.rsplit("/", 1)[-1].lower() in {"settings.py", "config.py", "config.ts", "config.js"}
+            )
             report_sections.append(
                 Section(
                     heading="Environment",
-                    bullets=discovery.environment_files[:30] or ["No environment configuration files detected."],
+                    bullets=environment_files[:30] or ["No environment/configuration paths detected."],
                 )
             )
 
         if "deployment" in selected:
-            deployment_files = sorted(set(discovery.docker_files + discovery.ci_files))
+            deployment_files = sorted(
+                path
+                for path in files
+                if "dockerfile" in path.lower()
+                or path.lower().startswith(".github/workflows/")
+                or path.lower().endswith((".yml", ".yaml"))
+                and any(token in path.lower() for token in ("deploy", "compose", "ci"))
+            )
             report_sections.append(
-                Section(heading="Deployment", bullets=deployment_files[:30] or ["No deployment files detected."])
+                Section(
+                    heading="Deployment",
+                    bullets=deployment_files[:30] or ["No deployment-related paths detected."],
+                )
             )
 
         if "contribution" in selected:
+            ecosystems = sorted({item.ecosystem for item in projection.dependencies if item.ecosystem})
+            manifests = sorted(
+                {
+                    declaration.manifest_path
+                    for dependency in projection.dependencies
+                    for declaration in dependency.declarations
+                    if declaration.manifest_path
+                }
+            )
             report_sections.append(
                 Section(
                     heading="Contribution",
                     fields=[
-                        ("Package managers", ", ".join(discovery.package_managers) if discovery.package_managers else "Not detected"),
-                        ("Config files", ", ".join(discovery.configuration_files[:20]) if discovery.configuration_files else "Not detected"),
+                        ("Dependency ecosystems", ", ".join(ecosystems) if ecosystems else "Not detected"),
+                        ("Observed manifests", ", ".join(manifests[:20]) if manifests else "Not detected"),
                     ],
-                    paragraphs=["Add setup, test, and review instructions that match this repository before onboarding contributors."],
+                    paragraphs=[
+                        "Setup, test, and review commands are not inferred from path inventory; verify repository instructions directly."
+                    ],
+                    bullets=[
+                        (
+                            f"{dependency.name}: "
+                            f"{declaration.version or 'no version/specifier declared'}"
+                            f" ({declaration.manifest_path or 'manifest path unavailable'})"
+                        )
+                        for dependency in projection.dependencies
+                        for declaration in dependency.declarations
+                    ][:50]
+                    or ["No supported dependency declarations detected."],
                 )
             )
 
         return ReportDocument(
             title=record.name,
-            subtitle=f"Generated {datetime.now(UTC):%Y-%m-%d %H:%M UTC}",
+            subtitle=(
+                f"Sealed {projection.schema_version} snapshot {projection.snapshot_id}; "
+                f"revision {projection.revision_kind}:{projection.revision_value}"
+            ),
             sections=report_sections,
         )

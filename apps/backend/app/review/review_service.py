@@ -2,7 +2,7 @@
 
 The legacy implementation subtracted arbitrary severity costs from 100 and
 generated generic recommendations from mutable repository metadata.  This
-builder deliberately has no dependency on ``RepositoryIntelligenceEngine``.
+builder deliberately has no dependency on a mutable compatibility read model.
 It emits only sealed ``ri.v1`` diagnostics that have an authentic supporting
 evidence span in the same snapshot.
 """

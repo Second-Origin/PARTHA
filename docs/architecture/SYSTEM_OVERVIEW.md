@@ -84,8 +84,8 @@ flowchart LR
 
 Both entry points converge on the same import path: land the source on disk,
 compute immutable revision identity, parse the bounded file tree, and persist the
-repository revision. A separate durable job then builds the legacy compatibility
-model and the normalized `ri.v1` snapshot off the request path.
+repository revision. A separate durable job then builds and seals the normalized
+`ri.v1` snapshot off the request path.
 
 ```mermaid
 sequenceDiagram
@@ -94,7 +94,6 @@ sequenceDiagram
     participant Repo as RepositoryService
     participant Store as LocalStorage
     participant Parser as RepositoryParser
-    participant RI as RepositoryIntelligenceEngine
     participant Worker as AnalysisWorker
     participant DB as Database
 
@@ -174,12 +173,16 @@ The AI subsystem gets no exemption from this:
 
 > **AI is a consumer of Repository Intelligence and must not independently parse or reinterpret repositories.**
 
-Only two places in the backend read repository source from disk:
+Repository source is read only by the bounded import/analysis pipeline
+(`RepositoryParser` and `AnalysisWorker`) and by
+`RepositoryService.read_file`, which serves the explorer's path-checked preview
+and feeds no analysis.
 
-1. `RepositoryParser` / `RepositoryIntelligenceEngine`, at build time.
-2. `RepositoryService.read_file`, which serves the explorer's file preview — a direct, path-checked read for display only. It feeds no analysis.
-
-Snapshot-backed consumers use the owner-scoped `SnapshotQueryService`; compatibility consumers use the legacy record loader and must disclose that boundary. See [REPOSITORY_INTELLIGENCE.md](REPOSITORY_INTELLIGENCE.md) for what each path extracts and what it does not.
+Every repository-derived consumer uses the owner-scoped `SnapshotQueryService`
+and requires a sealed snapshot for the current repository revision. Historical
+legacy JSON may remain stored but is ignored. See
+[REPOSITORY_INTELLIGENCE.md](REPOSITORY_INTELLIGENCE.md) for what each path
+extracts and what it does not.
 
 ### Current consumers
 
@@ -188,10 +191,10 @@ Snapshot-backed consumers use the owner-scoped `SnapshotQueryService`; compatibi
 | `analysis/` | sealed `ri.v1` nodes, edges, assertions, diagnostics, evidence | Architecture nodes, edges, layers, request-flow hints |
 | `review/` | sealed `ri.v1` diagnostics plus exact evidence and manifest identity | Supported findings and assessed/not-assessed category matrix; no scores |
 | `insights/` | sealed `ri.v1` nodes, edges, diagnostics, evidence and extractor set | Defined counts, ratios and breakdowns; no inferred trends |
-| `graph/` | legacy direct dependency declarations | Dependency Preview response with explicit legacy provenance |
-| `services/documentation_service.py` | legacy discovery, files, routes, architecture, dependencies | Preview Markdown / HTML documentation |
-| `ai/repository_context.py` | legacy discovery, modules, dependencies, file paths | Preview `RepositoryContext` → `PromptBundle` |
-| `reports/` | existing analysis and documentation output | JSON / Markdown / HTML / PDF |
+| `graph/` | sealed dependency nodes, declarations, resolved edges, diagnostics, evidence | Direct dependency graph with explicit not-computed assessments |
+| `services/documentation_service.py` | shared sealed structural projection and snapshot/revision identity | Markdown / HTML documentation |
+| `ai/repository_context.py` | shared sealed structural projection, without source bytes | Preview `RepositoryContext` → `PromptBundle` for a configured provider |
+| `reports/` | snapshot-backed analysis and documentation output | JSON / Markdown / HTML / PDF |
 
 ---
 
@@ -245,13 +248,12 @@ flowchart TB
 
 These are properties of the system as built, not a wish list.
 
-1. **Production ingestion remains partly heuristic.** File roles, modules, and layers are inferred from path segments and filenames, and legacy ingestion symbols come from regular expressions. Standalone syntax-aware Python and TypeScript extractors exist, but durable product integration remains a separate workflow.
-2. **No line-level provenance in production output.** The snapshot schema can store validated spans and derivations, but the current regex engine emits neither and is deliberately not promoted into `ri.v1`.
-3. **The graph store is not the only product read model.** Durable analysis
-   populates immutable normalized snapshots, and Architecture, Engineering
-   Review, Insights, and Dependency Graph consume the latest owner-scoped
-   sealed snapshot. Documentation, export, and AI paths still use the legacy
-   JSON model.
+1. **Production classification remains partly heuristic.** File roles, derived modules, and layers are inferred from observed path segments and filenames and are labelled as heuristic.
+2. **Line-level evidence is surface-dependent.** Syntax-aware Python and TypeScript facts can carry validated spans, but Documentation uses structural facts and free-form AI receives no source bytes, so provider answers have no automatic citations.
+3. **The graph store is the sole product read model.** Durable analysis
+   populates immutable normalized snapshots, and every product consumer
+   requires the latest owner-scoped snapshot matching the current revision.
+   Missing or stale snapshots return 404 without fallback.
 4. **Analysis is whole-repository.** It runs in a durable, cancellable background job with bounded retry and stale-worker recovery, but incremental re-analysis is not implemented. Import extraction and file-tree parsing remain synchronous.
 5. **The rate limiter trusts only the direct socket peer for unauthenticated requests.** `X-Forwarded-For` is deliberately ignored, so behind a reverse proxy every unauthenticated client shares one IP budget until a trusted-proxy allowlist is designed. Authenticated requests are keyed per user and unaffected.
 6. **Dependency coverage is narrow.** Three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The API exposes explicit `not_computed` assessment statuses and does not emit a clean result or count without a scanner.

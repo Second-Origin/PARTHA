@@ -8,41 +8,108 @@ from app.ai.providers.factory import ProviderFactory
 from app.ai.providers.registry import ProviderRegistry
 from app.ai.repository_context import RepositoryContextBuilder
 from app.ai.types import AiProviderConfig, AiProviderResponse, PromptBundle
-from app.intelligence.engine import RepositoryIntelligenceEngine
+from app.intelligence.query_service import (
+    ProductSnapshotProjection,
+    SnapshotDependencyDeclaration,
+    SnapshotDependencyFact,
+    SnapshotFileFact,
+    SnapshotModuleFact,
+)
 from app.models.repository import RepositoryRecord
-from app.parsers.repository_parser import RepositoryParser
 from app.schemas.ai import AiQueryRequest
 
 
-def _sample_repository(root: Path) -> None:
-    (root / "src" / "services").mkdir(parents=True)
-    (root / "package.json").write_text('{"dependencies":{"react":"^18.0.0"}}', encoding="utf-8")
-    (root / "src" / "main.tsx").write_text("import React from 'react';\nexport function App() { return null; }", encoding="utf-8")
-    (root / "src" / "services" / "user-service.ts").write_text("export class UserService {}", encoding="utf-8")
-    (root / "README.md").write_text("# Sample", encoding="utf-8")
-
-
 def _record(root: Path) -> RepositoryRecord:
-    tree, meta, total_size = RepositoryParser().parse(root)
-    intelligence = RepositoryIntelligenceEngine().build("repo-1", "sample", root, tree, meta, total_size)
-    metadata = intelligence.metadata.model_dump(mode="json", by_alias=True)
-    metadata["intelligence"] = intelligence.model_dump(mode="json", by_alias=True)
     return RepositoryRecord(
         id="repo-1",
         owner_id="owner-1",
         name="sample",
         source="upload",
         local_path=str(root),
-        size=total_size,
-        file_count=meta.total_files,
+        size=0,
+        file_count=3,
         status="completed",
         analysis_stage="completed",
         analysis_progress=100,
         uploaded_at=datetime.now(UTC),
         analysed_at=datetime.now(UTC),
-        repo_metadata=metadata,
-        file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
+        repo_metadata={"intelligence": {"ignored": True}},
+        file_tree=[],
+        revision_kind="upload",
+        revision_value="sha256:" + "a" * 64,
     )
+
+
+def _projection(*, conflict: bool = False) -> ProductSnapshotProjection:
+    declarations = (
+        SnapshotDependencyDeclaration(
+            version="==2.31.0",
+            dependency_type="production",
+            manifest_path="requirements.txt",
+            workspace_path=".",
+            start_line=1,
+            end_line=1,
+            extractor="dependency-manifest",
+            extractor_version="1",
+        ),
+        SnapshotDependencyDeclaration(
+            version=">=2.32.0",
+            dependency_type="production",
+            manifest_path="requirements.txt",
+            workspace_path=".",
+            start_line=2,
+            end_line=2,
+            extractor="dependency-manifest",
+            extractor_version="1",
+        ),
+    ) if conflict else (
+        SnapshotDependencyDeclaration(
+            version="^18.0.0",
+            dependency_type="production",
+            manifest_path="package.json",
+            workspace_path=".",
+            start_line=1,
+            end_line=1,
+            extractor="dependency-manifest",
+            extractor_version="1",
+        ),
+    )
+    dependency = SnapshotDependencyFact(
+        stable_key="dep:pypi:requests" if conflict else "dep:npm:react",
+        name="requests" if conflict else "react",
+        ecosystem="pypi" if conflict else "npm",
+        declarations=declarations,
+    )
+    return ProductSnapshotProjection(
+        snapshot_id="snapshot-1",
+        schema_version="ri.v1",
+        repository_id="repo-1",
+        revision_kind="upload",
+        revision_value="sha256:" + "a" * 64,
+        revision_ref=None,
+        canonical_graph_hash="sha256:" + "b" * 64,
+        primary_language="TypeScript",
+        frameworks=() if conflict else ("React",),
+        entry_points=("src/main.tsx",),
+        modules=(SnapshotModuleFact(name="Services", role="service", paths=("src/services/user-service.ts",)),),
+        files=(
+            SnapshotFileFact("README.md", None, "documentation", "heuristic"),
+            SnapshotFileFact("src/main.tsx", "typescript", "entrypoint", "heuristic"),
+            SnapshotFileFact("src/services/user-service.ts", "typescript", "service", "heuristic"),
+        ),
+        dependencies=(dependency,),
+        routes=(),
+        diagnostics=(),
+    )
+
+
+class StaticSnapshots:
+    def __init__(self, projection: ProductSnapshotProjection) -> None:
+        self.projection = projection
+
+    def product_projection(self, repository_id: str) -> ProductSnapshotProjection:
+        assert repository_id == "repo-1"
+        return self.projection
 
 
 class StaticRepository:
@@ -69,11 +136,10 @@ class FakeProvider:
         return AiProviderResponse(content=f"answer from {config.provider}")
 
 
-def test_repository_context_builder_uses_repository_intelligence(tmp_path: Path):
-    _sample_repository(tmp_path)
+def test_repository_context_builder_uses_sealed_snapshot(tmp_path: Path):
     record = _record(tmp_path)
 
-    context = RepositoryContextBuilder(RepositoryIntelligenceEngine()).build(record)
+    context = RepositoryContextBuilder(StaticSnapshots(_projection())).build(record)  # type: ignore[arg-type]
 
     assert context.repository.name == "sample"
     assert context.architecture.primary_language == "TypeScript"
@@ -86,9 +152,8 @@ def test_repository_context_builder_uses_repository_intelligence(tmp_path: Path)
 
 
 def test_prompt_builder_preserves_existing_system_prompt_shape(tmp_path: Path):
-    _sample_repository(tmp_path)
     record = _record(tmp_path)
-    context = RepositoryContextBuilder(RepositoryIntelligenceEngine()).build(record)
+    context = RepositoryContextBuilder(StaticSnapshots(_projection())).build(record)  # type: ignore[arg-type]
 
     prompt = PromptBuilder().build(context, "What should I read first?")
 
@@ -101,13 +166,9 @@ def test_prompt_builder_preserves_existing_system_prompt_shape(tmp_path: Path):
 
 
 def test_prompt_builder_renders_conflicting_declared_versions_without_none(tmp_path: Path):
-    _sample_repository(tmp_path)
-    (tmp_path / "requirements.txt").write_text(
-        "requests==2.31.0\nrequests>=2.32.0\n", encoding="utf-8"
-    )
     record = _record(tmp_path)
 
-    context = RepositoryContextBuilder(RepositoryIntelligenceEngine()).build(record)
+    context = RepositoryContextBuilder(StaticSnapshots(_projection(conflict=True))).build(record)  # type: ignore[arg-type]
     dependency = next(item for item in context.dependencies if item.name == "requests")
     prompt = PromptBuilder().build(context, "What dependencies conflict?")
 
@@ -141,7 +202,6 @@ def test_ai_orchestrator_preserves_query_response_shape(tmp_path: Path):
 
 
 async def _query_with_fake_provider(tmp_path: Path):
-    _sample_repository(tmp_path)
     record = _record(tmp_path)
     provider = FakeProvider()
     registry = ProviderRegistry()
@@ -149,7 +209,7 @@ async def _query_with_fake_provider(tmp_path: Path):
     orchestrator = AiOrchestrator(
         repository=StaticRepository(record),  # type: ignore[arg-type]
         config_store=StaticConfigStore(),  # type: ignore[arg-type]
-        context_builder=RepositoryContextBuilder(RepositoryIntelligenceEngine()),
+        context_builder=RepositoryContextBuilder(StaticSnapshots(_projection())),  # type: ignore[arg-type]
         prompt_builder=PromptBuilder(),
         provider_factory=ProviderFactory(registry),
         owner_id="owner-1",

@@ -1718,16 +1718,16 @@ rules), the three columns are explicit:
 
 | Concern | Current behavior (today) | Accepted `ri.v1` contract (this RFC) | Status |
 | --- | --- | --- | --- |
-| Storage | Legacy regex consumers still read the mutable JSON blob; normalized snapshot tables and the sealing store now exist | Immutable sealed snapshots with nodes, edges, assertions, observations, evidence, and diagnostics (§11) | **Persistence implemented** (#88); production producers/queries remain #89–#92 |
+| Storage | Sealed snapshot tables are the sole product read model; historical mutable JSON may remain stored but is ignored | Immutable sealed snapshots with nodes, edges, assertions, observations, evidence, and diagnostics (§11) | **Implemented** (#88/#171) |
 | Pipeline identity | Durable submission and execution share a fixed planned producer set and config hash before enqueue | Precomputed `producer_version_set` covers every enabled extractor/resolver/classifier (§3.3) | **Implemented** (#88/#93) |
 | Repository graph key | Durable analysis runs `ExtractionPipeline`, which emits deterministic `repo:root`; `SnapshotStore` validates exactly one before sealing | Deterministic snapshot-scoped `repo:root`; database `repository_id` excluded from graph keys (§4.3) | **Implemented** (#88–#90/#93) |
-| Symbol spans | Python/TypeScript extractors emit and durable analysis stores required spans; legacy `SourceSymbol` remains spanless | Required line spans (§6) | **Producer and durable population implemented** (#89/#90/#93) |
-| Extraction | Durable analysis runs the AST/tree-sitter extractors and also preserves the legacy regex model for unmigrated consumers | Syntax-aware extractors with support matrices | **Durable product integration implemented** (#89/#90/#93) |
+| Symbol spans | Python/TypeScript extractors emit and durable analysis stores required spans | Required line spans (§6) | **Producer and durable population implemented** (#89/#90/#93) |
+| Extraction | Durable analysis runs the AST/tree-sitter and dependency-manifest extractors and writes no legacy compatibility model | Syntax-aware extractors with support matrices | **Durable product integration implemented** (#89/#90/#93/#171) |
 | Revision identity | Indexed `revision_kind`/`revision_value`/`revision_ref`; `commitSha` is API compatibility only | Indexed immutable columns (§3) | **Implemented** (#87) |
 | Relationships | The durable job runs the deterministic resolver over stored observations, with resolved edges and explicit unresolved/ambiguous diagnostics | Resolved edges + diagnostics (§5) | **Implemented** (#91/#93) |
-| Inferred entity properties | Legacy heuristic module roles remain in the compatibility blob; the snapshot store supports separate validated assertions | Separate inferred property assertions; observed nodes remain unique (§5.6) | **Persistence implemented** (#88); production inference/querying remains #91/#92 |
-| Provenance | Durable analysis stores extractor path + span + producer/version and the normalized store validates them; legacy product consumers still receive file paths only | Path + span + extractor/version (§6) | **Producer, persistence, querying, and durable population implemented** (#88–#93) |
-| Query API | Normalized consumers use the versioned owner-scoped read API; legacy consumers still read the compatibility blob | Versioned owner-scoped read API (§9.5) | **Implemented and durably populated** (#92/#93); broader consumer migration remains #95 |
+| Inferred entity properties | Heuristic roles are stored as explicit `classified_as` assertions and remain labelled inferred | Separate inferred property assertions; observed nodes remain unique (§5.6) | **Implemented** (#95/#171) |
+| Provenance | Durable analysis stores extractor path + span + producer/version and the normalized store validates them; structural consumers disclose when they do not expose source evidence | Path + span + extractor/version (§6) | **Producer, persistence, querying, and durable population implemented** (#88–#93/#171) |
+| Query API | Every product consumer uses the versioned owner-scoped current-revision read boundary with no fallback | Versioned owner-scoped read API (§9.5) | **Implemented and durably populated** (#92/#93/#171) |
 | Evidence-backed output | AI emits empty citation lists | Every claim cites a valid span (§7.4) | **Unimplemented** (#95) |
 
 **This RFC does not claim every capability in the "Accepted contract" column is current product
