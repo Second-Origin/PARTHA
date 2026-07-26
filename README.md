@@ -86,6 +86,8 @@ Statuses describe executable behaviour on the current `dev` branch:
 
 Repository Intelligence is PARTHA's single repository-understanding boundary. Repository source enters one bounded import and extraction path; product consumers query the resulting sealed snapshot rather than opening files or constructing parallel facts.
 
+`ri.v1` is PARTHA's versioned, sealed Repository Intelligence snapshot: the product's single read model. Each immutable snapshot describes one repository at one exact revision and is identified by `repository_id`, `revision`, `schema_version`, `producer_version_set`, and `config_hash`; every fact carries a truth class and, where the contract requires it, provenance tied to an exact source location in that stored revision. Architecture, Dependency Graph, Review, Insights, Documentation, Exports, and AI consume the sealed snapshot instead of re-parsing repository files; if the current-revision snapshot is missing or stale, PARTHA reports it as unavailable rather than falling back to a parallel interpretation. The governing contract is the accepted [RFC-0001](docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md).
+
 ```mermaid
 flowchart LR
     Input["Repository input<br/>archive · public GitHub"]
