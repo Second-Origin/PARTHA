@@ -33,12 +33,14 @@ class PromptBuilder:
             f"Frameworks: {', '.join(architecture.frameworks) if architecture.frameworks else 'Not detected'}",
             f"Entry points: {', '.join(architecture.entry_points) if architecture.entry_points else 'Not found'}",
             "Modules (roles are heuristic classifications):",
-            *[
-                f"- {module.name} ({module.role}, {module.file_count} files)"
-                for module in architecture.modules
-            ],
+            *[f"- {module.name} ({module.role}, {module.file_count} files)" for module in architecture.modules],
             "Dependencies:",
-            *[self._render_dependency(dependency.name, dependency.version, dependency.declared_versions, dependency.has_version_conflict) for dependency in repository_context.dependencies],
+            *[
+                self._render_dependency(
+                    dependency.name, dependency.version, dependency.declared_versions, dependency.has_version_conflict
+                )
+                for dependency in repository_context.dependencies
+            ],
             "Files:",
             *[f"- {file.path}" for file in repository_context.selected_files],
         ]

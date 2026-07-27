@@ -84,9 +84,7 @@ class RepositoryInsightsBuilder:
             if language is not None
         }
         evidence_count = (
-            self.snapshots.db.scalar(
-                select(func.count(RiEvidence.id)).where(RiEvidence.snapshot_id == snapshot_id)
-            )
+            self.snapshots.db.scalar(select(func.count(RiEvidence.id)).where(RiEvidence.snapshot_id == snapshot_id))
             or 0
         )
         evidence_extractor_counts = {
@@ -295,7 +293,6 @@ class RepositoryInsightsBuilder:
                 for key, value in sorted(diagnostic_code_counts.items())
             ],
             languages=[
-                InsightBreakdown(key=key, label=key, value=value)
-                for key, value in sorted(language_counts.items())
+                InsightBreakdown(key=key, label=key, value=value) for key, value in sorted(language_counts.items())
             ],
         )

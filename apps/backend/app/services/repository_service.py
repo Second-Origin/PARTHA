@@ -291,9 +291,7 @@ class RepositoryService:
         if total_files == 0:
             raise ValidationServiceError("Repository archive does not contain any readable files.")
 
-    def _parse_repository(
-        self, root: Path
-    ) -> tuple[list[FileTreeNode], RepositoryMeta, int]:
+    def _parse_repository(self, root: Path) -> tuple[list[FileTreeNode], RepositoryMeta, int]:
         try:
             return self.parser.parse(root, max_file_count=self.settings.max_file_count)
         except RepositoryFileLimitExceeded as exc:

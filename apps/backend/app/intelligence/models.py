@@ -25,7 +25,9 @@ SourceRole = Literal[
 ]
 SymbolKind = Literal["function", "class", "interface", "type", "enum", "constant", "route"]
 GraphNodeType = Literal["repository", "module", "file", "symbol", "dependency"]
-RelationshipType = Literal["imports", "calls", "extends", "implements", "depends_on", "contains", "references", "exports"]
+RelationshipType = Literal[
+    "imports", "calls", "extends", "implements", "depends_on", "contains", "references", "exports"
+]
 DependencyType = Literal["production", "development", "peer", "optional", "multiple"]
 
 

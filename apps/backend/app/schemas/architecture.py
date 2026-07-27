@@ -23,7 +23,9 @@ ArchNodeType = Literal[
     "queue",
     "cache",
 ]
-ArchEdgeType = Literal["dependency", "import", "api-call", "data-flow", "event", "reads", "writes", "calls", "config-usage"]
+ArchEdgeType = Literal[
+    "dependency", "import", "api-call", "data-flow", "event", "reads", "writes", "calls", "config-usage"
+]
 RelationshipState = Literal["connected", "no-observed-relationships", "unresolved", "not-extracted"]
 TruthClass = Literal["resolved", "inferred"]
 

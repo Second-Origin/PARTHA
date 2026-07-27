@@ -73,9 +73,7 @@ class RepositoryFileLimitExceeded(Exception):
 
 
 class RepositoryParser:
-    def parse(
-        self, root: Path, *, max_file_count: int | None = None
-    ) -> tuple[list[FileTreeNode], RepositoryMeta, int]:
+    def parse(self, root: Path, *, max_file_count: int | None = None) -> tuple[list[FileTreeNode], RepositoryMeta, int]:
         if max_file_count is not None:
             self._enforce_file_count(root, max_file_count, [0])
         tree = self._build_tree(root, root)

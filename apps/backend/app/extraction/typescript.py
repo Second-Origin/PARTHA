@@ -41,14 +41,14 @@ _UNASSIGNED_ORDINAL = 0
 
 _NAMED_DECLARATIONS = {
     "function_declaration": "name",
-    "function_signature": "name",              # ambient/overload signatures (no body)
+    "function_signature": "name",  # ambient/overload signatures (no body)
     "generator_function_declaration": "name",
     "class_declaration": "name",
     "abstract_class_declaration": "name",
     "interface_declaration": "name",
     "type_alias_declaration": "name",
     "enum_declaration": "name",
-    "method_definition": "name",               # emitted via the unified path, in class scope
+    "method_definition": "name",  # emitted via the unified path, in class scope
 }
 
 
@@ -107,9 +107,7 @@ class TypeScriptExtractor:
                 )
             )
 
-        file_ev, file_diag = build_evidence(
-            path, 1, line_count, line_count, producer=self.producer, granularity="file"
-        )
+        file_ev, file_diag = build_evidence(path, 1, line_count, line_count, producer=self.producer, granularity="file")
         if file_ev is not None:
             nodes.append(
                 ExtractedNode(
@@ -138,14 +136,10 @@ class TypeScriptExtractor:
             diagnostics.append(file_diag)
 
         observations: list[ExtractedObservation] = []
-        self._collect_symbols(
-            tree.root_node, path, line_count, file_key, nodes, observations, diagnostics
-        )
+        self._collect_symbols(tree.root_node, path, line_count, file_key, nodes, observations, diagnostics)
         self._collect_implements(tree.root_node, path, line_count, nodes, observations)
         self._collect_imports(tree.root_node, path, line_count, file_key, observations)
-        self._collect_routes(
-            tree.root_node, path, line_count, file_key, nodes, observations, diagnostics
-        )
+        self._collect_routes(tree.root_node, path, line_count, file_key, nodes, observations, diagnostics)
         self._collect_calls(tree.root_node, path, line_count, file_key, observations)
         self._collect_blind_spots(tree.root_node, path, line_count, diagnostics)
         return ExtractionResult(
@@ -163,15 +157,21 @@ class TypeScriptExtractor:
                 if source_node is not None:
                     literal = self._node_text(source_node, source).strip("'\"`")
                     ev, _ = build_evidence(
-                        path, node.start_point[0] + 1, node.end_point[0] + 1,
-                        line_count, producer=self.producer,
+                        path,
+                        node.start_point[0] + 1,
+                        node.end_point[0] + 1,
+                        line_count,
+                        producer=self.producer,
                     )
                     if ev is not None:
                         observations.append(
                             ExtractedObservation(
-                                observed_kind="import", subject_kind="file",
-                                subject_key=file_key, referent_text=literal,
-                                ordinal=_UNASSIGNED_ORDINAL, evidence=ev,
+                                observed_kind="import",
+                                subject_kind="file",
+                                subject_key=file_key,
+                                referent_text=literal,
+                                ordinal=_UNASSIGNED_ORDINAL,
+                                evidence=ev,
                             )
                         )
                         if node.type == "import_statement":
@@ -206,8 +206,7 @@ class TypeScriptExtractor:
                         for symbol in symbols.values()
                         if symbol.name == class_name
                         and any(
-                            evidence.start_line == start_line
-                            and evidence.end_line == end_line
+                            evidence.start_line == start_line and evidence.end_line == end_line
                             for evidence in symbol.evidence
                         )
                     ]
@@ -246,9 +245,7 @@ class TypeScriptExtractor:
 
         walk(root)
 
-    def _collect_import_bindings(
-        self, statement, specifier, path, line_count, file_key, source, observations
-    ) -> None:
+    def _collect_import_bindings(self, statement, specifier, path, line_count, file_key, source, observations) -> None:
         """Record direct import aliases as resolver inputs without resolving them."""
 
         clause = next((child for child in statement.named_children if child.type == "import_clause"), None)
@@ -257,8 +254,11 @@ class TypeScriptExtractor:
 
         def emit(imported, local, node):
             evidence, _ = build_evidence(
-                path, node.start_point[0] + 1, node.end_point[0] + 1,
-                line_count, producer=self.producer,
+                path,
+                node.start_point[0] + 1,
+                node.end_point[0] + 1,
+                line_count,
+                producer=self.producer,
             )
             if evidence is not None:
                 observations.append(
@@ -291,9 +291,7 @@ class TypeScriptExtractor:
                             binding,
                         )
 
-    def _collect_routes(
-        self, root, path, line_count, file_key, nodes, observations, diagnostics
-    ) -> None:
+    def _collect_routes(self, root, path, line_count, file_key, nodes, observations, diagnostics) -> None:
         """Emit a ``route`` observation per confirmed react-router path literal.
 
         Only two contexts count: a ``path`` key inside an argument to a router
@@ -335,8 +333,11 @@ class TypeScriptExtractor:
                 return
             seen.add(node.id)
             ev, _ = build_evidence(
-                path, node.start_point[0] + 1, node.end_point[0] + 1,
-                line_count, producer=self.producer,
+                path,
+                node.start_point[0] + 1,
+                node.end_point[0] + 1,
+                line_count,
+                producer=self.producer,
             )
             if ev is not None:
                 route_ordinal += 1
@@ -356,9 +357,12 @@ class TypeScriptExtractor:
                 )
                 observations.append(
                     ExtractedObservation(
-                        observed_kind="route", subject_kind="symbol",
-                        subject_key=route_key, referent_text=literal,
-                        ordinal=_UNASSIGNED_ORDINAL, evidence=ev,
+                        observed_kind="route",
+                        subject_kind="symbol",
+                        subject_key=route_key,
+                        referent_text=literal,
+                        ordinal=_UNASSIGNED_ORDINAL,
+                        evidence=ev,
                     )
                 )
                 if handler_referent:
@@ -447,8 +451,7 @@ class TypeScriptExtractor:
             if node.type == "call_expression":
                 fn = node.child_by_field_name("function")
                 arguments = node.child_by_field_name("arguments")
-                if (fn is not None and arguments is not None
-                        and self._node_text(fn, source) in _ROUTER_FACTORIES):
+                if fn is not None and arguments is not None and self._node_text(fn, source) in _ROUTER_FACTORIES:
                     # createBrowserRouter(routes, opts?) — only the first argument
                     # is the route table. The options object also accepts a `path`
                     # (e.g. basename config), which is not a route.
@@ -457,8 +460,7 @@ class TypeScriptExtractor:
                         collect_route_table(route_table)
             elif node.type in ("jsx_self_closing_element", "jsx_opening_element"):
                 name_node = node.child_by_field_name("name")
-                if (name_node is not None
-                        and self._node_text(name_node, source) in _ROUTE_ELEMENTS):
+                if name_node is not None and self._node_text(name_node, source) in _ROUTE_ELEMENTS:
                     path_attribute = None
                     handler_referent = None
                     handler_node = None
@@ -466,15 +468,13 @@ class TypeScriptExtractor:
                         if child.type != "jsx_attribute":
                             continue
                         parts = child.named_children
-                        if (len(parts) > 1
-                                and self._node_text(parts[0], source) == "path"):
+                        if len(parts) > 1 and self._node_text(parts[0], source) == "path":
                             path_literal = jsx_path_literal(parts[1])
                             if path_literal is None:
                                 flag_dynamic_path(parts[1])
                             else:
                                 path_attribute = child
-                        elif (len(parts) > 1
-                              and self._node_text(parts[0], source) == "element"):
+                        elif len(parts) > 1 and self._node_text(parts[0], source) == "element":
                             jsx_handler = self._jsx_handler(parts[1], source)
                             if jsx_handler is not None:
                                 handler_referent, handler_node = jsx_handler
@@ -561,8 +561,11 @@ class TypeScriptExtractor:
                     # construct, so its diagnostic is the only emitted fact.
                     if function_name != "require":
                         evidence, _ = build_evidence(
-                            path, node.start_point[0] + 1, node.end_point[0] + 1,
-                            line_count, producer=self.producer,
+                            path,
+                            node.start_point[0] + 1,
+                            node.end_point[0] + 1,
+                            line_count,
+                            producer=self.producer,
                         )
                         if evidence is not None:
                             observations.append(
@@ -599,8 +602,11 @@ class TypeScriptExtractor:
         def flag(node, message):
             diagnostics.append(
                 ExtractedDiagnostic(
-                    code=RI_EXT_UNSUPPORTED, category="unsupported construct",
-                    severity="info", message=message, path=normalized,
+                    code=RI_EXT_UNSUPPORTED,
+                    category="unsupported construct",
+                    severity="info",
+                    message=message,
+                    path=normalized,
                     span=(node.start_point[0] + 1, node.end_point[0] + 1),
                     subject=file_subject,
                 )
@@ -630,7 +636,7 @@ class TypeScriptExtractor:
         walk(root)
 
     def _node_text(self, node, source: bytes) -> str:
-        return source[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+        return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
     def _is_exported(self, node) -> bool:
         return node.parent is not None and node.parent.type == "export_statement"
@@ -643,10 +649,7 @@ class TypeScriptExtractor:
             if statement.type != "export_statement":
                 continue
             if any(child.type == "default" for child in statement.children):
-                target = (
-                    statement.child_by_field_name("declaration")
-                    or statement.child_by_field_name("value")
-                )
+                target = statement.child_by_field_name("declaration") or statement.child_by_field_name("value")
                 if target is not None:
                     name = target.child_by_field_name("name") or target
                     if name.type in ("identifier", "type_identifier"):
@@ -659,11 +662,7 @@ class TypeScriptExtractor:
                         continue
                     name = specifier.child_by_field_name("name")
                     alias = specifier.child_by_field_name("alias")
-                    if (
-                        name is not None
-                        and alias is not None
-                        and self._node_text(alias, source) == "default"
-                    ):
+                    if name is not None and alias is not None and self._node_text(alias, source) == "default":
                         names.add(self._node_text(name, source))
         return names
 
@@ -673,15 +672,9 @@ class TypeScriptExtractor:
             return False
         if parent.type == "program":
             return True
-        return (
-            parent.type == "export_statement"
-            and parent.parent is not None
-            and parent.parent.type == "program"
-        )
+        return parent.type == "export_statement" and parent.parent is not None and parent.parent.type == "program"
 
-    def _collect_symbols(
-        self, root, path, line_count, file_key, nodes, observations, diagnostics
-    ) -> None:
+    def _collect_symbols(self, root, path, line_count, file_key, nodes, observations, diagnostics) -> None:
         assigner = DiscriminatorAssigner()
         source = root.text  # bytes of the whole tree
         default_export_names = self._default_export_names(root, source)
@@ -694,8 +687,11 @@ class TypeScriptExtractor:
             key = canonical.normalize_stable_key("symbol", final_key)
             # tree-sitter rows are 0-based; RFC spans are 1-based inclusive.
             ev, diag = build_evidence(
-                path, decl_node.start_point[0] + 1, decl_node.end_point[0] + 1,
-                line_count, producer=self.producer,
+                path,
+                decl_node.start_point[0] + 1,
+                decl_node.end_point[0] + 1,
+                line_count,
+                producer=self.producer,
             )
             if ev is None:
                 if diag is not None:
@@ -709,28 +705,36 @@ class TypeScriptExtractor:
                     properties["default_export"] = True
             nodes.append(
                 ExtractedNode(
-                    node_kind="symbol", stable_key=key, name=name,
-                    language="typescript", evidence=(ev,),
+                    node_kind="symbol",
+                    stable_key=key,
+                    name=name,
+                    language="typescript",
+                    evidence=(ev,),
                     properties=properties,
                 )
             )
             observations.append(
                 ExtractedObservation(
-                    observed_kind="definition", subject_kind="symbol",
-                    subject_key=key, referent_text=None,
-                    ordinal=_UNASSIGNED_ORDINAL, evidence=ev,
+                    observed_kind="definition",
+                    subject_kind="symbol",
+                    subject_key=key,
+                    referent_text=None,
+                    ordinal=_UNASSIGNED_ORDINAL,
+                    evidence=ev,
                 )
             )
             if duplicate:
                 diagnostics.append(
                     ExtractedDiagnostic(
-                        code=RI_KEY_DUP_SYMBOL, category="duplicate symbol",
+                        code=RI_KEY_DUP_SYMBOL,
+                        category="duplicate symbol",
                         severity="info",
                         # The key lives in `subject`, the field meant for it;
                         # repeating it here would put source-derived text in
                         # `message`, which RFC §13 reserves from content.
                         message="duplicate symbol name resolved with a discriminator",
-                        path=canonical.normalize_repo_path(path), subject=key,
+                        path=canonical.normalize_repo_path(path),
+                        subject=key,
                     )
                 )
             return name

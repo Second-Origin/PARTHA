@@ -23,7 +23,7 @@ _RESPONSE_EXAMPLE = {
     "filename": "engineering-review.json",
     "mediaType": "application/json",
     "encoding": "utf-8",
-    "content": "{\\n  \\\"repositoryId\\\": \\\"11111111-1111-1111-1111-111111111111\\\"\\n}",
+    "content": '{\\n  \\"repositoryId\\": \\"11111111-1111-1111-1111-111111111111\\"\\n}',
 }
 
 

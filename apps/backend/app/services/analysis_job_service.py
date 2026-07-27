@@ -150,9 +150,7 @@ class AnalysisJobService:
         self._get_record(repository_id)
         job = self._latest_job(repository_id)
         if job is None:
-            raise ConflictServiceError(
-                "No analysis job to cancel.", {"repositoryId": repository_id}
-            )
+            raise ConflictServiceError("No analysis job to cancel.", {"repositoryId": repository_id})
         return self._cancel_job(job)
 
     def _cancel_job(self, job: AnalysisJob) -> AnalysisJob:
@@ -224,9 +222,7 @@ class AnalysisJobService:
     @staticmethod
     def _require_revision(record: RepositoryRecord) -> str:
         if record.revision_kind is None or record.revision_value is None:
-            raise ServiceError(
-                "Repository has no analyzable revision.", {"repositoryId": record.id}
-            )
+            raise ServiceError("Repository has no analyzable revision.", {"repositoryId": record.id})
         return record.revision_value
 
     def _latest_job(self, repository_id: str) -> AnalysisJob | None:
@@ -316,9 +312,7 @@ class AnalysisJobService:
         self.db.refresh(job)
         return job
 
-    def _reconcile_completed_job(
-        self, record: RepositoryRecord, job: AnalysisJob, snapshot: RiSnapshot
-    ) -> AnalysisJob:
+    def _reconcile_completed_job(self, record: RepositoryRecord, job: AnalysisJob, snapshot: RiSnapshot) -> AnalysisJob:
         """Make a sealed snapshot authoritative over any non-completed job row."""
 
         if (
@@ -360,9 +354,7 @@ class AnalysisJobService:
         self.db.refresh(job)
         return job
 
-    def _insert_completed_job(
-        self, record: RepositoryRecord, snapshot: RiSnapshot
-    ) -> AnalysisJob:
+    def _insert_completed_job(self, record: RepositoryRecord, snapshot: RiSnapshot) -> AnalysisJob:
         now = _utcnow()
         completed_at = snapshot.sealed_at or now
         job = AnalysisJob(
@@ -407,9 +399,7 @@ class AnalysisJobService:
         record.error_message = None
         record.analysed_at = completed_at
 
-    def _completed_snapshot(
-        self, record: RepositoryRecord, revision_value: str
-    ) -> RiSnapshot | None:
+    def _completed_snapshot(self, record: RepositoryRecord, revision_value: str) -> RiSnapshot | None:
         return self.snapshots.find_completed_for_owner(
             owner_id=self.owner_id,
             repository_id=record.id,

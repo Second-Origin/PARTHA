@@ -107,9 +107,7 @@ class EvidenceSourceService:
         sealed_content_hash = self.snapshots.source_content_hash(snapshot, path)
         current_content_hash = canonical.sha256_prefixed(file_response.content.encode("utf-8"))
         if sealed_content_hash is None or current_content_hash != sealed_content_hash:
-            return unavailable(
-                "The available source bytes do not match the content sealed into this snapshot."
-            )
+            return unavailable("The available source bytes do not match the content sealed into this snapshot.")
 
         return EvidenceSourceResponse(
             schema_version="evidence-source.v1",

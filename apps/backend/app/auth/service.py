@@ -123,9 +123,7 @@ class AuthService:
         rather than the earlier read-then-write which two racers could both pass.
         """
         result = self.db.execute(
-            update(RefreshToken)
-            .where(RefreshToken.id == token_id, RefreshToken.used_at.is_(None))
-            .values(used_at=now)
+            update(RefreshToken).where(RefreshToken.id == token_id, RefreshToken.used_at.is_(None)).values(used_at=now)
         )
         return result.rowcount == 1
 

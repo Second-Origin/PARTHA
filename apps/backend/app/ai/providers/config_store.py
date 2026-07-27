@@ -145,7 +145,12 @@ class EncryptedProviderConfigStore:
         """
         if config.api_key:
             return self.cipher.encrypt(config.api_key), config.api_key[-4:]
-        if config.provider != "ollama" and record is not None and record.provider == config.provider and record.encrypted_api_key:
+        if (
+            config.provider != "ollama"
+            and record is not None
+            and record.provider == config.provider
+            and record.encrypted_api_key
+        ):
             return record.encrypted_api_key, record.api_key_last4
         if config.provider == "ollama":
             return None, None

@@ -46,7 +46,9 @@ class AiOrchestrator:
         provider = self.provider_factory.resolve(config)
         prompt = PromptBundle(system_prompt="Reply with the single word: ok", user_prompt="Connection test.")
         await provider.complete(config, prompt)
-        return AiProviderTestResponse(ok=True, message=f"{config.provider} connection succeeded.", checked_at=datetime.now(UTC))
+        return AiProviderTestResponse(
+            ok=True, message=f"{config.provider} connection succeeded.", checked_at=datetime.now(UTC)
+        )
 
     async def query(self, request: AiQueryRequest) -> AiQueryResponse:
         # Owner-scoped: another user's repository id resolves to None and gets

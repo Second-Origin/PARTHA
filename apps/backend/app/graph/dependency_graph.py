@@ -73,7 +73,9 @@ class DependencyGraphBuilder:
             item
             for item in self.snapshots.db.scalars(
                 select(RiDiagnostic)
-                .where(RiDiagnostic.snapshot_id == snapshot.snapshot_id, RiDiagnostic.code.in_(_RELEVANT_DIAGNOSTIC_CODES))
+                .where(
+                    RiDiagnostic.snapshot_id == snapshot.snapshot_id, RiDiagnostic.code.in_(_RELEVANT_DIAGNOSTIC_CODES)
+                )
                 .order_by(RiDiagnostic.path, RiDiagnostic.code, RiDiagnostic.id)
             )
             if item.path and posixpath.basename(item.path) in _MANIFEST_FILENAMES

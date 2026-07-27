@@ -52,7 +52,6 @@ _FRAMEWORK_BY_DEPENDENCY_NAME = {
 }
 
 
-
 class ArchitectureAnalyzer:
     """Builds the Architecture read model exclusively from sealed ri.v1 snapshots.
 
@@ -70,21 +69,39 @@ class ArchitectureAnalyzer:
     def build_architecture(self, record: RepositoryRecord) -> ArchitectureResponse:
         if self.snapshots is not None:
             self.snapshots.require_sealed_snapshot_for_current_revision(record.id)
-        facts = self.snapshots.architecture_facts(record.id) if self.snapshots is not None else None
+        facts = (
+            self.snapshots.architecture_facts(record.id)
+            if self.snapshots is not None
+            else None
+        )
         modules = self._modules_from_facts(facts)
         frameworks = self._frameworks_from_facts(facts)
         primary_language = self._primary_language_from_facts(facts)
         entry_points = self._entry_points_from_facts(facts)
         nodes = self._nodes_for_modules(modules)
         nodes.extend(self._dependency_nodes(facts))
-        edges, diagnostics, unresolved_node_ids, covered_paths = self._edges_for_modules(modules, nodes, facts)
-        edge_endpoint_ids = {node_id for edge in edges for node_id in (edge.source, edge.target)}
-        nodes = [node for node in nodes if node.layer != "external" or node.id in edge_endpoint_ids]
+        edges, diagnostics, unresolved_node_ids, covered_paths = (
+            self._edges_for_modules(modules, nodes, facts)
+        )
+        edge_endpoint_ids = {
+            node_id for edge in edges for node_id in (edge.source, edge.target)
+        }
+        nodes = [
+            node
+            for node in nodes
+            if node.layer != "external" or node.id in edge_endpoint_ids
+        ]
         remaining_node_ids = {node.id for node in nodes}
         for diagnostic in diagnostics:
             if diagnostic.node_ids is not None:
-                diagnostic.node_ids = [node_id for node_id in diagnostic.node_ids if node_id in remaining_node_ids] or None
-        self._set_relationship_states(modules, nodes, edges, unresolved_node_ids, covered_paths, facts is not None)
+                diagnostic.node_ids = [
+                    node_id
+                    for node_id in diagnostic.node_ids
+                    if node_id in remaining_node_ids
+                ] or None
+        self._set_relationship_states(
+            modules, nodes, edges, unresolved_node_ids, covered_paths, facts is not None
+        )
         layers = self._layers_for_nodes(nodes)
         arch_modules = [
             ArchModule(
@@ -114,7 +131,9 @@ class ArchitectureAnalyzer:
                 entry_point=entry_points[0] if entry_points else "/",
                 architecture_pattern=self._architecture_type(frameworks),
             ),
-            relationship_snapshot_id=facts.snapshot.snapshot_id if facts is not None else None,
+            relationship_snapshot_id=facts.snapshot.snapshot_id
+            if facts is not None
+            else None,
             diagnostics=diagnostics,
         )
 
@@ -166,7 +185,10 @@ class ArchitectureAnalyzer:
 
         roles: dict[str, str] = {}
         for assertion in facts.assertions:
-            if assertion.predicate != "classified_as" or assertion.subject_kind != "file":
+            if (
+                assertion.predicate != "classified_as"
+                or assertion.subject_kind != "file"
+            ):
                 continue
             classification = str((assertion.value or {}).get("classification", ""))
             if not classification:
@@ -174,7 +196,9 @@ class ArchitectureAnalyzer:
             roles[assertion.subject_key.removeprefix("file:")] = classification
         return roles
 
-    def _modules_from_facts(self, facts: ArchitectureSnapshotFacts | None) -> list[RepositoryModule]:
+    def _modules_from_facts(
+        self, facts: ArchitectureSnapshotFacts | None
+    ) -> list[RepositoryModule]:
         if facts is None:
             # Defensive only: build_architecture requires a sealed snapshot
             # before calling this whenever self.snapshots is configured, so a
@@ -198,7 +222,8 @@ class ArchitectureAnalyzer:
             candidate_roles = [
                 role_by_path[path]
                 for path in paths
-                if role_by_path.get(path) not in (None, "unknown", "documentation", "test")
+                if role_by_path.get(path)
+                not in (None, "unknown", "documentation", "test")
             ]
             dominant = (
                 Counter(candidate_roles).most_common(1)[0][0]
@@ -238,7 +263,11 @@ class ArchitectureAnalyzer:
             return "module:tests"
         if role == "documentation":
             return "module:documentation"
-        if parts and parts[0] in {"app", "src", "backend", "frontend", "apps"} and len(parts) > 1:
+        if (
+            parts
+            and parts[0] in {"app", "src", "backend", "frontend", "apps"}
+            and len(parts) > 1
+        ):
             return f"module:{parts[1].lower()}"
         return f"module:{parts[0].lower() if parts else 'repository'}"
 
@@ -255,10 +284,16 @@ class ArchitectureAnalyzer:
                 break
         return "/" + "/".join(prefix) if prefix else "/"
 
-    def _frameworks_from_facts(self, facts: ArchitectureSnapshotFacts | None) -> list[str]:
+    def _frameworks_from_facts(
+        self, facts: ArchitectureSnapshotFacts | None
+    ) -> list[str]:
         if facts is None:
             return []
-        names = {node.name.lower() for node in facts.nodes if node.node_kind == "dependency" and node.name}
+        names = {
+            node.name.lower()
+            for node in facts.nodes
+            if node.node_kind == "dependency" and node.name
+        }
         return sorted(
             {
                 framework
@@ -267,26 +302,40 @@ class ArchitectureAnalyzer:
             }
         )
 
-    def _primary_language_from_facts(self, facts: ArchitectureSnapshotFacts | None) -> str:
+    def _primary_language_from_facts(
+        self, facts: ArchitectureSnapshotFacts | None
+    ) -> str:
         if facts is None:
             return "Unknown"
         # Count persisted file facts, not symbols. Symbol counts make a file
         # with many declarations (and synthetic route symbols) outweigh other
         # files, and report "Unknown" for a valid script containing only
         # top-level statements.
-        counts = Counter(node.language for node in facts.nodes if node.node_kind == "file" and node.language)
+        counts = Counter(
+            node.language
+            for node in facts.nodes
+            if node.node_kind == "file" and node.language
+        )
         if not counts:
             return "Unknown"
         dominant = counts.most_common(1)[0][0]
-        return {"python": "Python", "typescript": "TypeScript"}.get(dominant, dominant.title())
+        return {"python": "Python", "typescript": "TypeScript"}.get(
+            dominant, dominant.title()
+        )
 
-    def _entry_points_from_facts(self, facts: ArchitectureSnapshotFacts | None) -> list[str]:
+    def _entry_points_from_facts(
+        self, facts: ArchitectureSnapshotFacts | None
+    ) -> list[str]:
         if facts is None:
             return []
         role_by_path = self._file_roles(facts)
-        return sorted(path for path, role in role_by_path.items() if role == "entrypoint")
+        return sorted(
+            path for path, role in role_by_path.items() if role == "entrypoint"
+        )
 
-    def _dependency_nodes(self, facts: ArchitectureSnapshotFacts | None) -> list[ArchNode]:
+    def _dependency_nodes(
+        self, facts: ArchitectureSnapshotFacts | None
+    ) -> list[ArchNode]:
         if facts is None:
             return []
         relationship_keys = {
@@ -297,7 +346,10 @@ class ArchitectureAnalyzer:
         }
         result: list[ArchNode] = []
         for item in facts.nodes:
-            if item.node_kind != "dependency" or item.stable_key not in relationship_keys:
+            if (
+                item.node_kind != "dependency"
+                or item.stable_key not in relationship_keys
+            ):
                 continue
             evidence = facts.node_evidence.get(item.id, [])
             result.append(
@@ -306,7 +358,9 @@ class ArchitectureAnalyzer:
                     name=item.name or item.stable_key,
                     type="shared-library",
                     description="External dependency from resolved repository evidence.",
-                    responsibilities=["Provides an externally declared or imported capability"],
+                    responsibilities=[
+                        "Provides an externally declared or imported capability"
+                    ],
                     files=sorted({entry.path for entry in evidence}),
                     dependencies=[],
                     dependents=[],
@@ -343,7 +397,9 @@ class ArchitectureAnalyzer:
         modules_by_file: dict[str, list[str]] = {}
         for module in modules:
             for path in module.files:
-                modules_by_file.setdefault(self._normalize_path(path), []).append(module.id)
+                modules_by_file.setdefault(self._normalize_path(path), []).append(
+                    module.id
+                )
         snapshot_node_by_key = {item.stable_key: item for item in facts.nodes}
         node_ids = {node.id for node in nodes}
         diagnostics = [
@@ -361,7 +417,9 @@ class ArchitectureAnalyzer:
             if item.code not in ARCHITECTURE_DIAGNOSTIC_CODES:
                 continue
             if item.path:
-                unresolved_node_ids.update(modules_by_file.get(self._normalize_path(item.path), []))
+                unresolved_node_ids.update(
+                    modules_by_file.get(self._normalize_path(item.path), [])
+                )
             for key in (item.subject_key, item.object_key):
                 if key in node_ids:
                     unresolved_node_ids.add(key)
@@ -411,7 +469,9 @@ class ArchitectureAnalyzer:
                         subject_key=fact.subject_key,
                         object_key=fact.object_key,
                         details={"factId": fact.edge_id, "predicate": fact.predicate},
-                        node_ids=[fact.object_key] if fact.object_key in node_ids else None,
+                        node_ids=[fact.object_key]
+                        if fact.object_key in node_ids
+                        else None,
                     )
                 )
                 if len(root_scope_evidence) == len(evidence_rows):
@@ -422,7 +482,9 @@ class ArchitectureAnalyzer:
                 for target in target_ids
                 if source in node_ids and target in node_ids
             )
-            non_self_pairs = [(source, target) for source, target in pairs if source != target]
+            non_self_pairs = [
+                (source, target) for source, target in pairs if source != target
+            ]
             if pairs and not non_self_pairs:
                 # A resolved fact wholly inside one architecture module remains
                 # extraction evidence, but it is not a module-to-module edge.
@@ -435,7 +497,9 @@ class ArchitectureAnalyzer:
                         severity="warning",
                         message="A resolved relationship could not be mapped to architecture nodes without guessing.",
                         path=evidence_rows[0].path if evidence_rows else None,
-                        start_line=evidence_rows[0].start_line if evidence_rows else None,
+                        start_line=evidence_rows[0].start_line
+                        if evidence_rows
+                        else None,
                         end_line=evidence_rows[0].end_line if evidence_rows else None,
                         subject_key=fact.subject_key,
                         object_key=fact.object_key,
@@ -456,7 +520,11 @@ class ArchitectureAnalyzer:
                 for item in evidence_rows
             ]
             for index, (source, target) in enumerate(non_self_pairs, start=1):
-                edge_id = fact.edge_id if len(non_self_pairs) == 1 else f"{fact.edge_id}:{index}"
+                edge_id = (
+                    fact.edge_id
+                    if len(non_self_pairs) == 1
+                    else f"{fact.edge_id}:{index}"
+                )
                 edges.append(
                     ArchEdge(
                         id=edge_id,
@@ -519,7 +587,10 @@ class ArchitectureAnalyzer:
             return {
                 module.id
                 for module in module_by_id.values()
-                if any(self._path_is_within(self._normalize_path(file_path), path) for file_path in module.files)
+                if any(
+                    self._path_is_within(self._normalize_path(file_path), path)
+                    for file_path in module.files
+                )
             }
         return set()
 
@@ -551,15 +622,23 @@ class ArchitectureAnalyzer:
         covered_paths: set[str],
         snapshot_available: bool,
     ) -> None:
-        connected = {node_id for edge in edges for node_id in (edge.source, edge.target)}
+        connected = {
+            node_id for edge in edges for node_id in (edge.source, edge.target)
+        }
         module_by_id = {module.id: module for module in modules}
         for node in nodes:
             if node.id in connected:
                 node.relationship_state = "connected"
             elif node.id in unresolved_node_ids:
                 node.relationship_state = "unresolved"
-            elif node.id in module_by_id and snapshot_available and module_by_id[node.id].files and all(
-                self._normalize_path(path) in covered_paths for path in module_by_id[node.id].files
+            elif (
+                node.id in module_by_id
+                and snapshot_available
+                and module_by_id[node.id].files
+                and all(
+                    self._normalize_path(path) in covered_paths
+                    for path in module_by_id[node.id].files
+                )
             ):
                 node.relationship_state = "no-observed-relationships"
             else:
@@ -573,14 +652,18 @@ class ArchitectureAnalyzer:
     ) -> ArchitectureDiagnostic:
         attributed_node_ids: set[str] = set()
         if item.path:
-            attributed_node_ids.update(modules_by_file.get(self._normalize_path(item.path), []))
+            attributed_node_ids.update(
+                modules_by_file.get(self._normalize_path(item.path), [])
+            )
         for key in (item.subject_key, item.object_key):
             if key is None:
                 continue
             if key in node_ids:
                 attributed_node_ids.add(key)
                 continue
-            path = self._path_for_stable_key("file" if key.startswith("file:") else "symbol", key)
+            path = self._path_for_stable_key(
+                "file" if key.startswith("file:") else "symbol", key
+            )
             if path is not None:
                 attributed_node_ids.update(modules_by_file.get(path, []))
         return ArchitectureDiagnostic(
@@ -620,8 +703,15 @@ class ArchitectureAnalyzer:
         for node in nodes:
             layers.setdefault(node.layer, []).append(node.id)
         return [
-            ArchLayer(id=layer, name=layer.replace("-", " ").title(), order=LAYER_ORDER.get(layer, 99), nodes=node_ids)
-            for layer, node_ids in sorted(layers.items(), key=lambda item: LAYER_ORDER.get(item[0], 99))
+            ArchLayer(
+                id=layer,
+                name=layer.replace("-", " ").title(),
+                order=LAYER_ORDER.get(layer, 99),
+                nodes=node_ids,
+            )
+            for layer, node_ids in sorted(
+                layers.items(), key=lambda item: LAYER_ORDER.get(item[0], 99)
+            )
         ]
 
     def _architecture_type(self, frameworks: list[str]) -> str:
@@ -634,12 +724,45 @@ class ArchitectureAnalyzer:
     def _request_flow(self, modules: list[RepositoryModule]) -> list[RequestFlowStep]:
         module_roles = {module.role for module in modules}
         steps = [
-            RequestFlowStep(id="client", name="Client", type="frontend", description="Request enters the system.", details=["Browser or API client sends a request."]),
+            RequestFlowStep(
+                id="client",
+                name="Client",
+                type="frontend",
+                description="Request enters the system.",
+                details=["Browser or API client sends a request."],
+            ),
         ]
         if "route" in module_roles or "controller" in module_roles:
-            steps.append(RequestFlowStep(id="api", name="API Layer", type="controller", description="Route/controller handles input.", details=["Validate request", "Call service"]))
+            steps.append(
+                RequestFlowStep(
+                    id="api",
+                    name="API Layer",
+                    type="controller",
+                    description="Route/controller handles input.",
+                    details=["Validate request", "Call service"],
+                )
+            )
         if "service" in module_roles:
-            steps.append(RequestFlowStep(id="service", name="Service Layer", type="service", description="Business logic executes.", details=["Coordinate repository intelligence consumers", "Transform data"]))
+            steps.append(
+                RequestFlowStep(
+                    id="service",
+                    name="Service Layer",
+                    type="service",
+                    description="Business logic executes.",
+                    details=[
+                        "Coordinate repository intelligence consumers",
+                        "Transform data",
+                    ],
+                )
+            )
         if "repository" in module_roles:
-            steps.append(RequestFlowStep(id="repository", name="Repository Layer", type="repository", description="Persistence or source files are accessed.", details=["Read or write data"] ))
+            steps.append(
+                RequestFlowStep(
+                    id="repository",
+                    name="Repository Layer",
+                    type="repository",
+                    description="Persistence or source files are accessed.",
+                    details=["Read or write data"],
+                )
+            )
         return steps

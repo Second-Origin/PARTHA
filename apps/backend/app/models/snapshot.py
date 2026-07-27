@@ -49,6 +49,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
 from app.models.repository import _hex_only_sql
 
+
 def _utcnow() -> datetime:
     return datetime.now(UTC)
 
@@ -325,8 +326,7 @@ class RiEvidence(Base):
         # (RFC §6.2). The upper bound is what stops a post-insert mutation from
         # stretching a span past the file it cites.
         CheckConstraint(
-            "start_line >= 1 AND end_line >= start_line AND "
-            "logical_line_count >= 1 AND end_line <= logical_line_count",
+            "start_line >= 1 AND end_line >= start_line AND logical_line_count >= 1 AND end_line <= logical_line_count",
             name="ck_ri_evidence_span",
         ),
         CheckConstraint("granularity IN ('span', 'file')", name="ck_ri_evidence_granularity"),

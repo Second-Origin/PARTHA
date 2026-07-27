@@ -73,9 +73,7 @@ _RULES: dict[str, tuple[ReviewCategoryId, str, str]] = {
 
 #: Codes whose category is source extraction, used to state that category's
 #: assessment from extraction evidence rather than from unrelated diagnostics.
-_SOURCE_EXTRACTION_CODES = frozenset(
-    code for code, rule in _RULES.items() if rule[0] == "source_extraction"
-)
+_SOURCE_EXTRACTION_CODES = frozenset(code for code, rule in _RULES.items() if rule[0] == "source_extraction")
 
 _CATEGORY_LABELS: dict[ReviewCategoryId, str] = {
     "architecture_boundaries": "Architecture and boundaries",
@@ -362,9 +360,7 @@ class EngineeringReviewBuilder:
                 ).all()
                 for evidence in rows:
                     fact_id = identity.get(
-                        evidence.observation_ref
-                        if column is RiEvidence.observation_ref
-                        else evidence.node_ref
+                        evidence.observation_ref if column is RiEvidence.observation_ref else evidence.node_ref
                     )
                     if fact_id is not None:
                         grouped[fact_id].append(evidence)
@@ -431,14 +427,10 @@ class EngineeringReviewBuilder:
                         or evidence.end_line != diagnostic.span_end_line
                     ):
                         continue
-                    return _SupportedEvidence(
-                        fact_id=fact_id, evidence=evidence, support_status="supported"
-                    )
+                    return _SupportedEvidence(fact_id=fact_id, evidence=evidence, support_status="supported")
                 if evidence.granularity != "file":
                     continue
-                return _SupportedEvidence(
-                    fact_id=fact_id, evidence=evidence, support_status="file_scoped"
-                )
+                return _SupportedEvidence(fact_id=fact_id, evidence=evidence, support_status="file_scoped")
         return None
 
     def _categories(
@@ -448,22 +440,16 @@ class EngineeringReviewBuilder:
         diagnostics: list[RiDiagnostic],
     ) -> list[ReviewCategoryAssessment]:
         finding_counts = Counter(finding.category for finding in findings)
-        has_extraction_diagnostics = any(
-            diagnostic.code in _SOURCE_EXTRACTION_CODES for diagnostic in diagnostics
-        )
+        has_extraction_diagnostics = any(diagnostic.code in _SOURCE_EXTRACTION_CODES for diagnostic in diagnostics)
         has_dependency_nodes = (
             self.snapshots.db.scalar(
-                select(RiNode.id)
-                .where(RiNode.snapshot_id == snapshot_id, RiNode.node_kind == "dependency")
-                .limit(1)
+                select(RiNode.id).where(RiNode.snapshot_id == snapshot_id, RiNode.node_kind == "dependency").limit(1)
             )
             is not None
         )
         has_file_nodes = (
             self.snapshots.db.scalar(
-                select(RiNode.id)
-                .where(RiNode.snapshot_id == snapshot_id, RiNode.node_kind == "file")
-                .limit(1)
+                select(RiNode.id).where(RiNode.snapshot_id == snapshot_id, RiNode.node_kind == "file").limit(1)
             )
             is not None
         )
