@@ -13,6 +13,7 @@ vi.mock('@/shared/feature-state/useRepositoryFeatureStatus', () => ({
 vi.mock('@/shared/services/api', () => ({
   aiService: {
     query: vi.fn(),
+    getConfig: vi.fn().mockResolvedValue({ provider: 'anthropic', hasKey: true }),
   },
   getErrorMessage: vi.fn((error: unknown) => String(error)),
 }));

@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom';
-import { Bot, Send, AlertCircle } from 'lucide-react';
+import { Bot, Send, AlertCircle, Settings } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { PreviewBanner } from '@/shared/components/ui/PreviewBanner';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 import { useAIWorkspace } from '@/features/ai/hooks/useAIWorkspace';
+import { getErrorDetail } from '@/shared/services/api';
 import { cn } from '@/shared/utils/cn';
 
 // Kept identical to the `limitation` recorded for this surface in the
@@ -85,12 +86,24 @@ export function AIWorkspacePage() {
             ))
           )}
           {aiWorkspace.loading && <p className="text-xs text-muted-foreground">AI provider is thinking...</p>}
-          {aiWorkspace.error && (
-            <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3">
-              <AlertCircle className="h-4 w-4 text-destructive" />
-              <p className="text-sm text-destructive">{aiWorkspace.error}</p>
-            </div>
-          )}
+          {aiWorkspace.error && (() => {
+            const detail = getErrorDetail(aiWorkspace.error);
+            return (
+              <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                <div className="space-y-1">
+                  <p className="text-sm text-destructive">{detail.message}</p>
+                  {detail.details.length > 0 && (
+                    <ul className="list-disc pl-4 text-xs text-destructive/80">
+                      {detail.details.map((d, i) => (
+                        <li key={i}>{d}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           {aiWorkspace.suggestions.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {aiWorkspace.suggestions.map((suggestion) => (
@@ -102,6 +115,22 @@ export function AIWorkspacePage() {
           )}
         </div>
         <div className="border-t border-border p-4">
+          {aiWorkspace.providerConfigured === false && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-2.5 text-sm text-amber-200">
+              <Settings className="h-4 w-4 shrink-0" />
+              <span>
+                No AI provider is configured. Free-form questions cannot run until you save a provider in{' '}
+                <button
+                  type="button"
+                  onClick={() => navigate('/settings')}
+                  className="underline underline-offset-2 hover:text-amber-100"
+                >
+                  Settings
+                </button>
+                .
+              </span>
+            </div>
+          )}
           <form
             className="flex items-center gap-2"
             onSubmit={(event) => {
