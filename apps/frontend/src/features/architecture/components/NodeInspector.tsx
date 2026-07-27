@@ -82,9 +82,10 @@ export function NodeInspector({ node, onClose }: NodeInspectorProps) {
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-3">
         <InspectorSection title="Overview" defaultOpen>
           <p className="text-xs text-muted-foreground leading-relaxed">{node.description}</p>
+          {/* Complexity/line-count stats were removed (#217): no repository-
+              intelligence producer measures either, so there was no real value
+              to show. */}
           <div className="grid grid-cols-2 gap-2 mt-3">
-            <MiniStat label="Complexity" value={node.estimatedComplexity} />
-            <MiniStat label="Est. Lines" value={String(node.estimatedLines)} />
             <MiniStat label="Layer" value={node.layer.replace('-', ' ')} />
             <MiniStat label="Files" value={String(node.files.length)} />
           </div>

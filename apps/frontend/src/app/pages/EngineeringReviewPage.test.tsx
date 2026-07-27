@@ -89,6 +89,7 @@ describe('EngineeringReviewPage', () => {
       status: 'success',
       loading: false,
       error: null,
+      noSnapshot: false,
       empty: false,
       success: true,
       retry: vi.fn(),
@@ -130,5 +131,30 @@ describe('EngineeringReviewPage', () => {
     expect(
       screen.getByText('No overall score, grade, health percentage, or category score is produced.'),
     ).toBeInTheDocument();
+  });
+
+  it('guides the user to run analysis again instead of showing a generic error when no sealed snapshot exists (#178)', () => {
+    vi.mocked(useReview).mockReturnValue({
+      review: null,
+      data: null,
+      source: null,
+      status: 'error',
+      loading: false,
+      error: null,
+      noSnapshot: true,
+      empty: false,
+      success: false,
+      retry: vi.fn(),
+      refresh: vi.fn(),
+      activeRepository: null,
+      completedRepositories: [],
+      emptyReason: null,
+    });
+
+    renderPage();
+
+    expect(screen.getByText('No sealed snapshot yet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /run analysis/i })).toBeInTheDocument();
+    expect(screen.queryByText('Evidence-backed summary')).not.toBeInTheDocument();
   });
 });

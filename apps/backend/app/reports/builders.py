@@ -147,7 +147,6 @@ def build_architecture_document(architecture: ArchitectureResponse) -> ReportDoc
                 fields=[
                     ("Type", node.type.replace("-", " ")),
                     ("Layer", node.layer.replace("-", " ")),
-                    ("Size Class", node.estimated_complexity),
                 ],
                 bullets=[f"File: {path}" for path in node.files[:10]],
             )

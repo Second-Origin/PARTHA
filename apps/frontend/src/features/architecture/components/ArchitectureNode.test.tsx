@@ -59,4 +59,30 @@ describe('ArchitectureNode', () => {
     expect(node.getAttribute('aria-label')).toContain('12 files');
     expect(node.getAttribute('aria-label')).toContain('high complexity');
   });
+
+  it('never renders a complexity badge or claim when complexity is not computed (#217)', () => {
+    const props = {
+      id: 'module:billing',
+      type: 'architectureNode',
+      data: {
+        label: 'Billing',
+        nodeType: 'service',
+        layer: 'business-logic',
+        relationshipState: 'connected',
+        description: 'Handles billing.',
+        filesCount: 4,
+        complexity: 'not_computed',
+      },
+    } as NodeProps<ArchFlowNode>;
+
+    render(
+      <ReactFlowProvider>
+        <ArchitectureNode {...props} />
+      </ReactFlowProvider>,
+    );
+
+    expect(screen.queryByText('not_computed')).not.toBeInTheDocument();
+    const node = screen.getByRole('group', { name: /Billing/ });
+    expect(node.getAttribute('aria-label')).not.toContain('complexity');
+  });
 });

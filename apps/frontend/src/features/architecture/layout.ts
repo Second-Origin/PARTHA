@@ -211,22 +211,15 @@ function computeHeatmapIntensity(node: ArchNode, allNodes: ArchNode[], mode: Hea
   if (mode === 'none') return 0;
 
   switch (mode) {
-    case 'complexity': {
-      const map = { low: 0.2, medium: 0.5, high: 0.9 };
-      return map[node.estimatedComplexity] || 0;
-    }
     case 'usage': {
       const maxDeps = Math.max(...allNodes.map((n) => n.dependents.length), 1);
       return node.dependents.length / maxDeps;
     }
-    case 'size': {
-      const maxLines = Math.max(...allNodes.map((n) => n.estimatedLines), 1);
-      return node.estimatedLines / maxLines;
-    }
     case 'critical': {
-      const score = (node.dependents.length * 0.4) +
-        (node.estimatedComplexity === 'high' ? 0.4 : node.estimatedComplexity === 'medium' ? 0.2 : 0) +
-        (node.files.length > 3 ? 0.2 : 0);
+      // Real signals only (#217): dependents count and file count, both from
+      // the sealed snapshot. No complexity term -- nothing measures it today.
+      const maxDeps = Math.max(...allNodes.map((n) => n.dependents.length), 1);
+      const score = (node.dependents.length / maxDeps) * 0.6 + (node.files.length > 3 ? 0.4 : 0);
       return Math.min(score, 1);
     }
     default:

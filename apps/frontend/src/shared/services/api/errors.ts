@@ -4,6 +4,8 @@ export class ApiError extends Error {
     public statusText: string,
     public body: unknown,
     public endpoint: string,
+    /** Raw `Retry-After` response header, if the server sent one (#169). */
+    public retryAfterHeader: string | null = null,
   ) {
     super(`API Error ${status}: ${statusText} [${endpoint}]`);
     this.name = 'ApiError';
@@ -17,6 +19,46 @@ export class ApiError extends Error {
   get isServerError() { return this.status >= 500; }
   get isUnavailable() { return this.status === 503; }
   get requestId() { return getBackendRequestId(this.body); }
+
+  /** Seconds to wait before retrying, or `null` if none could be determined.
+   * Prefers the `Retry-After` header (delta-seconds or an HTTP-date); falls
+   * back to the backend's `details.retryAfterSeconds` body field so a caller
+   * that only has the parsed JSON (not the raw response) still gets a value. */
+  get retryAfterSeconds(): number | null {
+    const fromHeader = parseRetryAfter(this.retryAfterHeader);
+    if (fromHeader !== null) return fromHeader;
+    return getBackendRetryAfterSeconds(this.body);
+  }
+}
+
+/** Parses an HTTP `Retry-After` header value: delta-seconds ("120") or an
+ * HTTP-date ("Wed, 21 Oct 2015 07:28:00 GMT"). Returns `null` for a missing
+ * or malformed value, and clamps a date already in the past to 0 rather than
+ * a negative wait. */
+export function parseRetryAfter(header: string | null | undefined, now: () => number = Date.now): number | null {
+  if (!header) return null;
+  const trimmed = header.trim();
+  if (!trimmed) return null;
+
+  if (/^\d+$/.test(trimmed)) {
+    return Number.parseInt(trimmed, 10);
+  }
+  // A bare signed integer ("-5") is not a valid delta-seconds value and not a
+  // real HTTP-date either -- reject it explicitly rather than relying on
+  // Date.parse, which is lenient enough to accept some digit-only strings.
+  if (/^[+-]?\d+$/.test(trimmed)) return null;
+
+  const dateMs = Date.parse(trimmed);
+  if (Number.isNaN(dateMs)) return null;
+  return Math.max(0, Math.ceil((dateMs - now()) / 1000));
+}
+
+function getBackendRetryAfterSeconds(body: unknown): number | null {
+  if (!body || typeof body !== 'object') return null;
+  const details = (body as { details?: unknown }).details;
+  if (!details || typeof details !== 'object') return null;
+  const value = (details as { retryAfterSeconds?: unknown }).retryAfterSeconds;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 export class NetworkError extends Error {
