@@ -101,6 +101,33 @@ class RiNeighboursResponse(CamelModel):
     pagination: RiPagination
 
 
+class RiImpactStepResponse(CamelModel):
+    """A reached node and the stored edge that proves the traversal hop."""
+
+    depth: int = Field(ge=1)
+    node_key: str
+    via: RiEdgeResponse
+
+
+class RiImpactDirectionResponse(CamelModel):
+    """One bounded traversal direction.
+
+    ``limit_reached`` means the response omitted further reachable nodes at the
+    requested depth rather than claiming that the listed nodes are exhaustive.
+    """
+
+    data: list[RiImpactStepResponse]
+    limit_reached: bool
+
+
+class RiImpactResponse(CamelModel):
+    schema_version: SchemaVersion
+    node_key: str
+    depth: int = Field(ge=1)
+    dependents: RiImpactDirectionResponse
+    dependencies: RiImpactDirectionResponse
+
+
 class RiReferencesResponse(CamelModel):
     schema_version: SchemaVersion
     data: list[RiEdgeResponse]

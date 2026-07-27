@@ -216,6 +216,18 @@ class RiEdge(Base):
             ondelete="CASCADE",
         ),
         Index("ix_ri_edges_snapshot_id", "snapshot_id"),
+        Index(
+            "ix_ri_edges_snapshot_subject_predicate",
+            "snapshot_id",
+            "subject_key",
+            "predicate",
+        ),
+        Index(
+            "ix_ri_edges_snapshot_object_predicate",
+            "snapshot_id",
+            "object_key",
+            "predicate",
+        ),
     )
 
 

@@ -76,7 +76,7 @@ Statuses describe executable behaviour on the current `dev` branch:
 | AI provider integration | **Implemented, limited** | Per-user configuration for supported providers, encrypted API keys, and constrained outbound destinations. Free-form answers receive structural facts and observed paths—not source bytes or line spans—and return no automatic citations. |
 | Asynchronous processing | **Partially implemented** | Analysis runs off the request path. Import, extraction of the initial archive/clone, and file-tree parsing remain synchronous; one in-process worker handles analysis jobs. |
 | Incremental re-analysis and revision comparison | **Not implemented / not assessed** | The full repository is analysed again; no snapshot-to-snapshot product workflow is available. |
-| Change-impact or blast-radius analysis | **Not implemented / not assessed** | No product result is emitted. |
+| Change-impact or blast-radius analysis | **Implemented, limited** | Owner-scoped traversal over one sealed snapshot's resolved import and dependency edges. It does not compare revisions or calculate churn or trends. |
 | Vulnerability and outdated-dependency scanning | **Not implemented / not assessed** | Dependency responses report explicit `not_computed` states; Review keeps vulnerability scanning `not_assessed`. No clean bill of health or zero count is fabricated. |
 | Grounded, cited free-form AI answers | **Not implemented / not assessed** | Provider answers are intentionally uncited because providers do not receive source content or line numbers. |
 
@@ -250,7 +250,7 @@ The prototype browser suite exercises defined Architecture, Engineering Review, 
 - **Pre-alpha, trusted-environment use.** PARTHA has not been operated or hardened as a public multi-tenant service.
 - **Narrow semantic coverage.** Supported Python and TypeScript/JavaScript constructs receive the deepest extraction. Other languages primarily contribute file inventory. Role, module, layer, framework, and entry-point classifications can be heuristic.
 - **Narrow dependency coverage.** Only direct declarations in three manifest formats are extracted. Lockfiles, transitive dependencies, vulnerability scanning, and outdated-version scanning are not implemented.
-- **No repository evolution workflow.** Analysis is whole-repository; incremental analysis, revision comparison, churn/trend analysis, and change impact are unavailable.
+- **No repository evolution workflow.** Analysis is whole-repository; incremental analysis, revision comparison, and churn/trend analysis are unavailable. The sealed-snapshot impact query does not compare revisions or calculate historical change.
 - **Surface-dependent evidence.** A sealed snapshot does not make every product sentence line-cited. In particular, generated structural documentation and free-form AI have stricter evidence limits.
 - **In-process execution.** A daemon worker thread inside the API process handles one analysis job at a time; there is no separate worker service or external job queue.
 

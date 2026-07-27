@@ -39,6 +39,7 @@ EXPECTED_RESPONSES = {
     ("GET", "/intelligence/v1/snapshots/{snapshot_id}"): {200, 401, 404, 422, 429, 500},
     ("GET", "/intelligence/v1/snapshots/{snapshot_id}/symbols"): {200, 401, 404, 422, 429, 500},
     ("GET", "/intelligence/v1/snapshots/{snapshot_id}/neighbours"): {200, 401, 404, 422, 429, 500},
+    ("GET", "/intelligence/v1/snapshots/{snapshot_id}/impact"): {200, 401, 404, 422, 429, 500},
     ("GET", "/intelligence/v1/snapshots/{snapshot_id}/references"): {200, 401, 404, 422, 429, 500},
     ("GET", "/intelligence/v1/snapshots/{snapshot_id}/assertions"): {200, 401, 404, 422, 429, 500},
     ("GET", "/intelligence/v1/snapshots/{snapshot_id}/paths"): {200, 401, 404, 422, 429, 500},
