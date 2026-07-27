@@ -155,7 +155,10 @@ export function AnalysisPipelinePage() {
         </motion.div>
       )}
 
-      {analysis.rateLimited && (
+      {/* Suppressed once cancelled: the disabled, countdown-labelled Restart
+          button below already communicates the same cooldown, and showing
+          both at once would be a redundant, slightly confusing double banner. */}
+      {analysis.rateLimited && !analysis.cancelled && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
