@@ -1,0 +1,8 @@
+# Development/test dependencies for PARTHA backend.
+# Extends the pinned runtime lockfile (requirements.txt) with the test
+# toolchain so CI and local dev can run pytest. The runtime image installs
+# only requirements.txt; pytest must never ship in the container (issue #185).
+-r requirements.txt
+iniconfig==2.3.0
+pluggy==1.6.0
+pytest==9.1.1

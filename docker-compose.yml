@@ -56,8 +56,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-partha}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-partha}
       POSTGRES_DB: ${POSTGRES_DB:-partha}
-    ports:
-      - "5432:5432"
+    # Intentionally no host port binding: the database is only reachable on the
+    # internal `data` network. Self-hosted deployments should not expose Postgres
+    # to the host/Internet (issue #186).
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -70,8 +71,8 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # Intentionally no host port binding: Redis is only reachable on the internal
+    # `data` network (issue #186).
     networks:
       - data
 

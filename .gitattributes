@@ -1,0 +1,33 @@
+# PARTHA .gitattributes
+# Normalise line endings and keep binary assets safe across platforms.
+# Generated lockfiles (package-lock.json) are large but text; Git/Linguist
+# already treats them as generated, so we keep them as text for sane diffs.
+
+# Default: normalise to LF on commit, convert to native on checkout.
+* text=auto eol=lf
+
+# Lockfiles and dependency manifests are text (large diffs, not binary).
+*.lock text
+package-lock.json text
+pnpm-lock.yaml text
+requirements*.txt text
+
+# Hand-authored SVG stays text (editable in-repo).
+*.svg text
+
+# Binary assets must never be line-ending-converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.pdf binary
