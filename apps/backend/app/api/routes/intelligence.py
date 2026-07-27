@@ -251,11 +251,7 @@ def get_impact(
     depth: ImpactDepth = 1,
 ) -> RiImpactResponse:
     impact = service.impact(snapshot_id, node_key=node_key, depth=depth)
-    edges = [
-        step.edge
-        for direction in (impact.dependents, impact.dependencies)
-        for step in direction.steps
-    ]
+    edges = [step.edge for direction in (impact.dependents, impact.dependencies) for step in direction.steps]
     evidence = service.evidence_for_edges(impact.snapshot, edges)
     derivations = service.derivations_for_edges(impact.snapshot, edges)
     return RiImpactResponse(

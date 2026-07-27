@@ -890,16 +890,20 @@ class SnapshotQueryService:
             # Ranking one canonical edge per adjacent node *before* the cap is
             # essential: limiting raw edges could otherwise exhaust the query
             # budget on duplicate paths and falsely claim the result complete.
-            canonical_rank = func.row_number().over(
-                partition_by=adjacent,
-                order_by=(
-                    RiEdge.subject_key,
-                    RiEdge.predicate,
-                    RiEdge.object_key,
-                    RiEdge.edge_id,
-                    RiEdge.id,
-                ),
-            ).label("canonical_rank")
+            canonical_rank = (
+                func.row_number()
+                .over(
+                    partition_by=adjacent,
+                    order_by=(
+                        RiEdge.subject_key,
+                        RiEdge.predicate,
+                        RiEdge.object_key,
+                        RiEdge.edge_id,
+                        RiEdge.id,
+                    ),
+                )
+                .label("canonical_rank")
+            )
             ranked_edges = (
                 select(RiEdge.id.label("edge_row_id"), canonical_rank)
                 .where(
