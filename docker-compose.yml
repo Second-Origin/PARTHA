@@ -50,6 +50,25 @@ services:
       - data
       - egress
 
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      # Reach the backend by its compose service name, not localhost.
+      VITE_API_URL: http://api:8000
+    # Mount source for hot reload; keep the container's node_modules.
+    volumes:
+      - ./apps/frontend:/app
+      - /app/node_modules
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - data
+
   postgres:
     image: postgres:16-alpine
     environment:

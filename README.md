@@ -159,16 +159,22 @@ npm run dev:frontend
 
 Open `http://localhost:5173`, register a local account, add a repository, and start analysis.
 
-### Optional: local Compose stack
+### Optional: local Compose stack (recommended for local dev)
 
-Compose runs the API with PostgreSQL and Redis for local development. It is not production deployment guidance.
+Compose runs the full stack — API, PostgreSQL, Redis, and the frontend dev
+server — in one command. It is not production deployment guidance.
 
 ```bash
-npm run docker:config
-npm run docker:up
+npm run docker:config   # validate the compose file
+npm run docker:up        # build and start api + postgres + redis + frontend
 ```
 
-Run the frontend separately with `npm run dev:frontend`. See the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md) before configuring any custom or local provider endpoint.
+The frontend dev server is available at `http://localhost:5173` and talks to
+the API container over the internal network. Source is mounted, so edits hot
+reload. See the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md)
+before configuring any custom or local provider endpoint.
+
+To run the frontend outside Compose instead, use `npm run dev:frontend`.
 
 ## Verification
 
