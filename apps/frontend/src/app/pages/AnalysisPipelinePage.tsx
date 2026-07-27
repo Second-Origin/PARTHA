@@ -1,6 +1,6 @@
 import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Check, Loader2, Circle, XCircle, ArrowLeft, Ban, WifiOff } from 'lucide-react';
+import { Check, Loader2, Circle, XCircle, ArrowLeft, Ban, WifiOff, Clock } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 import { useAnalysisPipeline } from '@/features/analysis/hooks/useAnalysisPipeline';
@@ -155,6 +155,39 @@ export function AnalysisPipelinePage() {
         </motion.div>
       )}
 
+      {analysis.rateLimited && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-4 rounded-xl border border-warning/50 bg-warning/5 p-4 flex items-start gap-3"
+          role="status"
+        >
+          <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-warning">
+              {analysis.rateLimitSecondsRemaining !== null
+                ? `Too many requests — retrying automatically in ${analysis.rateLimitSecondsRemaining}s`
+                : 'Still rate limited'}
+            </p>
+            <p className="text-xs text-warning/80 mt-0.5">
+              Analysis is still running server-side. This is a temporary rate limit, not a failure —
+              {analysis.rateLimitSecondsRemaining !== null
+                ? ' checking progress will resume automatically.'
+                : ' automatic retries were exhausted. Try again once the limit clears.'}
+            </p>
+            {analysis.rateLimitSecondsRemaining === null && (
+              <button
+                type="button"
+                onClick={() => analysis.retry()}
+                className="mt-2 text-xs text-primary hover:underline"
+              >
+                Retry now
+              </button>
+            )}
+          </div>
+        </motion.div>
+      )}
+
       {(repo.status === 'error' || analysis.error) && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -193,9 +226,12 @@ export function AnalysisPipelinePage() {
             <button
               type="button"
               onClick={() => void analysis.restart()}
-              className="mt-2 text-xs text-primary hover:underline"
+              disabled={analysis.rateLimitSecondsRemaining !== null}
+              className="mt-2 text-xs text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
             >
-              Restart analysis
+              {analysis.rateLimitSecondsRemaining !== null
+                ? `Restart analysis (wait ${analysis.rateLimitSecondsRemaining}s)`
+                : 'Restart analysis'}
             </button>
           </div>
         </motion.div>

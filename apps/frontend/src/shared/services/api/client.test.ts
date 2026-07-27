@@ -104,3 +104,38 @@ describe('api client 401 handling', () => {
     expect(onUnauthorized).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('api client 429 handling (#169)', () => {
+  const baseConfig = getApiConfig();
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    configureApiClient(baseConfig);
+  });
+
+  it('never blindly retries a 429 at the transport layer', async () => {
+    // A fixed exponential backoff that ignores Retry-After is itself a
+    // retry-storm risk; 429 recovery belongs to the caller (e.g. the analysis
+    // poller), which can honour Retry-After and show a countdown.
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ code: 'rate_limited', message: 'Too many requests.' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json', 'retry-after': '42' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    let caught: unknown;
+    try {
+      await api.get('/repositories');
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ApiError);
+    expect((caught as ApiError).isRateLimited).toBe(true);
+    expect((caught as ApiError).retryAfterSeconds).toBe(42);
+    // Exactly the one original attempt -- no retry loop for 429.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

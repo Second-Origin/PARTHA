@@ -123,7 +123,12 @@ async function request<T>(
       lastError = error;
 
       if (error instanceof CancelledError) throw error;
-      if (error instanceof ApiError && error.status < 500 && error.status !== 429) throw error;
+      // 429 is deliberately excluded from this transport-level retry (#169):
+      // blindly retrying with a fixed exponential backoff ignores Retry-After
+      // and can itself hammer an endpoint still inside its rate-limit window.
+      // Callers that need bounded, Retry-After-aware 429 recovery (e.g. the
+      // analysis poller) handle it explicitly instead.
+      if (error instanceof ApiError && error.status < 500) throw error;
 
       if (attempt < retries) {
         const delay = retryDelay * Math.pow(2, attempt);
@@ -182,7 +187,13 @@ async function executeRequest<T>(
         responseBody = await response.text().catch(() => null);
       }
 
-      const error = new ApiError(response.status, response.statusText, responseBody, endpoint);
+      const error = new ApiError(
+        response.status,
+        response.statusText,
+        responseBody,
+        endpoint,
+        response.headers.get('retry-after'),
+      );
       if (error.isUnauthorized) {
         if (await tryRecoverFromUnauthorized(endpoint, isRetry)) {
           return executeRequest<T>(method, endpoint, body, config, timeout, true);
@@ -255,7 +266,13 @@ export async function uploadFile<T>(
     if (!response.ok) {
       let responseBody: unknown;
       try { responseBody = await response.json(); } catch { responseBody = null; }
-      throw new ApiError(response.status, response.statusText, responseBody, endpoint);
+      throw new ApiError(
+        response.status,
+        response.statusText,
+        responseBody,
+        endpoint,
+        response.headers.get('retry-after'),
+      );
     }
 
     return await response.json() as T;
@@ -308,7 +325,7 @@ async function uploadWithProgress<T>(
       } else {
         let body: unknown;
         try { body = JSON.parse(xhr.responseText); } catch { body = xhr.responseText; }
-        reject(new ApiError(xhr.status, xhr.statusText, body, url));
+        reject(new ApiError(xhr.status, xhr.statusText, body, url, xhr.getResponseHeader('Retry-After')));
       }
     };
 
