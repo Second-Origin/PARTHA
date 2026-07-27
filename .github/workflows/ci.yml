@@ -129,6 +129,13 @@ jobs:
           python -m pip install -r apps/backend/requirements-dev.txt
           python -m pip install -e apps/backend --no-deps
 
+      - name: Static analysis
+        working-directory: apps/backend
+        run: |
+          ruff check app
+          ruff format --check app
+          mypy app
+
       - name: Test
         working-directory: apps/backend
         env:

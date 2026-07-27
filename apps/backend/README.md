@@ -49,6 +49,24 @@ npm run test:backend      # from the repository root
 
 Tests use per-test SQLite and the in-memory rate limiter by default. When `PARTHA_TEST_PG_URL` is set, the migration round trip runs against a fresh temporary PostgreSQL database and the PostgreSQL refresh-token concurrency test is enabled; without it, migrations fall back to SQLite and the concurrency test skips. Redis integration tests skip unless `PARTHA_TEST_REDIS_URL` is set. CI provides both services.
 
+## Static analysis
+
+The runtime lockfile deliberately excludes development tooling. Install the
+pinned development toolchain before running the backend static-analysis gates:
+
+```bash
+cd apps/backend
+python -m pip install -r requirements-dev.txt
+python -m pip install -e . --no-deps
+ruff check app
+ruff format --check app
+mypy app
+```
+
+Ruff targets the production package and Python 3.12, the project's minimum
+supported Python version. Run `ruff format app` to apply the repository's
+formatter, then review the resulting diff before committing.
+
 ## Migrations
 
 ```bash
