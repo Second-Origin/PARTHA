@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "partha": "node scripts/partha.mjs",
+    "partha:up": "node scripts/partha.mjs --no-build",
+    "partha:down": "docker compose down",
     "dev:frontend": "npm --prefix apps/frontend run dev",
     "build:frontend": "npm --prefix apps/frontend run build",
     "preview:frontend": "npm --prefix apps/frontend run preview",

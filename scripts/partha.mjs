@@ -11,6 +11,10 @@ let interrupted = false;
 let startupAttempted = false;
 let releaseKeepAlive;
 
+// `--no-build` skips image builds for instant restarts once images exist.
+const NO_BUILD = process.argv.includes('--no-build');
+const COMPOSE_UP_ARGS = NO_BUILD ? ['up', '--wait'] : ['up', '--build', '--wait'];
+
 function commandOutput(result) {
   return [result.stdout, result.stderr]
     .filter(Boolean)
@@ -128,7 +132,7 @@ async function main() {
 
   try {
     startupAttempted = true;
-    await run('docker', ['compose', 'up', '--build', '--wait']);
+    await run('docker', ['compose', ...COMPOSE_UP_ARGS]);
     await Promise.all([
       waitForUrl(API_READY_URL, 'PARTHA API'),
       waitForUrl(FRONTEND_URL, 'PARTHA frontend'),

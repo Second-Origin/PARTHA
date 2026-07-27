@@ -141,6 +141,21 @@ The command waits for both application services to become healthy, then prints
 the frontend URL. Open `http://localhost:5173`, register a local account, add a
 repository, and start analysis. Press `Ctrl+C` to stop all four services.
 
+On repeat runs the images are reused from cache, so startup is fast. If you have
+already built the images once and only want to restart the existing containers
+without the build step, use:
+
+```bash
+npm run partha:up
+```
+
+To stop the stack without the interactive `Ctrl+C` (for example from another
+terminal), use:
+
+```bash
+npm run partha:down
+```
+
 PostgreSQL data and imported repository storage persist across ordinary stops
 and restarts. To permanently delete that local Compose data and return to a
 clean state, run:
