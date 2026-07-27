@@ -126,11 +126,41 @@ Read [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) for
 | Python | 3.12 or 3.13 | Backend |
 | Node.js | 22 | Frontend and workflow scripts |
 | Git | Recent version | Checkout and public GitHub import |
-| Docker | Optional | PostgreSQL/Redis Compose stack |
+| Docker Engine with Compose and buildx plugins | Recent version | One-command full stack |
 
-### 1. Start the backend
+### Preferred: start the full stack
 
-The default development configuration uses SQLite, an in-memory rate limiter, and local filesystem storage. No `.env` file is required.
+With Docker Engine running, build and start the frontend, API, PostgreSQL, and
+Redis from this checkout:
+
+```bash
+npm run partha
+```
+
+The command waits for both application services to become healthy, then prints
+the frontend URL. Open `http://localhost:5173`, register a local account, add a
+repository, and start analysis. Press `Ctrl+C` to stop all four services.
+
+PostgreSQL data and imported repository storage persist across ordinary stops
+and restarts. To permanently delete that local Compose data and return to a
+clean state, run:
+
+```bash
+docker compose down -v
+```
+
+> **Warning:** The reset command permanently deletes the Compose database and
+> repository-storage volumes.
+
+### Alternative: start services separately
+
+The standalone development configuration uses SQLite, an in-memory rate
+limiter, and local filesystem storage. It requires Python 3.12 or 3.13 and
+Node.js 22, but does not require Docker.
+
+#### 1. Start the backend
+
+No `.env` file is required.
 
 ```bash
 git clone https://github.com/Second-Origin/PARTHA.git
@@ -147,7 +177,7 @@ npm run dev:backend
 
 The API starts at `http://localhost:8000`; OpenAPI is at `/docs` and readiness is at `/ready`.
 
-### 2. Start the frontend
+#### 2. Start the frontend
 
 In a second terminal:
 
@@ -157,18 +187,22 @@ npm ci --prefix apps/frontend
 npm run dev:frontend
 ```
 
-Open `http://localhost:5173`, register a local account, add a repository, and start analysis.
+Open `http://localhost:5173`, register a local account, add a repository, and
+start analysis.
 
-### Optional: local Compose stack
+### Lower-level Compose commands
 
-Compose runs the API with PostgreSQL and Redis for local development. It is not production deployment guidance.
+The launcher wraps these lower-level commands and performs prerequisite and
+readiness checks. The Compose stack is local development guidance, not
+production deployment guidance.
 
 ```bash
 npm run docker:config
 npm run docker:up
 ```
 
-Run the frontend separately with `npm run dev:frontend`. See the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md) before configuring any custom or local provider endpoint.
+See the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md) before
+configuring any custom or local provider endpoint.
 
 ## Verification
 
