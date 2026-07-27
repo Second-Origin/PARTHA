@@ -8,7 +8,7 @@ from __future__ import annotations
 
 # Fixture manifest schema. Bumping this is a deliberate, reviewed migration.
 FIXTURE_SCHEMA_VERSION = "ri-benchmark.v1"
-SUPPORT_MATRIX_SCHEMA_VERSION = "ri-benchmark-support-matrix.v1"
+SUPPORT_MATRIX_SCHEMA_VERSION = "ri-benchmark-support-matrix.v2"
 THRESHOLDS_SCHEMA_VERSION = "ri-benchmark-thresholds.v1"
 
 FIXTURE_CLASSES = ("minimal", "realistic", "adversarial")

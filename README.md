@@ -61,7 +61,8 @@ Across those surfaces, PARTHA keeps the repository revision, snapshot identity, 
 
 Statuses describe executable behaviour on the current `dev` branch:
 
-| Capability | Assessment | Current boundary |
+<!-- BEGIN GENERATED CAPABILITY REGISTRY -->
+| Capability | Status | Current boundary |
 | --- | --- | --- |
 | Archive upload and public GitHub import | **Implemented** | ZIP/TAR-family archives and shallow public GitHub HTTPS clones; size and path-safety limits apply. Private GitHub cloning and other repository hosts are not supported. |
 | Repository explorer | **Implemented** | Owner-scoped file tree plus bounded text/image preview, binary detection, and truncation. |
@@ -81,6 +82,7 @@ Statuses describe executable behaviour on the current `dev` branch:
 | Grounded, cited free-form AI answers | **Not implemented / not assessed** | Provider answers are intentionally uncited because providers do not receive source content or line numbers. |
 
 **Implemented, limited** means the workflow exists but has a disclosed coverage or trust boundary. **Partially implemented** means only part of the end-to-end behaviour exists. **Not implemented / not assessed** means PARTHA does not manufacture an answer.
+<!-- END GENERATED CAPABILITY REGISTRY -->
 
 ## One repository model, many consumers
 
@@ -248,7 +250,7 @@ The prototype browser suite exercises defined Architecture, Engineering Review, 
 ### Product limitations
 
 - **Pre-alpha, trusted-environment use.** PARTHA has not been operated or hardened as a public multi-tenant service.
-- **Narrow semantic coverage.** Supported Python and TypeScript/JavaScript constructs receive the deepest extraction. Other languages primarily contribute file inventory. Role, module, layer, framework, and entry-point classifications can be heuristic.
+- **Narrow semantic coverage.** The capability registry declares the Python and TypeScript/JavaScript constructs that receive the deepest extraction. Other languages primarily contribute file inventory. Role, module, layer, framework, and entry-point classifications can be heuristic.
 - **Narrow dependency coverage.** Only direct declarations in three manifest formats are extracted. Lockfiles, transitive dependencies, vulnerability scanning, and outdated-version scanning are not implemented.
 - **No repository evolution workflow.** Analysis is whole-repository; incremental analysis, revision comparison, and churn/trend analysis are unavailable. The sealed-snapshot impact query does not compare revisions or calculate historical change.
 - **Surface-dependent evidence.** A sealed snapshot does not make every product sentence line-cited. In particular, generated structural documentation and free-form AI have stricter evidence limits.

@@ -130,6 +130,11 @@ def to_json_dict(report: BenchmarkReport) -> dict[str, object]:
             "uncoveredUnsupported": report.parity.uncovered_unsupported,
         },
         "requiredDiagnostics": {"passed": report.diagnostics.passed, "missing": report.diagnostics.missing},
+        "goldenRegression": {
+            "passed": report.golden_regression_passed,
+            "unexpectedFactCount": len(report.scoring.report.false_positives) if report.scoring.report else None,
+            "missingFactCount": len(report.scoring.report.false_negatives) if report.scoring.report else None,
+        },
         "scoring": scoring,
         "failures": report.failures(),
     }
@@ -216,6 +221,16 @@ def to_markdown(report: BenchmarkReport) -> str:
         f"{len(report.parity.uncovered_supported)} supported uncovered; "
         f"{len(report.parity.uncovered_unsupported)} unsupported unexercised."
     )
+
+    lines += ["", "## Exact golden regression gate", ""]
+    if report.scoring.report is None:
+        lines.append("**Unavailable:** no real extraction comparison was produced.")
+    else:
+        lines.append(
+            f"Exact committed-golden comparison: **{'pass' if report.golden_regression_passed else 'fail'}** "
+            f"({len(report.scoring.report.false_positives)} unexpected, "
+            f"{len(report.scoring.report.false_negatives)} missing facts)."
+        )
 
     lines += ["", "## Extraction quality (precision / recall)", ""]
     if not report.scoring.available or report.scoring.report is None:

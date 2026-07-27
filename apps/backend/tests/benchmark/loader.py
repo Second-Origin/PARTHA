@@ -7,7 +7,7 @@ fails clearly on every condition Issue #94 enumerates:
 
 unsupported schema versions; duplicate fixture ids; duplicate expected
 identities; missing source files; absolute paths; ``..`` escapes; invalid line
-ranges; undeclared support-matrix construct ids; malformed expected facts;
+ranges; undeclared benchmark construct ids; malformed expected facts;
 unsupported languages; inconsistent producer versions; facts missing mandatory
 evidence; and accidental machine-blessed output committed as source truth.
 
@@ -23,7 +23,12 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
 
-from app.extraction.support_matrix import SUPPORT_MATRIX as PRODUCTION_SUPPORT_MATRIX
+from app.extraction.support_matrix import (
+    CAPABILITIES_BY_ID,
+    CONSTRUCT_CAPABILITIES,
+    SupportStatus,
+    validate_registry,
+)
 from app.intelligence import canonical
 
 from benchmark import schema
@@ -37,7 +42,7 @@ from benchmark.sourcefiles import (
 
 
 class ManifestError(ValueError):
-    """A fixture, support matrix, or thresholds file failed strict validation."""
+    """A fixture, capability mapping, or thresholds file failed strict validation."""
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +59,7 @@ class ConstructSpec:
     expected_diagnostic: str | None
     matrix_language: str
     matrix_construct: str
+    capability_id: str
 
 
 @dataclass(frozen=True)
@@ -89,7 +95,7 @@ def load_support_matrix(path: Path) -> SupportMatrix:
     data = _read_json(path)
     if data.get("schemaVersion") != schema.SUPPORT_MATRIX_SCHEMA_VERSION:
         raise ManifestError(
-            f"{path}: unsupported support-matrix schema version {data.get('schemaVersion')!r}"
+            f"{path}: unsupported capability-mapping schema version {data.get('schemaVersion')!r}"
         )
     constructs: dict[str, ConstructSpec] = {}
     raw = data.get("constructs")
@@ -100,61 +106,56 @@ def load_support_matrix(path: Path) -> SupportMatrix:
         raise ManifestError(
             f"{path}: productionMappings must map every benchmark construct exactly once"
         )
-    covered_production: set[tuple[str, str]] = set()
+    try:
+        validate_registry()
+    except ValueError as exc:
+        raise ManifestError(f"{path}: invalid production capability registry: {exc}") from exc
+    covered_capabilities: set[str] = set()
     for construct_id, spec in sorted(raw.items()):
-        language = spec.get("language")
-        if language not in schema.LANGUAGES:
-            raise ManifestError(f"{path}: construct {construct_id!r} has unsupported language {language!r}")
-        supported = spec.get("supported")
-        if not isinstance(supported, bool):
-            raise ManifestError(f"{path}: construct {construct_id!r} 'supported' must be boolean")
-        expected_diagnostic = spec.get("expectedDiagnostic")
-        if not supported and expected_diagnostic not in schema.DIAGNOSTIC_CODES:
+        if not isinstance(spec, dict) or not isinstance(spec.get("description"), str) or not spec["description"]:
+            raise ManifestError(f"{path}: construct {construct_id!r} must have a description")
+        capability_id = mappings[construct_id]
+        if not isinstance(capability_id, str):
+            raise ManifestError(f"{path}: construct {construct_id!r} mapping must be a capability id string")
+        capability = CAPABILITIES_BY_ID.get(capability_id)
+        if capability is None:
             raise ManifestError(
-                f"{path}: unsupported construct {construct_id!r} must declare a valid 'expectedDiagnostic'"
+                f"{path}: construct {construct_id!r} maps to unknown production capability {capability_id!r}"
             )
+        if construct_id not in capability.benchmark_ids:
+            raise ManifestError(
+                f"{path}: construct {construct_id!r} is not declared by production capability {capability_id!r}"
+            )
+        supported = capability.status == SupportStatus.SUPPORTED
+        expected_diagnostic = capability.expected_diagnostic
         if expected_diagnostic is not None and expected_diagnostic not in schema.DIAGNOSTIC_CODES:
-            raise ManifestError(f"{path}: construct {construct_id!r} has unknown diagnostic {expected_diagnostic!r}")
-        mapping = mappings[construct_id]
-        matrix_language = str(mapping.get("language", ""))
-        matrix_construct = str(mapping.get("construct", ""))
-        if matrix_language not in PRODUCTION_SUPPORT_MATRIX:
-            raise ManifestError(
-                f"{path}: construct {construct_id!r} maps to unknown production matrix {matrix_language!r}"
-            )
-        production = PRODUCTION_SUPPORT_MATRIX[matrix_language]
-        production_supported = matrix_construct in production.supported
-        production_unsupported = matrix_construct in production.unsupported
-        if not (production_supported or production_unsupported):
-            raise ManifestError(
-                f"{path}: construct {construct_id!r} maps to unknown production construct "
-                f"{matrix_language}.{matrix_construct}"
-            )
-        if supported != production_supported:
-            raise ManifestError(
-                f"{path}: construct {construct_id!r} support status disagrees with "
-                f"{matrix_language}.{matrix_construct}"
-            )
-        covered_production.add((matrix_language, matrix_construct))
+            raise ManifestError(f"{path}: capability {capability_id!r} has unknown diagnostic {expected_diagnostic!r}")
+        covered_capabilities.add(capability_id)
         constructs[construct_id] = ConstructSpec(
             construct_id=construct_id,
-            language=language,
+            language=capability.language,
             supported=supported,
             description=str(spec.get("description", "")),
             expected_diagnostic=expected_diagnostic,
-            matrix_language=matrix_language,
-            matrix_construct=matrix_construct,
+            matrix_language=capability.language,
+            matrix_construct=capability.construct,
+            capability_id=capability.id,
         )
-    missing_production = sorted(
-        (language, construct)
-        for language, matrix in PRODUCTION_SUPPORT_MATRIX.items()
-        for construct in (*matrix.supported, *matrix.unsupported)
-        if (language, construct) not in covered_production
+    missing_benchmark_ids = sorted(
+        benchmark_id
+        for capability in CONSTRUCT_CAPABILITIES
+        for benchmark_id in capability.benchmark_ids
+        if benchmark_id not in raw
     )
-    if missing_production:
+    if missing_benchmark_ids:
         raise ManifestError(
-            f"{path}: production support constructs have no benchmark mapping: {missing_production}"
+            f"{path}: production capability benchmark ids have no benchmark mapping: {missing_benchmark_ids}"
         )
+    missing_capabilities = sorted(
+        capability.id for capability in CONSTRUCT_CAPABILITIES if capability.id not in covered_capabilities
+    )
+    if missing_capabilities:
+        raise ManifestError(f"{path}: production capabilities have no benchmark mapping: {missing_capabilities}")
     return SupportMatrix(constructs=constructs, note=str(data.get("note", "")))
 
 
@@ -473,9 +474,11 @@ def load_fixture(directory: Path, support_matrix: SupportMatrix) -> LoadedFixtur
         f"{where0}: maxSourceBytes must be a positive integer",
     )
     for construct_id in constructs_covered:
-        _require(construct_id in support_matrix, f"{where0}: undeclared support-matrix construct {construct_id!r}")
+        _require(construct_id in support_matrix, f"{where0}: undeclared benchmark construct {construct_id!r}")
         _require(
-            support_matrix.constructs[construct_id].language in (language, "mixed") or language == "mixed",
+            support_matrix.constructs[construct_id].language in (language, "mixed")
+            or language == "mixed"
+            or support_matrix.constructs[construct_id].matrix_language == "source",
             f"{where0}: construct {construct_id!r} language mismatch with fixture language {language!r}",
         )
 

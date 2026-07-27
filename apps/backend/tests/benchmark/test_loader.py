@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from app.extraction.support_matrix import CONSTRUCT_CAPABILITIES, MANIFEST_CAPABILITIES
 from benchmark import paths
 from benchmark.loader import (
     ManifestError,
@@ -31,6 +32,15 @@ def test_committed_corpus_loads_cleanly():
     ids = [fixture.fixture_id for fixture in fixtures]
     assert ids == sorted(ids), "fixtures must load in deterministic id order"
     assert len(ids) == len(set(ids)), "fixture ids must be unique"
+
+
+def test_benchmark_mapping_is_complete_and_registry_authoritative():
+    for capability in CONSTRUCT_CAPABILITIES:
+        for benchmark_id in capability.benchmark_ids:
+            assert benchmark_id in SUPPORT_MATRIX.constructs
+            assert SUPPORT_MATRIX.constructs[benchmark_id].capability_id == capability.id
+    for capability in MANIFEST_CAPABILITIES:
+        assert capability.benchmark_disclosure
 
 
 def test_thresholds_load_with_exact_fractions():

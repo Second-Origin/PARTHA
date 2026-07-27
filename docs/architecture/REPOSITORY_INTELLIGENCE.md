@@ -81,8 +81,17 @@ dispatching those bytes through each extractor's real `supports()` method.
 `PythonExtractor` uses Python's AST and `TypeScriptExtractor` uses tree-sitter.
 Both emit normalized nodes, observations, diagnostics, and line evidence through
 the `ExtractionResult` contract. Their declared support and blind spots live in
-`app/extraction/support_matrix.py`. Durable analysis stores their output in a
-sealed normalized snapshot. Historical legacy JSON is not produced or consumed.
+the typed capability registry in `app/extraction/support_matrix.py`; the legacy
+`SUPPORT_MATRIX` import is only a derived compatibility view. Durable analysis
+stores their output in a sealed normalized snapshot. Historical legacy JSON is
+not produced or consumed.
+
+The registry is the authoritative source for construct status, limitations,
+stable ids, benchmark mappings, supported dependency-manifest names, and the
+public capability assessments rendered in the README. Run
+`python scripts/check-capabilities.py` to validate registry structure,
+registry-to-benchmark parity, deterministic rendering, and the committed
+README block. The command checks only; it never rewrites documentation.
 
 ---
 
@@ -280,7 +289,7 @@ because provider prose cannot be deterministically mapped to stored facts.
 - **Revision identity:** first-class and immutable per imported repository revision. Snapshot history can be retained, but diff/query APIs and product re-analysis orchestration are not implemented.
 - **Dependencies:** three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The dependency API reports both assessments as explicit `not_computed` statuses; it emits no clean result or count without a scanner.
 - **Dependency inventory:** only direct declarations from accepted `package.json`, `pyproject.toml`, and `requirements.txt` paths are reported. The parser inventory excludes `.git`, dependency/install directories, build output, virtual environments, caches, vendor paths, and generated paths; lockfiles are not read. Each candidate is size-checked and read with the existing 512 KiB source budget before being processed individually; oversized manifests produce `RI-LIMIT-SKIP` rather than being retained in memory. Multiple workspace declarations remain attached to one logical dependency, including conflicts rather than an arbitrarily selected version. A malformed supported manifest produces a safe `RI-SRC-MALFORMED` diagnostic while valid manifests continue to contribute declarations. No transitive resolution, vulnerability scanning, or outdated-version scanning is implemented. `AnalysisWorker` merges same-producer dependency nodes that share a stable key into one node with a `declarations` list before persistence, specifically so a package declared in more than one manifest — an ordinary monorepo shape — does not fail sealing for the whole repository.
-- **Languages:** meaningful extraction covers Python and TypeScript/JavaScript. Other languages get file-tree and metadata treatment only.
+- **Languages:** the capability registry declares meaningful extraction for Python and TypeScript/JavaScript constructs. Other languages get file-tree and metadata treatment only.
 - **File size cap:** files over 512 KB are read as empty during extraction, so their contents contribute nothing.
 - **Build cost:** the whole repository is re-analysed from scratch in a background job; incremental analysis is not implemented.
 
@@ -290,7 +299,7 @@ because provider prose cannot be deterministically mapped to stored facts.
 
 1. Add observed syntax facts to the shared extraction contract and the relevant
    extractor; represent heuristic conclusions as explicit inferred assertions.
-2. Update the published support matrix and focused extractor tests.
+2. Update the authoritative capability registry and focused extractor tests.
 3. Add or update an independently authored benchmark fixture and golden manifest.
 4. Consume the normalized fact only through the Repository Intelligence query
    boundary once that boundary supports it.
