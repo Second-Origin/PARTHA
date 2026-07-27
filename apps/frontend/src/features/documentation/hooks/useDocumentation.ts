@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { documentationService, getErrorMessage } from '@/shared/services/api';
+import { documentationService, getErrorMessage, isApiError } from '@/shared/services/api';
 import type { GenerateDocResponse } from '@/shared/services/api/types';
 import { useRepositoryFeatureStatus } from '@/shared/feature-state/useRepositoryFeatureStatus';
 
@@ -18,6 +18,10 @@ export function useDocumentation() {
   const [format, setFormat] = useState<'markdown' | 'html'>('markdown');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A repository can be "completed" (analysed) yet still have no sealed ri.v1
+  // snapshot yet, the same 404 Dependencies/Architecture already surface
+  // (#178). That must never collapse into an unguided generic error message.
+  const [noSnapshot, setNoSnapshot] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refresh = useCallback(() => {
@@ -37,6 +41,7 @@ export function useDocumentation() {
     if (!state.activeRepository || state.activeRepository.status !== 'completed') {
       setDocument(null);
       setError(null);
+      setNoSnapshot(false);
       return;
     }
 
@@ -45,6 +50,7 @@ export function useDocumentation() {
       if (!state.activeRepository) return;
       setLoading(true);
       setError(null);
+      setNoSnapshot(false);
       try {
         const nextDocument = await documentationService.generate({
           repositoryId: state.activeRepository.id,
@@ -53,7 +59,13 @@ export function useDocumentation() {
         });
         if (!cancelled) setDocument(nextDocument);
       } catch (caught) {
-        if (!cancelled) setError(getErrorMessage(caught));
+        if (!cancelled) {
+          if (isApiError(caught) && caught.isNotFound) {
+            setNoSnapshot(true);
+          } else {
+            setError(getErrorMessage(caught));
+          }
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -73,6 +85,7 @@ export function useDocumentation() {
     toggleSection,
     loading: state.loading || loading,
     error: state.error || error,
+    noSnapshot,
     retry: refresh,
     refresh,
   };

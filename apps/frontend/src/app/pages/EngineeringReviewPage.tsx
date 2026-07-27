@@ -72,6 +72,22 @@ export function EngineeringReviewPage() {
   if (reviewState.loading) {
     return <StatusPanel text="Loading evidence-backed engineering review..." />;
   }
+  // A repository can be analysed yet still have no sealed ri.v1 snapshot
+  // (#178, same 404 contract as Dependencies/Architecture). That must read as
+  // "run analysis again", never as a generic, unguided error message.
+  if (reviewState.noSnapshot) {
+    return (
+      <div>
+        <PageHeader title="Engineering Review" description="Verified engineering concerns and their source evidence" />
+        <EmptyState
+          icon={ShieldCheck}
+          title="No sealed snapshot yet"
+          description="This repository has no sealed Repository Intelligence snapshot for its current revision. Analyse it again to generate one."
+          action={{ label: 'Run analysis', onClick: () => navigate('/upload') }}
+        />
+      </div>
+    );
+  }
   if (reviewState.error) {
     return <ErrorPanel message={reviewState.error} retry={reviewState.retry} />;
   }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { RepositorySource, FeatureStatus } from '@/shared/types';
 import type { EngineeringReview } from '@/shared/types/review';
 import { backendService } from '@/shared/services/backend';
-import { getErrorMessage } from '@/shared/services/api';
+import { getErrorMessage, isApiError } from '@/shared/services/api';
 import { useRepository } from '@/features/repositories/hooks/useRepository';
 import { useReviewStore } from '../store';
 
@@ -15,6 +15,10 @@ export function useReview() {
   const [source, setSource] = useState<RepositorySource | null>(null);
   const [status, setStatus] = useState<FeatureStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  // A repository can be "completed" (analysed) yet still have no sealed ri.v1
+  // snapshot yet, the same 404 Dependencies/Architecture already surface
+  // (#178). That must never collapse into an unguided generic error message.
+  const [noSnapshot, setNoSnapshot] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refresh = useCallback(() => setRefreshKey((key) => key + 1), []);
@@ -26,6 +30,7 @@ export function useReview() {
       setReview(null);
       setSource(null);
       setError(null);
+      setNoSnapshot(false);
       return;
     }
 
@@ -35,6 +40,7 @@ export function useReview() {
       setReview(null);
       setSource(null);
       setError(null);
+      setNoSnapshot(false);
       return;
     }
 
@@ -47,6 +53,7 @@ export function useReview() {
       if (!activeRepository) return;
       setStatus('loading');
       setError(null);
+      setNoSnapshot(false);
 
       try {
         const nextReview = await backendService.fetchReview(activeRepository);
@@ -60,8 +67,13 @@ export function useReview() {
         if (cancelled) return;
         setLocalReview(null);
         setSource(null);
-        setError(getErrorMessage(caught));
-        setStatus('error');
+        if (isApiError(caught) && caught.isNotFound) {
+          setNoSnapshot(true);
+          setStatus('error');
+        } else {
+          setError(getErrorMessage(caught));
+          setStatus('error');
+        }
       }
     }
 
@@ -86,6 +98,7 @@ export function useReview() {
     status,
     loading: status === 'loading',
     error,
+    noSnapshot,
     empty: status === 'empty',
     success: status === 'success',
     retry: refresh,

@@ -2,10 +2,20 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '@/app/store/useAppStore';
 import { backendService } from '@/shared/services/backend';
-import { NetworkError, TimeoutError } from '@/shared/services/api';
+import { ApiError, NetworkError, TimeoutError } from '@/shared/services/api';
 import type { AnalysisStartResponse } from '@/shared/services/api/types';
 import type { Repository } from '@/shared/types';
-import { getNetworkRetryDelayMs, useAnalysisPipeline } from './useAnalysisPipeline';
+import { getNetworkRetryDelayMs, MAX_RATE_LIMIT_AUTO_RETRIES, useAnalysisPipeline } from './useAnalysisPipeline';
+
+function rateLimitedError(retryAfterSeconds: number): ApiError {
+  return new ApiError(
+    429,
+    'Too Many Requests',
+    { code: 'rate_limited', message: 'Too many requests.', details: { retryAfterSeconds } },
+    '/analysis/repo-1/status',
+    String(retryAfterSeconds),
+  );
+}
 
 const repositoryState = vi.hoisted(() => ({ repositories: [] as Repository[] }));
 
@@ -413,5 +423,151 @@ describe('useAnalysisPipeline', () => {
       expect(fetchStatus.mock.calls.length).toBe(callsAtCompletion);
     });
 
+  });
+
+  describe('rate limit resilience (#169)', () => {
+    const runningResponse = {
+      repositoryId: repository.id,
+      status: 'running' as const,
+      jobId: 'job-1',
+      stage: 'reading-structure' as const,
+      progress: 25,
+      startedAt: '2026-07-22T08:00:01Z',
+      completedAt: null,
+      error: null,
+    };
+
+    it('treats a 429 as transient, counts down using Retry-After, and recovers without ever reporting Analysis Failed', async () => {
+      vi.useFakeTimers();
+      const fetchStatus = vi
+        .spyOn(backendService, 'fetchAnalysisStatus')
+        .mockRejectedValueOnce(rateLimitedError(5))
+        .mockResolvedValue(runningResponse);
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.connectionStatus).toBe('rate-limited');
+      expect(hook.result.current.rateLimited).toBe(true);
+      expect(hook.result.current.rateLimitSecondsRemaining).toBe(5);
+      expect(hook.result.current.error).toBeNull();
+      expect(hook.result.current.status).not.toBe('error');
+
+      // Counts down second by second rather than jumping straight to retry.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(hook.result.current.rateLimitSecondsRemaining).toBe(4);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4000);
+      });
+
+      expect(hook.result.current.connectionStatus).toBe('connected');
+      expect(hook.result.current.rateLimited).toBe(false);
+      expect(hook.result.current.rateLimitSecondsRemaining).toBeNull();
+      expect(hook.result.current.jobStatus).toBe('running');
+      // The retry that recovers, plus (since 'running' isn't terminal) at
+      // least one regular poll scheduled after it -- never zero, never a gap.
+      expect(fetchStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('bounds automatic retries and never falls back to a terminal Analysis Failed state', async () => {
+      vi.useFakeTimers();
+      const fetchStatus = vi
+        .spyOn(backendService, 'fetchAnalysisStatus')
+        .mockRejectedValue(rateLimitedError(1));
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+
+      // Initial attempt + MAX_RATE_LIMIT_AUTO_RETRIES retries, each after a 1s cooldown.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      for (let attempt = 0; attempt < MAX_RATE_LIMIT_AUTO_RETRIES; attempt += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1000);
+        });
+      }
+
+      expect(fetchStatus).toHaveBeenCalledTimes(MAX_RATE_LIMIT_AUTO_RETRIES + 1);
+      expect(hook.result.current.rateLimited).toBe(true);
+      expect(hook.result.current.rateLimitSecondsRemaining).toBeNull();
+      // The retry budget is exhausted, but this was never a job failure --
+      // distinct from "Analysis Failed", exactly like connection-lost.
+      expect(hook.result.current.status).not.toBe('error');
+      expect(hook.result.current.error).toBeNull();
+
+      // No further automatic polling once the budget is exhausted.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      expect(fetchStatus).toHaveBeenCalledTimes(MAX_RATE_LIMIT_AUTO_RETRIES + 1);
+
+      // A manual retry() resumes it, same recovery path as connection-lost.
+      fetchStatus.mockReset().mockResolvedValue(runningResponse);
+      await act(async () => {
+        hook.result.current.retry();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.connectionStatus).toBe('connected');
+      expect(hook.result.current.jobStatus).toBe('running');
+    });
+
+    it('stops the countdown timer on unmount instead of leaking it', async () => {
+      vi.useFakeTimers();
+      const fetchStatus = vi
+        .spyOn(backendService, 'fetchAnalysisStatus')
+        .mockRejectedValue(rateLimitedError(30));
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.rateLimited).toBe(true);
+
+      hook.unmount();
+      const callsAtUnmount = fetchStatus.mock.calls.length;
+
+      // If the interval or the retry timeout leaked, this would fire another
+      // poll (or keep ticking) well after the component is gone.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(fetchStatus.mock.calls.length).toBe(callsAtUnmount);
+    });
+
+    it('clears the rate-limit cooldown once the job reaches a terminal status', async () => {
+      vi.useFakeTimers();
+      vi.spyOn(backendService, 'fetchAnalysisStatus')
+        .mockRejectedValueOnce(rateLimitedError(30))
+        .mockResolvedValue({
+          repositoryId: repository.id,
+          status: 'completed',
+          jobId: 'job-1',
+          stage: 'completed',
+          progress: 100,
+          startedAt: '2026-07-22T08:00:01Z',
+          completedAt: '2026-07-22T08:00:02Z',
+          error: null,
+        });
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.rateLimited).toBe(true);
+
+      // The elapsed cooldown retries and this time the job is already
+      // complete -- the countdown must not keep counting down past that.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(hook.result.current.jobStatus).toBe('completed');
+      expect(hook.result.current.rateLimited).toBe(false);
+      expect(hook.result.current.rateLimitSecondsRemaining).toBeNull();
+    });
   });
 });
