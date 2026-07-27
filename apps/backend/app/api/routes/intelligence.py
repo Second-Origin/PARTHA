@@ -6,13 +6,16 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import get_current_user, get_snapshot_query_service
 from app.api.openapi import documented_responses
-from app.intelligence.query_service import SnapshotQueryService
+from app.intelligence.query_service import IMPACT_MAX_DEPTH, SnapshotQueryService
 from app.schemas.intelligence import (
     RiAssertionResponse,
     RiAssertionsResponse,
     RiEdgeResponse,
     RiEvidenceResponse,
     RiEvidenceResponsePage,
+    RiImpactDirectionResponse,
+    RiImpactResponse,
+    RiImpactStepResponse,
     RiNeighboursResponse,
     RiNodeResponse,
     RiPagination,
@@ -33,6 +36,14 @@ _DEFAULT_LIMIT = 50
 _MAX_LIMIT = 100
 PaginationOffset = Annotated[int, Query(ge=0, description="Zero-based deterministic result offset.")]
 PaginationLimit = Annotated[int, Query(ge=1, le=_MAX_LIMIT, description="Maximum 100 results per page.")]
+ImpactDepth = Annotated[
+    int,
+    Query(
+        ge=1,
+        le=IMPACT_MAX_DEPTH,
+        description=f"Directed import/dependency traversal depth (1-{IMPACT_MAX_DEPTH}).",
+    ),
+]
 
 
 def _metadata(snapshot) -> RiSnapshotMetadataResponse:
@@ -114,6 +125,20 @@ def _pagination(offset: int, limit: int, total: int) -> RiPagination:
     return RiPagination(offset=offset, limit=limit, total=total)
 
 
+def _impact_direction(snapshot, direction, evidence, derivations) -> RiImpactDirectionResponse:
+    return RiImpactDirectionResponse(
+        data=[
+            RiImpactStepResponse(
+                depth=step.depth,
+                node_key=step.node_key,
+                via=_edge(snapshot, step.edge, evidence, derivations),
+            )
+            for step in direction.steps
+        ],
+        limit_reached=direction.limit_reached,
+    )
+
+
 @router.get(
     "/{snapshot_id}",
     response_model=RiSnapshotMetadataResponse,
@@ -155,6 +180,49 @@ def list_neighbours(
     evidence = service.evidence_for_edges(snapshot, edges)
     derivations = service.derivations_for_edges(snapshot, edges)
     return RiNeighboursResponse(schema_version=snapshot.schema_version, node_key=node_key, data=[_edge(snapshot, edge, evidence, derivations) for edge in edges], pagination=_pagination(offset, limit, total))
+
+
+@router.get(
+    "/{snapshot_id}/impact",
+    response_model=RiImpactResponse,
+    responses=documented_responses(
+        200,
+        "Bounded, provenance-backed dependents and dependencies over stored import/dependency edges.",
+        {
+            "schemaVersion": "ri.v1",
+            "nodeKey": "file:src/api.py",
+            "depth": 1,
+            "dependents": {"data": [], "limitReached": False},
+            "dependencies": {"data": [], "limitReached": False},
+        },
+        401,
+        404,
+        422,
+        429,
+        500,
+    ),
+)
+def get_impact(
+    snapshot_id: str,
+    node_key: Annotated[str, Query(alias="nodeKey", min_length=1, max_length=1024)],
+    service: SnapshotQueryService = Depends(get_snapshot_query_service),
+    depth: ImpactDepth = 1,
+) -> RiImpactResponse:
+    impact = service.impact(snapshot_id, node_key=node_key, depth=depth)
+    edges = [
+        step.edge
+        for direction in (impact.dependents, impact.dependencies)
+        for step in direction.steps
+    ]
+    evidence = service.evidence_for_edges(impact.snapshot, edges)
+    derivations = service.derivations_for_edges(impact.snapshot, edges)
+    return RiImpactResponse(
+        schema_version=impact.snapshot.schema_version,
+        node_key=impact.node_key,
+        depth=impact.depth,
+        dependents=_impact_direction(impact.snapshot, impact.dependents, evidence, derivations),
+        dependencies=_impact_direction(impact.snapshot, impact.dependencies, evidence, derivations),
+    )
 
 
 @router.get(

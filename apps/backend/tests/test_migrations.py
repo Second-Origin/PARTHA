@@ -86,6 +86,20 @@ def test_migrations_upgrade_and_downgrade_run_clean(tmp_path, monkeypatch):
                 "revision_value",
                 "config_hash",
             ]
+            edge_indexes = {
+                index["name"]: index["column_names"]
+                for index in inspect(probe_engine).get_indexes("ri_edges")
+            }
+            assert edge_indexes["ix_ri_edges_snapshot_subject_predicate"] == [
+                "snapshot_id",
+                "subject_key",
+                "predicate",
+            ]
+            assert edge_indexes["ix_ri_edges_snapshot_object_predicate"] == [
+                "snapshot_id",
+                "object_key",
+                "predicate",
+            ]
 
             command.downgrade(cfg, "base")
             assert "repositories" not in inspect(probe_engine).get_table_names()

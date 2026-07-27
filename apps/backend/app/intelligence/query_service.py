@@ -61,6 +61,15 @@ ARCHITECTURE_ASSERTION_PREDICATES = frozenset({"classified_as"})
 #: trusting the set to stay small.
 SNAPSHOT_IN_CLAUSE_BATCH_SIZE = 500
 ARCHITECTURE_EVIDENCE_BATCH_SIZE = SNAPSHOT_IN_CLAUSE_BATCH_SIZE
+#: Only these persisted, directed relationship facts participate in the #173
+#: blast-radius query. Unresolved observations remain diagnostics and are never
+#: traversed as if they were relationships.
+IMPACT_TRAVERSAL_PREDICATES = ("depends_on", "imports")
+#: A traversal is intentionally bounded by both depth and returned nodes. The
+#: endpoint exposes ``limit_reached`` whenever the node cap prevents a complete
+#: result at the requested depth.
+IMPACT_MAX_DEPTH = 10
+IMPACT_MAX_RESULTS_PER_DIRECTION = 100
 
 
 def batched_ids[T](values: Sequence[T], size: int = SNAPSHOT_IN_CLAUSE_BATCH_SIZE) -> Iterator[list[T]]:
@@ -161,6 +170,34 @@ class ProductSnapshotProjection:
     routes: tuple[SnapshotRouteFact, ...]
     diagnostics: tuple[tuple[str, str, str | None], ...]
     file_relationships: tuple[SnapshotFileRelationshipFact, ...] = ()
+
+
+@dataclass(frozen=True)
+class SnapshotImpactStep:
+    """One deterministically selected edge on a bounded graph traversal."""
+
+    depth: int
+    node_key: str
+    edge: RiEdge
+
+
+@dataclass(frozen=True)
+class SnapshotImpactDirection:
+    """One directional impact result and whether the response was capped."""
+
+    steps: tuple[SnapshotImpactStep, ...]
+    limit_reached: bool
+
+
+@dataclass(frozen=True)
+class SnapshotImpact:
+    """Persisted, provenance-backed impact facts for one snapshot node."""
+
+    snapshot: RiSnapshot
+    node_key: str
+    depth: int
+    dependents: SnapshotImpactDirection
+    dependencies: SnapshotImpactDirection
 
 
 class SnapshotQueryService:
@@ -652,6 +689,32 @@ class SnapshotQueryService:
         )
         return snapshot, rows, total
 
+    def impact(self, snapshot_id: str, *, node_key: str, depth: int) -> SnapshotImpact:
+        """Traverse stored import/dependency edges from one known snapshot node.
+
+        The traversal is read-only, owner-scoped through :meth:`_snapshot`, and
+        only follows resolved edges. Each direction retains a canonical shortest
+        path to each reached node, so cycles cannot cause unbounded work or
+        duplicate result nodes.
+        """
+
+        snapshot = self._snapshot(snapshot_id)
+        node_exists = self.db.scalar(
+            select(RiNode.id).where(
+                RiNode.snapshot_id == snapshot.snapshot_id,
+                RiNode.stable_key == node_key,
+            )
+        )
+        if node_exists is None:
+            raise NotFoundError("Node not found in snapshot.")
+        return SnapshotImpact(
+            snapshot=snapshot,
+            node_key=node_key,
+            depth=depth,
+            dependents=self._impact_direction(snapshot, node_key=node_key, depth=depth, outbound=False),
+            dependencies=self._impact_direction(snapshot, node_key=node_key, depth=depth, outbound=True),
+        )
+
     def references(self, snapshot_id: str, *, offset: int, limit: int) -> tuple[RiSnapshot, list[RiEdge], int]:
         """Return only stored resolved relationship facts, never unresolved observations."""
 
@@ -805,6 +868,75 @@ class SnapshotQueryService:
         total = self.db.scalar(select(func.count()).select_from(model).where(*where)) or 0
         rows = self.db.scalars(select(model).where(*where).order_by(*order_by).offset(offset).limit(limit)).all()
         return list(rows), total
+
+    def _impact_direction(
+        self,
+        snapshot: RiSnapshot,
+        *,
+        node_key: str,
+        depth: int,
+        outbound: bool,
+    ) -> SnapshotImpactDirection:
+        """Walk one edge direction with deterministic breadth-first ordering."""
+
+        frontier = [node_key]
+        visited = {node_key}
+        steps: list[SnapshotImpactStep] = []
+        endpoint = RiEdge.subject_key if outbound else RiEdge.object_key
+        adjacent = RiEdge.object_key if outbound else RiEdge.subject_key
+
+        for distance in range(1, depth + 1):
+            if not frontier:
+                break
+            # A reached node can be proven by many current-frontier edges.
+            # Ranking one canonical edge per adjacent node *before* the cap is
+            # essential: limiting raw edges could otherwise exhaust the query
+            # budget on duplicate paths and falsely claim the result complete.
+            canonical_rank = func.row_number().over(
+                partition_by=adjacent,
+                order_by=(
+                    RiEdge.subject_key,
+                    RiEdge.predicate,
+                    RiEdge.object_key,
+                    RiEdge.edge_id,
+                    RiEdge.id,
+                ),
+            ).label("canonical_rank")
+            ranked_edges = (
+                select(RiEdge.id.label("edge_row_id"), canonical_rank)
+                .where(
+                    RiEdge.snapshot_id == snapshot.snapshot_id,
+                    RiEdge.predicate.in_(IMPACT_TRAVERSAL_PREDICATES),
+                    endpoint.in_(frontier),
+                    adjacent.not_in(visited),
+                )
+                .subquery()
+            )
+            edges = self.db.scalars(
+                select(RiEdge)
+                .join(ranked_edges, RiEdge.id == ranked_edges.c.edge_row_id)
+                .where(ranked_edges.c.canonical_rank == 1)
+                .order_by(
+                    RiEdge.subject_key,
+                    RiEdge.predicate,
+                    RiEdge.object_key,
+                    RiEdge.edge_id,
+                    RiEdge.id,
+                )
+                .limit(IMPACT_MAX_RESULTS_PER_DIRECTION + 1)
+            ).all()
+
+            next_frontier: list[str] = []
+            for edge in edges:
+                adjacent_key = edge.object_key if outbound else edge.subject_key
+                if len(steps) >= IMPACT_MAX_RESULTS_PER_DIRECTION:
+                    return SnapshotImpactDirection(steps=tuple(steps), limit_reached=True)
+                visited.add(adjacent_key)
+                next_frontier.append(adjacent_key)
+                steps.append(SnapshotImpactStep(depth=distance, node_key=adjacent_key, edge=edge))
+            frontier = next_frontier
+
+        return SnapshotImpactDirection(steps=tuple(steps), limit_reached=False)
 
     def _architecture_covered_paths(self, snapshot: RiSnapshot) -> set[str]:
         """Return snapshot paths that carry non-inventory extraction evidence.

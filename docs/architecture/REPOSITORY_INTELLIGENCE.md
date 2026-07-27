@@ -155,6 +155,17 @@ queries. Documentation and free-form AI context share a bounded immutable
 projection over the owner-scoped sealed snapshot for the repository's current
 revision. Missing or stale snapshots return the standard 404.
 
+The authenticated `GET /intelligence/v1/snapshots/{snapshot_id}/impact` query
+answers “what depends on this node?” and “what does this node depend on?” from
+one named sealed snapshot. It follows only stored, resolved `imports` and
+`depends_on` edges: outgoing edges are dependencies and incoming edges are
+dependents. Every reached node carries the stored edge, evidence spans, and
+immediate derivation that prove its traversal hop. The read is deterministic,
+cycle-safe, and bounded to a requested depth from 1 through 10 and at most 100
+reached nodes in each direction. `limitReached: true` means that the result was
+cut off at that node limit and must not be treated as exhaustive. The query
+never reads a working tree, legacy metadata, or unresolved observations.
+
 The architecture read is bounded to what the response actually renders (#133):
 the relationship predicates Architecture draws, the resolution diagnostics it
 displays, `classified_as` assertions, and the file, dependency and repository
