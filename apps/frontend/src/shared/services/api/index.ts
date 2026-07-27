@@ -1,7 +1,7 @@
 export { api, configureApiClient, getApiConfig, uploadFile, requestSharedRefresh } from './client';
 export type { RequestConfig, ApiClientConfig, HttpMethod } from './client';
 
-export { ApiError, NetworkError, TimeoutError, CancelledError, isApiError, isNetworkError, isTimeoutError, isCancelledError, getErrorMessage } from './errors';
+export { ApiError, NetworkError, TimeoutError, CancelledError, isApiError, isNetworkError, isTimeoutError, isCancelledError, getErrorMessage, getErrorDetail } from './errors';
 
 export { authService } from './auth';
 export { repositoryService, repositoryIntelligenceService } from './repositories';
