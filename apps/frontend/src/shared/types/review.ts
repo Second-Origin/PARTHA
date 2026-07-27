@@ -1,113 +1,15 @@
-export type ReviewSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
-export type ReviewAssessmentState =
-  | 'assessed'
-  | 'partially_assessed'
-  | 'not_assessed'
-  | 'insufficient_evidence';
+import type { components } from '@/shared/services/api/generated';
 
-export type ReviewCategory =
-  | 'architecture_boundaries'
-  | 'relationship_resolution'
-  | 'source_extraction'
-  | 'dependency_declarations'
-  | 'security_vulnerability_scanning'
-  | 'authentication_evidence'
-  | 'repository_structure'
-  | 'analysis_integrity';
+export type ReviewSeverity = components['schemas']['ReviewFinding']['severity'];
+export type ReviewAssessmentState = components['schemas']['ReviewCategoryAssessment']['state'];
+export type ReviewCategory = components['schemas']['ReviewCategoryAssessment']['id'];
+export type ReviewSupportStatus = components['schemas']['ReviewFinding']['supportStatus'];
+export type ReviewProvenance = components['schemas']['ReviewProvenance'];
+export type ReviewEvidenceReference = components['schemas']['ReviewEvidenceReference'];
+export type ReviewFinding = components['schemas']['ReviewFinding'];
+export type ReviewCategoryAssessment = components['schemas']['ReviewCategoryAssessment'];
+export type ReviewSeverityCounts = components['schemas']['ReviewSeverityCounts'];
+export type ReviewSummary = components['schemas']['ReviewSummary'];
 
-/**
- * How precisely a finding's evidence addresses its diagnostic.
- *
- * `supported`   the reported lines are the diagnostic's own recorded span.
- * `file_scoped` the diagnostic named a file but no span, so the reported lines
- *               cover the whole file rather than the exact defect.
- */
-export type ReviewSupportStatus = 'supported' | 'file_scoped';
-
-export interface ReviewProvenance {
-  source: 'ri.v1';
-  snapshotId: string;
-  snapshotSchemaVersion: string;
-  canonicalGraphHash: string;
-}
-
-export interface ReviewEvidenceReference {
-  evidenceId: string;
-  snapshotId: string;
-  factId: string;
-  path: string;
-  startLine: number;
-  endLine: number;
-  extractorName: string;
-  extractorVersion: string;
-}
-
-export interface ReviewFinding {
-  id: string;
-  category: ReviewCategory;
-  severity: ReviewSeverity;
-  title: string;
-  explanation: string;
-  path: string;
-  startLine: number;
-  endLine: number;
-  snapshotId: string;
-  factId: string;
-  evidenceId: string;
-  extractorName: string;
-  extractorVersion: string;
-  diagnosticCode: string;
-  ruleId: string;
-  remediationGuidance: string;
-  supportStatus: ReviewSupportStatus;
-  provenance: ReviewProvenance;
-  evidence: ReviewEvidenceReference;
-}
-
-export interface ReviewCategoryAssessment {
-  id: ReviewCategory;
-  label: string;
-  state: ReviewAssessmentState;
-  explanation: string;
-  findingCount: number;
-}
-
-export interface ReviewSeverityCounts {
-  info: number;
-  low: number;
-  medium: number;
-  high: number;
-  critical: number;
-}
-
-export interface ReviewSummary {
-  message: string;
-  findingsBySeverity: ReviewSeverityCounts;
-  assessedCategories: number;
-  partiallyAssessedCategories: number;
-  notAssessedCategories: number;
-  insufficientEvidenceCategories: number;
-  evidenceBackedFindingCount: number;
-  /** Subset of evidenceBackedFindingCount scoped to a whole file, not a span. */
-  fileScopedFindingCount: number;
-  omittedUnsupportedDiagnosticCount: number;
-  vulnerabilityScanning: 'not_assessed';
-}
-
-export interface EngineeringReview {
-  schemaVersion: 'engineering-review.v2';
-  repositoryId: string;
-  repositoryName: string;
-  revisionKind: 'git' | 'upload';
-  revisionValue: string;
-  snapshotId: string;
-  snapshotSchemaVersion: string;
-  canonicalGraphHash: string;
-  manifestDigest: string;
-  provenance: ReviewProvenance;
-  generatedAt: string;
-  assessmentStatus: ReviewAssessmentState;
-  categories: ReviewCategoryAssessment[];
-  findings: ReviewFinding[];
-  summary: ReviewSummary;
-}
+export type EngineeringReview = components['schemas']['EngineeringReviewResponse'] &
+  Required<Pick<components['schemas']['EngineeringReviewResponse'], 'categories' | 'findings'>>;

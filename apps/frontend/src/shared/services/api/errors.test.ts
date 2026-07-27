@@ -5,6 +5,7 @@ import {
   NetworkError,
   TimeoutError,
   isApiError,
+  isErrorResponse,
   isNetworkError,
   isTimeoutError,
   parseRetryAfter,
@@ -95,5 +96,11 @@ describe('type guards', () => {
     expect(isApiError(new Error('plain'))).toBe(false);
     expect(isApiError(undefined)).toBe(false);
     expect(isNetworkError('nope')).toBe(false);
+  });
+
+  it('validates the generated error envelope at the untrusted response boundary', () => {
+    expect(isErrorResponse({ code: 'unauthorized', message: 'Sign in required' })).toBe(true);
+    expect(isErrorResponse({ code: 'unauthorized' })).toBe(false);
+    expect(isErrorResponse(null)).toBe(false);
   });
 });

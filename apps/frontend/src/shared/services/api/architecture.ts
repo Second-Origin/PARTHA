@@ -1,5 +1,6 @@
 import { api } from './client';
 import type { RequestConfig } from './client';
+import type { components } from './generated';
 import type {
   ArchitectureResponse,
   AuthenticationExplanationResponse,
@@ -9,14 +10,23 @@ import type {
 
 export const architectureService = {
   getArchitecture(repositoryId: string, config?: RequestConfig): Promise<ArchitectureResponse> {
-    return api.get(`/analysis/${repositoryId}/architecture`, config);
+    return api.get<components['schemas']['ArchitectureResponse']>(`/analysis/${repositoryId}/architecture`, config)
+      .then((response) => ({ ...response, diagnostics: response.diagnostics ?? [] }));
   },
 
   getAuthenticationExplanation(
     repositoryId: string,
     config?: RequestConfig,
   ): Promise<AuthenticationExplanationResponse> {
-    return api.get(`/analysis/${repositoryId}/architecture/authentication`, config);
+    return api.get<components['schemas']['AuthenticationExplanationResponse']>(
+      `/analysis/${repositoryId}/architecture/authentication`, config,
+    ).then((response) => ({
+      ...response,
+      claims: response.claims ?? [],
+      relationships: response.relationships ?? [],
+      chains: response.chains ?? [],
+      diagnostics: response.diagnostics ?? [],
+    }));
   },
 
   getRevisionManifest(repositoryId: string, config?: RequestConfig): Promise<RevisionManifestResponse> {

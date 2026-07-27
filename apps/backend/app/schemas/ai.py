@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
 from typing import Literal
 
+from pydantic import Field
+
 from app.schemas.base import CamelModel
 
 AiProvider = Literal["openai", "anthropic", "gemini", "openrouter", "ollama"]
@@ -65,4 +67,4 @@ class AiProviderTestRequest(CamelModel):
 class AiProviderTestResponse(CamelModel):
     ok: bool
     message: str
-    checked_at: datetime = datetime.now(UTC)
+    checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

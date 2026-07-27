@@ -1,59 +1,15 @@
-export type InsightAssessmentState = 'assessed' | 'not_assessed' | 'insufficient_evidence';
+import type { components } from '@/shared/services/api/generated';
 
-export interface InsightProvenance {
-  source: 'ri.v1';
-  snapshotId: string;
-  snapshotSchemaVersion: string;
-  canonicalGraphHash: string;
-}
+export type InsightAssessmentState = components['schemas']['InsightMetric']['assessmentState'];
+export type InsightProvenance = components['schemas']['InsightProvenance'];
+export type InsightExtractor = components['schemas']['InsightExtractor'];
+export type InsightMetric = components['schemas']['InsightMetric'];
+export type InsightBreakdown = components['schemas']['InsightBreakdown'];
 
-export interface InsightExtractor {
-  name: string;
-  version: string;
-  evidenceRecordCount: number;
-}
-
-export interface InsightMetric {
-  id: string;
-  label: string;
-  value: number | string | null;
-  unit: string;
-  definition: string;
-  provenance: InsightProvenance;
-  assessmentState: InsightAssessmentState;
-  snapshotId: string;
-  numerator: number | null;
-  denominator: number | null;
-}
-
-export interface InsightBreakdown {
-  key: string;
-  label: string;
-  value: number;
-}
-
-export interface RepositoryInsights {
-  schemaVersion: 'repository-insights.v1';
-  repositoryId: string;
-  repositoryName: string;
-  revisionKind: 'git' | 'upload';
-  revisionValue: string;
-  snapshotId: string;
-  snapshotSchemaVersion: string;
-  canonicalGraphHash: string;
-  manifestDigest: string;
-  provenance: InsightProvenance;
-  computedAt: string;
-  snapshotCreatedAt: string;
-  snapshotSealedAt: string;
-  extractorSet: InsightExtractor[];
-  metrics: InsightMetric[];
-  relationshipsByPredicate: InsightBreakdown[];
-  diagnosticsBySeverity: InsightBreakdown[];
-  diagnosticsByCode: InsightBreakdown[];
-  languages: InsightBreakdown[];
-  changeOverTime: {
-    assessmentState: 'not_assessed';
-    message: string;
-  };
-}
+export type RepositoryInsights = components['schemas']['RepositoryInsightsResponse'] & Required<
+  Pick<
+    components['schemas']['RepositoryInsightsResponse'],
+    'changeOverTime' | 'extractorSet' | 'metrics' | 'relationshipsByPredicate' |
+      'diagnosticsBySeverity' | 'diagnosticsByCode' | 'languages'
+  >
+>;

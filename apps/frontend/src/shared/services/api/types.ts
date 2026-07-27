@@ -1,7 +1,8 @@
-import type { FileTreeNode, RepositoryMeta, AnalysisStage } from '@/shared/types';
-import type { ArchitectureModel } from '@/shared/types/architecture';
-import type { EngineeringReview } from '@/shared/types/review';
+import type { components } from './generated';
 
+type WithGeneratedDefaults<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
+
+/** Transport helpers retained for non-schema-wrapped legacy endpoints. */
 export interface ApiResponse<T> {
   data: T;
   meta?: {
@@ -21,487 +22,87 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// Repository
+// The aliases below are compatibility names for the existing service/UI
+// modules. Their shapes are owned by the generated OpenAPI components; this
+// file intentionally contains no hand-maintained DTO fields.
+export type RepositoryRevision = components['schemas']['RepositoryRevision'];
+export type RepositoryResponse = components['schemas']['RepositoryResponse'];
+export type ImportGithubRequest = components['schemas']['GitHubImportRequest'];
+export type RepositoryListResponse = components['schemas']['RepositoryListResponse'];
+export type RepositoryFileResponse = components['schemas']['RepositoryFileResponse'];
 
-// First-class revision identity (#87). `value` is the immutable identity: a
-// 40-char lowercase git commit SHA for GitHub imports, or a `sha256:<hex>`
-// archive content hash for uploads. `ref` (e.g. `refs/heads/main`) is a moving
-// pointer — descriptive metadata only, never identity, and null for uploads.
-export interface RepositoryRevision {
-  kind: 'git' | 'upload';
-  value: string;
-  ref: string | null;
-}
+export type RiSchemaVersion = components['schemas']['RiEvidenceResponse']['schemaVersion'];
+export type RiPagination = components['schemas']['RiPagination'];
+export type RiEvidence = components['schemas']['RiEvidenceResponse'];
+export type RiNode = components['schemas']['RiNodeResponse'];
+export type RiEdge = components['schemas']['RiEdgeResponse'];
+export type RiAssertion = components['schemas']['RiAssertionResponse'];
+export type RiSnapshotMetadata = components['schemas']['RiSnapshotMetadataResponse'];
+export type RiCollectionResponse<T> = Omit<components['schemas']['RiSymbolsResponse'], 'data'> & { data: T[] };
+export type RiPath = components['schemas']['RiPathResponse'];
+export type RiNeighboursResponse = components['schemas']['RiNeighboursResponse'];
 
-export interface RepositoryResponse {
-  id: string;
-  name: string;
-  description: string | null;
-  source: 'upload' | 'github';
-  sourceUrl: string | null;
-  branch?: string | null;
-  size: number;
-  fileCount: number;
-  status: 'uploading' | 'analysing' | 'completed' | 'cancelled' | 'error';
-  analysisStage: AnalysisStage | null;
-  analysisProgress: number;
-  uploadedAt: string;
-  analysedAt: string | null;
-  errorMessage: string | null;
-  revision: RepositoryRevision | null;
-  // Backward-compatible alias of `revision.value`.
-  commitSha: string | null;
-  meta: RepositoryMeta | null;
-  fileTree: FileTreeNode[];
-}
+export type AnalysisJobStatus = components['schemas']['AnalysisStartResponse']['status'];
+export type AnalysisStartResponse = components['schemas']['AnalysisStartResponse'];
+export type AnalysisStatusResponse = components['schemas']['AnalysisStatusResponse'];
 
-export interface CreateRepositoryRequest {
-  name: string;
-  description?: string;
-  source: 'upload' | 'github';
-  sourceUrl?: string;
-}
+export type ArchitectureResponse = WithGeneratedDefaults<components['schemas']['ArchitectureResponse'], 'diagnostics'>;
 
-export interface ImportGithubRequest {
-  url: string;
-  branch?: string;
-}
+export type AuthSchemaVersion = components['schemas']['AuthenticationExplanationResponse']['schemaVersion'];
+export type AuthClaimKind = components['schemas']['AuthClaim']['kind'];
+export type AuthRelationshipNodeKind = components['schemas']['AuthRelationship']['subjectKind'];
+export type AuthConfidence = components['schemas']['AuthClaim']['confidence'];
+export type AuthStatus = components['schemas']['AuthenticationExplanationResponse']['status'];
+export type AuthEvidenceRef = components['schemas']['AuthEvidenceRef'];
+export type AuthClaim = components['schemas']['AuthClaim'];
+export type AuthRelationship = components['schemas']['AuthRelationship'];
+export type AuthChain = components['schemas']['AuthChain'];
+export type AuthenticationDiagnostic = components['schemas']['AuthenticationDiagnostic'];
+export type AuthenticationExplanationResponse = WithGeneratedDefaults<
+  components['schemas']['AuthenticationExplanationResponse'],
+  'claims' | 'relationships' | 'chains' | 'diagnostics'
+>;
 
-export interface RepositoryListResponse {
-  data: RepositoryResponse[];
-  total: number;
-}
+export type EvidenceSchemaVersion = components['schemas']['EvidenceSourceResponse']['schemaVersion'];
+export type EvidenceSourceStatus = components['schemas']['EvidenceSourceResponse']['status'];
+export type EvidenceSourceResponse = components['schemas']['EvidenceSourceResponse'];
 
-export interface RepositoryFileResponse {
-  path: string;
-  content: string;
-  size: number;
-  truncated: boolean;
-  isBinary: boolean;
-  isImage: boolean;
-  mediaType: string | null;
-}
+export type DependencyNode = components['schemas']['DependencyNode'];
+export type DependencyDeclaration = components['schemas']['DependencyDeclaration'];
+export type DependencyDiagnostic = components['schemas']['DependencyDiagnostic'];
+export type DependencyEdge = components['schemas']['DependencyEdge'];
+export type DependencyAssessment = components['schemas']['DependencyAssessment'];
+export type DependencyProvenance = components['schemas']['DependencyProvenance'];
+export type DependencyGraphResponse = WithGeneratedDefaults<components['schemas']['DependencyGraphResponse'], 'diagnostics'>;
 
-// Repository Intelligence snapshot queries (`/intelligence/v1`). These are
-// read-only views of sealed, owner-scoped normalized facts, not legacy metadata.
-export type RiSchemaVersion = 'ri.v1';
+export type ReviewResponse = WithGeneratedDefaults<
+  components['schemas']['EngineeringReviewResponse'],
+  'categories' | 'findings'
+>;
 
-export interface RiPagination {
-  offset: number;
-  limit: number;
-  total: number;
-}
+export type AiQueryRequest = components['schemas']['AiQueryRequest'];
+export type AiMessage = components['schemas']['AiMessage'];
+export type AiCitation = components['schemas']['AiCitation'];
+export type AiQueryResponse = components['schemas']['AiQueryResponse'];
+export type AiProvider = components['schemas']['AiProviderConfig']['provider'];
+export type AiProviderConfig = components['schemas']['AiProviderConfig'];
+export type AiProviderPublicConfig = components['schemas']['AiProviderPublicConfig'];
+export type AiProviderTestRequest = components['schemas']['AiProviderTestRequest'];
+export type AiProviderTestResponse = components['schemas']['AiProviderTestResponse'];
 
-export interface RiEvidence {
-  schemaVersion: RiSchemaVersion;
-  factKind: 'node' | 'edge' | 'observation';
-  factId: string;
-  path: string;
-  startLine: number;
-  endLine: number;
-  granularity: 'span' | 'file';
-  extractor: string;
-  extractorVersion: string;
-}
+export type GenerateDocRequest = components['schemas']['GenerateDocRequest'];
+export type GenerateDocResponse = components['schemas']['GenerateDocResponse'];
 
-export interface RiNode {
-  stableKey: string;
-  nodeKind: string;
-  name: string | null;
-  language: string | null;
-  truthClass: 'observed';
-  properties: Record<string, unknown> | null;
-  evidence: RiEvidence[];
-}
+export type UserResponse = components['schemas']['UserResponse'];
+export type AuthResponse = components['schemas']['AuthResponse'];
+export type LoginRequest = components['schemas']['LoginRequest'];
+export type RegisterRequest = components['schemas']['RegisterRequest'];
 
-export interface RiEdge {
-  edgeId: string;
-  subjectKind: string;
-  subjectKey: string;
-  predicate: string;
-  objectKind: string;
-  objectKey: string;
-  truthClass: 'resolved';
-  producer: string;
-  producerVersion: string;
-  evidence: RiEvidence[];
-  derivedFrom: Array<{ kind: string; identity: string }>;
-}
+export type ExportFormat = components['schemas']['ExportRequest']['format'];
+export type ExportTarget = components['schemas']['ExportRequest']['target'];
+export type ExportRequest = components['schemas']['ExportRequest'];
+export type ExportResponse = components['schemas']['ExportResponse'];
 
-export interface RiAssertion {
-  assertionId: string;
-  subjectKind: string;
-  subjectKey: string;
-  predicate: string;
-  value: Record<string, unknown>;
-  truthClass: 'inferred';
-  producer: string;
-  producerVersion: string;
-  derivedFrom: Array<{ kind: string; identity: string }>;
-}
-
-export interface RiSnapshotMetadata {
-  schemaVersion: RiSchemaVersion;
-  snapshotId: string;
-  repositoryId: string;
-  revisionKind: 'git' | 'upload';
-  revisionValue: string;
-  revisionRef: string | null;
-  state: 'completed';
-  producerVersionSet: string[];
-  producerSetHash: string;
-  configHash: string;
-  canonicalGraphHash: string;
-  createdAt: string;
-  updatedAt: string;
-  sealedAt: string;
-}
-
-export interface RiCollectionResponse<T> {
-  schemaVersion: RiSchemaVersion;
-  data: T[];
-  pagination: RiPagination;
-}
-
-export interface RiPath {
-  path: string;
-  node: RiNode;
-}
-
-export interface RiNeighboursResponse extends RiCollectionResponse<RiEdge> {
-  nodeKey: string;
-}
-
-// Analysis
-export type AnalysisJobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-
-export interface AnalysisStartResponse {
-  repositoryId: string;
-  status: AnalysisJobStatus;
-  jobId: string | null;
-}
-
-export interface AnalysisStatusResponse {
-  repositoryId: string;
-  status: AnalysisJobStatus;
-  jobId: string | null;
-  stage: AnalysisStage | null;
-  progress: number;
-  startedAt: string | null;
-  completedAt: string | null;
-  error: string | null;
-}
-
-// Architecture
-export type ArchitectureResponse = ArchitectureModel;
-
-// Authentication explanation (evidence-backed, snapshot-only)
-export type AuthSchemaVersion = 'auth-explanation.v1';
-export type AuthClaimKind = 'route' | 'middleware' | 'service' | 'model' | 'dependency';
-export type AuthRelationshipNodeKind = 'route' | 'handler' | 'middleware' | 'service' | 'model' | 'dependency';
-export type AuthConfidence = 'observed' | 'heuristic';
-export type AuthStatus = 'ready' | 'missing_snapshot';
-
-export interface AuthEvidenceRef {
-  snapshotId: string;
-  factId: string;
-  path: string;
-  startLine: number;
-  endLine: number;
-}
-
-export interface AuthClaim {
-  kind: AuthClaimKind;
-  name: string;
-  confidence: AuthConfidence;
-  evidence: AuthEvidenceRef[];
-}
-
-export interface AuthRelationship {
-  subject: string;
-  subjectKind: AuthRelationshipNodeKind;
-  predicate: string;
-  object: string;
-  objectKind: AuthRelationshipNodeKind;
-  evidence: AuthEvidenceRef[];
-}
-
-export interface AuthChain {
-  route: string;
-  hops: AuthRelationship[];
-}
-
-export interface AuthenticationDiagnostic {
-  code: string;
-  category: string;
-  severity: 'fatal' | 'error' | 'warning' | 'info';
-  message: string;
-  path: string | null;
-  startLine: number | null;
-  endLine: number | null;
-}
-
-export interface AuthenticationExplanationResponse {
-  schemaVersion: AuthSchemaVersion;
-  repositoryId: string;
-  repositoryName: string;
-  revisionKind: string | null;
-  revisionValue: string | null;
-  snapshotId: string | null;
-  status: AuthStatus;
-  summary: string;
-  claims: AuthClaim[];
-  relationships: AuthRelationship[];
-  chains: AuthChain[];
-  diagnostics: AuthenticationDiagnostic[];
-}
-
-// Evidence-source navigation (snapshot-and-revision-verified, #95)
-export type EvidenceSchemaVersion = 'evidence-source.v1';
-export type EvidenceSourceStatus = 'ready' | 'unavailable';
-
-export interface EvidenceSourceResponse {
-  schemaVersion: EvidenceSchemaVersion;
-  repositoryId: string;
-  snapshotId: string;
-  factId: string;
-  revisionKind: string | null;
-  revisionValue: string | null;
-  path: string;
-  startLine: number;
-  endLine: number;
-  status: EvidenceSourceStatus;
-  reason: string | null;
-  content: string | null;
-  truncated: boolean;
-  size: number;
-}
-
-// Dependency Graph (#158) — built exclusively from a sealed ri.v1 snapshot,
-// the same contract shape as Review/Insights: no legacy fallback.
-export interface DependencyNode {
-  id: string;
-  name: string;
-  version: string | null;
-  type: 'production' | 'development' | 'peer' | 'optional' | 'multiple';
-  ecosystem: string;
-  declarations: DependencyDeclaration[];
-}
-
-export interface DependencyDeclaration {
-  name: string;
-  manifestPath: string;
-  workspacePath: string;
-  startLine: number;
-  endLine: number;
-  extractor: string;
-  extractorVersion: string;
-  ecosystem: string;
-  version: string | null;
-  type: 'production' | 'development' | 'peer' | 'optional';
-}
-
-export interface DependencyDiagnostic {
-  code: string;
-  category: string;
-  severity: 'fatal' | 'error' | 'warning' | 'info';
-  message: string;
-  path: string | null;
-  producer: string;
-  details: Record<string, unknown> | null;
-}
-
-export interface DependencyEdge {
-  id: string;
-  source: string;
-  target: string;
-  type: 'depends-on';
-}
-
-export interface DependencyAssessment {
-  status: 'not_computed';
-}
-
-export interface DependencyProvenance {
-  source: 'ri.v1';
-  snapshotId: string;
-  snapshotSchemaVersion: string;
-  canonicalGraphHash: string;
-}
-
-export interface DependencyGraphResponse {
-  schemaVersion: 'dependency-graph.v2';
-  repositoryId: string;
-  repositoryName: string;
-  revisionKind: 'git' | 'upload';
-  revisionValue: string;
-  snapshotId: string;
-  snapshotSchemaVersion: string;
-  canonicalGraphHash: string;
-  manifestDigest: string;
-  provenance: DependencyProvenance;
-  generatedAt: string;
-  nodes: DependencyNode[];
-  edges: DependencyEdge[];
-  totalDependencies: number;
-  manifestCount: number;
-  diagnostics: DependencyDiagnostic[];
-  vulnerabilityAssessment: DependencyAssessment;
-  outdatedAssessment: DependencyAssessment;
-}
-
-// Review
-export type ReviewResponse = EngineeringReview;
-
-// AI
-export interface AiQueryRequest {
-  repositoryId: string;
-  query: string;
-  context?: {
-    selectedNodeId?: string;
-    selectedFile?: string;
-    conversationHistory?: AiMessage[];
-  };
-}
-
-export interface AiMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
-  citations?: AiCitation[];
-}
-
-export interface AiCitation {
-  file: string;
-  startLine: number;
-  endLine: number;
-  content: string;
-}
-
-export interface AiQueryResponse {
-  message: AiMessage;
-  suggestions?: string[];
-}
-
-export type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'openrouter' | 'ollama';
-
-export interface AiProviderConfig {
-  provider: AiProvider;
-  apiKey?: string;
-  model?: string;
-  baseUrl?: string;
-}
-
-export interface AiProviderPublicConfig {
-  provider: AiProvider | null;
-  model: string | null;
-  baseUrl: string | null;
-  hasApiKey: boolean;
-  // Write-only key contract: the backend returns only the last four characters,
-  // never the full key. Null when no key is stored.
-  apiKeyLast4: string | null;
-}
-
-export interface AiProviderTestRequest {
-  provider?: AiProvider;
-  apiKey?: string;
-  model?: string;
-  baseUrl?: string;
-}
-
-export interface AiProviderTestResponse {
-  ok: boolean;
-  message: string;
-  checkedAt: string;
-}
-
-// Documentation
-export interface GenerateDocRequest {
-  repositoryId: string;
-  format: 'markdown' | 'html';
-  sections?: string[];
-}
-
-export interface GenerateDocResponse {
-  content: string;
-  format: 'markdown' | 'html';
-  generatedAt: string;
-  source: 'ri.v1';
-  snapshotId: string;
-  snapshotSchemaVersion: 'ri.v1';
-  revisionKind: 'git' | 'upload';
-  revisionValue: string;
-  revisionRef?: string | null;
-}
-
-// Auth
-export interface UserResponse {
-  id: string;
-  email: string;
-  createdAt: string;
-}
-
-export interface AuthResponse {
-  accessToken: string;
-  tokenType: 'bearer';
-  user: UserResponse;
-}
-
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface RegisterRequest {
-  email: string;
-  password: string;
-}
-
-// Export
-export type ExportFormat = 'json' | 'markdown' | 'html' | 'pdf';
-export type ExportTarget = 'review' | 'documentation' | 'architecture' | 'dependencies';
-
-export interface ExportRequest {
-  repositoryId: string;
-  target: ExportTarget;
-  format: ExportFormat;
-}
-
-export interface ExportResponse {
-  filename: string;
-  mediaType: string;
-  encoding: 'utf-8' | 'base64';
-  content: string;
-}
-
-// Revision manifest (#113): the verifiable identity of the sealed snapshot an
-// answer was derived from. `manifestDigest` is a canonical content hash, not a
-// digital signature.
-export interface ManifestExtractor {
-  name: string;
-  version: string;
-}
-
-export interface RevisionManifest {
-  schemaVersion: 'revision-manifest.v1';
-  repositoryId: string;
-  revisionKind: 'git' | 'upload';
-  revisionValue: string;
-  revisionRef: string | null;
-  snapshotId: string;
-  snapshotSchemaVersion: string;
-  extractors: ManifestExtractor[];
-  producerSetHash: string;
-  configHash: string;
-  canonicalGraphHash: string | null;
-  createdAt: string;
-  sealedAt: string | null;
-}
-
-export interface RevisionManifestResponse {
-  manifest: RevisionManifest;
-  manifestDigest: string;
-  verificationMethod: string;
-  verificationState: 'verified' | 'superseded' | 'mismatch' | 'unverifiable';
-  verificationNote: string;
-}
+export type ManifestExtractor = components['schemas']['ManifestExtractor'];
+export type RevisionManifest = components['schemas']['RevisionManifest'];
+export type RevisionManifestResponse = components['schemas']['RevisionManifestResponse'];

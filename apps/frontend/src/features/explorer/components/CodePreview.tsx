@@ -108,7 +108,7 @@ export function CodePreview({ node, repositoryId, citation }: CodePreviewProps) 
         setContent(file.content);
         setIsBinary(file.isBinary);
         setIsImage(file.isImage);
-        setMediaType(file.mediaType);
+        setMediaType(file.mediaType ?? null);
         setTruncated(file.truncated);
       })
       .catch((caught) => {

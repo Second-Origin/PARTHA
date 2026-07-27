@@ -1,3 +1,7 @@
+import type { components } from './generated';
+
+export type ApiErrorResponse = components['schemas']['ErrorResponse'];
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -145,8 +149,8 @@ export function getErrorDetail(error: unknown): { message: string; details: stri
 }
 
 function getBackendMessage(body: unknown): string | null {
-  if (!body || typeof body !== 'object') return null;
-  const maybeMessage = (body as { message?: unknown }).message;
+  if (!isErrorResponse(body)) return null;
+  const maybeMessage = body.message;
   return typeof maybeMessage === 'string' && maybeMessage.trim() ? maybeMessage : null;
 }
 
@@ -172,7 +176,17 @@ function getBackendDetails(body: unknown): string[] {
 }
 
 function getBackendRequestId(body: unknown): string | null {
-  if (!body || typeof body !== 'object') return null;
-  const maybeRequestId = (body as { request_id?: unknown }).request_id;
+  if (!isErrorResponse(body)) return null;
+  const maybeRequestId = body.request_id;
   return typeof maybeRequestId === 'string' && maybeRequestId.trim() ? maybeRequestId : null;
+}
+
+/** Runtime boundary for untrusted backend error responses. */
+export function isErrorResponse(body: unknown): body is ApiErrorResponse {
+  return Boolean(
+    body &&
+      typeof body === 'object' &&
+      typeof (body as { code?: unknown }).code === 'string' &&
+      typeof (body as { message?: unknown }).message === 'string',
+  );
 }
