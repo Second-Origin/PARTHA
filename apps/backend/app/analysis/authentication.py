@@ -41,9 +41,7 @@ from app.schemas.authentication import (
 _GUARD_CLASSIFICATION = "auth_dependency"
 _SERVICE_CLASSIFICATION = "service"
 _MODEL_CLASSIFICATION = "model"
-_DIAGNOSTIC_CODES = frozenset(
-    {"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS", "RI-EXT-UNSUPPORTED", "RI-SRC-MALFORMED"}
-)
+_DIAGNOSTIC_CODES = frozenset({"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS", "RI-EXT-UNSUPPORTED", "RI-SRC-MALFORMED"})
 _MAX_DIAGNOSTICS = 50
 
 
@@ -274,11 +272,7 @@ class _AuthenticationSubgraphBuilder:
                 used_nodes.add(walk_key)
                 walk_key = parent[walk_key][0]
 
-        return [
-            (edge.subject_key, edge.object_key, edge)
-            for edge in discovered_edges
-            if edge.object_key in used_nodes
-        ]
+        return [(edge.subject_key, edge.object_key, edge) for edge in discovered_edges if edge.object_key in used_nodes]
 
     def _role_of(self, stable_key: str) -> AuthRelationshipNodeKind:
         roles = self.classifications.get(stable_key, ())

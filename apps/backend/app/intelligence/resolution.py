@@ -105,23 +105,15 @@ class RelationshipResolver:
             raise ValueError(f"snapshot producer_version_set is missing {self.producer!r}")
         self._snapshot = snapshot
 
-        nodes = list(
-            self.store.db.scalars(
-                select(RiNode).where(RiNode.snapshot_id == snapshot.snapshot_id)
-            )
-        )
+        nodes = list(self.store.db.scalars(select(RiNode).where(RiNode.snapshot_id == snapshot.snapshot_id)))
         nodes_by_key = {node.stable_key: node for node in nodes}
         observations = sorted(
-            self.store.db.scalars(
-                select(RiObservation).where(RiObservation.snapshot_id == snapshot.snapshot_id)
-            ),
+            self.store.db.scalars(select(RiObservation).where(RiObservation.snapshot_id == snapshot.snapshot_id)),
             key=lambda item: item.observation_id,
         )
         evidence_by_observation: dict[int, list[RiEvidence]] = defaultdict(list)
         evidence_by_node: dict[int, list[RiEvidence]] = defaultdict(list)
-        for evidence in self.store.db.scalars(
-            select(RiEvidence).where(RiEvidence.snapshot_id == snapshot.snapshot_id)
-        ):
+        for evidence in self.store.db.scalars(select(RiEvidence).where(RiEvidence.snapshot_id == snapshot.snapshot_id)):
             self._check_cancelled(check_cancelled)
             if evidence.observation_ref is not None:
                 evidence_by_observation[evidence.observation_ref].append(evidence)
@@ -173,9 +165,7 @@ class RelationshipResolver:
         for input_ in inputs_by_kind["call"]:
             self._check_cancelled(check_cancelled)
             if self._reference_input_key(input_) in shadowed_calls:
-                added, diagnosed = self._unresolved(
-                    input_, "calls target is shadowed by a local binding"
-                )
+                added, diagnosed = self._unresolved(input_, "calls target is shadowed by a local binding")
             else:
                 added, diagnosed = self._resolve_reference(
                     input_, nodes_by_key, evidence_by_node, bindings_by_file, predicate="calls"
@@ -227,9 +217,7 @@ class RelationshipResolver:
         if check_cancelled is not None:
             check_cancelled()
 
-    def _resolve_definition(
-        self, input_: _ObservedInput, nodes_by_key: dict[str, RiNode]
-    ) -> tuple[int, int]:
+    def _resolve_definition(self, input_: _ObservedInput, nodes_by_key: dict[str, RiNode]) -> tuple[int, int]:
         observation = input_.observation
         symbol = nodes_by_key.get(observation.subject_key)
         if symbol is None or symbol.node_kind != "symbol" or "::" not in symbol.stable_key:
@@ -280,10 +268,15 @@ class RelationshipResolver:
         subject = observed_subject
         if subject is None or subject.node_kind != "symbol":
             subject = self._containing_symbol(input_, nodes_by_key, evidence_by_node)
-            if subject is None and observed_subject is not None and observed_subject.node_kind in {
-                "file",
-                "module",
-            }:
+            if (
+                subject is None
+                and observed_subject is not None
+                and observed_subject.node_kind
+                in {
+                    "file",
+                    "module",
+                }
+            ):
                 subject = observed_subject
         if subject is None:
             return self._unresolved(input_, f"{predicate} source symbol is absent from the snapshot")
@@ -302,9 +295,7 @@ class RelationshipResolver:
             ),
         )
 
-    def _resolve_dependency(
-        self, input_: _ObservedInput, nodes_by_key: dict[str, RiNode]
-    ) -> tuple[int, int]:
+    def _resolve_dependency(self, input_: _ObservedInput, nodes_by_key: dict[str, RiNode]) -> tuple[int, int]:
         dependency = nodes_by_key.get(input_.observation.subject_key)
         repository = nodes_by_key.get("repo:root")
         if dependency is None or dependency.node_kind != "dependency" or repository is None:
@@ -377,11 +368,10 @@ class RelationshipResolver:
             # so the module file resolves without reparsing the source.
             for binding_specifier, imported, _local in bindings:
                 if binding_specifier and f"{binding_specifier}.{imported}" == specifier:
-                    file_candidates.update(
-                        self._python_absolute_file_candidates(binding_specifier)
-                    )
+                    file_candidates.update(self._python_absolute_file_candidates(binding_specifier))
         files = [
-            node for key, node in nodes_by_key.items()
+            node
+            for key, node in nodes_by_key.items()
             if key in {f"file:{path}" for path in file_candidates} and node.node_kind == "file"
         ]
         if files:
@@ -393,10 +383,7 @@ class RelationshipResolver:
             node
             for node in nodes_by_key.values()
             if node.node_kind == "dependency"
-            and (
-                node.stable_key == f"dep:npm:{package}"
-                or node.stable_key == f"dep:pypi:{normalized_python}"
-            )
+            and (node.stable_key == f"dep:npm:{package}" or node.stable_key == f"dep:pypi:{normalized_python}")
         ]
 
     @staticmethod
@@ -425,10 +412,16 @@ class RelationshipResolver:
             if root.endswith((".ts", ".tsx", ".py")):
                 paths.add(root)
             else:
-                paths.update({
-                    f"{root}.ts", f"{root}.tsx", f"{root}.py",
-                    f"{root}/index.ts", f"{root}/index.tsx", f"{root}/__init__.py",
-                })
+                paths.update(
+                    {
+                        f"{root}.ts",
+                        f"{root}.tsx",
+                        f"{root}.py",
+                        f"{root}/index.ts",
+                        f"{root}/index.tsx",
+                        f"{root}/__init__.py",
+                    }
+                )
         return paths
 
     @staticmethod
@@ -494,7 +487,8 @@ class RelationshipResolver:
                     bound_candidates.append(direct_target)
                 else:
                     bound_candidates.extend(
-                        node for node in nodes_by_key.values()
+                        node
+                        for node in nodes_by_key.values()
                         if node.node_kind == "symbol"
                         and node.name == imported
                         and node.stable_key.startswith(f"{path}::")
@@ -560,9 +554,7 @@ class RelationshipResolver:
         self._diagnostic(input_, RI_RES_UNRESOLVED, "unresolved reference", message)
         return 0, 1
 
-    def _ambiguous(
-        self, input_: _ObservedInput, message: str, candidates: tuple[str, ...]
-    ) -> tuple[int, int]:
+    def _ambiguous(self, input_: _ObservedInput, message: str, candidates: tuple[str, ...]) -> tuple[int, int]:
         self._diagnostic(input_, RI_RES_AMBIGUOUS, "ambiguous resolution", message, candidates)
         return 0, 1
 

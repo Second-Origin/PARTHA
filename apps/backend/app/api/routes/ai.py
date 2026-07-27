@@ -4,7 +4,14 @@ from fastapi import APIRouter, Body, Depends
 
 from app.api.deps import get_ai_service, get_current_user
 from app.api.openapi import documented_responses
-from app.schemas.ai import AiProviderConfig, AiProviderPublicConfig, AiProviderTestRequest, AiProviderTestResponse, AiQueryRequest, AiQueryResponse
+from app.schemas.ai import (
+    AiProviderConfig,
+    AiProviderPublicConfig,
+    AiProviderTestRequest,
+    AiProviderTestResponse,
+    AiQueryRequest,
+    AiQueryResponse,
+)
 from app.services.ai_service import AiService
 
 # Every AI route requires auth; the repository and the provider config are both

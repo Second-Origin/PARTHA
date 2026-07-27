@@ -38,9 +38,7 @@ AUTHENTICATION_EXPLANATION_PREDICATES = frozenset({"injects", "calls", "routes_t
 #: What ``architecture_facts`` actually loads: the union of both consumers.
 #: Each consumer still filters again in Python for what it renders, so widening
 #: this set never widens a response — it only prevents starving a consumer.
-ARCHITECTURE_FACT_PREDICATES = (
-    frozenset(ARCHITECTURE_RELATIONSHIP_EDGE_TYPES) | AUTHENTICATION_EXPLANATION_PREDICATES
-)
+ARCHITECTURE_FACT_PREDICATES = frozenset(ARCHITECTURE_RELATIONSHIP_EDGE_TYPES) | AUTHENTICATION_EXPLANATION_PREDICATES
 ARCHITECTURE_DIAGNOSTIC_CODES = frozenset({"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS"})
 #: Diagnostic codes the authentication explanation renders.
 AUTHENTICATION_DIAGNOSTIC_CODES = frozenset(
@@ -485,11 +483,7 @@ class SnapshotQueryService:
             for node in nodes
             if node.node_kind == "file" and node.stable_key.startswith("file:")
         )
-        dependencies = tuple(
-            self._project_dependency(node)
-            for node in nodes
-            if node.node_kind == "dependency"
-        )
+        dependencies = tuple(self._project_dependency(node) for node in nodes if node.node_kind == "dependency")
         language_counts = Counter(file.language for file in files if file.language)
         primary_language = (
             {"python": "Python", "typescript": "TypeScript"}.get(
@@ -509,11 +503,7 @@ class SnapshotQueryService:
         }
         dependency_names = {item.name.lower() for item in dependencies}
         frameworks = tuple(
-            sorted(
-                framework
-                for name, framework in framework_by_dependency.items()
-                if name in dependency_names
-            )
+            sorted(framework for name, framework in framework_by_dependency.items() if name in dependency_names)
         )
         entry_points = tuple(sorted(file.path for file in files if file.role == "entrypoint"))
         modules = self._project_modules(files)
@@ -541,9 +531,7 @@ class SnapshotQueryService:
         routes = tuple(
             SnapshotRouteFact(
                 path=observation.referent_text or "Not available",
-                evidence_paths=tuple(
-                    sorted({item.path for item in route_evidence.get(observation.id, [])})
-                ),
+                evidence_paths=tuple(sorted({item.path for item in route_evidence.get(observation.id, [])})),
             )
             for observation in route_observations
         )
@@ -618,14 +606,10 @@ class SnapshotQueryService:
         result: list[SnapshotModuleFact] = []
         for key, members in sorted(grouped.items()):
             meaningful_roles = [
-                item.role
-                for item in members
-                if item.role not in (None, "unknown", "documentation", "test")
+                item.role for item in members if item.role not in (None, "unknown", "documentation", "test")
             ]
             role = (
-                Counter(meaningful_roles).most_common(1)[0][0]
-                if meaningful_roles
-                else (members[0].role or "unknown")
+                Counter(meaningful_roles).most_common(1)[0][0] if meaningful_roles else (members[0].role or "unknown")
             )
             result.append(
                 SnapshotModuleFact(
@@ -656,7 +640,9 @@ class SnapshotQueryService:
                     start_line=raw.get("start_line") if isinstance(raw.get("start_line"), int) else None,
                     end_line=raw.get("end_line") if isinstance(raw.get("end_line"), int) else None,
                     extractor=raw.get("extractor") if isinstance(raw.get("extractor"), str) else None,
-                    extractor_version=raw.get("extractor_version") if isinstance(raw.get("extractor_version"), str) else None,
+                    extractor_version=raw.get("extractor_version")
+                    if isinstance(raw.get("extractor_version"), str)
+                    else None,
                 )
             )
         return SnapshotDependencyFact(
@@ -777,7 +763,9 @@ class SnapshotQueryService:
             return {}
         rows = self.db.scalars(
             select(RiDerivation)
-            .where(RiDerivation.snapshot_id == snapshot.snapshot_id, RiDerivation.edge_ref.in_([edge.id for edge in edges]))
+            .where(
+                RiDerivation.snapshot_id == snapshot.snapshot_id, RiDerivation.edge_ref.in_([edge.id for edge in edges])
+            )
             .order_by(RiDerivation.ref_kind, RiDerivation.ref_identity, RiDerivation.id)
         ).all()
         grouped: dict[int, list[RiDerivation]] = defaultdict(list)
@@ -786,7 +774,9 @@ class SnapshotQueryService:
                 grouped[row.edge_ref].append(row)
         return grouped
 
-    def derivations_for_assertions(self, snapshot: RiSnapshot, assertions: list[RiAssertion]) -> dict[int, list[RiDerivation]]:
+    def derivations_for_assertions(
+        self, snapshot: RiSnapshot, assertions: list[RiAssertion]
+    ) -> dict[int, list[RiDerivation]]:
         if not assertions:
             return {}
         rows = self.db.scalars(
@@ -803,22 +793,30 @@ class SnapshotQueryService:
                 grouped[row.assertion_ref].append(row)
         return grouped
 
-    def fact_identity_for_evidence(self, snapshot: RiSnapshot, evidence: list[RiEvidence]) -> dict[tuple[str, int], str]:
+    def fact_identity_for_evidence(
+        self, snapshot: RiSnapshot, evidence: list[RiEvidence]
+    ) -> dict[tuple[str, int], str]:
         node_refs = [item.node_ref for item in evidence if item.node_ref is not None]
         edge_refs = [item.edge_ref for item in evidence if item.edge_ref is not None]
         observation_refs = [item.observation_ref for item in evidence if item.observation_ref is not None]
         identities: dict[tuple[str, int], str] = {}
         if node_refs:
-            for node in self.db.scalars(select(RiNode).where(RiNode.snapshot_id == snapshot.snapshot_id, RiNode.id.in_(node_refs))):
+            for node in self.db.scalars(
+                select(RiNode).where(RiNode.snapshot_id == snapshot.snapshot_id, RiNode.id.in_(node_refs))
+            ):
                 identities[("node", node.id)] = node.stable_key
         if edge_refs:
-            for edge in self.db.scalars(select(RiEdge).where(RiEdge.snapshot_id == snapshot.snapshot_id, RiEdge.id.in_(edge_refs))):
+            for edge in self.db.scalars(
+                select(RiEdge).where(RiEdge.snapshot_id == snapshot.snapshot_id, RiEdge.id.in_(edge_refs))
+            ):
                 identities[("edge", edge.id)] = edge.edge_id
         if observation_refs:
             from app.models.snapshot import RiObservation
 
             for observation in self.db.scalars(
-                select(RiObservation).where(RiObservation.snapshot_id == snapshot.snapshot_id, RiObservation.id.in_(observation_refs))
+                select(RiObservation).where(
+                    RiObservation.snapshot_id == snapshot.snapshot_id, RiObservation.id.in_(observation_refs)
+                )
             ):
                 identities[("observation", observation.id)] = observation.observation_id
         return identities
@@ -892,16 +890,20 @@ class SnapshotQueryService:
             # Ranking one canonical edge per adjacent node *before* the cap is
             # essential: limiting raw edges could otherwise exhaust the query
             # budget on duplicate paths and falsely claim the result complete.
-            canonical_rank = func.row_number().over(
-                partition_by=adjacent,
-                order_by=(
-                    RiEdge.subject_key,
-                    RiEdge.predicate,
-                    RiEdge.object_key,
-                    RiEdge.edge_id,
-                    RiEdge.id,
-                ),
-            ).label("canonical_rank")
+            canonical_rank = (
+                func.row_number()
+                .over(
+                    partition_by=adjacent,
+                    order_by=(
+                        RiEdge.subject_key,
+                        RiEdge.predicate,
+                        RiEdge.object_key,
+                        RiEdge.edge_id,
+                        RiEdge.id,
+                    ),
+                )
+                .label("canonical_rank")
+            )
             ranked_edges = (
                 select(RiEdge.id.label("edge_row_id"), canonical_rank)
                 .where(

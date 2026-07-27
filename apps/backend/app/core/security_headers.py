@@ -28,9 +28,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     (e.g. a route needing a looser CSP) is never overridden.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         response = await call_next(request)
         for header, value in SECURITY_HEADERS.items():
             response.headers.setdefault(header, value)

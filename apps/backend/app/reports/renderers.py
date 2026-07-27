@@ -86,8 +86,7 @@ def _render_section_html(section: Section) -> str:
     if section.table:
         head = "".join(f"<th>{escape(header)}</th>" for header in section.table.headers)
         body = "".join(
-            "<tr>" + "".join(f"<td>{escape(cell)}</td>" for cell in row) + "</tr>"
-            for row in section.table.rows
+            "<tr>" + "".join(f"<td>{escape(cell)}</td>" for cell in row) + "</tr>" for row in section.table.rows
         )
         parts.append(f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>")
     if section.bullets:

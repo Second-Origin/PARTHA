@@ -73,7 +73,10 @@ class DocumentationService:
                         ("Frameworks", ", ".join(projection.frameworks) if projection.frameworks else "Not detected"),
                         ("Observed files", str(len(projection.files))),
                         ("Observed supported-language files", str(source_files)),
-                        ("Entry point", ", ".join(projection.entry_points) if projection.entry_points else "Not detected"),
+                        (
+                            "Entry point",
+                            ", ".join(projection.entry_points) if projection.entry_points else "Not detected",
+                        ),
                     ],
                 )
             )
@@ -86,11 +89,7 @@ class DocumentationService:
 
         if "api" in selected:
             api_files = sorted(
-                {
-                    file.path
-                    for file in projection.files
-                    if file.role in {"route", "controller"}
-                }
+                {file.path for file in projection.files if file.role in {"route", "controller"}}
                 | {path for route in projection.routes for path in route.evidence_paths}
             )
             report_sections.append(

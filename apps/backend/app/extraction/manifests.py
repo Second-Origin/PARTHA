@@ -340,7 +340,7 @@ class DependencyManifestExtractor:
                 i += 1
             else:
                 start = i
-                while i < n and text[i] not in " \t\r\n{}[]:,\"":
+                while i < n and text[i] not in ' \t\r\n{}[]:,"':
                     i += 1
                 tokens.append(("other", text[start:i], line))
         return tokens

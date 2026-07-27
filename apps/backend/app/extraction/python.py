@@ -173,9 +173,7 @@ class PythonExtractor:
                         severity="error",
                         message="file could not be parsed as Python",
                         path=canonical.normalize_repo_path(path),
-                        subject=canonical.normalize_stable_key(
-                            "file", f"file:{canonical.normalize_repo_path(path)}"
-                        ),
+                        subject=canonical.normalize_stable_key("file", f"file:{canonical.normalize_repo_path(path)}"),
                     ),
                 )
             )
@@ -205,12 +203,8 @@ class PythonExtractor:
         elif module_ev_diag is not None:
             diagnostics.append(module_ev_diag)
 
-        self._collect_imports(
-            tree, path, line_count, module_key, observations, diagnostics
-        )
-        self._collect_symbols(
-            tree, path, line_count, nodes, observations, diagnostics
-        )
+        self._collect_imports(tree, path, line_count, module_key, observations, diagnostics)
+        self._collect_symbols(tree, path, line_count, nodes, observations, diagnostics)
         self._collect_calls(tree, path, line_count, module_key, observations, diagnostics)
         self._collect_blind_spots(tree, path, line_count, diagnostics)
 
@@ -220,16 +214,12 @@ class PythonExtractor:
             diagnostics=tuple(diagnostics),
         )
 
-    def _collect_imports(
-        self, tree, path, line_count, module_key, observations, diagnostics
-    ) -> None:
+    def _collect_imports(self, tree, path, line_count, module_key, observations, diagnostics) -> None:
         # Only direct module-level imports can safely act as file-wide name
         # bindings. A function- or block-local binding must not leak into an
         # unrelated call site during downstream resolution.
         module_binding_statements = {
-            id(statement)
-            for statement in tree.body
-            if isinstance(statement, (ast.Import, ast.ImportFrom))
+            id(statement) for statement in tree.body if isinstance(statement, (ast.Import, ast.ImportFrom))
         }
         for node in ast.walk(tree):
             names: list[str] = []
@@ -255,7 +245,10 @@ class PythonExtractor:
                 continue
             for name in names:
                 ev, diag = build_evidence(
-                    path, node.lineno, node.end_lineno or node.lineno, line_count,
+                    path,
+                    node.lineno,
+                    node.end_lineno or node.lineno,
+                    line_count,
                     producer=self.producer,
                 )
                 if ev is None:
@@ -274,7 +267,10 @@ class PythonExtractor:
                 )
             for specifier, imported, local in bindings:
                 ev, diag = build_evidence(
-                    path, node.lineno, node.end_lineno or node.lineno, line_count,
+                    path,
+                    node.lineno,
+                    node.end_lineno or node.lineno,
+                    line_count,
                     producer=self.producer,
                 )
                 if ev is None:
@@ -294,9 +290,7 @@ class PythonExtractor:
 
     _DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
-    def _collect_symbols(
-        self, tree, path, line_count, nodes, observations, diagnostics
-    ) -> None:
+    def _collect_symbols(self, tree, path, line_count, nodes, observations, diagnostics) -> None:
         assigner = DiscriminatorAssigner()
         route_ordinal = 0
 
@@ -308,17 +302,17 @@ class PythonExtractor:
                 base_key = symbol_stable_key(path, scope, child.name)
                 final_key, duplicate = assigner.key(base_key)
                 ev, diag = build_evidence(
-                    path, child.lineno, child.end_lineno or child.lineno,
-                    line_count, producer=self.producer,
+                    path,
+                    child.lineno,
+                    child.end_lineno or child.lineno,
+                    line_count,
+                    producer=self.producer,
                 )
                 if ev is None:
                     if diag is not None:
                         diagnostics.append(diag)
                 else:
-                    decorator_nodes = [
-                        (self._decorator_name(d), d)
-                        for d in getattr(child, "decorator_list", [])
-                    ]
+                    decorator_nodes = [(self._decorator_name(d), d) for d in getattr(child, "decorator_list", [])]
                     decorator_nodes = [(n, d) for n, d in decorator_nodes if n]
                     decorators = [n for n, _ in decorator_nodes]
                     properties = {"decorators": decorators} if decorators else None
@@ -347,9 +341,11 @@ class PythonExtractor:
                     # lines rather than only a name in `properties` (#90).
                     for decorator_name, decorator_node in decorator_nodes:
                         dec_ev, dec_diag = build_evidence(
-                            path, decorator_node.lineno,
+                            path,
+                            decorator_node.lineno,
                             decorator_node.end_lineno or decorator_node.lineno,
-                            line_count, producer=self.producer,
+                            line_count,
+                            producer=self.producer,
                         )
                         if dec_ev is None:
                             if dec_diag is not None:
@@ -367,8 +363,11 @@ class PythonExtractor:
                         )
                     for route_path, route_node in self._route_paths(child):
                         route_ev, route_diag = build_evidence(
-                            path, route_node.lineno, route_node.end_lineno or route_node.lineno,
-                            line_count, producer=self.producer,
+                            path,
+                            route_node.lineno,
+                            route_node.end_lineno or route_node.lineno,
+                            line_count,
+                            producer=self.producer,
                         )
                         if route_ev is None:
                             if route_diag is not None:
@@ -458,8 +457,11 @@ class PythonExtractor:
             if node.func.id in {"dir", "getattr", "hasattr", "setattr", "vars"}:
                 return
             evidence, diagnostic = build_evidence(
-                path, node.lineno, node.end_lineno or node.lineno,
-                line_count, producer=self.producer,
+                path,
+                node.lineno,
+                node.end_lineno or node.lineno,
+                line_count,
+                producer=self.producer,
             )
             if evidence is None:
                 if diagnostic is not None:
@@ -737,9 +739,7 @@ class PythonExtractor:
             elif isinstance(node, ast.Import):
                 bind_import(node, scope)
             elif isinstance(node, ast.ClassDef):
-                if any(
-                    keyword.arg == "metaclass" for keyword in node.keywords
-                ):
+                if any(keyword.arg == "metaclass" for keyword in node.keywords):
                     # The class itself is still extracted; what a metaclass does to it
                     # at runtime is not modelled, so say so rather than imply we know.
                     flag(node, "metaclass is unsupported")
@@ -843,5 +843,9 @@ class PythonExtractor:
                 continue
             if decorator.func.attr not in _ROUTE_METHODS:
                 continue
-            if decorator.args and isinstance(decorator.args[0], ast.Constant) and isinstance(decorator.args[0].value, str):
+            if (
+                decorator.args
+                and isinstance(decorator.args[0], ast.Constant)
+                and isinstance(decorator.args[0].value, str)
+            ):
                 yield decorator.args[0].value, decorator

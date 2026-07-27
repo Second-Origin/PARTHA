@@ -121,10 +121,7 @@ def build_architecture_document(architecture: ArchitectureResponse) -> ReportDoc
             heading="Layers",
             table=Table(
                 headers=["Layer", "Order", "Components"],
-                rows=[
-                    [layer.name, str(layer.order), str(len(layer.nodes))]
-                    for layer in architecture.detected_layers
-                ],
+                rows=[[layer.name, str(layer.order), str(len(layer.nodes))] for layer in architecture.detected_layers],
             ),
         ),
         Section(
@@ -207,10 +204,7 @@ def build_dependencies_document(dependencies: DependencyGraphResponse, repositor
             paragraphs=[] if dependencies.nodes else ["No dependencies were detected."],
             table=Table(
                 headers=["Name", "Version", "Type"],
-                rows=[
-                    [node.name, node.version or "unknown", node.type]
-                    for node in dependencies.nodes
-                ],
+                rows=[[node.name, node.version or "unknown", node.type] for node in dependencies.nodes],
             )
             if dependencies.nodes
             else None,

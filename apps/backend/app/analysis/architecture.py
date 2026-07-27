@@ -52,7 +52,6 @@ _FRAMEWORK_BY_DEPENDENCY_NAME = {
 }
 
 
-
 class ArchitectureAnalyzer:
     """Builds the Architecture read model exclusively from sealed ri.v1 snapshots.
 
@@ -83,7 +82,9 @@ class ArchitectureAnalyzer:
         remaining_node_ids = {node.id for node in nodes}
         for diagnostic in diagnostics:
             if diagnostic.node_ids is not None:
-                diagnostic.node_ids = [node_id for node_id in diagnostic.node_ids if node_id in remaining_node_ids] or None
+                diagnostic.node_ids = [
+                    node_id for node_id in diagnostic.node_ids if node_id in remaining_node_ids
+                ] or None
         self._set_relationship_states(modules, nodes, edges, unresolved_node_ids, covered_paths, facts is not None)
         layers = self._layers_for_nodes(nodes)
         arch_modules = [
@@ -509,9 +510,7 @@ class ArchitectureAnalyzer:
         if node is not None and not evidence:
             evidence = facts.node_evidence.get(node.id, [])
         exact = {
-            module_id
-            for item in evidence
-            for module_id in modules_by_file.get(self._normalize_path(item.path), [])
+            module_id for item in evidence for module_id in modules_by_file.get(self._normalize_path(item.path), [])
         }
         if exact:
             return exact
@@ -535,10 +534,7 @@ class ArchitectureAnalyzer:
             if not directory:
                 continue
             for module in module_by_id.values():
-                if any(
-                    self._path_is_within(self._normalize_path(file_path), directory)
-                    for file_path in module.files
-                ):
+                if any(self._path_is_within(self._normalize_path(file_path), directory) for file_path in module.files):
                     result.add(module.id)
         return result
 
@@ -558,8 +554,11 @@ class ArchitectureAnalyzer:
                 node.relationship_state = "connected"
             elif node.id in unresolved_node_ids:
                 node.relationship_state = "unresolved"
-            elif node.id in module_by_id and snapshot_available and module_by_id[node.id].files and all(
-                self._normalize_path(path) in covered_paths for path in module_by_id[node.id].files
+            elif (
+                node.id in module_by_id
+                and snapshot_available
+                and module_by_id[node.id].files
+                and all(self._normalize_path(path) in covered_paths for path in module_by_id[node.id].files)
             ):
                 node.relationship_state = "no-observed-relationships"
             else:
@@ -620,7 +619,12 @@ class ArchitectureAnalyzer:
         for node in nodes:
             layers.setdefault(node.layer, []).append(node.id)
         return [
-            ArchLayer(id=layer, name=layer.replace("-", " ").title(), order=LAYER_ORDER.get(layer, 99), nodes=node_ids)
+            ArchLayer(
+                id=layer,
+                name=layer.replace("-", " ").title(),
+                order=LAYER_ORDER.get(layer, 99),
+                nodes=node_ids,
+            )
             for layer, node_ids in sorted(layers.items(), key=lambda item: LAYER_ORDER.get(item[0], 99))
         ]
 
@@ -634,12 +638,45 @@ class ArchitectureAnalyzer:
     def _request_flow(self, modules: list[RepositoryModule]) -> list[RequestFlowStep]:
         module_roles = {module.role for module in modules}
         steps = [
-            RequestFlowStep(id="client", name="Client", type="frontend", description="Request enters the system.", details=["Browser or API client sends a request."]),
+            RequestFlowStep(
+                id="client",
+                name="Client",
+                type="frontend",
+                description="Request enters the system.",
+                details=["Browser or API client sends a request."],
+            ),
         ]
         if "route" in module_roles or "controller" in module_roles:
-            steps.append(RequestFlowStep(id="api", name="API Layer", type="controller", description="Route/controller handles input.", details=["Validate request", "Call service"]))
+            steps.append(
+                RequestFlowStep(
+                    id="api",
+                    name="API Layer",
+                    type="controller",
+                    description="Route/controller handles input.",
+                    details=["Validate request", "Call service"],
+                )
+            )
         if "service" in module_roles:
-            steps.append(RequestFlowStep(id="service", name="Service Layer", type="service", description="Business logic executes.", details=["Coordinate repository intelligence consumers", "Transform data"]))
+            steps.append(
+                RequestFlowStep(
+                    id="service",
+                    name="Service Layer",
+                    type="service",
+                    description="Business logic executes.",
+                    details=[
+                        "Coordinate repository intelligence consumers",
+                        "Transform data",
+                    ],
+                )
+            )
         if "repository" in module_roles:
-            steps.append(RequestFlowStep(id="repository", name="Repository Layer", type="repository", description="Persistence or source files are accessed.", details=["Read or write data"] ))
+            steps.append(
+                RequestFlowStep(
+                    id="repository",
+                    name="Repository Layer",
+                    type="repository",
+                    description="Persistence or source files are accessed.",
+                    details=["Read or write data"],
+                )
+            )
         return steps

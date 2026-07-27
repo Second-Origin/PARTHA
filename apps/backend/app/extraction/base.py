@@ -126,9 +126,7 @@ def logical_line_count(text: str) -> int:
     return 1 + text.count("\n")
 
 
-def decode_source(
-    path: str, source: bytes, *, producer: str
-) -> tuple[str | None, ExtractedDiagnostic | None]:
+def decode_source(path: str, source: bytes, *, producer: str) -> tuple[str | None, ExtractedDiagnostic | None]:
     """Strict UTF-8 decode with RFC §6.2 binary/malformed handling.
 
     Returns ``(text, None)`` for decodable text (a zero-byte file decodes to
@@ -197,9 +195,7 @@ def build_evidence(
             code=RI_SPAN_INVALID,
             category=_CATEGORY[RI_SPAN_INVALID],
             severity="error",
-            message=(
-                f"span {start_line}..{end_line} is not within 1..{logical_line_count}"
-            ),
+            message=(f"span {start_line}..{end_line} is not within 1..{logical_line_count}"),
             path=normalized,
             span=(start_line, end_line),
         )

@@ -119,9 +119,7 @@ class AnalysisWorker:
         self.lease_seconds = lease_seconds
         self.max_source_bytes = max_source_bytes
         self._clock = clock
-        self._heartbeat_interval_seconds = heartbeat_interval_seconds or min(
-            max(lease_seconds / 3, 0.1), 5.0
-        )
+        self._heartbeat_interval_seconds = heartbeat_interval_seconds or min(max(lease_seconds / 3, 0.1), 5.0)
         self._shutdown = threading.Event()
 
     # -- public API ----------------------------------------------------------
@@ -412,12 +410,7 @@ class AnalysisWorker:
             # before this completion CAS. If this worker still owns that running
             # row, honour the accepted request instead of abandoning/completing.
             job = ctx.session.get(AnalysisJob, job_id)
-            if (
-                job is not None
-                and job.status == "running"
-                and job.worker_id == self.worker_id
-                and job.cancel_requested
-            ):
+            if job is not None and job.status == "running" and job.worker_id == self.worker_id and job.cancel_requested:
                 ctx.job = job
                 ctx.record = ctx.session.get(RepositoryRecord, job.repository_id)
                 self._cancel(ctx)
@@ -435,11 +428,7 @@ class AnalysisWorker:
         """Honour a cooperative cancel: fail any open snapshot, cancel the job."""
 
         self._lock_owned_job(ctx)
-        snapshot = (
-            ctx.session.get(RiSnapshot, ctx.job.snapshot_id)
-            if ctx.job.snapshot_id is not None
-            else None
-        )
+        snapshot = ctx.session.get(RiSnapshot, ctx.job.snapshot_id) if ctx.job.snapshot_id is not None else None
         if snapshot is not None and snapshot.state == "completed":
             self._complete_sealed_snapshot(ctx, snapshot)
             return
@@ -668,18 +657,13 @@ class AnalysisWorker:
             ownership.append(AnalysisJob.cancel_requested.is_(False))
         with ctx.session.no_autoflush:
             result = ctx.session.execute(
-                update(AnalysisJob)
-                .where(*ownership)
-                .values(**values)
-                .execution_options(synchronize_session="fetch")
+                update(AnalysisJob).where(*ownership).values(**values).execution_options(synchronize_session="fetch")
             )
         if result.rowcount == 0:
             ctx.session.rollback()
             raise _LeaseLostError(job_id)
 
-    def _lock_owned_job(
-        self, ctx: _StageContext, *, require_cancel_not_requested: bool = False
-    ) -> None:
+    def _lock_owned_job(self, ctx: _StageContext, *, require_cancel_not_requested: bool = False) -> None:
         """Lock the running row after atomically confirming this worker owns it."""
 
         try:
@@ -702,11 +686,7 @@ class AnalysisWorker:
             raise
 
     def _cancel_requested(self, ctx: _StageContext) -> bool:
-        return bool(
-            ctx.session.scalar(
-                select(AnalysisJob.cancel_requested).where(AnalysisJob.id == ctx.job.id)
-            )
-        )
+        return bool(ctx.session.scalar(select(AnalysisJob.cancel_requested).where(AnalysisJob.id == ctx.job.id)))
 
     def _fail_open_snapshot(self, ctx: _StageContext, *, code: str) -> None:
         """Mark an opened-but-unsealed snapshot ``failed`` (no-op if reused/sealed)."""
@@ -820,11 +800,7 @@ class AnalysisWorker:
             # A SQLite writer prevents every other SQLite writer, including a
             # stale sweeper. Skipping that transient pulse avoids a false retry;
             # PostgreSQL heartbeats remain fully independent and guarded.
-            if (
-                session.bind is not None
-                and session.bind.dialect.name == "sqlite"
-                and "locked" in str(exc).lower()
-            ):
+            if session.bind is not None and session.bind.dialect.name == "sqlite" and "locked" in str(exc).lower():
                 logger.debug("SQLite analysis heartbeat skipped while the stage held the write lock")
             else:
                 state.failure = exc
@@ -871,9 +847,7 @@ class AnalysisWorker:
             ctx.record.analysed_at = completed_at
         ctx.session.commit()
 
-    def _read_sources(
-        self, record: RepositoryRecord, ctx: _StageContext | None = None
-    ) -> Mapping[str, bytes]:
+    def _read_sources(self, record: RepositoryRecord, ctx: _StageContext | None = None) -> Mapping[str, bytes]:
         """Read repository source bytes keyed by normalized repo-relative path.
 
         Paths come from ``record.file_tree`` (already computed at ingestion) rather
@@ -983,7 +957,11 @@ class AnalysisWorker:
                 for node in item.result.nodes
                 if not (node.node_kind == "dependency" and node.stable_key in mergeable)
             )
-            rewritten.append(item if kept_nodes == item.result.nodes else replace(item, result=replace(item.result, nodes=kept_nodes)))
+            rewritten.append(
+                item
+                if kept_nodes == item.result.nodes
+                else replace(item, result=replace(item.result, nodes=kept_nodes))
+            )
         return tuple(merged_entries) + tuple(rewritten)
 
     @staticmethod

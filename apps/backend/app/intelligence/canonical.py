@@ -85,9 +85,7 @@ def _normalize(value: Any) -> Any:
         for key, item in value.items():
             normalized_key = nfc(str(key))
             if normalized_key in normalized:
-                raise CanonicalizationError(
-                    f"object keys collide after Unicode normalization: {normalized_key!r}"
-                )
+                raise CanonicalizationError(f"object keys collide after Unicode normalization: {normalized_key!r}")
             normalized[normalized_key] = _normalize(item)
         return normalized
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
@@ -162,9 +160,7 @@ def normalize_declared_arrays(
             return prepared
         if isinstance(node, Sequence) and not isinstance(node, (str, bytes, bytearray)):
             if key not in set_array_keys and key not in ordered_array_keys:
-                raise CanonicalizationError(
-                    f"{context} array {key!r} has no declared set/order semantics"
-                )
+                raise CanonicalizationError(f"{context} array {key!r} has no declared set/order semantics")
             elements = [prepare(item) for item in node]
             if key in set_array_keys:
                 by_bytes = {canonical_json_bytes(element): element for element in elements}
@@ -420,9 +416,7 @@ def compute_config_hash(
             for raw_key, value in node.items():
                 normalized_key = nfc(str(raw_key))
                 if normalized_key in prepared:
-                    raise CanonicalizationError(
-                        f"config keys collide after Unicode normalization: {normalized_key!r}"
-                    )
+                    raise CanonicalizationError(f"config keys collide after Unicode normalization: {normalized_key!r}")
                 prepared[normalized_key] = prepare(value, normalized_key)
             return prepared
         if isinstance(node, Sequence) and not isinstance(node, (str, bytes, bytearray)):
@@ -504,9 +498,7 @@ def order_evidence(evidence_records: Sequence[Mapping[str, Any]]) -> list[dict[s
     )
 
 
-def canonical_node_record(
-    node: Mapping[str, Any], *, schema_version: str = SCHEMA_VERSION
-) -> dict[str, Any]:
+def canonical_node_record(node: Mapping[str, Any], *, schema_version: str = SCHEMA_VERSION) -> dict[str, Any]:
     record: dict[str, Any] = {
         "kind": "node",
         "node_kind": node["node_kind"],
@@ -524,9 +516,7 @@ def canonical_node_record(
     return record
 
 
-def canonical_edge_record(
-    edge: Mapping[str, Any], *, schema_version: str = SCHEMA_VERSION
-) -> dict[str, Any]:
+def canonical_edge_record(edge: Mapping[str, Any], *, schema_version: str = SCHEMA_VERSION) -> dict[str, Any]:
     return {
         "kind": "edge",
         "edge_id": edge["edge_id"],
@@ -542,9 +532,7 @@ def canonical_edge_record(
     }
 
 
-def canonical_assertion_record(
-    assertion: Mapping[str, Any], *, schema_version: str = SCHEMA_VERSION
-) -> dict[str, Any]:
+def canonical_assertion_record(assertion: Mapping[str, Any], *, schema_version: str = SCHEMA_VERSION) -> dict[str, Any]:
     return {
         "kind": "assertion",
         "assertion_id": assertion["assertion_id"],
@@ -610,9 +598,7 @@ def _consolidate_edges(
         existing = grouped[triple]
         for field in ("edge_id", "truth_class", "producer", "producer_version"):
             if existing[field] != record[field]:
-                raise CanonicalizationError(
-                    f"inconsistent edge field {field!r} for duplicate triple {triple}"
-                )
+                raise CanonicalizationError(f"inconsistent edge field {field!r} for duplicate triple {triple}")
         existing["evidence"] = order_evidence(existing["evidence"] + record["evidence"])
         existing["derived_from"] = sort_derived_from(existing["derived_from"] + record["derived_from"])
     return list(grouped.values())

@@ -38,9 +38,7 @@ class RepositoryContextBuilder:
         )
         dependencies: list[DependencyContext] = []
         for dependency in projection.dependencies[:20]:
-            declared_versions = tuple(
-                dict.fromkeys(declaration.version for declaration in dependency.declarations)
-            )
+            declared_versions = tuple(dict.fromkeys(declaration.version for declaration in dependency.declarations))
             has_conflict = len(declared_versions) > 1
             dependencies.append(
                 DependencyContext(

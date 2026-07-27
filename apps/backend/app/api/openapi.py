@@ -122,9 +122,7 @@ def remove_suppressed_automatic_validation_errors(document: dict[str, Any]) -> N
     """Remove FastAPI's synthetic 422 response from explicitly marked operations."""
     for path_item in document.get("paths", {}).values():
         for operation in path_item.values():
-            if not isinstance(operation, dict) or not operation.pop(
-                _SUPPRESS_AUTOMATIC_422_MARKER, False
-            ):
+            if not isinstance(operation, dict) or not operation.pop(_SUPPRESS_AUTOMATIC_422_MARKER, False):
                 continue
             operation.get("responses", {}).pop("422", None)
 

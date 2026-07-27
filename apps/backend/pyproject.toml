@@ -34,6 +34,10 @@ dependencies = [
 test = [
   "pytest>=8.3.0",
 ]
+dev = [
+  "mypy==2.3.0",
+  "ruff==0.16.0",
+]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
@@ -42,3 +46,57 @@ include = ["app*"]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["app"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+# AiProviderConfig is a backwards-compatible re-export from app.ai.types.
+per-file-ignores = { "app/ai/types.py" = ["F401"] }
+
+[tool.mypy]
+files = ["app"]
+python_version = "3.12"
+show_error_codes = true
+warn_unused_configs = true
+warn_unused_ignores = true
+
+# Existing type debt is isolated to the listed modules. The rest of the
+# production package remains checked, so each entry can be removed as its
+# annotations are repaired without weakening the global baseline.
+[[tool.mypy.overrides]]
+module = [
+  "app.ai.providers.config_store",
+  "app.ai.providers.http",
+  "app.analysis.architecture",
+  "app.analysis.authentication",
+  "app.api.routes.ai",
+  "app.api.routes.analysis",
+  "app.api.routes.auth",
+  "app.api.routes.documentation",
+  "app.api.routes.intelligence",
+  "app.api.routes.repositories",
+  "app.api.routes.reports",
+  "app.auth.service",
+  "app.core.ai_egress",
+  "app.core.observability",
+  "app.extraction.manifests",
+  "app.extraction.python",
+  "app.extraction.typescript",
+  "app.graph.dependency_graph",
+  "app.insights.service",
+  "app.intelligence.query_service",
+  "app.intelligence.resolution",
+  "app.intelligence.snapshot_store",
+  "app.main",
+  "app.reports.renderers",
+  "app.review.review_service",
+  "app.services.analysis_job_service",
+  "app.services.documentation_service",
+  "app.services.repository_service",
+  "app.workers.analysis_worker",
+]
+ignore_errors = true

@@ -123,9 +123,11 @@ def _stored_snapshot_state(session: Session, snapshot_id: str | None) -> str | N
             return state
         if snapshot in session.new:
             return snapshot.state
-    return session.connection().execute(
-        select(RiSnapshot.state).where(RiSnapshot.snapshot_id == snapshot_id)
-    ).scalar_one_or_none()
+    return (
+        session.connection()
+        .execute(select(RiSnapshot.state).where(RiSnapshot.snapshot_id == snapshot_id))
+        .scalar_one_or_none()
+    )
 
 
 @event.listens_for(Session, "before_flush")
@@ -134,9 +136,11 @@ def _guard_completed_snapshots(session: Session, _flush_context, _instances) -> 
         if isinstance(obj, RiSnapshot):
             persisted_state = _persisted_state(obj)
             if persisted_state is None and obj not in session.new:
-                persisted_state = session.connection().execute(
-                    select(RiSnapshot.state).where(RiSnapshot.snapshot_id == obj.snapshot_id)
-                ).scalar_one_or_none()
+                persisted_state = (
+                    session.connection()
+                    .execute(select(RiSnapshot.state).where(RiSnapshot.snapshot_id == obj.snapshot_id))
+                    .scalar_one_or_none()
+                )
             if persisted_state == "completed":
                 raise SnapshotImmutableError("A completed snapshot is immutable and cannot be modified.")
             if persisted_state is not None and obj.state != persisted_state:
@@ -1016,7 +1020,9 @@ class SnapshotStore:
         # Every observation has exactly one evidence record (RFC §6.4).
         for observation in facts.observations:
             if len(evidence_by_observation.get(observation.id, [])) != 1:
-                raise SnapshotSealError(f"observation {observation.observation_id} must have exactly one evidence record")
+                raise SnapshotSealError(
+                    f"observation {observation.observation_id} must have exactly one evidence record"
+                )
             if node_kind_by_key.get(observation.subject_key) != observation.subject_kind:
                 raise SnapshotSealError(f"observation {observation.observation_id} has an invalid subject")
             evidence = evidence_by_observation[observation.id][0]

@@ -154,8 +154,7 @@ class RevisionManifestService:
                 matches_stored_snapshot=False,
                 mismatched_fields=mismatched,
                 detail=(
-                    "The manifest is internally consistent but does not match the "
-                    "snapshot stored for this repository."
+                    "The manifest is internally consistent but does not match the snapshot stored for this repository."
                 ),
             )
         if named.snapshot_id != current.snapshot_id:
@@ -180,6 +179,4 @@ class RevisionManifestService:
     def _mismatched_fields(stored: RevisionManifest, submitted: RevisionManifest) -> list[str]:
         stored_fields = stored.model_dump(mode="json", by_alias=True)
         submitted_fields = submitted.model_dump(mode="json", by_alias=True)
-        return sorted(
-            key for key in stored_fields if stored_fields[key] != submitted_fields.get(key)
-        )
+        return sorted(key for key in stored_fields if stored_fields[key] != submitted_fields.get(key))

@@ -188,9 +188,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     condition is impossible to miss.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         settings: Settings = request.app.state.rate_limit_settings
         if not settings.rate_limit_enabled:
             return await call_next(request)

@@ -226,8 +226,7 @@ def get_authentication_explanation(
     dependencies=[Depends(require_repository_owner)],
     responses=documented_responses(
         200,
-        "Source text for one evidence citation, verified against the exact "
-        "snapshot revision it was cited from.",
+        "Source text for one evidence citation, verified against the exact snapshot revision it was cited from.",
         {
             "schemaVersion": "evidence-source.v1",
             "repositoryId": _REPOSITORY_ID,
@@ -240,7 +239,7 @@ def get_authentication_explanation(
             "endLine": 10,
             "status": "ready",
             "reason": None,
-            "content": "@app.get(\"/me\")\n",
+            "content": '@app.get("/me")\n',
             "truncated": False,
             "size": 16,
         },
@@ -390,9 +389,7 @@ def verify_revision_manifest(
                     ],
                 }
             ],
-            "edges": [
-                {"id": "edge_example", "source": "repo:root", "target": "dep:npm:react", "type": "depends-on"}
-            ],
+            "edges": [{"id": "edge_example", "source": "repo:root", "target": "dep:npm:react", "type": "depends-on"}],
             "totalDependencies": 1,
             "manifestCount": 1,
             "diagnostics": [],

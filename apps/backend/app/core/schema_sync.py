@@ -150,9 +150,7 @@ def ensure_schema_in_sync(engine: Engine, *, app_env: str) -> None:
     lower = current or "base"
     existing_tables = set(sa_inspect(engine).get_table_names())
     tables_by_revision = _tables_created_between(script, head, lower)
-    conflicts = {
-        table: revision for table, revision in tables_by_revision.items() if table in existing_tables
-    }
+    conflicts = {table: revision for table, revision in tables_by_revision.items() if table in existing_tables}
     if conflicts:
         recommended = _recommended_stamp(script, head, lower, existing_tables)
         conflict_desc = ", ".join(f"{table!r} (from {revision})" for table, revision in sorted(conflicts.items()))

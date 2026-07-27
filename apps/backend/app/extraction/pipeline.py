@@ -125,21 +125,16 @@ class ExtractionPipeline:
                 result = extractor.extract(path, source)
                 if check_cancelled is not None:
                     check_cancelled()
-                produced.append(
-                    ProducedExtraction(extractor.name, extractor.version, result)
-                )
+                produced.append(ProducedExtraction(extractor.name, extractor.version, result))
                 # Python emits a directory module but no file node. Inventory
                 # supplies that shared entity only after successful extraction;
                 # TypeScript already emits its own file node.
                 if result.nodes and not any(
-                    node.node_kind == "file" and node.stable_key == file_key
-                    for node in result.nodes
+                    node.node_kind == "file" and node.stable_key == file_key for node in result.nodes
                 ):
                     evidence = self._whole_file_evidence(path, source)
                     if evidence is not None:
-                        inventory_nodes.append(
-                            self._file_node(path, evidence, self._language(path), source)
-                        )
+                        inventory_nodes.append(self._file_node(path, evidence, self._language(path), source))
                 continue
 
             text, diagnostic = decode_source(
@@ -197,9 +192,7 @@ class ExtractionPipeline:
             )
         return tuple(produced)
 
-    def _whole_file_evidence(
-        self, path: str, source: bytes
-    ) -> ExtractedEvidence | None:
+    def _whole_file_evidence(self, path: str, source: bytes) -> ExtractedEvidence | None:
         text, _ = decode_source(
             path,
             source,

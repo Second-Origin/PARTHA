@@ -249,9 +249,7 @@ class Settings(BaseSettings):
         except (binascii.Error, ValueError) as exc:
             raise ValueError("AI_ENCRYPTION_KEY must be a URL-safe base64-encoded 32-byte Fernet key.") from exc
         if len(decoded) != FERNET_KEY_BYTES:
-            raise ValueError(
-                f"AI_ENCRYPTION_KEY must decode to exactly {FERNET_KEY_BYTES} bytes (a Fernet key)."
-            )
+            raise ValueError(f"AI_ENCRYPTION_KEY must decode to exactly {FERNET_KEY_BYTES} bytes (a Fernet key).")
         return self
 
     @model_validator(mode="after")
