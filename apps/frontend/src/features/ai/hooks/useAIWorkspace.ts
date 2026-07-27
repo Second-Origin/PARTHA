@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { aiService, getErrorMessage } from '@/shared/services/api';
 import type { AiMessage } from '@/shared/services/api/types';
 import { useRepositoryFeatureStatus } from '@/shared/feature-state/useRepositoryFeatureStatus';
@@ -10,6 +10,18 @@ export function useAIWorkspace() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [providerConfigured, setProviderConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    aiService
+      .getConfig()
+      .then(() => !cancelled && setProviderConfigured(true))
+      .catch(() => !cancelled && setProviderConfigured(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const ask = useCallback(async () => {
     const activeRepository = repositoryFeature.activeRepository;
@@ -50,6 +62,7 @@ export function useAIWorkspace() {
     suggestions,
     loading: repositoryFeature.loading || loading,
     error: repositoryFeature.error || error,
+    providerConfigured,
     ask,
   };
 }
