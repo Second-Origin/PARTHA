@@ -42,6 +42,22 @@ export function InsightsPage() {
       </div>
     );
   }
+  // A repository can be analysed yet still have no sealed ri.v1 snapshot
+  // (#178, same 404 contract as Dependencies/Architecture). That must read as
+  // "run analysis again", never as a generic, unguided error message.
+  if (insights.noSnapshot) {
+    return (
+      <div>
+        <PageHeader title="Insights" description="Measurable facts for one exact repository revision" />
+        <EmptyState
+          icon={BarChart3}
+          title="No sealed snapshot yet"
+          description="This repository has no sealed Repository Intelligence snapshot for its current revision. Analyse it again to generate one."
+          action={{ label: 'Run analysis', onClick: () => navigate('/upload') }}
+        />
+      </div>
+    );
+  }
   if (insights.error) {
     return (
       <div className="flex min-h-72 flex-col items-center justify-center text-center">

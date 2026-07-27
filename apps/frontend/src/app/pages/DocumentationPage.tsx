@@ -48,6 +48,23 @@ export function DocumentationPage() {
     );
   }
 
+  // A repository can be analysed yet still have no sealed ri.v1 snapshot
+  // (#178, same 404 contract as Dependencies/Architecture). That must read as
+  // "run analysis again", never as a generic, unguided error message.
+  if (documentation.noSnapshot) {
+    return (
+      <div>
+        <PageHeader title="Documentation" description="Auto-generated documentation from your codebase" />
+        <EmptyState
+          icon={FileText}
+          title="No sealed snapshot yet"
+          description="This repository has no sealed Repository Intelligence snapshot for its current revision. Analyse it again to generate one."
+          action={{ label: 'Run analysis', onClick: () => navigate('/upload') }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader title="Documentation" description={`Documentation for ${activeRepository.name}`}>
