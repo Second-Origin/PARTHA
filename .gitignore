@@ -72,6 +72,18 @@ apps/backend/.env
 !apps/backend/.env.example
 
 # ==========================================
+# Local-only strategy / roadmap docs (never commit)
+# The Market-Fit Roadmap is the single source of truth for product direction,
+# but it must stay local-only (not published to the public repo).
+# ==========================================
+
+PARTHA_Market_Fit_Product_Roadmap.html
+PARTHA_Defensible_Repository_Intelligence_Roadmap_2026_2027.html
+
+# Local Hermes agent state (desktop attachments, sessions, caches)
+.hermes/
+
+# ==========================================
 # IDE
 # ==========================================
 
