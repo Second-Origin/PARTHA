@@ -18,7 +18,6 @@ PUBLIC_OPERATIONS = {
     ("POST", "/auth/logout"),
     ("GET", "/health"),
     ("GET", "/ready"),
-    ("GET", "/metrics"),
 }
 
 # Refresh is unauthenticated in the HTTPBearer sense, but requires a valid
@@ -63,7 +62,7 @@ EXPECTED_RESPONSES = {
     ("POST", "/export"): {200, 401, 404, 409, 422, 429, 500},
     ("GET", "/health"): {200, 500},
     ("GET", "/ready"): {200, 503, 500},
-    ("GET", "/metrics"): {200, 500},
+    ("GET", "/metrics"): {200, 401, 500},
 }
 
 BODY_MEDIA_TYPES = {

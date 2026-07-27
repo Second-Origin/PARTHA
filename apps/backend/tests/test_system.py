@@ -23,10 +23,10 @@ def test_readiness_endpoint(client):
     }
 
 
-def test_metrics_endpoint_exposes_request_counters(client):
-    client.get("/health")
+def test_metrics_endpoint_exposes_request_counters(auth_client):
+    auth_client.get("/health")
 
-    response = client.get("/metrics")
+    response = auth_client.get("/metrics")
 
     assert response.status_code == 200
     assert "text/plain" in response.headers["content-type"]

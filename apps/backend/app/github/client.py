@@ -161,10 +161,16 @@ class GitHubClient:
 
     def _directory_size(self, path: Path) -> int:
         total = 0
-        for child in path.rglob("*"):
-            try:
-                if child.is_file() and not child.is_symlink():
-                    total += child.stat().st_size
-            except OSError:
-                continue
+        for root, dirs, files in os.walk(path, followlinks=False):
+            for name in files:
+                child = Path(root, name)
+                try:
+                    if not child.is_symlink():
+                        total += child.stat().st_size
+                except OSError:
+                    continue
+            # Do not descend into symlinked directories: prevents a crafted
+            # symlink (e.g. to / or a parent dir) from causing disclosure or a
+            # size-measurement loop during clone budget enforcement.
+            dirs[:] = [d for d in dirs if not Path(root, d).is_symlink()]
         return total

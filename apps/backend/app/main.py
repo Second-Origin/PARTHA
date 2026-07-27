@@ -7,7 +7,7 @@ from time import perf_counter
 from typing import Any, Literal
 from uuid import uuid4
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import text
@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy import inspect as sa_inspect
 
 from app.api.router import api_router
+from app.api.deps import get_current_user
 from app.api.openapi import (
     documented_responses,
     remove_suppressed_automatic_validation_errors,
@@ -296,11 +297,13 @@ def create_app() -> FastAPI:
     @app.get(
         "/metrics",
         tags=["system"],
+        dependencies=[Depends(get_current_user)],
         response_class=PlainTextResponse,
         responses=documented_responses(
             status.HTTP_200_OK,
             "Prometheus-compatible runtime metrics.",
             "partha_http_requests_total 1\\n",
+            status.HTTP_401_UNAUTHORIZED,
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             media_type="text/plain",
             schema={"type": "string"},
