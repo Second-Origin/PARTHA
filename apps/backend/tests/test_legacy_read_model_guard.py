@@ -50,3 +50,26 @@ def test_product_code_has_no_legacy_intelligence_read_path():
                     f"{path.relative_to(PRODUCT_ROOT)}:{node.lineno}: reads repo_metadata.get('intelligence')"
                 )
     assert violations == []
+
+
+#: Analytical consumers per AGENTS.md's canonical-boundary rule: architecture,
+#: dependencies, review, insights, AI and exports. `app/services` and
+#: `app/workers` are deliberately excluded -- they legitimately read/write
+#: `record.file_tree` as part of ingestion (populating the field the sealed
+#: snapshot is built from), not as a canonical-source bypass.
+ANALYTICAL_CONSUMER_DIRS = ("analysis", "graph", "review", "insights", "ai", "reports")
+
+
+def test_analytical_consumers_never_read_repository_file_tree():
+    """Regression guard for Issue #217: no analytical consumer may derive its
+    output from ``RepositoryRecord.file_tree`` -- a sealed ``ri.v1`` snapshot,
+    or an explicit missing-snapshot state, is the only allowed source."""
+
+    violations: list[str] = []
+    for consumer_dir in ANALYTICAL_CONSUMER_DIRS:
+        for path in sorted((PRODUCT_ROOT / consumer_dir).rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Attribute) and node.attr == "file_tree":
+                    violations.append(f"{path.relative_to(PRODUCT_ROOT)}:{node.lineno}: reads .file_tree")
+    assert violations == []

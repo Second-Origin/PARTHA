@@ -57,18 +57,21 @@ class ArchitectureAnalyzer:
     """Builds the Architecture read model exclusively from sealed ri.v1 snapshots.
 
     No filesystem read, no working-tree fallback, and no legacy
-    ``repo_metadata['intelligence']`` read: every field is derived from
-    :class:`SnapshotQueryService` facts, or from ``record.file_tree`` (already
-    persisted repository metadata, not a filesystem walk) when no sealed
-    snapshot exists yet.
+    ``repo_metadata['intelligence']`` or ``record.file_tree`` read: every field
+    is derived from :class:`SnapshotQueryService` facts. A repository with no
+    sealed snapshot for its current revision raises ``NotFoundError`` (#217),
+    the same 404 contract Dependencies, Review and Insights already use —
+    never a fallback graph built from unsealed repository metadata.
     """
 
     def __init__(self, snapshots: SnapshotQueryService | None = None) -> None:
         self.snapshots = snapshots
 
     def build_architecture(self, record: RepositoryRecord) -> ArchitectureResponse:
+        if self.snapshots is not None:
+            self.snapshots.require_sealed_snapshot_for_current_revision(record.id)
         facts = self.snapshots.architecture_facts(record.id) if self.snapshots is not None else None
-        modules = self._modules_from_facts(facts, record)
+        modules = self._modules_from_facts(facts)
         frameworks = self._frameworks_from_facts(facts)
         primary_language = self._primary_language_from_facts(facts)
         entry_points = self._entry_points_from_facts(facts)
@@ -129,23 +132,16 @@ class ArchitectureAnalyzer:
                     files=module.files[:25],
                     dependencies=[],
                     dependents=[],
-                    estimated_complexity="high" if len(module.files) > 30 else "medium" if len(module.files) > 10 else "low",
-                    estimated_lines=max(len(module.files) * 80, 20),
+                    # No producer measures size/complexity (#217): file count is
+                    # not a line count or a complexity metric, so it is never
+                    # used to synthesize one.
+                    estimated_complexity="not_computed",
+                    estimated_lines="not_computed",
                     tags=[module.layer, module.role, module.id.replace("module:", "")],
                     layer=module.layer,
                 )
             )
         return nodes
-
-    def _persisted_file_paths(self, tree: list[dict]) -> list[str]:
-        paths: list[str] = []
-        for item in tree:
-            if item.get("type") == "file" and isinstance(item.get("path"), str):
-                paths.append(item["path"])
-            children = item.get("children")
-            if isinstance(children, list):
-                paths.extend(self._persisted_file_paths(children))
-        return sorted(set(paths))
 
     def _empty_module(self, files: list[str]) -> list[RepositoryModule]:
         return [
@@ -178,11 +174,14 @@ class ArchitectureAnalyzer:
             roles[assertion.subject_key.removeprefix("file:")] = classification
         return roles
 
-    def _modules_from_facts(
-        self, facts: ArchitectureSnapshotFacts | None, record: RepositoryRecord
-    ) -> list[RepositoryModule]:
+    def _modules_from_facts(self, facts: ArchitectureSnapshotFacts | None) -> list[RepositoryModule]:
         if facts is None:
-            return self._empty_module(self._persisted_file_paths(record.file_tree or []))
+            # Defensive only: build_architecture requires a sealed snapshot
+            # before calling this whenever self.snapshots is configured, so a
+            # production caller never reaches this branch with real facts
+            # unresolved. It stays as an honest, empty module set rather than
+            # ever reading `record.file_tree` (unsealed repository metadata).
+            return self._empty_module([])
         file_paths = sorted(
             node.stable_key.removeprefix("file:")
             for node in facts.nodes
@@ -311,8 +310,8 @@ class ArchitectureAnalyzer:
                     files=sorted({entry.path for entry in evidence}),
                     dependencies=[],
                     dependents=[],
-                    estimated_complexity="low",
-                    estimated_lines=0,
+                    estimated_complexity="not_computed",
+                    estimated_lines="not_computed",
                     tags=["external", "dependency"],
                     layer="external",
                 )

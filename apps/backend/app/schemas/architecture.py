@@ -59,8 +59,12 @@ class ArchNode(CamelModel):
     files: list[str]
     dependencies: list[str]
     dependents: list[str]
-    estimated_complexity: Literal["low", "medium", "high"]
-    estimated_lines: int
+    # No repository-intelligence producer measures complexity or line counts
+    # today (#217): these are never a synthesized guess (e.g. file count * 80).
+    # A real value can only appear once a named heuristic with a truth class
+    # backs it; until then every node reports "not_computed" explicitly.
+    estimated_complexity: Literal["low", "medium", "high", "not_computed"]
+    estimated_lines: int | Literal["not_computed"]
     tags: list[str]
     layer: str
     parent_module: str | None = None
