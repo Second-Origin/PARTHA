@@ -413,33 +413,16 @@ def test_architecture_fact_query_batches_relevant_evidence_ids(auth_client):
     assert max(evidence_query_parameter_counts) <= ARCHITECTURE_EVIDENCE_BATCH_SIZE + 1
 
 
-def test_architecture_without_snapshot_does_not_claim_isolation(auth_client):
+def test_architecture_without_a_sealed_snapshot_returns_404(auth_client):
     # Leave the analysis job queued (worker not drained) so no snapshot is sealed:
-    # this exercises the genuine "no sealed snapshot" architecture response, which
-    # durable analysis otherwise reaches only in the window before the worker runs.
+    # this exercises the genuine "no sealed snapshot" case, which durable analysis
+    # otherwise reaches only in the window before the worker runs. Architecture must
+    # 404 the same way Dependencies/Review/Insights already do (#217) rather than
+    # falling back to a graph built from unsealed repository metadata.
     repository = _upload(
         auth_client, {"src/lonely/index.ts": b"export const lonely = 1;\n"}, analyse=False
     )
 
     response = auth_client.get(f"/analysis/{repository['id']}/architecture")
 
-    assert response.status_code == 200
-    architecture = response.json()
-    assert architecture["relationshipSnapshotId"] is None
-    assert architecture["edges"] == []
-    assert architecture["nodes"][0]["relationshipState"] == "not-extracted"
-    assert architecture["diagnostics"] == [
-        {
-            "code": "ARCH-REL-NOT-EXTRACTED",
-            "category": "relationship extraction",
-            "severity": "info",
-            "message": "No sealed repository-intelligence snapshot is available for relationship analysis.",
-            "path": None,
-            "startLine": None,
-            "endLine": None,
-            "subjectKey": None,
-            "objectKey": None,
-            "details": None,
-            "nodeIds": None,
-        }
-    ]
+    assert response.status_code == 404

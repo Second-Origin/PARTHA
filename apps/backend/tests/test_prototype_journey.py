@@ -204,12 +204,9 @@ def test_journey_reports_honest_state_before_a_snapshot_exists(auth_client):
     # Enqueue but do not drain the worker: no snapshot is sealed.
     assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
 
-    architecture = auth_client.get(f"/analysis/{repository_id}/architecture").json()
-    assert architecture["relationshipSnapshotId"] is None
-    assert any(
-        diagnostic["code"] == "ARCH-REL-NOT-EXTRACTED"
-        for diagnostic in architecture["diagnostics"]
-    )
+    # Architecture 404s rather than falling back to a graph built from unsealed
+    # repository metadata (#217) -- the same honest contract as the manifest below.
+    assert auth_client.get(f"/analysis/{repository_id}/architecture").status_code == 404
 
     explanation = auth_client.get(
         f"/analysis/{repository_id}/architecture/authentication"
