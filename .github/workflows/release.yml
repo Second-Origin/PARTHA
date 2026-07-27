@@ -31,7 +31,7 @@ jobs:
         run: npm ci --prefix apps/frontend
 
       - name: Install backend dependencies
-        run: python -m pip install -e apps/backend
+        run: python -m pip install -e "apps/backend[test]"
 
       - name: Lint frontend
         run: npm --prefix apps/frontend run lint
