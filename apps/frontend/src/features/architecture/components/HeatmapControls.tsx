@@ -1,13 +1,14 @@
-import { Flame, Activity, HardDrive, AlertTriangle } from 'lucide-react';
+import { Activity, AlertTriangle } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useArchitectureStore } from '../store';
 import type { HeatmapMode } from '@/shared/types/architecture';
 
-const modes: { id: HeatmapMode; label: string; icon: typeof Flame }[] = [
+// 'Complexity' and 'Size' modes were removed (#217): no repository-
+// intelligence producer measures either, so there was no real signal to
+// render -- only 'Usage' and 'Critical' are computed from real graph facts.
+const modes: { id: HeatmapMode; label: string; icon: typeof Activity }[] = [
   { id: 'none', label: 'Off', icon: Activity },
-  { id: 'complexity', label: 'Complexity', icon: Flame },
   { id: 'usage', label: 'Usage', icon: Activity },
-  { id: 'size', label: 'Size', icon: HardDrive },
   { id: 'critical', label: 'Critical', icon: AlertTriangle },
 ];
 

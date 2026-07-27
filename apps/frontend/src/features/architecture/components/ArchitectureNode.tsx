@@ -35,7 +35,9 @@ export interface ArchNodeData {
   relationshipState: RelationshipState;
   description: string;
   filesCount: number;
-  complexity: 'low' | 'medium' | 'high';
+  // No producer measures complexity today (#217); 'not_computed' must never
+  // render as if it were a real "low/medium/high" assessment.
+  complexity: 'low' | 'medium' | 'high' | 'not_computed';
   isSelected?: boolean;
   isHighlighted?: boolean;
   heatmapIntensity?: number;
@@ -78,7 +80,7 @@ export const ArchitectureNode = memo(({ data }: NodeProps<ArchFlowNode>) => {
     `${formatLabel(data.nodeType)}, ${formatLabel(data.layer)}`,
     data.description,
     data.filesCount > 0 ? `${data.filesCount} files` : null,
-    `${data.complexity} complexity`,
+    data.complexity !== 'not_computed' ? `${data.complexity} complexity` : null,
     relationshipStateConfig[data.relationshipState].label,
   ]
     .filter(Boolean)
@@ -122,16 +124,18 @@ export const ArchitectureNode = memo(({ data }: NodeProps<ArchFlowNode>) => {
             {data.filesCount > 0 && (
               <span className="text-xs text-muted-foreground">{data.filesCount} files</span>
             )}
-            <span
-              className={cn(
-                'rounded px-1 py-0.5 text-xs',
-                data.complexity === 'high' && 'bg-destructive/10 text-destructive',
-                data.complexity === 'medium' && 'bg-warning/10 text-warning',
-                data.complexity === 'low' && 'bg-success/10 text-success'
-              )}
-            >
-              {data.complexity}
-            </span>
+            {data.complexity !== 'not_computed' && (
+              <span
+                className={cn(
+                  'rounded px-1 py-0.5 text-xs',
+                  data.complexity === 'high' && 'bg-destructive/10 text-destructive',
+                  data.complexity === 'medium' && 'bg-warning/10 text-warning',
+                  data.complexity === 'low' && 'bg-success/10 text-success'
+                )}
+              >
+                {data.complexity}
+              </span>
+            )}
             <span data-testid="architecture-node-trust" className={cn('rounded px-1 py-0.5 text-xs', relationshipStateConfig[data.relationshipState].className)}>
               {relationshipStateConfig[data.relationshipState].label}
             </span>

@@ -41,30 +41,52 @@ export function ArchitecturePage() {
     );
   }
 
-  if (!architecture.model) {
+  if (architecture.loading) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          {architecture.loading && (
-            <>
-              <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-              <span className="text-sm text-muted-foreground">Loading architecture model...</span>
-            </>
-          )}
-          {architecture.error && (
-            <div className="text-center">
-              <p className="text-sm text-destructive mb-2">{architecture.error}</p>
-              <button
-                onClick={architecture.retry}
-                className="text-xs text-primary hover:underline"
-              >
-                Retry
-              </button>
-            </div>
-          )}
+          <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <span className="text-sm text-muted-foreground">Loading architecture model...</span>
         </div>
       </div>
     );
+  }
+
+  // A repository can be analysed yet still have no sealed ri.v1 snapshot
+  // (#217, same 404 contract as Dependencies/Review/Insights). That must read
+  // as "run analysis again", never as a silent, indistinguishable empty graph.
+  if (architecture.noSnapshot) {
+    return (
+      <div className="h-full flex flex-col">
+        <PageHeader title="Architecture" description="Explore the architecture of your codebase" />
+        <EmptyState
+          icon={Network}
+          title="No sealed snapshot yet"
+          description="This repository has no sealed Repository Intelligence snapshot for its current revision. Analyse it again to generate one."
+          action={{ label: 'Run analysis', onClick: () => navigate('/upload') }}
+        />
+      </div>
+    );
+  }
+
+  if (architecture.error) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-sm text-destructive mb-2">{architecture.error}</p>
+          <button
+            onClick={architecture.retry}
+            className="text-xs text-primary hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!architecture.model) {
+    return null;
   }
 
   return (
