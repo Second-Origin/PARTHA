@@ -433,6 +433,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/intelligence/v1/snapshots/{snapshot_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Impact */
+        get: operations["get_impact_intelligence_v1_snapshots__snapshot_id__impact_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/intelligence/v1/snapshots/{snapshot_id}/neighbours": {
         parameters: {
             query?: never;
@@ -917,9 +934,9 @@ export interface components {
              * Estimatedcomplexity
              * @enum {string}
              */
-            estimatedComplexity: "low" | "medium" | "high";
+            estimatedComplexity: "low" | "medium" | "high" | "not_computed";
             /** Estimatedlines */
-            estimatedLines: number;
+            estimatedLines: number | "not_computed";
             /** Files */
             files: string[];
             /** Id */
@@ -2120,6 +2137,44 @@ export interface components {
              */
             schemaVersion: "ri.v1";
         };
+        /**
+         * RiImpactDirectionResponse
+         * @description One bounded traversal direction.
+         *
+         *     ``limit_reached`` means the response omitted further reachable nodes at the
+         *     requested depth rather than claiming that the listed nodes are exhaustive.
+         */
+        RiImpactDirectionResponse: {
+            /** Data */
+            data: components["schemas"]["RiImpactStepResponse"][];
+            /** Limitreached */
+            limitReached: boolean;
+        };
+        /** RiImpactResponse */
+        RiImpactResponse: {
+            dependencies: components["schemas"]["RiImpactDirectionResponse"];
+            dependents: components["schemas"]["RiImpactDirectionResponse"];
+            /** Depth */
+            depth: number;
+            /** Nodekey */
+            nodeKey: string;
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: "ri.v1";
+        };
+        /**
+         * RiImpactStepResponse
+         * @description A reached node and the stored edge that proves the traversal hop.
+         */
+        RiImpactStepResponse: {
+            /** Depth */
+            depth: number;
+            /** Nodekey */
+            nodeKey: string;
+            via: components["schemas"]["RiEdgeResponse"];
+        };
         /** RiNeighboursResponse */
         RiNeighboursResponse: {
             /** Data */
@@ -2765,7 +2820,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Architecture model derived from repository intelligence. */
+            /** @description Architecture model derived from the sealed repository-intelligence snapshot bound to the repository's current revision. A repository with no sealed snapshot yet returns 404, never a fallback graph (#217). */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2781,14 +2836,8 @@ export interface operations {
                      *       "edges": [],
                      *       "modules": [],
                      *       "requestFlow": [],
-                     *       "diagnostics": [
-                     *         {
-                     *           "code": "ARCH-REL-NOT-EXTRACTED",
-                     *           "category": "relationship extraction",
-                     *           "severity": "info",
-                     *           "message": "No sealed repository-intelligence snapshot is available for relationship analysis."
-                     *         }
-                     *       ],
+                     *       "relationshipSnapshotId": "snap_example",
+                     *       "diagnostics": [],
                      *       "summary": {
                      *         "language": "Python",
                      *         "framework": "FastAPI",
@@ -5297,6 +5346,144 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["RiEvidenceResponsePage"];
+                };
+            };
+            /** @description Authentication is required or the access token is invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "unauthorized",
+                     *       "message": "Not authenticated.",
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The requested resource does not exist or is not accessible to this user. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "not_found",
+                     *       "message": "Repository not found.",
+                     *       "details": {
+                     *         "repositoryId": "11111111-1111-1111-1111-111111111111"
+                     *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request could not be validated. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "request_validation_error",
+                     *       "message": "Request validation failed.",
+                     *       "details": {
+                     *         "errors": [
+                     *           {
+                     *             "loc": [
+                     *               "body",
+                     *               "url"
+                     *             ],
+                     *             "msg": "Field required"
+                     *           }
+                     *         ]
+                     *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request-rate limit has been exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "rate_limited",
+                     *       "message": "Too many requests. Try again shortly.",
+                     *       "details": {
+                     *         "retryAfterSeconds": 30
+                     *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description An unexpected server error occurred. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "internal_server_error",
+                     *       "message": "An unexpected error occurred.",
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_impact_intelligence_v1_snapshots__snapshot_id__impact_get: {
+        parameters: {
+            query: {
+                /** @description Directed import/dependency traversal depth (1-10). */
+                depth?: number;
+                nodeKey: string;
+            };
+            header?: never;
+            path: {
+                snapshot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded, provenance-backed dependents and dependencies over stored import/dependency edges. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "schemaVersion": "ri.v1",
+                     *       "nodeKey": "file:src/api.py",
+                     *       "depth": 1,
+                     *       "dependents": {
+                     *         "data": [],
+                     *         "limitReached": false
+                     *       },
+                     *       "dependencies": {
+                     *         "data": [],
+                     *         "limitReached": false
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RiImpactResponse"];
                 };
             };
             /** @description Authentication is required or the access token is invalid. */
