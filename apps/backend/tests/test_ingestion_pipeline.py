@@ -137,12 +137,11 @@ def test_analysis_read_endpoints_return_typed_defaults_before_worker_runs(auth_c
         record = session.get(RepositoryRecord, repository_id)
         assert "intelligence" not in (record.repo_metadata or {})
 
+    # Architecture is sealed-snapshot-bound (#217), same as Dependencies/Review/
+    # Insights: no snapshot yet means 404, never a fallback graph built from
+    # unsealed repository metadata.
     architecture_response = auth_client.get(f"/analysis/{repository_id}/architecture")
-    assert architecture_response.status_code == 200
-    architecture = architecture_response.json()
-    assert architecture["edges"] == []
-    assert architecture["relationshipSnapshotId"] is None
-    assert architecture["diagnostics"][0]["code"] == "ARCH-REL-NOT-EXTRACTED"
+    assert architecture_response.status_code == 404
 
     # Dependency Graph is sealed-snapshot-bound (#158), same as Review/Insights:
     # no snapshot yet means 404, not a typed-empty 200.

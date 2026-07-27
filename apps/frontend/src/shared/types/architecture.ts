@@ -21,7 +21,11 @@ export type ArchEdgeType = 'dependency' | 'import' | 'api-call' | 'data-flow' | 
 export type RelationshipState = 'connected' | 'no-observed-relationships' | 'unresolved' | 'not-extracted';
 export type TruthClass = 'resolved' | 'inferred';
 
-export type HeatmapMode = 'none' | 'complexity' | 'usage' | 'size' | 'critical';
+// 'complexity' and 'size' heatmap modes were removed with #217: no repository-
+// intelligence producer measures either today, so there was no real signal to
+// render. 'usage' (dependents count) and 'critical' are computed only from
+// real graph facts.
+export type HeatmapMode = 'none' | 'usage' | 'critical';
 
 export interface ArchNode {
   id: string;
@@ -32,8 +36,11 @@ export interface ArchNode {
   files: string[];
   dependencies: string[];
   dependents: string[];
-  estimatedComplexity: 'low' | 'medium' | 'high';
-  estimatedLines: number;
+  // No producer measures complexity or line counts today (#217); 'not_computed'
+  // is explicit and must never be synthesized from an unrelated real value
+  // (e.g. file count).
+  estimatedComplexity: 'low' | 'medium' | 'high' | 'not_computed';
+  estimatedLines: number | 'not_computed';
   tags: string[];
   layer: string;
   parentModule?: string;

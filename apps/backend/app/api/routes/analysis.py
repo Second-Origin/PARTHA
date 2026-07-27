@@ -137,7 +137,9 @@ def cancel_analysis(
     response_model=ArchitectureResponse,
     responses=documented_responses(
         200,
-        "Architecture model derived from repository intelligence.",
+        "Architecture model derived from the sealed repository-intelligence snapshot "
+        "bound to the repository's current revision. A repository with no sealed "
+        "snapshot yet returns 404, never a fallback graph (#217).",
         {
             "repositoryId": _REPOSITORY_ID,
             "repositoryName": "example-service",
@@ -147,15 +149,8 @@ def cancel_analysis(
             "edges": [],
             "modules": [],
             "requestFlow": [],
-            "relationshipSnapshotId": None,
-            "diagnostics": [
-                {
-                    "code": "ARCH-REL-NOT-EXTRACTED",
-                    "category": "relationship extraction",
-                    "severity": "info",
-                    "message": "No sealed repository-intelligence snapshot is available for relationship analysis.",
-                }
-            ],
+            "relationshipSnapshotId": "snap_example",
+            "diagnostics": [],
             "summary": {
                 "language": "Python",
                 "framework": "FastAPI",
