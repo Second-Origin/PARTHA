@@ -176,7 +176,7 @@ def test_loader_rejects_invalid_synthetic_sources(tmp_path: Path, synthetic_file
         (lambda m: m.update(revisionIdentity="git-sha"), "unsupported revisionIdentity"),
         (lambda m: m.update(blessed=True), "forbidden key"),
         (lambda m: m.update(producerVersionSet=["badproducer"]), "must be 'name@version'"),
-        (lambda m: m.update(constructsCovered=["py.not_a_construct"]), "undeclared support-matrix construct"),
+        (lambda m: m.update(constructsCovered=["py.not_a_construct"]), "undeclared benchmark construct"),
         (lambda m: m["expected"]["nodes"][1]["evidence"][0].update(path="/etc/passwd"), "absolute or escapes"),
         (lambda m: m["expected"]["nodes"][1]["evidence"][0].update(path="../escape.py"), "absolute or escapes"),
         (lambda m: m["expected"]["nodes"][1]["evidence"][0].update(startLine=0), "start_line must be >= 1"),
