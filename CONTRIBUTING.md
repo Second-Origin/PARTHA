@@ -8,6 +8,29 @@ PARTHA is a self-hosted Repository Intelligence Platform. One architectural rule
 
 Throughout this document, **must** and **must not** are requirements, **should** is a strong expectation, and **may** is permission.
 
+## 0. Strategy alignment (merge gate)
+
+PARTHA's direction is set by a single source of truth: the roadmap document
+`PARTHA_Market_Fit_Product_&_Engineering_Roadmap.html` (the local strategy file;
+ask the maintainer if you cannot see it). It defines the capability sequencing,
+gates, rejected paths (§27), and market-fit exit criteria (§28).
+
+A pull request is **in scope only if it advances one of the §23 workstreams
+toward a §28 market-fit exit criterion, with accepted evidence.** A "quick
+useful surface" or breadth addition that does not move a §28 criterion is
+**out of scope** and should not be proposed or merged. The encouraged default
+is to *deepen the existing moat* (versioned evidence, history and drift,
+governed team memory, workflow outcomes); new surfaces or languages are the
+discouraged direction and need explicit owner justification.
+
+You must fill the **Roadmap alignment** section of the pull request template
+on every pull request — naming the §23 workstream, the §28 criterion, and the
+accepted evidence. A pull request that cannot fill it is, by definition, out
+of scope and will be sent back.
+
+Editing the roadmap itself is a strategy-sensitive change reserved to the
+maintainer; do not treat roadmap content as something you may revise.
+
 ---
 
 ## 1. Setup
