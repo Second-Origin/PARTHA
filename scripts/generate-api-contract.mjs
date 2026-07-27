@@ -1,10 +1,15 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import openapiTS, { COMMENT_HEADER, astToString } from 'openapi-typescript';
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
+// The generator is kept at the repository root, while its tool dependency
+// belongs to the frontend workspace. Resolve from that workspace so this works
+// after `npm ci --prefix apps/frontend` in a clean CI checkout as well.
+const frontendRequire = createRequire(resolve(repoRoot, 'apps/frontend/package.json'));
+const { default: openapiTS, COMMENT_HEADER, astToString } = frontendRequire('openapi-typescript');
 const outputPath = resolve(repoRoot, 'apps/frontend/src/shared/services/api/generated.ts');
 const checkOnly = process.argv.includes('--check');
 
@@ -62,7 +67,8 @@ function assertSafeGeneratedOutput(content) {
 }
 
 const document = loadOpenApiDocument();
-const generated = `${COMMENT_HEADER}// Source: apps/backend/app.main:app.openapi()\n// Generator: openapi-typescript@7.13.0\n\n${astToString(await openapiTS(document, { alphabetize: true }))}\n`;
+const contractBody = astToString(await openapiTS(document, { alphabetize: true })).replace(/\r?\n+$/, '');
+const generated = `${COMMENT_HEADER}// Source: apps/backend/app.main:app.openapi()\n// Generator: openapi-typescript@7.13.0\n\n${contractBody}\n`;
 assertSafeGeneratedOutput(generated);
 
 if (checkOnly) {
