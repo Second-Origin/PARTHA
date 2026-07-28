@@ -5,8 +5,10 @@ import {
   NetworkError,
   TimeoutError,
   isApiError,
+  isErrorResponse,
   isNetworkError,
   isTimeoutError,
+  getErrorDetail,
   parseRetryAfter,
 } from './errors';
 
@@ -95,5 +97,34 @@ describe('type guards', () => {
     expect(isApiError(new Error('plain'))).toBe(false);
     expect(isApiError(undefined)).toBe(false);
     expect(isNetworkError('nope')).toBe(false);
+  });
+
+  it('validates the generated error envelope at the untrusted response boundary', () => {
+    expect(isErrorResponse({ code: 'unauthorized', message: 'Sign in required' })).toBe(true);
+    expect(isErrorResponse({ code: 'unauthorized' })).toBe(false);
+    expect(isErrorResponse(null)).toBe(false);
+  });
+});
+
+describe('getErrorDetail', () => {
+  it('only renders details from a valid backend error envelope', () => {
+    const valid = new ApiError(
+      422,
+      'Unprocessable Entity',
+      { code: 'validation_error', message: 'Invalid request', details: ['name is required'] },
+      '/x',
+    );
+    const invalid = new ApiError(
+      422,
+      'Unprocessable Entity',
+      { details: ['must not render without code and message'] },
+      '/x',
+    );
+
+    expect(getErrorDetail(valid)).toEqual({
+      message: 'Invalid request',
+      details: ['name is required'],
+    });
+    expect(getErrorDetail(invalid).details).toEqual([]);
   });
 });

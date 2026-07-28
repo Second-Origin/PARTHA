@@ -1,17 +1,12 @@
 import { api } from './client';
 import type { RequestConfig } from './client';
+import type { components } from './generated';
 import type {
   RepositoryResponse,
   RepositoryListResponse,
   RepositoryFileResponse,
   ImportGithubRequest,
-  RiCollectionResponse,
-  RiAssertion,
-  RiEdge,
-  RiEvidence,
   RiNeighboursResponse,
-  RiNode,
-  RiPath,
   RiSnapshotMetadata,
 } from './types';
 
@@ -42,7 +37,7 @@ export const repositoryIntelligenceService = {
     return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}`, config);
   },
 
-  listSymbols(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<RiCollectionResponse<RiNode>> {
+  listSymbols(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<components['schemas']['RiSymbolsResponse']> {
     return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}/symbols?offset=${offset}&limit=${limit}`, config);
   },
 
@@ -50,19 +45,19 @@ export const repositoryIntelligenceService = {
     return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}/neighbours?nodeKey=${encodeURIComponent(nodeKey)}&offset=${offset}&limit=${limit}`, config);
   },
 
-  listReferences(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<RiCollectionResponse<RiEdge>> {
+  listReferences(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<components['schemas']['RiReferencesResponse']> {
     return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}/references?offset=${offset}&limit=${limit}`, config);
   },
 
-  listAssertions(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<RiCollectionResponse<RiAssertion>> {
+  listAssertions(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<components['schemas']['RiAssertionsResponse']> {
     return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}/assertions?offset=${offset}&limit=${limit}`, config);
   },
 
-  listPaths(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<RiCollectionResponse<RiPath>> {
+  listPaths(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<components['schemas']['RiPathsResponse']> {
     return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}/paths?offset=${offset}&limit=${limit}`, config);
   },
 
-  listEvidence(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<RiCollectionResponse<RiEvidence>> {
+  listEvidence(snapshotId: string, offset = 0, limit = 50, config?: RequestConfig): Promise<components['schemas']['RiEvidenceResponsePage']> {
     return api.get(`/intelligence/v1/snapshots/${encodeURIComponent(snapshotId)}/evidence?offset=${offset}&limit=${limit}`, config);
   },
 };

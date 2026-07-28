@@ -12,6 +12,7 @@
     "partha:down": "docker compose down",
     "dev:frontend": "npm --prefix apps/frontend run dev",
     "build:frontend": "npm --prefix apps/frontend run build",
+    "generate:api-contract": "npm --prefix apps/frontend run generate:api-contract",
     "preview:frontend": "npm --prefix apps/frontend run preview",
     "lint:frontend": "npm --prefix apps/frontend run lint",
     "test:backend": "node scripts/backend-python.mjs -m pytest",

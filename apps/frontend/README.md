@@ -37,8 +37,16 @@ npm --prefix apps/frontend run lint      # eslint
 npm --prefix apps/frontend run test      # vitest, with coverage
 npm --prefix apps/frontend run test:watch
 npm --prefix apps/frontend run build     # tsc -b && vite build
+npm run generate:api-contract            # regenerate DTOs from FastAPI OpenAPI
+npm --prefix apps/frontend run generate:api-contract -- --check # fail on drift
 npm run test:prototype                   # disposable fixtures + Playwright journeys
 ```
+
+The generated contract lives at
+`src/shared/services/api/generated.ts` and must not be edited directly. The
+generator imports backend module `app.main:app` from `apps/backend`, strips only import-time dynamic
+datetime defaults, and runs the pinned `openapi-typescript@7.13.0` tool. The CI
+API Contract Drift job installs both app lockfiles and runs the check command.
 
 From the repository root: `npm run dev:frontend`, `npm run lint:frontend`,
 `npm run build:frontend`, and `npm run test:prototype`. There is no root alias
