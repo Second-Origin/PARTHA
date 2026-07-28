@@ -1,6 +1,7 @@
 import { api } from './client';
 import type { RequestConfig } from './client';
 import type {
+  AiConversationResponse,
   AiQueryRequest,
   AiQueryResponse,
   AiProviderConfig,
@@ -24,6 +25,10 @@ export const aiService = {
 
   query(request: AiQueryRequest, config?: RequestConfig): Promise<AiQueryResponse> {
     return api.post('/ai/query', request, config);
+  },
+
+  listConversations(repositoryId: string, config?: RequestConfig): Promise<AiConversationResponse> {
+    return api.get(`/ai/conversations?repositoryId=${encodeURIComponent(repositoryId)}`, config);
   },
 
 };

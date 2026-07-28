@@ -59,6 +59,7 @@ EXPECTED_RESPONSES = {
     ("PUT", "/ai/config"): {200, 401, 422, 429, 500},
     ("POST", "/ai/test"): {200, 401, 422, 429, 502, 500},
     ("POST", "/ai/query"): {200, 401, 404, 422, 429, 502, 500},
+    ("GET", "/ai/conversations"): {200, 401, 404, 422, 429, 500},
     ("POST", "/documentation/generate"): {200, 401, 404, 422, 429, 500},
     ("POST", "/export"): {200, 401, 404, 409, 422, 429, 500},
     ("GET", "/health"): {200, 500},

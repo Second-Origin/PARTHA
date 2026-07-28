@@ -6,6 +6,7 @@ from app.ai.providers.factory import ProviderFactory
 from app.ai.repository_context import RepositoryContextBuilder
 from app.ai.types import PromptBundle
 from app.core.exceptions import NotFoundError, ValidationServiceError
+from app.repositories.ai_conversation_repository import AiConversationRepository
 from app.repositories.repository_repository import RepositoryRepository
 from app.schemas.ai import (
     AiMessage,
@@ -26,6 +27,7 @@ class AiOrchestrator:
         context_builder: RepositoryContextBuilder,
         prompt_builder: PromptBuilder,
         provider_factory: ProviderFactory,
+        conversation_repository: AiConversationRepository,
         owner_id: str,
     ) -> None:
         self.repository = repository
@@ -33,6 +35,7 @@ class AiOrchestrator:
         self.context_builder = context_builder
         self.prompt_builder = prompt_builder
         self.provider_factory = provider_factory
+        self.conversation_repository = conversation_repository
         self.owner_id = owner_id
 
     def get_config(self) -> AiProviderPublicConfig:
@@ -49,6 +52,14 @@ class AiOrchestrator:
         return AiProviderTestResponse(
             ok=True, message=f"{config.provider} connection succeeded.", checked_at=datetime.now(UTC)
         )
+
+    def list_conversation(self, repository_id: str) -> list[AiMessage]:
+        # Same owner-scoping as query(): a non-owned repository id is
+        # indistinguishable from a missing one.
+        record = self.repository.get_for_owner(repository_id, self.owner_id)
+        if not record:
+            raise NotFoundError("Repository not found.", {"repositoryId": repository_id})
+        return self.conversation_repository.list_conversation(repository_id, self.owner_id)
 
     async def query(self, request: AiQueryRequest) -> AiQueryResponse:
         # Owner-scoped: another user's repository id resolves to None and gets
@@ -71,15 +82,35 @@ class AiOrchestrator:
                 "AI provider API key is missing. Open Settings and save your provider API key."
             )
 
+        user_turn_at = datetime.now(UTC)
         prompt = self.prompt_builder.build(repository_context, request.query)
         provider = self.provider_factory.resolve(config)
         provider_response = await provider.complete(config, prompt)
+        assistant_turn_at = datetime.now(UTC)
+        citations = [citation.to_schema() for citation in repository_context.citations] or None
+
+        # Persisted only once the provider has actually answered, so a failed
+        # call never leaves a stored question without its reply.
+        self.conversation_repository.append_turns(
+            repository_id=request.repository_id,
+            owner_id=self.owner_id,
+            turns=[
+                ("user", request.query, None, user_turn_at),
+                (
+                    "assistant",
+                    provider_response.content,
+                    [citation.model_dump() for citation in citations] if citations else None,
+                    assistant_turn_at,
+                ),
+            ],
+        )
+
         return AiQueryResponse(
             message=AiMessage(
                 role="assistant",
                 content=provider_response.content,
-                timestamp=datetime.now(UTC),
-                citations=[citation.to_schema() for citation in repository_context.citations] or None,
+                timestamp=assistant_turn_at,
+                citations=citations,
             ),
             # Suggestions are not computed from the provider response or the
             # repository context yet. Return an explicit empty list instead of

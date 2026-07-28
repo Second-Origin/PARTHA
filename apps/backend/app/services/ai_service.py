@@ -1,6 +1,7 @@
 from app.ai.orchestrator import AiOrchestrator
 from app.ai.types import AiProviderConfig
 from app.schemas.ai import (
+    AiMessage,
     AiProviderPublicConfig,
     AiProviderTestRequest,
     AiProviderTestResponse,
@@ -24,3 +25,6 @@ class AiService:
 
     async def query(self, request: AiQueryRequest) -> AiQueryResponse:
         return await self.orchestrator.query(request)
+
+    def list_conversation(self, repository_id: str) -> list[AiMessage]:
+        return self.orchestrator.list_conversation(repository_id)

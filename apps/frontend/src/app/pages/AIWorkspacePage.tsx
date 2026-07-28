@@ -100,6 +100,15 @@ export function AIWorkspacePage() {
                       ))}
                     </ul>
                   )}
+                  {aiWorkspace.historyError && (
+                    <button
+                      type="button"
+                      onClick={aiWorkspace.retryLoad}
+                      className="mt-1 rounded-md border border-destructive/40 px-2.5 py-1 text-xs text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      Retry
+                    </button>
+                  )}
                 </div>
               </div>
             );
