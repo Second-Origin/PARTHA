@@ -61,26 +61,28 @@ Across those surfaces, PARTHA keeps the repository revision, snapshot identity, 
 
 Statuses describe executable behaviour on the current `dev` branch:
 
-| Capability | Assessment | Current boundary |
+<!-- BEGIN GENERATED CAPABILITY REGISTRY -->
+| Capability | Status | Current boundary |
 | --- | --- | --- |
 | Archive upload and public GitHub import | **Implemented** | ZIP/TAR-family archives and shallow public GitHub HTTPS clones; size and path-safety limits apply. Private GitHub cloning and other repository hosts are not supported. |
 | Repository explorer | **Implemented** | Owner-scoped file tree plus bounded text/image preview, binary detection, and truncation. |
 | Authentication and owner isolation | **Implemented** | Email/password, Argon2, short-lived access tokens, rotating refresh tokens with reuse detection. Protected resources are owner-scoped; non-owner access returns 404. |
 | Analysis lifecycle | **Implemented** | Database-backed, cancellable job with progress, bounded retry, lease renewal, and stale-worker recovery. |
-| Repository Intelligence | **Implemented, limited** | Immutable, revision-addressed `ri.v1` snapshots with normalized facts, evidence, query APIs, and a total canonical graph hash. Semantic extraction is strongest for supported Python and TypeScript/JavaScript constructs. |
-| Architecture and authentication explanation | **Implemented, limited** | Interactive snapshot-backed graph. Module/layer classification is heuristic. The cited authentication subgraph covers supported Python/FastAPI patterns only. |
-| Dependency Graph | **Implemented, limited** | Direct declarations from `package.json`, `requirements.txt`, and `pyproject.toml`, including repeated workspace declarations and exact manifest spans. No lockfiles or transitive resolution. |
-| Engineering Review | **Implemented, limited** | `engineering-review.v2`; evidence-addressed findings and explicit category states. No overall score, grade, health percentage, vulnerability result, or generated roadmap. |
-| Repository Insights | **Implemented, limited** | `repository-insights.v1`; defined counts, ratios, diagnostics, language breakdowns, and extraction coverage from one snapshot. No change-over-time claims. |
-| Documentation and report export | **Implemented, limited** | Documentation uses current-revision structural facts. Review, Documentation, Architecture, and Dependencies export through one JSON/Markdown/HTML/PDF pipeline. |
-| AI provider integration | **Implemented, limited** | Per-user configuration for supported providers, encrypted API keys, and constrained outbound destinations. Free-form answers receive structural facts and observed paths—not source bytes or line spans—and return no automatic citations. |
-| Asynchronous processing | **Partially implemented** | Analysis runs off the request path. Import, extraction of the initial archive/clone, and file-tree parsing remain synchronous; one in-process worker handles analysis jobs. |
-| Incremental re-analysis and revision comparison | **Not implemented / not assessed** | The full repository is analysed again; no snapshot-to-snapshot product workflow is available. |
-| Change-impact or blast-radius analysis | **Implemented, limited** | Owner-scoped traversal over one sealed snapshot's resolved import and dependency edges. It does not compare revisions or calculate churn or trends. |
-| Vulnerability and outdated-dependency scanning | **Not implemented / not assessed** | Dependency responses report explicit `not_computed` states; Review keeps vulnerability scanning `not_assessed`. No clean bill of health or zero count is fabricated. |
-| Grounded, cited free-form AI answers | **Not implemented / not assessed** | Provider answers are intentionally uncited because providers do not receive source content or line numbers. |
+| Repository Intelligence | **Implemented with disclosed limits** | Immutable, revision-addressed `ri.v1` snapshots with normalized facts, evidence, query APIs, and a total canonical graph hash. Semantic extraction is strongest for supported Python and TypeScript/JavaScript constructs. |
+| Architecture and authentication explanation | **Implemented with disclosed limits** | Interactive snapshot-backed graph. Module/layer classification is heuristic. The cited authentication subgraph covers supported Python/FastAPI patterns only. |
+| Dependency Graph | **Implemented with disclosed limits** | Direct declarations from `package.json`, `pyproject.toml`, and `requirements.txt`, including repeated workspace declarations and exact manifest spans. No lockfiles or transitive resolution. |
+| Engineering Review | **Implemented with disclosed limits** | `engineering-review.v2`; evidence-addressed findings and explicit category states. No overall score, grade, health percentage, vulnerability result, or generated roadmap. |
+| Repository Insights | **Implemented with disclosed limits** | `repository-insights.v1`; defined counts, ratios, diagnostics, language breakdowns, and extraction coverage from one snapshot. No change-over-time claims. |
+| Documentation and report export | **Implemented with disclosed limits** | Documentation uses current-revision structural facts. Review, Documentation, Architecture, and Dependencies export through one JSON/Markdown/HTML/PDF pipeline. |
+| AI provider integration | **Implemented with disclosed limits** | Per-user configuration for supported providers, encrypted API keys, and constrained outbound destinations. Free-form answers receive structural facts and observed paths—not source bytes or line spans—and return no automatic citations. |
+| Asynchronous processing | **Implemented with disclosed limits** | Analysis runs off the request path. Import, extraction of the initial archive/clone, and file-tree parsing remain synchronous; one in-process worker handles analysis jobs. |
+| Incremental re-analysis and revision comparison | **Planned** | The full repository is analysed again; no snapshot-to-snapshot product workflow is available. |
+| Change-impact or blast-radius analysis | **Implemented with disclosed limits** | Owner-scoped traversal over one sealed snapshot's resolved import and dependency edges. It does not compare revisions or calculate churn or trends. |
+| Vulnerability and outdated-dependency scanning | **Planned** | Dependency responses report explicit `not_computed` states; Review keeps vulnerability scanning `not_assessed`. No clean bill of health or zero count is fabricated. |
+| Grounded, cited free-form AI answers | **Planned** | Provider answers are intentionally uncited because providers do not receive source content or line numbers. |
 
-**Implemented, limited** means the workflow exists but has a disclosed coverage or trust boundary. **Partially implemented** means only part of the end-to-end behaviour exists. **Not implemented / not assessed** means PARTHA does not manufacture an answer.
+**Implemented with disclosed limits** means the workflow exists with an explicit coverage or trust boundary. **Planned** means it is roadmap work and current responses do not manufacture an answer. **Rejected** means the capability is intentionally outside the product contract.
+<!-- END GENERATED CAPABILITY REGISTRY -->
 
 ## One repository model, many consumers
 
@@ -248,7 +250,7 @@ The prototype browser suite exercises defined Architecture, Engineering Review, 
 ### Product limitations
 
 - **Pre-alpha, trusted-environment use.** PARTHA has not been operated or hardened as a public multi-tenant service.
-- **Narrow semantic coverage.** Supported Python and TypeScript/JavaScript constructs receive the deepest extraction. Other languages primarily contribute file inventory. Role, module, layer, framework, and entry-point classifications can be heuristic.
+- **Narrow semantic coverage.** The capability registry declares the Python and TypeScript/JavaScript constructs that receive the deepest extraction. Other languages primarily contribute file inventory. Role, module, layer, framework, and entry-point classifications can be heuristic.
 - **Narrow dependency coverage.** Only direct declarations in three manifest formats are extracted. Lockfiles, transitive dependencies, vulnerability scanning, and outdated-version scanning are not implemented.
 - **No repository evolution workflow.** Analysis is whole-repository; incremental analysis, revision comparison, and churn/trend analysis are unavailable. The sealed-snapshot impact query does not compare revisions or calculate historical change.
 - **Surface-dependent evidence.** A sealed snapshot does not make every product sentence line-cited. In particular, generated structural documentation and free-form AI have stricter evidence limits.

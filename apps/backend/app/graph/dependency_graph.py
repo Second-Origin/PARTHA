@@ -16,6 +16,7 @@ from sqlalchemy import select
 
 from app.analysis.manifest import build_manifest, manifest_digest
 from app.intelligence.query_service import SnapshotQueryService
+from app.extraction.support_matrix import supported_manifest_filenames
 from app.models.repository import RepositoryRecord
 from app.models.snapshot import RiDiagnostic, RiEdge, RiEvidence, RiNode
 from app.schemas.dependencies import (
@@ -31,7 +32,7 @@ from app.schemas.dependencies import (
 #: Manifest filenames ``DependencyManifestExtractor`` supports (app/extraction/manifests.py).
 #: A diagnostic is "relevant to dependency extraction" only when it names one of these paths —
 #: the same scoping the legacy engine got for free by only ever iterating manifest-supporting files.
-_MANIFEST_FILENAMES = frozenset({"package.json", "pyproject.toml", "requirements.txt"})
+_MANIFEST_FILENAMES = frozenset(supported_manifest_filenames())
 #: Codes the manifest extractor and the pipeline's size-budget gate can emit for a manifest file.
 _RELEVANT_DIAGNOSTIC_CODES = frozenset({"RI-SRC-MALFORMED", "RI-LIMIT-SKIP"})
 

@@ -7,7 +7,7 @@ when any enforceable gate fails:
 - a manifest is invalid;
 - provenance validity is below threshold;
 - determinism fails;
-- the fixture/support-matrix parity check fails;
+- the fixture/capability-mapping parity check fails;
 - an expected (required) diagnostic is missing for a declared blind spot;
 - the real extraction adapter is unavailable;
 - precision or recall is below threshold; or
@@ -112,6 +112,20 @@ class BenchmarkReport:
         )
 
     @property
+    def golden_regression_passed(self) -> bool:
+        """Require an exact committed-golden match independent of thresholds.
+
+        Thresholds remain useful quality summaries, but a small semantic drift
+        must not pass merely because aggregate precision/recall stays high.
+        An intentional change is therefore visible as a reviewed expectation
+        diff and a corresponding exact-golden baseline change.
+        """
+
+        if not self.scoring.available or self.scoring.report is None:
+            return False
+        return not self.scoring.report.false_positives and not self.scoring.report.false_negatives
+
+    @property
     def passed(self) -> bool:
         if self.load_error is not None:
             return False
@@ -120,6 +134,7 @@ class BenchmarkReport:
             and self.determinism_passed
             and self.parity.passed
             and self.diagnostics.passed
+            and self.golden_regression_passed
             and self.scoring_gate_passed
         )
 
@@ -146,6 +161,12 @@ class BenchmarkReport:
         for construct in self.parity.uncovered_unsupported:
             reasons.append(f"parity: unsupported construct {construct!r} is not exercised by any fixture")
         reasons.extend(f"diagnostics: {item}" for item in self.diagnostics.missing)
+        if not self.golden_regression_passed and self.scoring.report is not None:
+            reasons.append(
+                "golden regression: exact committed expectations changed "
+                f"({len(self.scoring.report.false_positives)} unexpected, "
+                f"{len(self.scoring.report.false_negatives)} missing facts)"
+            )
         if not self.scoring.available or self.scoring.report is None:
             reasons.append("scoring: the real extraction adapter did not produce measurements")
         elif not self.scoring_gate_passed:

@@ -28,6 +28,7 @@ def test_full_benchmark_passes_and_reports_all_real_signals():
     assert result.scoring.report.overall.recall == 1
     assert result.scoring.actual_provenance is not None
     assert result.scoring.actual_provenance.validity == 1
+    assert result.golden_regression_passed
     # All three fixture classes and both languages are represented.
     assert set(result.corpus.by_class) == {"minimal", "realistic", "adversarial"}
     assert {"python", "typescript"} <= set(result.corpus.by_language)
@@ -41,6 +42,7 @@ def test_precision_recall_is_measured_by_the_real_extractors():
     assert result.scoring.report.false_positives == []
     assert result.scoring.report.false_negatives == []
     assert result.scoring_gate_passed
+    assert result.golden_regression_passed
 
 
 def test_reports_are_deterministic_and_serialisable():
@@ -60,6 +62,7 @@ def test_reports_are_deterministic_and_serialisable():
     assert "class:adversarial" in markdown
     assert "False positives" in markdown
     assert "False negatives" in markdown
+    assert "Exact golden regression gate" in markdown
     assert "deferred" not in markdown.lower()
     assert "unavailable" not in markdown.lower()
 

@@ -17,7 +17,7 @@ into the actual side.
 | Path | What it is |
 | --- | --- |
 | [`fixtures/{minimal,realistic,adversarial}/`](fixtures) | The versioned golden corpus: synthetic source + a `manifest.json` of expected facts per fixture. |
-| [`config/benchmark_support_matrix.json`](config/benchmark_support_matrix.json) | The benchmark construct taxonomy and validated mapping to every production support-matrix entry. |
+| [`config/benchmark_support_matrix.json`](config/benchmark_support_matrix.json) | Benchmark-only construct taxonomy mapped to every production capability id; status and limitations come from the production registry. |
 | [`config/thresholds.json`](config/thresholds.json) | The versioned, exact-fraction acceptance thresholds. |
 | [`facts.py`](facts.py) / [`scorer.py`](scorer.py) | The fact model and precision/recall scorer. |
 | [`loader.py`](loader.py) / [`schema.py`](schema.py) | Strict manifest loading and validation. |
@@ -39,7 +39,11 @@ python tests/benchmark/run.py --report-dir /tmp/ri-benchmark
 cat /tmp/ri-benchmark/benchmark.md
 ```
 
-The runner exits non-zero when any enforced gate fails. **Reports are generated,
+The runner exits non-zero when any enforced gate fails. This includes an exact
+golden regression comparison: a real-extractor fact/evidence change cannot pass
+only because aggregate precision and recall remain above threshold. An
+intentional baseline change requires a reviewed hand-authored fixture or
+expectation diff. **Reports are generated,
 never committed** (`.gitignore` excludes them; CI writes them to `$RUNNER_TEMP`).
 
 ## Fixture schema and versioning
@@ -95,7 +99,7 @@ getting maintainer agreement.
 
 ## How unsupported constructs are scored
 
-A construct outside the support matrix must produce **no fact** plus a specific
+A construct outside the production capability registry must produce **no fact** plus a specific
 diagnostic (e.g. `RI-EXT-UNSUPPORTED`, `RI-SRC-MALFORMED`). In scoring:
 
 - an invented fact where none is expected is a **false positive**;
@@ -106,10 +110,10 @@ diagnostic (e.g. `RI-EXT-UNSUPPORTED`, `RI-SRC-MALFORMED`). In scoring:
 ## Adding or reviewing a fixture
 
 1. Write small, original synthetic source (no third-party/copyrighted code).
-2. Derive the expected facts **by hand** from the source and the support matrix —
+2. Derive the expected facts **by hand** from the source and the production capability registry —
    count the one-based line spans yourself. Do **not** run any extractor and copy
    its output.
-3. Add the manifest; tag each fact with the support-matrix construct(s) it covers.
+3. Add the manifest; tag each fact with the benchmark construct id(s) it covers.
 4. `python -m pytest tests/benchmark` — the loader validates structure and
    provenance; the runner validates parity, diagnostics, and determinism.
 
@@ -134,7 +138,7 @@ page, and fails the job when the benchmark is below threshold.
 - every citation emitted by the real extractors is valid;
 - repeated real extraction, including reversed insertion order, seals to the
   same product canonical graph hash;
-- support-matrix drift, duplicate/cross-fixture facts, invalid citations, bad
+- capability-registry drift, duplicate/cross-fixture facts, invalid citations, bad
   precision/recall, and nondeterminism fail the build.
 
 Durable product analysis uses the same extractors, support matrices, resolver,
