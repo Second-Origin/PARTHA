@@ -7,7 +7,7 @@
   "description": "Star import, dynamic import, imported-name monkey-patching, and reflection produce exact real diagnostics.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.1.0"],
+  "producerVersionSet": ["python-ast@1.1.0", "repository-inventory@1.1.0"],
   "constructsCovered": ["src.repository", "src.file", "py.module", "py.import", "py.star_import", "py.dynamic_import", "py.monkeypatch", "py.reflection"],
   "deterministic": false,
   "expected": {
@@ -17,19 +17,19 @@
       {"nodeKind": "file", "stableKey": "file:src/dynamic.py", "properties": {"content_sha256": "sha256:3a573501dabf9de11fd3c263d985271a210509d8fff00f92a61d27f969c4a4e0"}, "name": "dynamic.py", "language": "python", "constructs": ["src.file"],
        "evidence": [{"path": "src/dynamic.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "module", "stableKey": "mod:src", "name": "src", "constructs": ["py.module"],
-       "evidence": [{"path": "src/dynamic.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
+       "evidence": [{"path": "src/dynamic.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.1.0"}]}
     ],
     "edges": [],
     "observations": [
       {"observedKind": "import", "subjectKind": "module", "subjectKey": "mod:src", "referentText": "importlib", "ordinal": 1, "constructs": ["py.import"],
-       "evidence": {"path": "src/dynamic.py", "startLine": 2, "endLine": 2, "extractor": "python-ast", "extractorVersion": "1.0.0"}}
+       "evidence": {"path": "src/dynamic.py", "startLine": 2, "endLine": 2, "extractor": "python-ast", "extractorVersion": "1.1.0"}}
     ],
     "assertions": [],
     "diagnostics": [
-      {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info", "message": "star-import is unsupported", "producer": "python-ast@1.0.0", "path": "src/dynamic.py", "span": {"startLine": 1, "endLine": 1}, "subject": "file:src/dynamic.py", "constructs": ["py.star_import"]},
-      {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info", "message": "dynamic import via import_module() is unsupported", "producer": "python-ast@1.0.0", "path": "src/dynamic.py", "span": {"startLine": 4, "endLine": 4}, "subject": "file:src/dynamic.py", "constructs": ["py.dynamic_import"]},
-      {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info", "message": "monkey-patching an imported name is unsupported", "producer": "python-ast@1.0.0", "path": "src/dynamic.py", "span": {"startLine": 5, "endLine": 5}, "subject": "file:src/dynamic.py", "constructs": ["py.monkeypatch"]},
-      {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info", "message": "reflection via getattr() is unsupported", "producer": "python-ast@1.0.0", "path": "src/dynamic.py", "span": {"startLine": 6, "endLine": 6}, "subject": "file:src/dynamic.py", "constructs": ["py.reflection"]}
+      {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info", "message": "star-import is unsupported", "producer": "python-ast@1.1.0", "path": "src/dynamic.py", "span": {"startLine": 1, "endLine": 1}, "subject": "file:src/dynamic.py", "constructs": ["py.star_import"]},
+      {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info", "message": "dynamic import via import_module() is unsupported", "producer": "python-ast@1.1.0", "path": "src/dynamic.py", "span": {"startLine": 4, "endLine": 4}, "subject": "file:src/dynamic.py", "constructs": ["py.dynamic_import"]},
+      {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info", "message": "monkey-patching an imported name is unsupported", "producer": "python-ast@1.1.0", "path": "src/dynamic.py", "span": {"startLine": 5, "endLine": 5}, "subject": "file:src/dynamic.py", "constructs": ["py.monkeypatch"]},
+      {"code": "RI-EXT-UNSUPPORTED", "category": "unsupported construct", "severity": "info", "message": "reflection via getattr() is unsupported", "producer": "python-ast@1.1.0", "path": "src/dynamic.py", "span": {"startLine": 6, "endLine": 6}, "subject": "file:src/dynamic.py", "constructs": ["py.reflection"]}
     ]
   }
 }

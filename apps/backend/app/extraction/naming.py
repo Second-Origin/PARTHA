@@ -1,10 +1,53 @@
 from __future__ import annotations
 
 import posixpath
+import re
 from collections import defaultdict
 from collections.abc import Sequence
 
 from app.intelligence import canonical
+
+
+def dependency_stable_key(ecosystem: str, name: str) -> str:
+    """Build the logical ``dep:<ecosystem>:<name>`` identity (RFC §4.3).
+
+    This is the single place a dependency identity is derived. A direct manifest
+    declaration and a lockfile resolution describe *one* logical dependency, so
+    both producers must land on a byte-identical key or they would create two
+    nodes for one entity. PyPI names are folded per PEP 503 (runs of ``-``,
+    ``_``, and ``.`` collapse to ``-``, lowercased) so ``Foo_Bar`` declared in a
+    manifest and ``foo-bar`` pinned in a lockfile share one node. npm names are
+    already canonical and are used verbatim.
+    """
+
+    if ecosystem == "pypi":
+        name = re.sub(r"[-_.]+", "-", name).lower()
+    return canonical.normalize_stable_key("dependency", f"dep:{ecosystem}:{name}")
+
+
+def service_stable_key(origin: str) -> str:
+    """Build the ``svc:<origin>`` identity for an observed outbound service.
+
+    Identity is the normalized origin only — scheme, host, and a non-default
+    port. Request paths, query strings, and methods vary per call site and are
+    recorded on the call's own observation, so folding them into the node key
+    would create one "service" per URL instead of one per destination.
+    """
+
+    return canonical.normalize_stable_key("service", f"svc:{origin}")
+
+
+def iac_resource_stable_key(manifest_path: str, resource_type: str, name: str) -> str:
+    """Build the ``iac:<manifest-path>::<type>/<name>`` identity (RFC §4.3).
+
+    An IaC resource is only unique within the manifest that declares it: two
+    Compose files may both declare a ``db`` service and they are different
+    resources, so the manifest path is part of the identity rather than a
+    property alone.
+    """
+
+    normalized = canonical.normalize_repo_path(manifest_path)
+    return canonical.normalize_stable_key("iac_resource", f"iac:{normalized}::{resource_type}/{name}")
 
 
 def symbol_stable_key(path: str, scope: Sequence[str], name: str) -> str:

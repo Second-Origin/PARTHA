@@ -14,9 +14,9 @@ def _fixture(
     *,
     language: str = "mixed",
     producers: tuple[str, ...] = (
-        "python-ast@1.0.0",
+        "python-ast@1.1.0",
         "repository-inventory@1.1.0",
-        "typescript-ast@1.1.0",
+        "typescript-ast@1.2.0",
     ),
     max_source_bytes: int = 512 * 1024,
 ) -> LoadedFixture:
@@ -75,8 +75,8 @@ def test_binary_and_malformed_supported_sources_use_real_extractors(tmp_path: Pa
     facts = RealExtractionAdapter().extract(_fixture(tmp_path))
 
     diagnostics = {(fact.kind, fact.producer) for fact in facts if fact.fact_type == "diagnostic"}
-    assert ("RI-SRC-BINARY", "python-ast@1.0.0") in diagnostics
-    assert ("RI-SRC-MALFORMED", "typescript-ast@1.1.0") in diagnostics
+    assert ("RI-SRC-BINARY", "python-ast@1.1.0") in diagnostics
+    assert ("RI-SRC-MALFORMED", "typescript-ast@1.2.0") in diagnostics
 
 
 def test_duplicate_symbols_observations_properties_and_provenance_are_preserved(tmp_path: Path):
@@ -98,7 +98,7 @@ def test_duplicate_symbols_observations_properties_and_provenance_are_preserved(
     assert all(fact.evidence[0].extractor == "python-ast" for fact in definitions)
     duplicate = next(fact for fact in facts if fact.kind == "RI-KEY-DUP-SYMBOL")
     assert duplicate.subject == "src/a.py::repeated#2"
-    assert duplicate.producer == "python-ast@1.0.0"
+    assert duplicate.producer == "python-ast@1.1.0"
 
 
 def test_real_source_size_policy_emits_limit_diagnostic(tmp_path: Path):
@@ -123,7 +123,7 @@ def test_exact_duplicate_adapter_output_is_not_hidden():
         name="f",
         language="python",
         truth_class="observed",
-        evidence=(EvidenceSpan("src/a.py", 1, 1, "python-ast", "1.0.0", "span"),),
+        evidence=(EvidenceSpan("src/a.py", 1, 1, "python-ast", "1.1.0", "span"),),
     )
 
     merged = RealExtractionAdapter._merge_compatible_nodes([fact, fact])

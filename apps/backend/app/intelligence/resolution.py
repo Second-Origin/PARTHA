@@ -16,6 +16,7 @@ import re
 
 from sqlalchemy import select
 
+from app.extraction.http import parse_referent
 from app.intelligence.snapshot_store import Evidence, SnapshotStateError, SnapshotStore
 from app.models.snapshot import RiEvidence, RiNode, RiObservation, RiSnapshot
 
@@ -63,6 +64,15 @@ class RelationshipResolver:
     ``dependency``
         A manifest-backed dependency declaration whose subject is a dependency
         node.  It resolves ``repo:root -> dependency``.
+    ``http_call``
+        An outbound HTTP call site whose referent carries a proven method,
+        origin, and path (#209).  It resolves ``<caller> -[calls_service]->
+        <service>`` against the service node the extractor emitted for that
+        exact origin.  The caller is the symbol whose span contains the call, or
+        the file/module when no symbol does.
+    ``iac_resource``
+        A declared infrastructure resource whose subject is an ``iac_resource``
+        node (#209).  It resolves ``repo:root -[declares]-> <resource>``.
     ``injects``
         A ``Depends(name)`` argument (#95).  Resolved exactly like a ``call``:
         through proven evidence only, attributed to whichever symbol's span
@@ -70,11 +80,15 @@ class RelationshipResolver:
         function to the referenced dependency callable.
 
     New extractors can add observation kinds without making this class guess:
-    unsupported kinds are simply not relationship inputs.
+    unsupported kinds are simply not relationship inputs.  ``resolution`` (a
+    lockfile pin, #209) is deliberately one of those: a lockfile proves that a
+    version was installed, not that the repository depends on the package
+    directly, so a resolution stays an observation on its dependency node and
+    never manufactures a ``depends_on`` edge for a transitive entry.
     """
 
     name = "relationship-resolver"
-    version = "1.0.0"
+    version = "1.1.0"
 
     def __init__(self, store: SnapshotStore) -> None:
         self.store = store
@@ -207,6 +221,18 @@ class RelationshipResolver:
             edges_added += added
             diagnostics_added += diagnosed
 
+        for input_ in inputs_by_kind["http_call"]:
+            self._check_cancelled(check_cancelled)
+            added, diagnosed = self._resolve_http_call(input_, nodes_by_key, evidence_by_node)
+            edges_added += added
+            diagnostics_added += diagnosed
+
+        for input_ in inputs_by_kind["iac_resource"]:
+            self._check_cancelled(check_cancelled)
+            added, diagnosed = self._resolve_iac_resource(input_, nodes_by_key)
+            edges_added += added
+            diagnostics_added += diagnosed
+
         route_handlers: dict[str, list[_ObservedInput]] = defaultdict(list)
         for input_ in inputs_by_kind["route_handler"]:
             self._check_cancelled(check_cancelled)
@@ -276,20 +302,7 @@ class RelationshipResolver:
         *,
         predicate: str,
     ) -> tuple[int, int]:
-        observed_subject = nodes_by_key.get(input_.observation.subject_key)
-        subject = observed_subject
-        if subject is None or subject.node_kind != "symbol":
-            subject = self._containing_symbol(input_, nodes_by_key, evidence_by_node)
-            if (
-                subject is None
-                and observed_subject is not None
-                and observed_subject.node_kind
-                in {
-                    "file",
-                    "module",
-                }
-            ):
-                subject = observed_subject
+        subject = self._reference_subject(input_, nodes_by_key, evidence_by_node)
         if subject is None:
             return self._unresolved(input_, f"{predicate} source symbol is absent from the snapshot")
         referent = input_.observation.referent_text
@@ -314,6 +327,64 @@ class RelationshipResolver:
             return self._unresolved(input_, "dependency declaration is incomplete")
         self._add_edge(input_, repository, "depends_on", dependency)
         return 1, 0
+
+    def _resolve_http_call(
+        self,
+        input_: _ObservedInput,
+        nodes_by_key: dict[str, RiNode],
+        evidence_by_node: dict[int, list[RiEvidence]],
+    ) -> tuple[int, int]:
+        """Resolve one proven outbound call to its service node (#209).
+
+        The destination is not searched for or guessed: the extractor that
+        proved the literal URL also emitted the ``service`` node for that exact
+        origin, so this looks up one deterministic key. A referent that does not
+        carry the three expected parts, or an origin with no node, stays an
+        explicit diagnostic rather than becoming an edge to somewhere plausible.
+        """
+
+        referent = input_.observation.referent_text
+        destination = parse_referent(referent) if referent else None
+        if destination is None:
+            return self._unresolved(input_, "calls_service has no parsable destination")
+        subject = self._reference_subject(input_, nodes_by_key, evidence_by_node)
+        if subject is None:
+            return self._unresolved(input_, "calls_service source is absent from the snapshot")
+        service = nodes_by_key.get(f"svc:{destination.origin}")
+        if service is None or service.node_kind != "service":
+            return self._unresolved(input_, "calls_service target service is absent from the snapshot")
+        self._add_edge(input_, subject, "calls_service", service)
+        return 1, 0
+
+    def _resolve_iac_resource(self, input_: _ObservedInput, nodes_by_key: dict[str, RiNode]) -> tuple[int, int]:
+        """Attach a declared infrastructure resource to the repository (#209)."""
+
+        resource = nodes_by_key.get(input_.observation.subject_key)
+        repository = nodes_by_key.get("repo:root")
+        if resource is None or resource.node_kind != "iac_resource" or repository is None:
+            return self._unresolved(input_, "iac resource declaration is incomplete")
+        self._add_edge(input_, repository, "declares", resource)
+        return 1, 0
+
+    def _reference_subject(
+        self,
+        input_: _ObservedInput,
+        nodes_by_key: dict[str, RiNode],
+        evidence_by_node: dict[int, list[RiEvidence]],
+    ) -> RiNode | None:
+        """Pick the fact that owns a call site: its symbol, else its file/module.
+
+        Shared with :meth:`_resolve_reference` so ``calls`` and ``calls_service``
+        attribute a call site to the same subject.
+        """
+
+        observed_subject = nodes_by_key.get(input_.observation.subject_key)
+        if observed_subject is not None and observed_subject.node_kind == "symbol":
+            return observed_subject
+        subject = self._containing_symbol(input_, nodes_by_key, evidence_by_node)
+        if subject is None and observed_subject is not None and observed_subject.node_kind in {"file", "module"}:
+            return observed_subject
+        return subject
 
     def _resolve_route(
         self,

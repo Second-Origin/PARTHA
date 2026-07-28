@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 
+from app.extraction.http import HTTP_METHOD_ATTRIBUTES, describe_destination
 from app.extraction.base import (
     ExtractedDiagnostic,
     ExtractedNode,
@@ -20,6 +21,7 @@ from app.extraction.naming import (
     DiscriminatorAssigner,
     module_name,
     module_stable_key,
+    service_stable_key,
     symbol_stable_key,
 )
 from app.intelligence import canonical
@@ -27,6 +29,25 @@ from app.intelligence import canonical
 _ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
 _REFLECTION_CALLS = {"getattr", "setattr", "delattr"}
 _DEPENDENCY_MARKERS = {"Depends"}
+
+# --- Supported HTTP client surface (#209) -----------------------------------
+#
+# Deliberately narrow: a name is only an HTTP client when an import in scope
+# proves it is. There is no "looks like a session" heuristic.
+_HTTP_CLIENT_MODULES = {"httpx", "requests"}
+# Constructors whose return value is a client/session object with the same
+# method surface as the module itself.
+_HTTP_CLIENT_FACTORIES = {
+    "httpx": {"AsyncClient", "Client"},
+    "requests": {"Session"},
+}
+# ``requests.request("GET", url)`` / ``client.request(method="GET", url=...)``.
+_HTTP_REQUEST_ATTRIBUTE = "request"
+
+_BINDING_HTTP_MODULE = "http-module"
+_BINDING_HTTP_CLIENT = "http-client"
+_BINDING_HTTP_FUNCTION = "http-function"
+_BINDING_HTTP_FACTORY = "http-factory"
 
 # Collectors emit this; assign_ordinals sets the RFC §6.4 value on the way out.
 # It is deliberately invalid (ordinals are one-based) so a result that skipped
@@ -132,7 +153,7 @@ class _BindingScope:
 
 class PythonExtractor:
     name = "python-ast"
-    version = "1.0.0"
+    version = "1.1.0"
 
     @property
     def producer(self) -> str:
@@ -206,6 +227,7 @@ class PythonExtractor:
         self._collect_imports(tree, path, line_count, module_key, observations, diagnostics)
         self._collect_symbols(tree, path, line_count, nodes, observations, diagnostics)
         self._collect_calls(tree, path, line_count, module_key, observations, diagnostics)
+        self._collect_service_interactions(tree, path, line_count, module_key, nodes, observations, diagnostics)
         self._collect_blind_spots(tree, path, line_count, diagnostics)
 
         return ExtractionResult(
@@ -564,6 +586,240 @@ class PythonExtractor:
                 return
             if isinstance(node, ast.Call):
                 emit(node, scope)
+            for child in ast.iter_child_nodes(node):
+                scan(child, scope)
+
+        module_scope = _BindingScope()
+        for statement in tree.body:
+            scan(statement, module_scope)
+
+    def _collect_service_interactions(
+        self, tree, path, line_count, module_key, nodes, observations, diagnostics
+    ) -> None:
+        """Record outbound HTTP call sites that syntax proves (#209).
+
+        A call becomes a service-interaction fact only when three things are
+        visible in the source at once: an import that proves the receiver is a
+        ``requests``/``httpx`` module or a client constructed from one, a literal
+        HTTP method, and an absolute literal URL. Anything less — a computed URL,
+        a relative path, a method read from a variable, or a client name a local
+        binding has shadowed — produces an ``RI-EXT-UNSUPPORTED`` disclosure and
+        no destination fact.
+
+        Only attribute-form calls are recognized. ``from requests import get``
+        followed by ``get(url)`` is a bare identifier call that
+        :meth:`_collect_calls` already records as a generic ``call``; emitting a
+        second fact for the same call site would double-count it, so that form
+        is disclosed as unsupported instead.
+        """
+
+        normalized = canonical.normalize_repo_path(path)
+        file_subject = canonical.normalize_stable_key("file", f"file:{normalized}")
+        # Names an import proved are HTTP clients somewhere in the file. Used
+        # only to tell "shadowed client" apart from "unrelated local name", so a
+        # genuine blind spot is reported and ordinary code stays quiet.
+        client_names: set[str] = set()
+
+        def flag(node, message: str) -> None:
+            diagnostics.append(
+                ExtractedDiagnostic(
+                    code=RI_EXT_UNSUPPORTED,
+                    category="unsupported construct",
+                    severity="info",
+                    # Names the construct only. A URL argument can carry tokens
+                    # or internal hostnames, and RFC §13 keeps repository content
+                    # out of diagnostic text; the span says where to look.
+                    message=message,
+                    path=normalized,
+                    span=(node.lineno, node.end_lineno or node.lineno),
+                    subject=file_subject,
+                )
+            )
+
+        def literal_string(node) -> str | None:
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                return node.value
+            return None
+
+        def keyword_value(call: ast.Call, name: str):
+            for keyword in call.keywords:
+                if keyword.arg == name:
+                    return keyword.value
+            return None
+
+        def bind_imports(node, scope: _BindingScope) -> None:
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    root = alias.name.split(".", 1)[0]
+                    local = alias.asname or root
+                    if alias.name in _HTTP_CLIENT_MODULES or (alias.asname is None and root in _HTTP_CLIENT_MODULES):
+                        scope.bind(local, f"{_BINDING_HTTP_MODULE}:{root}")
+                        client_names.add(local)
+                    else:
+                        scope.bind(local, _BINDING_LOCAL)
+                return
+            module = node.module or ""
+            if node.level or module not in _HTTP_CLIENT_MODULES:
+                for alias in node.names:
+                    if alias.name != "*":
+                        scope.bind(alias.asname or alias.name, _BINDING_LOCAL)
+                return
+            for alias in node.names:
+                if alias.name == "*":
+                    continue
+                local = alias.asname or alias.name
+                if alias.name in _HTTP_CLIENT_FACTORIES[module]:
+                    scope.bind(local, f"{_BINDING_HTTP_FACTORY}:{module}")
+                elif alias.name in HTTP_METHOD_ATTRIBUTES or alias.name == _HTTP_REQUEST_ATTRIBUTE:
+                    scope.bind(local, _BINDING_HTTP_FUNCTION)
+                    client_names.add(local)
+                else:
+                    scope.bind(local, _BINDING_LOCAL)
+
+        def constructs_client(value, scope: _BindingScope) -> bool:
+            """True when ``value`` is a direct ``Session()``/``Client()`` call."""
+
+            if not isinstance(value, ast.Call):
+                return False
+            function = value.func
+            if isinstance(function, ast.Attribute) and isinstance(function.value, ast.Name):
+                binding = scope.resolve(function.value.id) or ""
+                module, _, library = binding.partition(":")
+                return module == _BINDING_HTTP_MODULE and function.attr in _HTTP_CLIENT_FACTORIES.get(library, ())
+            if isinstance(function, ast.Name):
+                binding = scope.resolve(function.id) or ""
+                return binding.split(":", 1)[0] == _BINDING_HTTP_FACTORY
+            return False
+
+        def bind_assignment(targets, value, scope: _BindingScope) -> None:
+            for target in targets:
+                for name in self._target_names(target):
+                    if constructs_client(value, scope):
+                        scope.bind(name, _BINDING_HTTP_CLIENT)
+                        client_names.add(name)
+                    else:
+                        scope.bind(name, _BINDING_LOCAL)
+
+        def emit(call: ast.Call, method: str, url: str) -> None:
+            destination = describe_destination(method, url)
+            if destination is None:
+                flag(call, "HTTP destination without an absolute http(s) URL is unsupported")
+                return
+            evidence, diagnostic = build_evidence(
+                path,
+                call.lineno,
+                call.end_lineno or call.lineno,
+                line_count,
+                producer=self.producer,
+            )
+            if evidence is None:
+                if diagnostic is not None:
+                    diagnostics.append(diagnostic)
+                return
+            service_key = service_stable_key(destination.origin)
+            nodes.append(
+                ExtractedNode(
+                    node_kind="service",
+                    stable_key=service_key,
+                    name=destination.origin,
+                    # A destination is not a source language; several languages in
+                    # one repository can call the same origin and must produce a
+                    # byte-identical record or the snapshot refuses to seal.
+                    language=None,
+                    evidence=(evidence,),
+                    properties={"origin": destination.origin},
+                )
+            )
+            observations.append(
+                ExtractedObservation(
+                    observed_kind="http_call",
+                    subject_kind="module",
+                    subject_key=module_key,
+                    referent_text=destination.referent_text,
+                    ordinal=_UNASSIGNED_ORDINAL,
+                    evidence=evidence,
+                )
+            )
+
+        def visit_client_call(call: ast.Call, attribute: str) -> None:
+            if attribute in HTTP_METHOD_ATTRIBUTES:
+                url_node = call.args[0] if call.args else keyword_value(call, "url")
+                method: str | None = attribute
+            elif attribute == _HTTP_REQUEST_ATTRIBUTE:
+                method_node = call.args[0] if call.args else keyword_value(call, "method")
+                method = literal_string(method_node) if method_node is not None else None
+                if method is None:
+                    flag(call, "computed HTTP method is unsupported")
+                    return
+                url_node = call.args[1] if len(call.args) > 1 else keyword_value(call, "url")
+            else:
+                # ``requests.codes``, ``client.close()``, and friends are not
+                # request call sites at all.
+                return
+            url = literal_string(url_node) if url_node is not None else None
+            if url is None:
+                flag(call, "dynamic HTTP destination is unsupported")
+                return
+            emit(call, method, url)
+
+        def visit_call(call: ast.Call, scope: _BindingScope) -> None:
+            function = call.func
+            if isinstance(function, ast.Name):
+                if scope.resolve(function.id) == _BINDING_HTTP_FUNCTION:
+                    flag(call, "bare imported HTTP client function is unsupported")
+                elif function.id in client_names and scope.resolve(function.id) == _BINDING_LOCAL:
+                    flag(call, "HTTP client name is shadowed by a local binding")
+                return
+            if not isinstance(function, ast.Attribute) or not isinstance(function.value, ast.Name):
+                return
+            receiver = function.value.id
+            binding = scope.resolve(receiver) or ""
+            kind = binding.split(":", 1)[0]
+            if kind in (_BINDING_HTTP_MODULE, _BINDING_HTTP_CLIENT):
+                visit_client_call(call, function.attr)
+            elif receiver in client_names and (
+                function.attr in HTTP_METHOD_ATTRIBUTES or function.attr == _HTTP_REQUEST_ATTRIBUTE
+            ):
+                flag(call, "HTTP client name is shadowed by a local binding")
+
+        def scan(node, scope: _BindingScope) -> None:
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                bind_imports(node, scope)
+                return
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                scope.bind(node.name, _BINDING_LOCAL)
+                function_scope = self._function_scope(node, self._function_parent(scope))
+                for statement in node.body:
+                    scan(statement, function_scope)
+                return
+            if isinstance(node, ast.Lambda):
+                scan(node.body, self._function_scope(node, self._function_parent(scope)))
+                return
+            if isinstance(node, ast.ClassDef):
+                scope.bind(node.name, _BINDING_LOCAL)
+                class_scope = _BindingScope(scope, kind="class")
+                for statement in node.body:
+                    scan(statement, class_scope)
+                return
+            if isinstance(node, ast.Assign):
+                scan(node.value, scope)
+                bind_assignment(node.targets, node.value, scope)
+                return
+            if isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+                if node.value is not None:
+                    scan(node.value, scope)
+                    bind_assignment([node.target], node.value, scope)
+                return
+            if isinstance(node, (ast.With, ast.AsyncWith)):
+                for item in node.items:
+                    scan(item.context_expr, scope)
+                    if item.optional_vars is not None:
+                        bind_assignment([item.optional_vars], item.context_expr, scope)
+                for statement in node.body:
+                    scan(statement, scope)
+                return
+            if isinstance(node, ast.Call):
+                visit_call(node, scope)
             for child in ast.iter_child_nodes(node):
                 scan(child, scope)
 

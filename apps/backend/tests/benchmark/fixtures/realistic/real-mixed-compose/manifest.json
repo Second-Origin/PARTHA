@@ -1,0 +1,26 @@
+{
+  "schemaVersion":"ri-benchmark.v1","fixtureId":"real-mixed-compose","fixtureClass":"realistic","language":"mixed",
+  "title":"Realistic IaC — Docker Compose resources","description":"Declared Compose services, volumes, and networks become iac_resource nodes at their exact declaration lines; an interpolated image is disclosed rather than recorded as an observed value.",
+  "sourceRoot":".","revisionIdentity":"upload-sha256","producerVersionSet":["iac-manifest@1.0.0","repository-inventory@1.1.0"],
+  "constructsCovered":["src.file","src.repository","src.compose_service","src.compose_volume","src.compose_network","src.compose_templated"],"deterministic":true,
+  "expected":{"nodes":[
+    {"nodeKind":"repository","stableKey":"repo:root","name":"repository","constructs":["src.repository"],"evidence":[{"path":"docker-compose.yml","startLine":1,"endLine":1,"extractor":"repository-inventory","extractorVersion":"1.1.0"}]},
+    {"nodeKind":"file","stableKey":"file:docker-compose.yml","properties":{"content_sha256":"sha256:a08b976e00f7cb9114fcc5793da7d6600c3d016f7d3474f9435c1c9e2cdf25f7"},"name":"docker-compose.yml","constructs":["src.file"],"evidence":[{"path":"docker-compose.yml","startLine":1,"endLine":10,"granularity":"file","extractor":"repository-inventory","extractorVersion":"1.1.0"}]},
+
+    {"comment":"Identity carries the manifest path: a db service in a second Compose file would be a different resource, not a redefinition of this one.",
+     "nodeKind":"iac_resource","stableKey":"iac:docker-compose.yml::network/backend","name":"backend","properties":{"resource_type":"network","manifest_format":"docker-compose","manifest_path":"docker-compose.yml"},"constructs":["src.compose_network"],"evidence":[{"path":"docker-compose.yml","startLine":9,"endLine":9,"extractor":"iac-manifest","extractorVersion":"1.0.0"}]},
+    {"comment":"A literal image is recorded as an observed property.",
+     "nodeKind":"iac_resource","stableKey":"iac:docker-compose.yml::service/api","name":"api","properties":{"resource_type":"service","manifest_format":"docker-compose","manifest_path":"docker-compose.yml","image":"python:3.13-slim"},"constructs":["src.compose_service"],"evidence":[{"path":"docker-compose.yml","startLine":2,"endLine":2,"extractor":"iac-manifest","extractorVersion":"1.0.0"}]},
+    {"comment":"The resource itself is still declared literally, so it is a real node; only the interpolated image property is withheld.",
+     "nodeKind":"iac_resource","stableKey":"iac:docker-compose.yml::service/worker","name":"worker","properties":{"resource_type":"service","manifest_format":"docker-compose","manifest_path":"docker-compose.yml"},"constructs":["src.compose_service","src.compose_templated"],"evidence":[{"path":"docker-compose.yml","startLine":4,"endLine":4,"extractor":"iac-manifest","extractorVersion":"1.0.0"}]},
+    {"nodeKind":"iac_resource","stableKey":"iac:docker-compose.yml::volume/pgdata","name":"pgdata","properties":{"resource_type":"volume","manifest_format":"docker-compose","manifest_path":"docker-compose.yml"},"constructs":["src.compose_volume"],"evidence":[{"path":"docker-compose.yml","startLine":7,"endLine":7,"extractor":"iac-manifest","extractorVersion":"1.0.0"}]}
+  ],"edges":[],"observations":[
+    {"observedKind":"iac_resource","subjectKind":"iac_resource","subjectKey":"iac:docker-compose.yml::network/backend","referentText":"network/backend","ordinal":1,"constructs":["src.compose_network"],"evidence":{"path":"docker-compose.yml","startLine":9,"endLine":9,"extractor":"iac-manifest","extractorVersion":"1.0.0"}},
+    {"observedKind":"iac_resource","subjectKind":"iac_resource","subjectKey":"iac:docker-compose.yml::service/api","referentText":"service/api","ordinal":1,"constructs":["src.compose_service"],"evidence":{"path":"docker-compose.yml","startLine":2,"endLine":2,"extractor":"iac-manifest","extractorVersion":"1.0.0"}},
+    {"observedKind":"iac_resource","subjectKind":"iac_resource","subjectKey":"iac:docker-compose.yml::service/worker","referentText":"service/worker","ordinal":1,"constructs":["src.compose_service"],"evidence":{"path":"docker-compose.yml","startLine":4,"endLine":4,"extractor":"iac-manifest","extractorVersion":"1.0.0"}},
+    {"observedKind":"iac_resource","subjectKind":"iac_resource","subjectKey":"iac:docker-compose.yml::volume/pgdata","referentText":"volume/pgdata","ordinal":1,"constructs":["src.compose_volume"],"evidence":{"path":"docker-compose.yml","startLine":7,"endLine":7,"extractor":"iac-manifest","extractorVersion":"1.0.0"}}
+  ],"assertions":[],"diagnostics":[
+    {"comment":"image: ${WORKER_IMAGE} is a template. The blind spot is disclosed at the resource it belongs to, and no image property is claimed.",
+     "code":"RI-EXT-UNSUPPORTED","category":"unsupported construct","severity":"info","message":"templated IaC value is unsupported","producer":"iac-manifest@1.0.0","path":"docker-compose.yml","span":{"startLine":4,"endLine":4},"subject":"iac:docker-compose.yml::service/worker","constructs":["src.compose_templated"]}
+  ]}
+}

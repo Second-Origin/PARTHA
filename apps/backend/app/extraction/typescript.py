@@ -19,10 +19,15 @@ from app.extraction.base import (
     decode_source,
     logical_line_count,
 )
+from app.extraction.http import (
+    HTTP_METHOD_ATTRIBUTES,
+    describe_destination,
+)
 from app.extraction.naming import (
     DiscriminatorAssigner,
     module_name,
     module_stable_key,
+    service_stable_key,
     symbol_stable_key,
 )
 from app.intelligence import canonical
@@ -39,6 +44,27 @@ _ROUTE_ELEMENTS = {"Route"}
 # assignment fails loudly rather than persisting a wrong identity.
 _UNASSIGNED_ORDINAL = 0
 
+# --- Supported HTTP client surface (#209) -----------------------------------
+#
+# ``fetch`` is the platform global, so it needs no import to be a client; axios
+# must be proved by a default import from the ``axios`` module specifier.
+_FETCH_NAME = "fetch"
+_AXIOS_SPECIFIER = "axios"
+# fetch(input) with no init is a GET by specification, so the method is proven
+# by the call shape rather than assumed.
+_FETCH_DEFAULT_METHOD = "get"
+
+_FUNCTION_SCOPE_TYPES = frozenset(
+    {
+        "function_declaration",
+        "function_expression",
+        "generator_function_declaration",
+        "generator_function",
+        "arrow_function",
+        "method_definition",
+    }
+)
+
 _NAMED_DECLARATIONS = {
     "function_declaration": "name",
     "function_signature": "name",  # ambient/overload signatures (no body)
@@ -54,7 +80,7 @@ _NAMED_DECLARATIONS = {
 
 class TypeScriptExtractor:
     name = "typescript-ast"
-    version = "1.1.0"
+    version = "1.2.0"
 
     @property
     def producer(self) -> str:
@@ -140,7 +166,12 @@ class TypeScriptExtractor:
         self._collect_implements(tree.root_node, path, line_count, nodes, observations)
         self._collect_imports(tree.root_node, path, line_count, file_key, observations)
         self._collect_routes(tree.root_node, path, line_count, file_key, nodes, observations, diagnostics)
-        self._collect_calls(tree.root_node, path, line_count, file_key, observations)
+        # Service interactions run first so the generic call pass can skip the
+        # call sites they already own (see ``_collect_calls``).
+        http_call_sites = self._collect_service_interactions(
+            tree.root_node, path, line_count, file_key, nodes, observations, diagnostics
+        )
+        self._collect_calls(tree.root_node, path, line_count, file_key, observations, http_call_sites)
         self._collect_blind_spots(tree.root_node, path, line_count, diagnostics)
         return ExtractionResult(
             nodes=tuple(nodes),
@@ -498,62 +529,69 @@ class TypeScriptExtractor:
         text = self._node_text(name, source)
         return (text, name) if text and text[0].isupper() else None
 
-    def _collect_calls(self, root, path, line_count, file_key, observations) -> None:
-        """Record direct identifier calls; target selection is resolver work."""
+    def _binding_names(self, pattern, source: bytes) -> set[str]:
+        if pattern is None:
+            return set()
+        if pattern.type in ("identifier", "shorthand_property_identifier_pattern"):
+            return {self._node_text(pattern, source)}
+        names: set[str] = set()
+        for child in pattern.named_children:
+            names.update(self._binding_names(child, source))
+        return names
+
+    def _scope_bindings(self, function, source: bytes) -> set[str]:
+        """Names a function scope binds locally: parameters and own declarations.
+
+        Shared by the call and service-interaction passes so both agree on what
+        "shadowed" means; two different answers would let one pass emit a
+        confident destination the other proved was a local name.
+        """
+
+        names: set[str] = set()
+        parameters = function.child_by_field_name("parameters")
+        if parameters is not None:
+            for parameter in parameters.named_children:
+                names.update(self._binding_names(parameter.child_by_field_name("pattern"), source))
+        parameter = function.child_by_field_name("parameter")
+        if parameter is not None:
+            names.update(self._binding_names(parameter, source))
+
+        body = function.child_by_field_name("body")
+
+        def collect(node) -> None:
+            if node is not body and node.type in _FUNCTION_SCOPE_TYPES:
+                names.update(self._binding_names(node.child_by_field_name("name"), source))
+                return
+            if node.type in ("class_declaration", "abstract_class_declaration"):
+                names.update(self._binding_names(node.child_by_field_name("name"), source))
+                return
+            if node.type == "variable_declarator":
+                names.update(self._binding_names(node.child_by_field_name("name"), source))
+            for child in node.named_children:
+                collect(child)
+
+        if body is not None:
+            collect(body)
+        return names
+
+    def _collect_calls(self, root, path, line_count, file_key, observations, http_call_sites=frozenset()) -> None:
+        """Record direct identifier calls; target selection is resolver work.
+
+        ``http_call_sites`` holds the node ids of call expressions the
+        service-interaction pass already recorded as ``http_call``. They are
+        skipped here so one ``fetch(...)`` line is one fact, not a service
+        interaction plus a generic unresolvable ``call``.
+        """
 
         source = root.text
 
-        function_scope_types = {
-            "function_declaration",
-            "function_expression",
-            "generator_function_declaration",
-            "generator_function",
-            "arrow_function",
-            "method_definition",
-        }
-
-        def binding_names(pattern) -> set[str]:
-            if pattern is None:
-                return set()
-            if pattern.type in ("identifier", "shorthand_property_identifier_pattern"):
-                return {self._node_text(pattern, source)}
-            names: set[str] = set()
-            for child in pattern.named_children:
-                names.update(binding_names(child))
-            return names
-
         def scope_bindings(function) -> set[str]:
-            names: set[str] = set()
-            parameters = function.child_by_field_name("parameters")
-            if parameters is not None:
-                for parameter in parameters.named_children:
-                    names.update(binding_names(parameter.child_by_field_name("pattern")))
-            parameter = function.child_by_field_name("parameter")
-            if parameter is not None:
-                names.update(binding_names(parameter))
-
-            body = function.child_by_field_name("body")
-
-            def collect(node) -> None:
-                if node is not body and node.type in function_scope_types:
-                    names.update(binding_names(node.child_by_field_name("name")))
-                    return
-                if node.type in ("class_declaration", "abstract_class_declaration"):
-                    names.update(binding_names(node.child_by_field_name("name")))
-                    return
-                if node.type == "variable_declarator":
-                    names.update(binding_names(node.child_by_field_name("name")))
-                for child in node.named_children:
-                    collect(child)
-
-            if body is not None:
-                collect(body)
-            return names
+            return self._scope_bindings(function, source)
 
         def walk(node, shadowed: frozenset[str] = frozenset()):
-            if node.type in function_scope_types:
+            if node.type in _FUNCTION_SCOPE_TYPES:
                 shadowed = shadowed | frozenset(scope_bindings(node))
-            if node.type == "call_expression":
+            if node.type == "call_expression" and node.id not in http_call_sites:
                 function = node.child_by_field_name("function")
                 if function is not None and function.type == "identifier":
                     function_name = self._node_text(function, source)
@@ -593,6 +631,205 @@ class TypeScriptExtractor:
                 walk(child, shadowed)
 
         walk(root)
+
+    def _collect_service_interactions(self, root, path, line_count, file_key, nodes, observations, diagnostics):
+        """Record outbound HTTP call sites that syntax proves (#209).
+
+        Two client forms are recognized: the ``fetch`` global, and attribute
+        calls on a local name bound by a **default import from ``axios``** — so
+        ``import http from "axios"`` works and an unrelated local ``axios``
+        object does not. A call becomes a fact only when the destination is an
+        absolute literal URL and the method is proven: the axios method name,
+        a literal ``method`` in an inline ``fetch`` init object, or fetch's
+        specified GET default when no init is passed at all.
+
+        Returns the set of call-expression node ids that produced a fact, so the
+        generic ``call`` pass can skip them.
+        """
+
+        source = root.text
+        normalized = canonical.normalize_repo_path(path)
+        emitted: set[int] = set()
+        axios_names = self._axios_default_import_names(root, source)
+        # Every name that is an HTTP client somewhere in this file. Used only to
+        # tell a genuine shadowed-client blind spot from an unrelated local name.
+        client_names = {_FETCH_NAME, *axios_names}
+
+        def flag(node, message: str) -> None:
+            diagnostics.append(
+                ExtractedDiagnostic(
+                    code=RI_EXT_UNSUPPORTED,
+                    category="unsupported construct",
+                    severity="info",
+                    # Construct name only: a URL argument or init object can
+                    # carry tokens and internal hostnames, which RFC §13 keeps
+                    # out of diagnostic text. The span says where to look.
+                    message=message,
+                    path=normalized,
+                    span=(node.start_point[0] + 1, node.end_point[0] + 1),
+                    subject=file_key,
+                )
+            )
+
+        def string_literal(node) -> str | None:
+            """Return a literal string's text, or ``None`` if it is computed."""
+
+            if node is None:
+                return None
+            if node.type == "template_string":
+                if any(child.type == "template_substitution" for child in node.named_children):
+                    return None
+                return self._node_text(node, source).strip("`")
+            if node.type != "string":
+                return None
+            return self._node_text(node, source).strip("'\"")
+
+        def fetch_method(arguments) -> str | None | bool:
+            """Method for a ``fetch`` call: name, ``False`` if computed."""
+
+            if len(arguments) < 2:
+                return _FETCH_DEFAULT_METHOD
+            init = arguments[1]
+            if init.type != "object":
+                return False
+            for entry in init.named_children:
+                if entry.type == "spread_element":
+                    # A spread can set ``method`` invisibly, so the GET default
+                    # is no longer proven by the call shape.
+                    return False
+                if entry.type != "pair":
+                    continue
+                key = entry.child_by_field_name("key")
+                if key is None or self._node_text(key, source).strip("'\"") != "method":
+                    continue
+                literal = string_literal(entry.child_by_field_name("value"))
+                return literal if literal is not None else False
+            return _FETCH_DEFAULT_METHOD
+
+        def emit(call, method: str, url_node) -> None:
+            url = string_literal(url_node)
+            if url is None:
+                flag(call, "dynamic HTTP destination is unsupported")
+                return
+            destination = describe_destination(method, url)
+            if destination is None:
+                flag(call, "HTTP destination without an absolute http(s) URL is unsupported")
+                return
+            evidence, _ = build_evidence(
+                path,
+                call.start_point[0] + 1,
+                call.end_point[0] + 1,
+                line_count,
+                producer=self.producer,
+            )
+            if evidence is None:
+                return
+            emitted.add(call.id)
+            nodes.append(
+                ExtractedNode(
+                    node_kind="service",
+                    stable_key=service_stable_key(destination.origin),
+                    name=destination.origin,
+                    # A destination is not a source language: Python and
+                    # TypeScript calling one origin must produce a byte-identical
+                    # record or the snapshot refuses to seal.
+                    language=None,
+                    evidence=(evidence,),
+                    properties={"origin": destination.origin},
+                )
+            )
+            observations.append(
+                ExtractedObservation(
+                    observed_kind="http_call",
+                    subject_kind="file",
+                    subject_key=file_key,
+                    referent_text=destination.referent_text,
+                    ordinal=_UNASSIGNED_ORDINAL,
+                    evidence=evidence,
+                )
+            )
+
+        def visit(call, shadowed: frozenset[str]) -> None:
+            function = call.child_by_field_name("function")
+            argument_node = call.child_by_field_name("arguments")
+            if function is None or argument_node is None:
+                return
+            arguments = [child for child in argument_node.named_children if child.type != "comment"]
+
+            if function.type == "identifier":
+                name = self._node_text(function, source)
+                if name not in client_names:
+                    return
+                if name in shadowed:
+                    flag(call, "HTTP client name is shadowed by a local binding")
+                    return
+                if name in axios_names:
+                    # axios(config) takes its method and url from an object whose
+                    # shape this extractor does not interpret.
+                    flag(call, "unsupported HTTP client call form")
+                    return
+                method = fetch_method(arguments)
+                if method is False:
+                    flag(call, "computed fetch init is unsupported")
+                    return
+                if not arguments:
+                    flag(call, "dynamic HTTP destination is unsupported")
+                    return
+                emit(call, str(method), arguments[0])
+                return
+
+            if function.type != "member_expression":
+                return
+            receiver = function.child_by_field_name("object")
+            attribute = function.child_by_field_name("property")
+            if receiver is None or attribute is None or receiver.type != "identifier":
+                return
+            name = self._node_text(receiver, source)
+            if name not in axios_names:
+                return
+            if name in shadowed:
+                flag(call, "HTTP client name is shadowed by a local binding")
+                return
+            method = self._node_text(attribute, source)
+            if method not in HTTP_METHOD_ATTRIBUTES:
+                # axios.request/axios.create and friends do not name a method.
+                flag(call, "unsupported HTTP client call form")
+                return
+            if not arguments:
+                flag(call, "dynamic HTTP destination is unsupported")
+                return
+            emit(call, method, arguments[0])
+
+        def walk(node, shadowed: frozenset[str] = frozenset()):
+            if node.type in _FUNCTION_SCOPE_TYPES:
+                shadowed = shadowed | frozenset(self._scope_bindings(node, source))
+            if node.type == "call_expression":
+                visit(node, shadowed)
+            for child in node.named_children:
+                walk(child, shadowed)
+
+        walk(root)
+        return frozenset(emitted)
+
+    def _axios_default_import_names(self, root, source: bytes) -> set[str]:
+        """Local names bound by a default import from the ``axios`` specifier."""
+
+        names: set[str] = set()
+
+        def walk(node):
+            if node.type == "import_statement":
+                specifier = node.child_by_field_name("source")
+                if specifier is not None and self._node_text(specifier, source).strip("'\"`") == _AXIOS_SPECIFIER:
+                    clause = next((child for child in node.named_children if child.type == "import_clause"), None)
+                    if clause is not None:
+                        for child in clause.named_children:
+                            if child.type == "identifier":
+                                names.add(self._node_text(child, source))
+            for child in node.named_children:
+                walk(child)
+
+        walk(root)
+        return names
 
     def _collect_blind_spots(self, root, path, line_count, diagnostics) -> None:
         source = root.text

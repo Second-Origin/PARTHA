@@ -10,9 +10,9 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Protocol, runtime_checkable
 
+from app.extraction import production_extractors
+from app.extraction.dependencies import merge_dependency_facts
 from app.extraction.pipeline import ExtractionPipeline, ProducedExtraction
-from app.extraction.python import PythonExtractor
-from app.extraction.typescript import TypeScriptExtractor
 
 from benchmark.facts import EvidenceSpan, Fact, canonical_value
 from benchmark.loader import LoadedFixture
@@ -37,11 +37,14 @@ class RealExtractionAdapter:
 
     def extract(self, fixture: LoadedFixture) -> list[Fact]:
         pipeline = ExtractionPipeline(
-            (PythonExtractor(), TypeScriptExtractor()),
+            production_extractors(),
             max_source_bytes=fixture.max_source_bytes,
         )
         facts: list[Fact] = []
-        for produced in pipeline.run(fixture.source_files()):
+        # The same cross-file dependency reducer the worker applies, so a
+        # fixture's golden dependency node is the merged record the product
+        # actually persists rather than an unmerged per-file intermediate.
+        for produced in merge_dependency_facts(pipeline.run(fixture.source_files())):
             facts.extend(self._convert(produced))
         return self._merge_compatible_nodes(facts)
 

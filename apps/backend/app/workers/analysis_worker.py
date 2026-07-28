@@ -27,10 +27,9 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections import defaultdict
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -46,15 +45,17 @@ from app.analysis.resource_budget import (
     AnalysisResourceExceeded,
 )
 from app.analysis.source_stream import RepositorySourceStream
-from app.extraction.base import ExtractedEvidence, ExtractedNode, ExtractionResult
-from app.extraction.manifests import DependencyManifestExtractor
+from app.extraction.base import ExtractedEvidence
+from app.extraction.dependencies import (
+    DEPENDENCY_SET_ARRAY_KEYS,
+    merge_dependency_facts,
+)
+from app.extraction import production_extractors
 from app.extraction.pipeline import (
     DEFAULT_MAX_SOURCE_BYTES,
     ExtractionPipeline,
     ProducedExtraction,
 )
-from app.extraction.python import PythonExtractor
-from app.extraction.typescript import TypeScriptExtractor
 from app.intelligence.classification import RoleClassifier
 from app.intelligence.resolution import RelationshipResolver
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
@@ -379,7 +380,7 @@ class AnalysisWorker:
             check_cancelled=lambda: self._check_heartbeat(ctx),
         )
         pipeline = ExtractionPipeline(
-            (PythonExtractor(), TypeScriptExtractor(), DependencyManifestExtractor()),
+            production_extractors(),
             max_source_bytes=self.max_source_bytes,
         )
         deferred_dependencies: list[ProducedExtraction] = []
@@ -389,7 +390,8 @@ class AnalysisWorker:
         ):
             if any(node.node_kind == "dependency" for node in produced.result.nodes):
                 # Dependency observations reference these nodes, so the complete
-                # manifest result must wait for the cross-manifest reducer.
+                # manifest and lockfile results must wait for the cross-file
+                # reducer that folds them onto one identity.
                 deferred_dependencies.append(produced)
                 continue
             self._persist_produced(store, snapshot, produced, ctx)
@@ -946,120 +948,16 @@ class AnalysisWorker:
     def _merge_dependency_declarations(
         produced: tuple[ProducedExtraction, ...],
     ) -> tuple[ProducedExtraction, ...]:
-        """Combine per-manifest dependency nodes sharing a stable key into one.
+        """Fold per-file dependency facts onto one node before persistence.
 
-        A dependency is one entity that can carry several manifest
-        declarations — the same package name declared in more than one
-        workspace is an ordinary monorepo shape — but
-        ``DependencyManifestExtractor`` only ever sees one file per
-        ``extract()`` call, so it emits one ``ExtractedNode`` per declaration.
-        Left unmerged, two declarations sharing a stable key would reach
-        ``SnapshotStore.add_node`` as two writes whose ``properties`` differ
-        (at minimum a different ``manifest_path``), which it correctly treats
-        as an internal conflict and rejects — failing the entire analysis job
-        for a repository shape that is not actually an error (#156). This
-        merges such nodes into one per stable key before persistence, so
-        ``add_node`` only ever sees a single, self-consistent write.
-
-        Declarations are ordered deterministically by ``(manifest_path,
-        start_line, end_line)`` so the canonical graph hash never depends on
-        the order files happened to be read in.
-
-        Scoped to this worker's single repository-wide ``pipeline.run()``
-        call; ``ExtractionPipeline`` itself is unchanged.
+        Scoped to this worker's single repository-wide extraction stream, where
+        every manifest and lockfile in the repository has been seen;
+        ``ExtractionPipeline`` itself is unchanged. The reducer lives in
+        :mod:`app.extraction.dependencies` so the golden benchmark seals the
+        identical merged shape this worker persists.
         """
 
-        groups: dict[str, list[tuple[ProducedExtraction, ExtractedNode]]] = defaultdict(list)
-        for item in produced:
-            for node in item.result.nodes:
-                if node.node_kind == "dependency":
-                    groups[node.stable_key].append((item, node))
-        if not groups:
-            return produced
-
-        # A stable key claimed by more than one distinct producer identity is
-        # a genuine identity conflict, not a multi-manifest declaration by the
-        # same extractor; leave those nodes exactly as produced so
-        # ``add_node`` still rejects them rather than this silently picking one.
-        mergeable = {
-            stable_key: members
-            for stable_key, members in groups.items()
-            if len({(item.producer_name, item.producer_version) for item, _ in members}) == 1
-        }
-        if not mergeable:
-            return produced
-
-        merged_by_producer: dict[tuple[str, str], list[ExtractedNode]] = defaultdict(list)
-        for stable_key in sorted(mergeable):
-            members = mergeable[stable_key]
-            producer_identity = (members[0][0].producer_name, members[0][0].producer_version)
-            merged_by_producer[producer_identity].append(
-                AnalysisWorker._build_merged_dependency_node(stable_key, members)
-            )
-        # The merged nodes must be persisted before any per-file
-        # ``ExtractedObservation`` that references their stable key —
-        # ``add_observation`` enforces a same-snapshot foreign key to an
-        # already-persisted node — so they are placed first, ahead of every
-        # other produced entry (observations are left exactly where they were
-        # produced; only the now-redundant per-file dependency nodes move).
-        merged_entries = [
-            ProducedExtraction(producer_name, producer_version, ExtractionResult(nodes=tuple(nodes)))
-            for (producer_name, producer_version), nodes in sorted(merged_by_producer.items())
-        ]
-
-        rewritten: list[ProducedExtraction] = []
-        for item in produced:
-            kept_nodes = tuple(
-                node
-                for node in item.result.nodes
-                if not (node.node_kind == "dependency" and node.stable_key in mergeable)
-            )
-            rewritten.append(
-                item
-                if kept_nodes == item.result.nodes
-                else replace(item, result=replace(item.result, nodes=kept_nodes))
-            )
-        return tuple(merged_entries) + tuple(rewritten)
-
-    @staticmethod
-    def _build_merged_dependency_node(
-        stable_key: str,
-        members: list[tuple[ProducedExtraction, ExtractedNode]],
-    ) -> ExtractedNode:
-        ordered = sorted(
-            members,
-            key=lambda pair: (
-                str((pair[1].properties or {}).get("manifest_path") or ""),
-                pair[1].evidence[0].start_line,
-                pair[1].evidence[0].end_line,
-            ),
-        )
-        declarations: list[dict[str, object]] = []
-        evidence: list[ExtractedEvidence] = []
-        for item, node in ordered:
-            properties = node.properties or {}
-            declarations.append(
-                {
-                    "name": node.name,
-                    "version": properties.get("version"),
-                    "dependency_type": properties.get("dependency_type"),
-                    "manifest_path": properties.get("manifest_path"),
-                    "workspace_path": properties.get("workspace_path"),
-                    "start_line": node.evidence[0].start_line,
-                    "end_line": node.evidence[0].end_line,
-                    "extractor": item.producer_name,
-                    "extractor_version": item.producer_version,
-                }
-            )
-            evidence.extend(node.evidence)
-        return ExtractedNode(
-            node_kind="dependency",
-            stable_key=stable_key,
-            name=ordered[0][1].name,
-            language=None,
-            evidence=tuple(evidence),
-            properties={"ecosystem": (ordered[0][1].properties or {}).get("ecosystem"), "declarations": declarations},
-        )
+        return merge_dependency_facts(produced)
 
     def _persist_produced(
         self,
@@ -1081,7 +979,9 @@ class AnalysisWorker:
             if ctx is not None:
                 self._check_heartbeat(ctx)
             set_array_keys = frozenset(
-                key for key in ("decorators", "declarations") if node.properties and key in node.properties
+                key
+                for key in ("decorators", *sorted(DEPENDENCY_SET_ARRAY_KEYS))
+                if node.properties and key in node.properties
             )
             store.add_node(
                 snapshot,

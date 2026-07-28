@@ -35,6 +35,9 @@ edge.
 | `route` + `route_handler` | Route declaration and one handler reference | `routes_to` |
 | `dependency` | Direct manifest declaration on a dependency node | `depends_on` |
 | `injects` | A `Depends(name)` argument (#95) | `injects` |
+| `http_call` | A proven outbound HTTP call site, `METHOD\|origin\|path` (#209) | `calls_service` |
+| `iac_resource` | A declared infrastructure resource on an `iac_resource` node (#209) | `declares` |
+| `resolution` | A lockfile pin on a dependency node (#209) | *(none — deliberately not a relationship input)* |
 
 `import_binding` uses an unambiguous delimiter format because `ri.v1`
 observations intentionally have only `referent_text`; it is still direct
@@ -113,6 +116,50 @@ or one this fixture never defines (e.g. a bare `oauth2_scheme` reference with
 no local definition), stays an honest `RI-RES-UNRESOLVED` diagnostic rather
 than a guessed edge.
 
+### Service interactions (#209)
+
+An `http_call` referent is the extractor's three-part
+`METHOD|origin|path` record — the same delimited representation `import_binding`
+uses, and for the same reason: it is direct extractor output, not resolver
+interpretation. The resolver splits it and looks up exactly one deterministic
+key, `svc:<origin>`. There is no search and no nearest-match: the extractor that
+proved the literal URL also emitted the `service` node for that origin, so
+either the key is present or the observation stays `RI-RES-UNRESOLVED`. A
+referent that does not carry all three parts is never repaired.
+
+The call is attributed to whichever symbol's stored span contains it, falling
+back to the observed file/module — identical to how a `calls` reference picks
+its source, so both predicates agree about who made a call.
+
+Only the origin is the service's identity. The method and path vary per call
+site and live on the observation, so `GET https://api.example.com/v1/users` and
+`POST https://api.example.com/v1/orders` are two calls to **one** service rather
+than two services. That identity is language-neutral, so a Python and a
+TypeScript call site to the same origin converge on one node.
+
+### Lockfile resolutions (#209)
+
+A `resolution` observation records that a lockfile pinned a dependency to an
+exact version. It is deliberately **not** a relationship input. A lockfile entry
+proves that a version was installed; it does not prove the repository depends on
+that package directly, and most entries in a real lockfile are transitive. Only
+a manifest-backed `dependency` observation produces `depends_on`, so no
+transitive resolution is ever implied by a `depends_on` edge.
+
+The resolution is retained as an observation on the dependency node rather than
+downgraded to a diagnostic: nothing about it is unresolved, it simply is not a
+relationship claim. The merged dependency node keeps `declarations` and
+`resolutions` as separate collections, and an empty `resolutions` list is the
+honest statement that no supported lockfile pinned that dependency.
+
+### Infrastructure resources (#209)
+
+An `iac_resource` observation whose subject is an `iac_resource` node in the
+snapshot resolves `repo:root -[declares]-> <resource>`, exactly like a manifest
+`dependency` observation resolves `depends_on`. An observation whose subject is
+absent or is some other node kind stays unresolved rather than attaching an
+arbitrary node to the repository.
+
 ### Routes
 
 Extractors create an observed anonymous route symbol for each literal route
@@ -127,7 +174,7 @@ property or used as the subject of a resolved route relationship.
 ## Truth classes and provenance
 
 The resolver emits only `resolved` edges through `SnapshotStore.add_edge`. Each
-edge has `relationship-resolver@1.0.0` as its immediate producer, carries the
+edge has `relationship-resolver@1.1.0` as its immediate producer, carries the
 same repository-relative span as its source observation under that resolver
 producer identity, and has a tagged observation derivation. The producer must
 be present in the snapshot's planned `producer_version_set`, which sealing
@@ -148,3 +195,13 @@ both languages, module-local Python import bindings, default-imported React
 route handlers, dynamic JSX route paths, top-level and recursive calls, and
 abstract generic `implements` clauses. All warning paths are sealed
 successfully to prove that honest partial knowledge remains usable.
+
+`tests/intelligence/test_service_and_iac_resolution.py` covers the #209 kinds:
+a proven call resolving to its origin's service node and being attributed to the
+containing symbol, a top-level call falling back to its module, an origin with no
+service node and a malformed referent both staying unresolved, an `iac_resource`
+observation attaching to `repo:root`, and — the negative that matters most — a
+lockfile `resolution` producing neither an edge nor a diagnostic while a manifest
+declaration for the same dependency still produces `depends_on`. Edge truth class,
+producer identity, evidence span, and observation derivation are asserted
+directly rather than inferred from a count.

@@ -7,7 +7,7 @@
   "description": "A decorated handler registered as a FastAPI route. Exercises py.decorator and py.fastapi_route.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.1.0"],
+  "producerVersionSet": ["python-ast@1.1.0", "repository-inventory@1.1.0"],
   "constructsCovered": ["py.decorator", "py.fastapi_route", "py.function.def", "py.module"],
   "deterministic": false,
   "expected": {
@@ -17,25 +17,25 @@
       {"nodeKind": "file", "stableKey": "file:src/api.py", "properties": {"content_sha256": "sha256:46a792fb22fe222d3d2ad106b3e84fa5ab9998b97b6bbc7010a6b7831da7c4b4"}, "name": "api.py", "language": "python", "constructs": ["src.file"],
        "evidence": [{"path": "src/api.py", "startLine": 1, "endLine": 14, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "module", "stableKey": "mod:src", "name": "src", "constructs": ["py.module"],
-       "evidence": [{"path": "src/api.py", "startLine": 1, "endLine": 14, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+       "evidence": [{"path": "src/api.py", "startLine": 1, "endLine": 14, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/api.py::audit", "name": "audit", "language": "python", "constructs": ["py.function.def"],
-       "evidence": [{"path": "src/api.py", "startLine": 6, "endLine": 7, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+       "evidence": [{"path": "src/api.py", "startLine": 6, "endLine": 7, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/api.py::health", "name": "health", "language": "python", "properties": {"decorators": ["audit", "router.get"]}, "constructs": ["py.function.def", "py.decorator"],
-       "evidence": [{"path": "src/api.py", "startLine": 12, "endLine": 13, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+       "evidence": [{"path": "src/api.py", "startLine": 12, "endLine": 13, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/api.py::(anonymous:route#1)", "name": "route", "language": "python", "properties": {"route_path": "/health"}, "constructs": ["py.fastapi_route"],
-       "evidence": [{"path": "src/api.py", "startLine": 11, "endLine": 11, "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
+       "evidence": [{"path": "src/api.py", "startLine": 11, "endLine": 11, "extractor": "python-ast", "extractorVersion": "1.1.0"}]}
     ],
     "edges": [],
     "observations": [
-      {"observedKind":"import","subjectKind":"module","subjectKey":"mod:src","referentText":"fastapi.APIRouter","ordinal":1,"constructs":["py.import"],"evidence":{"path":"src/api.py","startLine":1,"endLine":1,"extractor":"python-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"import_binding","subjectKind":"module","subjectKey":"mod:src","referentText":"fastapi|APIRouter|APIRouter","ordinal":1,"constructs":["py.import"],"evidence":{"path":"src/api.py","startLine":1,"endLine":1,"extractor":"python-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"call","subjectKind":"module","subjectKey":"mod:src","referentText":"APIRouter","ordinal":1,"constructs":["py.fastapi_route"],"evidence":{"path":"src/api.py","startLine":3,"endLine":3,"extractor":"python-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/api.py::audit","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/api.py","startLine":6,"endLine":7,"extractor":"python-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/api.py::health","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/api.py","startLine":12,"endLine":13,"extractor":"python-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"decorator","subjectKind":"symbol","subjectKey":"src/api.py::health","referentText":"audit","ordinal":1,"constructs":["py.decorator"],"evidence":{"path":"src/api.py","startLine":10,"endLine":10,"extractor":"python-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"decorator","subjectKind":"symbol","subjectKey":"src/api.py::health","referentText":"router.get","ordinal":1,"constructs":["py.decorator"],"evidence":{"path":"src/api.py","startLine":11,"endLine":11,"extractor":"python-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"route","subjectKind":"symbol","subjectKey":"src/api.py::(anonymous:route#1)","referentText":"/health","ordinal":1,"constructs":["py.fastapi_route"],"evidence":{"path":"src/api.py","startLine":11,"endLine":11,"extractor":"python-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"route_handler","subjectKind":"symbol","subjectKey":"src/api.py::(anonymous:route#1)","referentText":"src/api.py::health","ordinal":1,"constructs":["py.fastapi_route"],"evidence":{"path":"src/api.py","startLine":11,"endLine":11,"extractor":"python-ast","extractorVersion":"1.0.0"}}
+      {"observedKind":"import","subjectKind":"module","subjectKey":"mod:src","referentText":"fastapi.APIRouter","ordinal":1,"constructs":["py.import"],"evidence":{"path":"src/api.py","startLine":1,"endLine":1,"extractor":"python-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"import_binding","subjectKind":"module","subjectKey":"mod:src","referentText":"fastapi|APIRouter|APIRouter","ordinal":1,"constructs":["py.import"],"evidence":{"path":"src/api.py","startLine":1,"endLine":1,"extractor":"python-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"call","subjectKind":"module","subjectKey":"mod:src","referentText":"APIRouter","ordinal":1,"constructs":["py.fastapi_route"],"evidence":{"path":"src/api.py","startLine":3,"endLine":3,"extractor":"python-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/api.py::audit","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/api.py","startLine":6,"endLine":7,"extractor":"python-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/api.py::health","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/api.py","startLine":12,"endLine":13,"extractor":"python-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"decorator","subjectKind":"symbol","subjectKey":"src/api.py::health","referentText":"audit","ordinal":1,"constructs":["py.decorator"],"evidence":{"path":"src/api.py","startLine":10,"endLine":10,"extractor":"python-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"decorator","subjectKind":"symbol","subjectKey":"src/api.py::health","referentText":"router.get","ordinal":1,"constructs":["py.decorator"],"evidence":{"path":"src/api.py","startLine":11,"endLine":11,"extractor":"python-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"route","subjectKind":"symbol","subjectKey":"src/api.py::(anonymous:route#1)","referentText":"/health","ordinal":1,"constructs":["py.fastapi_route"],"evidence":{"path":"src/api.py","startLine":11,"endLine":11,"extractor":"python-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"route_handler","subjectKind":"symbol","subjectKey":"src/api.py::(anonymous:route#1)","referentText":"src/api.py::health","ordinal":1,"constructs":["py.fastapi_route"],"evidence":{"path":"src/api.py","startLine":11,"endLine":11,"extractor":"python-ast","extractorVersion":"1.1.0"}}
     ],
     "assertions": [], "diagnostics": []
   }

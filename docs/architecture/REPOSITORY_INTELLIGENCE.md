@@ -21,17 +21,17 @@ If your feature needs a repository fact that does not exist yet, the answer is a
 ## What Repository Intelligence currently means
 
 Production analysis has one authoritative output. A durable job runs the
-evidence-backed Python, TypeScript, and dependency-manifest extractors, resolves
-stored observations, classifies explicitly heuristic roles, and seals a
-normalized `ri.v1` snapshot. It no longer builds or writes the legacy mutable
-`RepositoryIntelligence` JSON model.
+evidence-backed Python, TypeScript, dependency-manifest, lockfile, and IaC
+extractors, resolves stored observations, classifies explicitly heuristic roles,
+and seals a normalized `ri.v1` snapshot. It no longer builds or writes the legacy
+mutable `RepositoryIntelligence` JSON model.
 
 The `ri.v1` persistence boundary includes first-class repository revision
 columns, normalized snapshot/fact/provenance tables, deterministic canonical
 hashing, and a lifecycle store that validates and seals immutable snapshots.
-Evidence-backed Python and TypeScript extractors, the dependency-manifest
-extractor, their support matrices, the repository-level source-policy
-pipeline, deterministic
+Evidence-backed Python and TypeScript extractors, the dependency-manifest,
+lockfile, and IaC extractors, their support matrices, the repository-level
+source-policy pipeline, deterministic
 [relationship resolution](REPOSITORY_INTELLIGENCE_RESOLUTION.md) over stored
 observations, and a heuristic `role-classifier` producer (file- and
 symbol-level `classified_as` assertions, always `inferred`) all run in the
@@ -67,7 +67,7 @@ flowchart LR
 Repository source enters the intelligence pipeline in two bounded phases:
 
 1. **`RepositoryParser`** walks the extracted tree during import and persists a path inventory plus basic import metadata.
-2. **`AnalysisWorker`** reads the persisted inventory's source paths under the shared size/path policy and supplies bytes to `ExtractionPipeline`. The Python, TypeScript, and dependency-manifest extractors never walk the tree themselves.
+2. **`AnalysisWorker`** reads the persisted inventory's source paths under the shared size/path policy and supplies bytes to `ExtractionPipeline`. The extractor set is registered once in `app/extraction/__init__.py::production_extractors()`, which the worker's pipeline, the planned producer-version set in `AnalysisJobService`, and the golden benchmark all read — a second hand-kept list is how a producer ends up emitting facts a snapshot never declared. No extractor walks the tree itself.
 
 There is one further direct read that is **not** parsing: `RepositoryService.read_file` serves the explorer's file preview. It is a path-checked read for display only and feeds no analysis.
 
@@ -79,16 +79,22 @@ dispatching those bytes through each extractor's real `supports()` method.
 ### Syntax-aware extractors are a separate, real boundary
 
 `PythonExtractor` uses Python's AST and `TypeScriptExtractor` uses tree-sitter.
-Both emit normalized nodes, observations, diagnostics, and line evidence through
-the `ExtractionResult` contract. Their declared support and blind spots live in
+`DependencyManifestExtractor` and `LockfileExtractor` share one structure-aware
+JSON/TOML scanner (`app/extraction/structured.py`) so two producers can never
+disagree about where a value sits in the same file, and `IacExtractor` parses
+Compose through PyYAML's *composer* rather than `safe_load` because the node
+graph's source marks are what make an exact declaration line possible at all.
+Every one of them emits normalized nodes, observations, diagnostics, and line
+evidence through the `ExtractionResult` contract. Their declared support and blind spots live in
 the typed capability registry in `app/extraction/support_matrix.py`; the legacy
 `SUPPORT_MATRIX` import is only a derived compatibility view. Durable analysis
 stores their output in a sealed normalized snapshot. Historical legacy JSON is
 not produced or consumed.
 
 The registry is the authoritative source for construct status, limitations,
-stable ids, benchmark mappings, supported dependency-manifest names, and the
-public capability assessments rendered in the README. Run
+stable ids, benchmark mappings, the supported dependency-manifest, lockfile, and
+IaC filenames each extractor's `supports()` reads, and the public capability
+assessments rendered in the README. Run
 `python scripts/check-capabilities.py` to validate registry structure,
 registry-to-benchmark parity, deterministic rendering, and the committed
 README block. The command checks only; it never rewrites documentation.
@@ -102,8 +108,10 @@ README block. The command checks only; it never rewrites documentation.
 | `file` nodes | Observed normalized paths, supported language, content hash. | Repository inventory producer. |
 | `symbol` and `module` nodes | Supported Python and TypeScript/JavaScript syntax facts. | AST/tree-sitter extractors with stored evidence spans. |
 | `classified_as` assertions | File and symbol roles. | Explicit path/name heuristics, stored as inferred with heuristic confidence. |
-| `dependency` nodes | Logical direct dependency plus every declared version/specifier, type, ecosystem, workspace/manifest path, exact declaration span, and extractor identity. | Supported `package.json`, `requirements.txt`, and `pyproject.toml` files at accepted root or nested workspace paths. |
-| observations and resolved edges | Imports, calls, routes, dependency declarations, and supported relationships. | Syntax/manifest observations resolved only against stored snapshot facts. |
+| `dependency` nodes | Logical dependency carrying two separate collections: `declarations` (every declared version/specifier, type, ecosystem, workspace/manifest path, span, extractor) and `resolutions` (every lockfile-pinned exact version with its entry, scope, lockfile path, and span). | Supported `package.json`, `requirements.txt`, and `pyproject.toml` manifests, plus supported `package-lock.json` and `poetry.lock` lockfiles, at accepted root or nested workspace paths. |
+| `service` nodes | An outbound HTTP destination identified by its absolute origin (`svc:<scheme>://<host>[:<port>]`). | Syntax-proven `requests`/`httpx`/`fetch`/`axios` call sites with a literal absolute URL. |
+| `iac_resource` nodes | A declared infrastructure resource with its type, literal name, manifest path, exact declaration line, and literal image where present. | Docker Compose `services`, `volumes`, and `networks` sections. |
+| observations and resolved edges | Imports, calls, routes, dependency declarations, lockfile resolutions, outbound service interactions, IaC resource declarations, and supported relationships. | Syntax/manifest observations resolved only against stored snapshot facts. |
 | diagnostics and evidence | Unsupported/malformed/unresolved states plus exact stored spans where available. | Producers and resolver; missing facts are never manufactured. |
 
 ### Deterministic vs. heuristic
@@ -115,7 +123,9 @@ This distinction matters, and consumers must respect it.
 - file paths, names, extensions, sizes, and the file tree;
 - supported Python and TypeScript/JavaScript modules, symbols, imports, calls,
   route declarations, and implementation relationships, with source spans;
-- dependency names and version specifiers **as declared in** the three supported manifests, including accepted nested workspaces;
+- dependency names and version specifiers **as declared in** the three supported manifests, including accepted nested workspaces, kept distinct from the exact versions **as resolved in** the two supported lockfiles;
+- outbound service interactions where the source proves both a literal HTTP method and an absolute literal URL;
+- declared Docker Compose services, volumes, and networks with their exact declaration lines;
 - resolved graph edges and unresolved/ambiguous diagnostics produced from stored
   observations under the published resolution rules;
 - primary language and recognized framework labels derived from observed file
@@ -192,12 +202,22 @@ API pagination.
 ## The knowledge graph
 
 Node kinds currently persisted are `repository`, `module`, `file`, `symbol`,
-and `dependency`.
+`dependency`, `service`, and `iac_resource`.
+
+`service` and `iac_resource` (#209) are registered stable-key forms in
+`canonical.normalize_stable_key`, not free-form future kinds: a `service` key
+must be `svc:<scheme>://<host>[:<port>]` and an `iac_resource` key must be
+`iac:<manifest-path>::<type>/<name>`. Registering them is what stops a relative
+path or a bare host entering a snapshot as though it were a proven destination.
+Existing consumers filter by the kinds they render, so the new kinds are
+inventoried and counted but are not injected into the Architecture graph,
+Dependency Graph, or role classification.
 
 The resolver can emit `contains`, `defines`, `imports`, `calls`, `implements`,
-`routes_to`, `depends_on`, and `injects`. A consumer must request only the
-predicates it needs through the snapshot query layer; the Architecture response,
-for example, intentionally renders a bounded subset.
+`routes_to`, `depends_on`, `injects`, `calls_service`, and `declares`. A
+consumer must request only the predicates it needs through the snapshot query
+layer; the Architecture response, for example, intentionally renders a bounded
+subset.
 
 Edges are backed by snapshot evidence records carrying normalized paths and
 inclusive line spans where the producer can provide them. Unresolved or
@@ -214,7 +234,7 @@ speculative edges.
 | Authentication explanation (#95) | `app/analysis/authentication.py` | exclusively the sealed snapshot query layer — routes, `routes_to`/`injects`/`calls` edges, `classified_as` assertions, diagnostics. No legacy read. |
 | Engineering review | `app/review/` | exclusively one sealed snapshot — diagnostics promoted only when an exact same-snapshot fact and evidence span exist; manifest identity; no legacy read and no scores. |
 | Repository insights | `app/insights/` | exclusively one sealed snapshot — defined node, relationship, evidence, diagnostic, language, coverage, and extractor counts; no legacy read. |
-| Dependency graph (#158) | `app/graph/` | exclusively one sealed snapshot — `dependency` nodes and resolved `depends_on` edges, with declarations merged across manifests (#156); no legacy read. |
+| Dependency graph (#158) | `app/graph/` | exclusively one sealed snapshot — `dependency` nodes and resolved `depends_on` edges, with declarations merged across manifests (#156) and lockfile resolutions merged onto the same identity (#209); no legacy read. |
 | Documentation | `app/services/documentation_service.py` | current-revision sealed projection: observed paths/languages, heuristic roles/modules, routes, dependencies/declarations, diagnostics, and snapshot identity |
 | AI | `app/ai/repository_context.py` | the same sealed projection; structural facts only, with no source-file contents or fabricated citations |
 | Reports and exports | `app/reports/` | snapshot-backed analysis and Documentation output |
@@ -287,8 +307,11 @@ because provider prose cannot be deterministically mapped to stored facts.
 - **Authentication subgraph selection (#95):** the classifier and the resolved graph together only produce *candidate* facts; `AuthenticationExplanationService` additionally requires graph connectivity before any of them is claimed as authentication. A route is included only when its resolved `routes_to` handler has a resolved `injects` edge to a symbol explicitly classified `auth_dependency`; a service or model is included only when it lies on a resolved `calls` path from that guard (a breadth-first walk that keeps only edges on a path to a `service`/`model`-classified symbol, discarding everything else the guard happens to call). This is why an unrelated `/health` route, a generic `Depends(get_database)`, or a same-suffix `PaymentService`/`AuditModel` that the guard never calls are never claimed as authentication even though the classifier still labels them `service`/`model` for Architecture's module grouping — a name match alone is never sufficient. The response also returns `chains`: one ordered route -> handler -> guard -> (service/model) path per qualifying route, so a consumer does not have to reconstruct the flow from the flat `relationships` list.
 - **Evidence navigation (#95, #154):** authentication and Engineering Review citations link to the existing repository Explorer with `snapshotId`, `factId`, path, and line span. The Explorer calls the owner-scoped `GET /analysis/{repositoryId}/evidence` endpoint, which returns source only when the exact fact/span exists and the current source bytes match the SHA-256 sealed on the snapshot's file fact; otherwise it displays an explicit unavailable state. The same Monaco-based `CodePreview` is reused rather than adding a second viewer.
 - **Revision identity:** first-class and immutable per imported repository revision. Snapshot history can be retained, but diff/query APIs and product re-analysis orchestration are not implemented.
-- **Dependencies:** three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The dependency API reports both assessments as explicit `not_computed` statuses; it emits no clean result or count without a scanner.
-- **Dependency inventory:** only direct declarations from accepted `package.json`, `pyproject.toml`, and `requirements.txt` paths are reported. The parser inventory excludes `.git`, dependency/install directories, build output, virtual environments, caches, vendor paths, and generated paths; lockfiles are not read. Each candidate is size-checked and read with the existing 512 KiB source budget before being processed individually; oversized manifests produce `RI-LIMIT-SKIP` rather than being retained in memory. Multiple workspace declarations remain attached to one logical dependency, including conflicts rather than an arbitrarily selected version. A malformed supported manifest produces a safe `RI-SRC-MALFORMED` diagnostic while valid manifests continue to contribute declarations. No transitive resolution, vulnerability scanning, or outdated-version scanning is implemented. `AnalysisWorker` merges same-producer dependency nodes that share a stable key into one node with a `declarations` list before persistence, specifically so a package declared in more than one manifest — an ordinary monorepo shape — does not fail sealing for the whole repository.
+- **Dependencies:** three manifest formats plus two lockfile formats, no transitive resolution, and no vulnerability or outdated-version scanning. The dependency API reports both assessments as explicit `not_computed` statuses; it emits no clean result or count without a scanner.
+- **Lockfiles (#209):** exactly two formats are read, and both are named rather than sniffed. `package-lock.json` is read only at `lockfileVersion` 2 or 3, through its `packages` table; only entries under a `node_modules/` path with a concrete `version` string count, and workspace `"link": true` entries are skipped. `poetry.lock` is read only at `[metadata] lock-version` major 1 or 2, taking each `[[package]]` table's `name` and `version`. `lockfileVersion` 1 is disclosed as `RI-EXT-UNSUPPORTED` rather than parsed from its legacy `dependencies` tree, and `yarn.lock`, `pnpm-lock.yaml`, `npm-shrinkwrap.json`, `Pipfile.lock`, `uv.lock`, and `pdm.lock` are not opened at all. A resolution is recorded on the same logical dependency identity as its declaration (PyPI names folded per PEP 503) but is **never** promoted to a `depends_on` edge: a lockfile proves a version was installed, not that the repository depends on the package directly. A nested npm tree resolving one package twice is modelled as two resolutions of one node, not two dependencies. Poetry lock-version 2 removed the per-package `category` field, so the production/development split is reported as unknown rather than guessed. Lockfiles are subject to the same 512 KiB source budget as any other file, so a large `package-lock.json` produces `RI-LIMIT-SKIP` and contributes nothing.
+- **Service interactions (#209):** a destination fact requires three things visible in the source at once — an import proving the client, a literal HTTP method, and a literal absolute `http`/`https` URL. Python covers attribute-form calls on a module-level `requests`/`httpx` binding and on a local name assigned directly from `requests.Session()` / `httpx.Client()` / `httpx.AsyncClient()`; a bare `from requests import get` followed by `get(url)` is disclosed as unsupported specifically so it is not counted twice alongside the generic `call` observation it already produces. TypeScript covers the `fetch` global (GET by specification when no init is passed, or a literal `method` in an inline init object) and attribute calls on a default import from `axios`. Computed URLs, f-strings and template substitutions, relative paths, non-HTTP schemes, computed methods, spread or variable `fetch` init objects, `axios(config)`, `axios.request`, and shadowed client names all produce `RI-EXT-UNSUPPORTED` and no destination fact. Identity is the **origin only**: the request path travels on the call's own observation, and query strings and userinfo credentials are dropped rather than stored, because a literal URL can carry a token and stored facts must not embed secrets. Base URLs, client configuration, and any destination assembled at runtime are outside this contract.
+- **IaC (#209):** only Docker Compose, and only its four canonical filenames (`compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`) and its `services`, `volumes`, and `networks` sections. Detecting Kubernetes by scanning every `*.yaml` for an `apiVersion` key would turn an arbitrary document into a resource claim, so Terraform/OpenTofu HCL, Kubernetes, Helm, CloudFormation, Pulumi, Ansible, and Compose's `configs`/`secrets` sections are not read at all. Provenance is the resource's declaration line, not its whole block. A value that interpolates the environment (`image: ${TAG}`) is a template, not an observed image: the property is omitted and the blind spot is disclosed at that resource's span. Deployment topology, profiles, and runtime behaviour are not modelled.
+- **Dependency inventory:** direct declarations from accepted `package.json`, `pyproject.toml`, and `requirements.txt` paths, plus resolved pins from accepted `package-lock.json` and `poetry.lock` paths, are reported. The parser inventory excludes `.git`, dependency/install directories, build output, virtual environments, caches, vendor paths, and generated paths. Each candidate is size-checked and read with the existing 512 KiB source budget before being processed individually; oversized manifests and lockfiles produce `RI-LIMIT-SKIP` rather than being retained in memory. Multiple workspace declarations remain attached to one logical dependency, including conflicts rather than an arbitrarily selected version. A malformed supported manifest or lockfile produces a safe `RI-SRC-MALFORMED` diagnostic while valid ones continue to contribute facts. No transitive resolution, vulnerability scanning, or outdated-version scanning is implemented. `app/extraction/dependencies.py` merges dependency nodes that share a stable key into one node carrying separate `declarations` and `resolutions` set-arrays before persistence, specifically so a package declared in more than one manifest — an ordinary monorepo shape — or pinned by a lockfile does not fail sealing for the whole repository. The merged node is emitted once per contributing producer so manifest evidence stays attributed to `dependency-manifest` and lockfile evidence to `dependency-lockfile`; a stable key claimed by any producer outside that pair is left as a genuine conflict for `add_node` to reject. The durable worker and the golden benchmark both apply that same reducer, so the benchmark measures the merged shape the product actually persists.
 - **Languages:** the capability registry declares meaningful extraction for Python and TypeScript/JavaScript constructs. Other languages get file-tree and metadata treatment only.
 - **File size cap:** files over 512 KB are read as empty during extraction, so their contents contribute nothing.
 - **Build cost:** the whole repository is re-analysed from scratch in a background job; incremental analysis is not implemented.

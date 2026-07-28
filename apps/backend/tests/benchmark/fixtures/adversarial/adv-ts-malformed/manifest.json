@@ -7,7 +7,7 @@
   "description": "A file that fails to parse. It must emit RI-SRC-MALFORMED while the mandatory repository root remains evidenced by the stored text source (RFC-0001 §4.3, §6.2, §8). Exercises ts.syntax_error.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["typescript-ast@1.1.0", "repository-inventory@1.1.0"],
+  "producerVersionSet": ["typescript-ast@1.2.0", "repository-inventory@1.1.0"],
   "constructsCovered": ["ts.syntax_error"],
   "deterministic": false,
   "expected": {
@@ -17,7 +17,7 @@
     ], "edges": [], "observations": [], "assertions": [],
     "diagnostics": [
       {"code": "RI-SRC-MALFORMED", "category": "malformed source", "severity": "error",
-       "message": "src/broken.ts could not be parsed.", "producer": "typescript-ast@1.1.0",
+       "message": "src/broken.ts could not be parsed.", "producer": "typescript-ast@1.2.0",
        "path": "src/broken.ts", "subject": "file:src/broken.ts", "constructs": ["ts.syntax_error"]}
     ]
   }

@@ -7,7 +7,7 @@
   "description": "A nested function and a redefined name resolved with a discriminator. Exercises py.nested_function and py.duplicate_symbol, with an informational RI-KEY-DUP-SYMBOL diagnostic.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.1.0"],
+  "producerVersionSet": ["python-ast@1.1.0", "repository-inventory@1.1.0"],
   "constructsCovered": ["py.function.def", "py.nested_function", "py.duplicate_symbol", "py.module"],
   "deterministic": true,
   "expected": {
@@ -17,22 +17,22 @@
       {"nodeKind": "file", "stableKey": "file:src/util.py", "properties": {"content_sha256": "sha256:c554a8a791d2ff0efefbcec4a14f0f0be2fdb53c6254ee668fc30b7077bf949e"}, "name": "util.py", "language": "python", "constructs": ["src.file"],
        "evidence": [{"path": "src/util.py", "startLine": 1, "endLine": 9, "granularity": "file", "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "module", "stableKey": "mod:src", "name": "src", "constructs": ["py.module"],
-       "evidence": [{"path": "src/util.py", "startLine": 1, "endLine": 9, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+       "evidence": [{"path": "src/util.py", "startLine": 1, "endLine": 9, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/util.py::outer", "name": "outer", "language": "python", "constructs": ["py.function.def", "py.duplicate_symbol"],
-       "evidence": [{"path": "src/util.py", "startLine": 1, "endLine": 4, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+       "evidence": [{"path": "src/util.py", "startLine": 1, "endLine": 4, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/util.py::outer.inner", "name": "inner", "language": "python", "constructs": ["py.nested_function"],
-       "evidence": [{"path": "src/util.py", "startLine": 2, "endLine": 3, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]},
+       "evidence": [{"path": "src/util.py", "startLine": 2, "endLine": 3, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/util.py::outer#2", "name": "outer", "language": "python", "constructs": ["py.function.def", "py.duplicate_symbol"],
-       "evidence": [{"path": "src/util.py", "startLine": 7, "endLine": 8, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}]}
+       "evidence": [{"path": "src/util.py", "startLine": 7, "endLine": 8, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.1.0"}]}
     ],
     "edges": [], "observations": [
-      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/util.py::outer","ordinal":1,"constructs":["py.function.def","py.duplicate_symbol"],"evidence":{"path":"src/util.py","startLine":1,"endLine":4,"extractor":"python-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/util.py::outer.inner","ordinal":1,"constructs":["py.nested_function"],"evidence":{"path":"src/util.py","startLine":2,"endLine":3,"extractor":"python-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/util.py::outer#2","ordinal":1,"constructs":["py.function.def","py.duplicate_symbol"],"evidence":{"path":"src/util.py","startLine":7,"endLine":8,"extractor":"python-ast","extractorVersion":"1.0.0"}}
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/util.py::outer","ordinal":1,"constructs":["py.function.def","py.duplicate_symbol"],"evidence":{"path":"src/util.py","startLine":1,"endLine":4,"extractor":"python-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/util.py::outer.inner","ordinal":1,"constructs":["py.nested_function"],"evidence":{"path":"src/util.py","startLine":2,"endLine":3,"extractor":"python-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/util.py::outer#2","ordinal":1,"constructs":["py.function.def","py.duplicate_symbol"],"evidence":{"path":"src/util.py","startLine":7,"endLine":8,"extractor":"python-ast","extractorVersion":"1.1.0"}}
     ], "assertions": [],
     "diagnostics": [
       {"code": "RI-KEY-DUP-SYMBOL", "category": "duplicate symbol", "severity": "info",
-       "message": "Redefined name 'outer' resolved with discriminator #2.", "producer": "python-ast@1.0.0",
+       "message": "Redefined name 'outer' resolved with discriminator #2.", "producer": "python-ast@1.1.0",
        "path": "src/util.py", "subject": "src/util.py::outer#2", "constructs": ["py.duplicate_symbol"]}
     ]
   }

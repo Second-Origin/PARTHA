@@ -7,7 +7,7 @@
   "description": "Two top-level function definitions and their module/repository nodes. Exercises py.function.def and py.module with hand-verified line spans.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["python-ast@1.0.0", "repository-inventory@1.1.0"],
+  "producerVersionSet": ["python-ast@1.1.0", "repository-inventory@1.1.0"],
   "constructsCovered": ["py.function.def", "py.module"],
   "deterministic": true,
   "expected": {
@@ -44,7 +44,7 @@
         "name": "src",
         "constructs": ["py.module"],
         "evidence": [
-          {"path": "src/greeting.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.0.0"}
+          {"path": "src/greeting.py", "startLine": 1, "endLine": 7, "granularity": "file", "extractor": "python-ast", "extractorVersion": "1.1.0"}
         ]
       },
       {
@@ -54,7 +54,7 @@
         "language": "python",
         "constructs": ["py.function.def"],
         "evidence": [
-          {"path": "src/greeting.py", "startLine": 1, "endLine": 2, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}
+          {"path": "src/greeting.py", "startLine": 1, "endLine": 2, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.1.0"}
         ]
       },
       {
@@ -64,14 +64,14 @@
         "language": "python",
         "constructs": ["py.function.def"],
         "evidence": [
-          {"path": "src/greeting.py", "startLine": 5, "endLine": 6, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.0.0"}
+          {"path": "src/greeting.py", "startLine": 5, "endLine": 6, "granularity": "span", "extractor": "python-ast", "extractorVersion": "1.1.0"}
         ]
       }
     ],
     "edges": [],
     "observations": [
-      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/greeting.py::greet","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/greeting.py","startLine":1,"endLine":2,"extractor":"python-ast","extractorVersion":"1.0.0"}},
-      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/greeting.py::farewell","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/greeting.py","startLine":5,"endLine":6,"extractor":"python-ast","extractorVersion":"1.0.0"}}
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/greeting.py::greet","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/greeting.py","startLine":1,"endLine":2,"extractor":"python-ast","extractorVersion":"1.1.0"}},
+      {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/greeting.py::farewell","ordinal":1,"constructs":["py.function.def"],"evidence":{"path":"src/greeting.py","startLine":5,"endLine":6,"extractor":"python-ast","extractorVersion":"1.1.0"}}
     ],
     "assertions": [],
     "diagnostics": []

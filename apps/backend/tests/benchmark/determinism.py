@@ -10,9 +10,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import register_sqlite_foreign_key_enforcement
+from app.extraction import production_extractors
+from app.extraction.dependencies import DEPENDENCY_SET_ARRAY_KEYS, merge_dependency_facts
 from app.extraction.pipeline import ExtractionPipeline, ProducedExtraction
-from app.extraction.python import PythonExtractor
-from app.extraction.typescript import TypeScriptExtractor
 from app.intelligence import canonical
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
 from app.models import RepositoryRecord, User
@@ -21,6 +21,7 @@ from app.models.base import Base
 from benchmark.loader import LoadedFixture
 
 SCHEMA_VERSION = canonical.SCHEMA_VERSION
+_SET_ARRAY_KEYS = frozenset({"decorators", *DEPENDENCY_SET_ARRAY_KEYS})
 
 
 @dataclass(frozen=True)
@@ -42,10 +43,12 @@ class DeterminismResult:
 
 
 def _extract(fixture: LoadedFixture) -> tuple[ProducedExtraction, ...]:
-    return ExtractionPipeline(
-        (PythonExtractor(), TypeScriptExtractor()),
-        max_source_bytes=fixture.max_source_bytes,
-    ).run(fixture.source_files())
+    return merge_dependency_facts(
+        ExtractionPipeline(
+            production_extractors(),
+            max_source_bytes=fixture.max_source_bytes,
+        ).run(fixture.source_files())
+    )
 
 
 def _evidence(record, produced: ProducedExtraction) -> Evidence:
@@ -126,11 +129,7 @@ def _seal_real_graph(
             language=node.language,
             properties=node.properties,
             evidence=records,
-            set_array_keys=(
-                frozenset({"decorators"})
-                if node.properties and "decorators" in node.properties
-                else frozenset()
-            ),
+            set_array_keys=_node_set_array_keys(node.properties),
         )
 
     for produced, observation in observations:
@@ -158,6 +157,20 @@ def _seal_real_graph(
             details=diagnostic.details,
         )
     return store.seal(snapshot).canonical_graph_hash
+
+
+def _node_set_array_keys(properties) -> frozenset[str]:
+    return frozenset(key for key in _SET_ARRAY_KEYS if properties and key in properties)
+
+
+def _normalized_properties(properties):
+    if properties is None:
+        return None
+    return canonical.normalize_declared_arrays(
+        dict(properties),
+        set_array_keys=_node_set_array_keys(properties),
+        context="node properties",
+    )
 
 
 def _evidence_mapping(record, produced: ProducedExtraction) -> dict[str, object]:
@@ -190,7 +203,11 @@ def _pure_real_hash(
                 "truth_class": "observed",
                 "name": node.name,
                 "language": node.language,
-                "properties": dict(node.properties) if node.properties is not None else None,
+                # Declared set arrays must be sorted here exactly as
+                # ``SnapshotStore.add_node`` sorts them, or this independent
+                # hash would disagree with the sealed one purely because the
+                # extractor emitted set members in source order.
+                "properties": _normalized_properties(node.properties),
                 "evidence": evidence,
             }
             existing = nodes_by_key.get(node.stable_key)

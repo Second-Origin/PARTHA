@@ -46,13 +46,15 @@ class DependencyGraphBuilder:
     def build(self, record: RepositoryRecord) -> DependencyGraphResponse:
         snapshot = self.snapshots.require_sealed_snapshot_for_current_revision(record.id)
 
-        dependency_nodes = list(
-            self.snapshots.db.scalars(
+        dependency_nodes = [
+            item
+            for item in self.snapshots.db.scalars(
                 select(RiNode)
                 .where(RiNode.snapshot_id == snapshot.snapshot_id, RiNode.node_kind == "dependency")
                 .order_by(RiNode.stable_key, RiNode.id)
             )
-        )
+            if self._is_declared(item)
+        ]
         node_evidence = self.snapshots.evidence_for_nodes(snapshot, dependency_nodes)
         nodes = [self._node(item, node_evidence.get(item.id, [])) for item in dependency_nodes]
         dependency_keys = {item.stable_key for item in dependency_nodes}
@@ -120,6 +122,25 @@ class DependencyGraphBuilder:
             vulnerability_assessment=DependencyAssessment(status="not_computed"),
             outdated_assessment=DependencyAssessment(status="not_computed"),
         )
+
+    @staticmethod
+    def _is_declared(item: RiNode) -> bool:
+        """Keep only dependencies a manifest actually declares.
+
+        Since #209 a ``dependency`` node can exist purely because a lockfile
+        pinned it, which is every transitive package in a real ``package-lock``.
+        This response is the *direct* dependency graph, so rendering one would
+        claim the repository depends on a package it never asked for — and it
+        would arrive with no version and a ``multiple`` type, because it has no
+        declarations to summarize. A pre-#156 snapshot stored its single
+        declaration flat on the node, so that shape counts as declared too.
+        """
+
+        properties = item.properties or {}
+        declarations = properties.get("declarations")
+        if declarations is None:
+            return bool(properties.get("manifest_path"))
+        return bool(declarations)
 
     @staticmethod
     def _node(item: RiNode, evidence: list[RiEvidence]) -> DependencyNode:

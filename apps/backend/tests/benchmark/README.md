@@ -7,10 +7,14 @@ the regression guard that answers "is the repository model actually correct?",
 which a green test suite alone cannot.
 
 The default runner sends every applicable fixture's stored bytes through the
-production source-policy pipeline and the merged Python and TypeScript
-extractors. It compares only real emitted nodes, observations, and diagnostics
-with the independently authored golden facts; it never copies expected output
-into the actual side.
+production source-policy pipeline and the exact extractor set the durable worker
+runs — `production_extractors()` in `app/extraction/__init__.py`, covering
+Python, TypeScript, dependency manifests, lockfiles, and IaC — then applies the
+same cross-file dependency reducer the worker applies before persistence. It
+compares only real emitted nodes, observations, and diagnostics with the
+independently authored golden facts; it never copies expected output into the
+actual side. Measuring a narrower pipeline than the product runs would let a
+fixture covering a lockfile or IaC construct silently produce nothing.
 
 ## Where things live
 
