@@ -34,7 +34,7 @@ class AiConversationRepository:
         turns = self.db.scalars(statement).all()
         return [
             AiMessage(
-                role=turn.role,
+                role=turn.role,  # type: ignore[arg-type]
                 content=turn.content,
                 timestamp=turn.created_at,
                 citations=[AiCitation(**citation) for citation in turn.citations] if turn.citations else None,
