@@ -138,16 +138,21 @@ class RoleClassifier:
         if self.producer not in set(snapshot.producer_version_set):
             raise ValueError(f"snapshot producer_version_set is missing {self.producer!r}")
 
-        nodes = list(self.store.db.scalars(select(RiNode).where(RiNode.snapshot_id == snapshot.snapshot_id)))
-        injected_keys = {
-            edge.object_key
-            for edge in self.store.db.scalars(
-                select(RiEdge).where(
-                    RiEdge.snapshot_id == snapshot.snapshot_id,
-                    RiEdge.predicate == "injects",
-                )
+        nodes: list[RiNode] = []
+        for node in self.store.db.scalars(select(RiNode).where(RiNode.snapshot_id == snapshot.snapshot_id)).yield_per(
+            500
+        ):
+            self._check_cancelled(check_cancelled)
+            nodes.append(node)
+        injected_keys: set[str] = set()
+        for edge in self.store.db.scalars(
+            select(RiEdge).where(
+                RiEdge.snapshot_id == snapshot.snapshot_id,
+                RiEdge.predicate == "injects",
             )
-        }
+        ).yield_per(500):
+            self._check_cancelled(check_cancelled)
+            injected_keys.add(edge.object_key)
 
         assertions_added = 0
         for node in nodes:

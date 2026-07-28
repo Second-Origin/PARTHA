@@ -178,6 +178,11 @@ the job to `completed` without producing a duplicate snapshot.
 
 Operational settings are `ANALYSIS_WORKER_AUTOSTART`,
 `ANALYSIS_JOB_POLL_INTERVAL_SECONDS`, and `ANALYSIS_JOB_LEASE_SECONDS`.
+Each job also fails closed when it exceeds
+`ANALYSIS_MAX_REPOSITORY_SOURCE_BYTES`, `ANALYSIS_MAX_PROCESS_RSS_BYTES`, or
+`ANALYSIS_MAX_DURATION_SECONDS`. Resource breaches are terminal
+`resource_exceeded` failures rather than retries, because replaying the same
+repository under the same limits cannot succeed.
 
 Repository responses include first-class source identity:
 

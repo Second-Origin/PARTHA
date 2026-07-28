@@ -12,7 +12,7 @@ and the output-affecting file-size budget required by RFC-0001 sections 4.3,
 from __future__ import annotations
 
 import posixpath
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 
 from app.extraction.base import (
@@ -67,14 +67,36 @@ class ExtractionPipeline:
         *,
         check_cancelled: Callable[[], None] | None = None,
     ) -> tuple[ProducedExtraction, ...]:
+        """Compatibility wrapper for callers that already materialize sources."""
+
         inventory_nodes: list[ExtractedNode] = []
         inventory_diagnostics: list[ExtractedDiagnostic] = []
         produced: list[ProducedExtraction] = []
+        for item in self.iter_run(sorted(sources.items()), check_cancelled=check_cancelled):
+            if item.producer_name == self.inventory_name and item.producer_version == self.inventory_version:
+                inventory_nodes.extend(item.result.nodes)
+                inventory_diagnostics.extend(item.result.diagnostics)
+            else:
+                produced.append(item)
+        if inventory_nodes or inventory_diagnostics:
+            produced.insert(0, self._inventory_result(inventory_nodes, inventory_diagnostics))
+        return tuple(produced)
+
+    def iter_run(
+        self,
+        sources: Iterable[tuple[str, bytes]],
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> Iterator[ProducedExtraction]:
+        """Extract a deterministic source stream without retaining repository bytes."""
+
         repository_evidence: ExtractedEvidence | None = None
 
-        for raw_path, source in sorted(sources.items()):
+        for raw_path, source in sources:
             if check_cancelled is not None:
                 check_cancelled()
+            inventory_nodes: list[ExtractedNode] = []
+            inventory_diagnostics: list[ExtractedDiagnostic] = []
             try:
                 path = canonical.normalize_repo_path(raw_path)
             except canonical.PathEscapeError:
@@ -86,6 +108,7 @@ class ExtractionPipeline:
                         message="source path is absolute or escapes the repository root",
                     )
                 )
+                yield self._inventory_result(inventory_nodes, inventory_diagnostics)
                 continue
 
             # The mandatory repository entity is an observed fact, so it needs
@@ -97,6 +120,15 @@ class ExtractionPipeline:
                 evidence = self._whole_file_evidence(path, source)
                 if evidence is not None:
                     repository_evidence = self._repo_evidence(evidence)
+                    inventory_nodes.append(
+                        ExtractedNode(
+                            node_kind="repository",
+                            stable_key="repo:root",
+                            name="repository",
+                            language=None,
+                            evidence=(repository_evidence,),
+                        )
+                    )
 
             file_key = canonical.normalize_stable_key("file", f"file:{path}")
             if len(source) > self.max_source_bytes:
@@ -114,6 +146,7 @@ class ExtractionPipeline:
                         },
                     )
                 )
+                yield self._inventory_result(inventory_nodes, inventory_diagnostics)
                 continue
 
             matches = [extractor for extractor in self.extractors if extractor.supports(path)]
@@ -125,7 +158,6 @@ class ExtractionPipeline:
                 result = extractor.extract(path, source)
                 if check_cancelled is not None:
                     check_cancelled()
-                produced.append(ProducedExtraction(extractor.name, extractor.version, result))
                 # Python emits a directory module but no file node. Inventory
                 # supplies that shared entity only after successful extraction;
                 # TypeScript already emits its own file node.
@@ -135,6 +167,9 @@ class ExtractionPipeline:
                     evidence = self._whole_file_evidence(path, source)
                     if evidence is not None:
                         inventory_nodes.append(self._file_node(path, evidence, self._language(path), source))
+                if inventory_nodes or inventory_diagnostics:
+                    yield self._inventory_result(inventory_nodes, inventory_diagnostics)
+                yield ProducedExtraction(extractor.name, extractor.version, result)
                 continue
 
             text, diagnostic = decode_source(
@@ -155,6 +190,7 @@ class ExtractionPipeline:
                         details=diagnostic.details,
                     )
                 )
+                yield self._inventory_result(inventory_nodes, inventory_diagnostics)
                 continue
             assert text is not None
             evidence = ExtractedEvidence(
@@ -166,31 +202,18 @@ class ExtractionPipeline:
             )
             inventory_nodes.append(self._file_node(path, evidence, self._language(path), source))
 
-        if repository_evidence is not None:
-            inventory_nodes.insert(
-                0,
-                ExtractedNode(
-                    node_kind="repository",
-                    stable_key="repo:root",
-                    name="repository",
-                    language=None,
-                    evidence=(repository_evidence,),
-                ),
-            )
+            yield self._inventory_result(inventory_nodes, inventory_diagnostics)
 
-        if inventory_nodes or inventory_diagnostics:
-            produced.insert(
-                0,
-                ProducedExtraction(
-                    self.inventory_name,
-                    self.inventory_version,
-                    ExtractionResult(
-                        nodes=tuple(inventory_nodes),
-                        diagnostics=tuple(inventory_diagnostics),
-                    ),
-                ),
-            )
-        return tuple(produced)
+    def _inventory_result(
+        self,
+        nodes: Sequence[ExtractedNode],
+        diagnostics: Sequence[ExtractedDiagnostic],
+    ) -> ProducedExtraction:
+        return ProducedExtraction(
+            self.inventory_name,
+            self.inventory_version,
+            ExtractionResult(nodes=tuple(nodes), diagnostics=tuple(diagnostics)),
+        )
 
     def _whole_file_evidence(self, path: str, source: bytes) -> ExtractedEvidence | None:
         text, _ = decode_source(

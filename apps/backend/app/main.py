@@ -118,6 +118,9 @@ def _start_analysis_worker() -> tuple[threading.Thread, threading.Event, Any] | 
         SessionLocal,
         worker_id=_analysis_worker_id(),
         lease_seconds=settings.analysis_job_lease_seconds,
+        max_repository_source_bytes=settings.analysis_max_repository_source_bytes,
+        max_process_rss_bytes=settings.analysis_max_process_rss_bytes,
+        max_analysis_seconds=settings.analysis_max_duration_seconds,
     )
     stop_event = threading.Event()
 

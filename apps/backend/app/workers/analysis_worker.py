@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections import defaultdict
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
@@ -37,6 +37,15 @@ from pathlib import Path
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
+from app.analysis.resource_budget import (
+    DEFAULT_MAX_ANALYSIS_SECONDS,
+    DEFAULT_MAX_PROCESS_RSS_BYTES,
+    DEFAULT_MAX_REPOSITORY_SOURCE_BYTES,
+    RESOURCE_EXCEEDED_CODE,
+    AnalysisResourceBudget,
+    AnalysisResourceExceeded,
+)
+from app.analysis.source_stream import RepositorySourceStream
 from app.extraction.base import ExtractedEvidence, ExtractedNode, ExtractionResult
 from app.extraction.manifests import DependencyManifestExtractor
 from app.extraction.pipeline import (
@@ -46,7 +55,6 @@ from app.extraction.pipeline import (
 )
 from app.extraction.python import PythonExtractor
 from app.extraction.typescript import TypeScriptExtractor
-from app.intelligence import canonical
 from app.intelligence.classification import RoleClassifier
 from app.intelligence.resolution import RelationshipResolver
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
@@ -97,7 +105,7 @@ class _StageContext:
     store: SnapshotStore | None = None
     snapshot: RiSnapshot | None = None
     reused: bool = False
-    produced: tuple[ProducedExtraction, ...] = field(default_factory=tuple)
+    resource_budget: AnalysisResourceBudget | None = None
     heartbeat: _HeartbeatState | None = None
 
 
@@ -111,6 +119,11 @@ class AnalysisWorker:
         worker_id: str,
         lease_seconds: int,
         max_source_bytes: int = DEFAULT_MAX_SOURCE_BYTES,
+        max_repository_source_bytes: int = DEFAULT_MAX_REPOSITORY_SOURCE_BYTES,
+        max_process_rss_bytes: int = DEFAULT_MAX_PROCESS_RSS_BYTES,
+        max_analysis_seconds: float = DEFAULT_MAX_ANALYSIS_SECONDS,
+        rss_reader: Callable[[], int] | None = None,
+        monotonic: Callable[[], float] | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         heartbeat_interval_seconds: float | None = None,
     ) -> None:
@@ -118,6 +131,11 @@ class AnalysisWorker:
         self.worker_id = worker_id
         self.lease_seconds = lease_seconds
         self.max_source_bytes = max_source_bytes
+        self.max_repository_source_bytes = max_repository_source_bytes
+        self.max_process_rss_bytes = max_process_rss_bytes
+        self.max_analysis_seconds = max_analysis_seconds
+        self._rss_reader = rss_reader
+        self._monotonic = monotonic
         self._clock = clock
         self._heartbeat_interval_seconds = heartbeat_interval_seconds or min(max(lease_seconds / 3, 0.1), 5.0)
         self._shutdown = threading.Event()
@@ -293,6 +311,14 @@ class AnalysisWorker:
             session.rollback()
             self._log_lease_lost(job.id)
             return
+        except AnalysisResourceExceeded as exc:
+            try:
+                self._fail_resource_exceeded(ctx, exc)
+            except _LeaseLostError:
+                self._log_lease_lost(job.id)
+                return
+            yield ctx
+            return
         except Exception as exc:  # noqa: BLE001 - bounded retry is the contract
             try:
                 self._retry_or_fail(ctx, exc)
@@ -327,6 +353,8 @@ class AnalysisWorker:
         ctx.snapshot = snapshot
         ctx.reused = reused
         ctx.job.snapshot_id = snapshot.snapshot_id
+        if not reused:
+            ctx.resource_budget = self._new_resource_budget()
 
     def _stage_extract(self, ctx: _StageContext) -> None:
         """Run the evidence pipeline and persist every extracted fact.
@@ -341,19 +369,31 @@ class AnalysisWorker:
         store = ctx.store
         snapshot = ctx.snapshot
         assert store is not None and snapshot is not None
-        sources = self._read_sources(record, ctx)
+        budget = ctx.resource_budget
+        assert budget is not None
+        sources = RepositorySourceStream(
+            root=Path(record.local_path),
+            file_tree=record.file_tree or (),
+            max_file_bytes=self.max_source_bytes,
+            budget=budget,
+            check_cancelled=lambda: self._check_heartbeat(ctx),
+        )
         pipeline = ExtractionPipeline(
             (PythonExtractor(), TypeScriptExtractor(), DependencyManifestExtractor()),
             max_source_bytes=self.max_source_bytes,
         )
-        ctx.produced = self._merge_dependency_declarations(
-            pipeline.run(
-                sources,
-                check_cancelled=lambda: self._check_heartbeat(ctx),
-            )
-        )
-        self._check_heartbeat(ctx)
-        for produced in ctx.produced:
+        deferred_dependencies: list[ProducedExtraction] = []
+        for produced in pipeline.iter_run(
+            sources,
+            check_cancelled=lambda: self._check_heartbeat(ctx),
+        ):
+            if any(node.node_kind == "dependency" for node in produced.result.nodes):
+                # Dependency observations reference these nodes, so the complete
+                # manifest result must wait for the cross-manifest reducer.
+                deferred_dependencies.append(produced)
+                continue
+            self._persist_produced(store, snapshot, produced, ctx)
+        for produced in self._merge_dependency_declarations(tuple(deferred_dependencies)):
             self._persist_produced(store, snapshot, produced, ctx)
         self._check_heartbeat(ctx)
         RelationshipResolver(store).resolve(
@@ -377,7 +417,10 @@ class AnalysisWorker:
         # ``seal`` commits internally, so acquire the guarded job row in the
         # same transaction before allowing the snapshot transition to commit.
         self._lock_owned_job(ctx, require_cancel_not_requested=True)
-        ctx.store.seal(ctx.snapshot)
+        ctx.store.seal(
+            ctx.snapshot,
+            check_cancelled=lambda: self._check_heartbeat(ctx),
+        )
 
     # -- terminal transitions ------------------------------------------------
 
@@ -523,6 +566,45 @@ class AnalysisWorker:
             error_message=self._error_message(exc),
             updated_at=now,
         )
+        session.commit()
+
+    def _fail_resource_exceeded(self, ctx: _StageContext, exc: AnalysisResourceExceeded) -> None:
+        """Fail a deterministic resource breach terminally instead of retrying it."""
+
+        session = ctx.session
+        session.rollback()
+        job = session.get(AnalysisJob, ctx.job.id)
+        if job is None:
+            raise _LeaseLostError(ctx.job.id)
+        ctx.job = job
+        ctx.record = session.get(RepositoryRecord, job.repository_id)
+        now = self._clock()
+        try:
+            self._lock_owned_job(ctx, require_cancel_not_requested=True)
+        except _CancellationObserved:
+            self._cancel(ctx)
+            return
+        snapshot = session.get(RiSnapshot, job.snapshot_id) if job.snapshot_id else None
+        if snapshot is not None and snapshot.state == "completed":
+            self._complete_sealed_snapshot(ctx, snapshot)
+            return
+        self._fail_open_snapshot(ctx, code=RESOURCE_EXCEEDED_CODE)
+        self._update_owned_job(
+            ctx,
+            status="failed",
+            worker_id=None,
+            lease_expires_at=None,
+            next_attempt_at=None,
+            error_code=RESOURCE_EXCEEDED_CODE,
+            error_message=self._error_message(exc),
+            completed_at=now,
+            updated_at=now,
+        )
+        if ctx.record is not None:
+            ctx.record.status = "error"
+            ctx.record.analysis_stage = None
+            ctx.record.analysis_progress = 0
+            ctx.record.error_message = "Repository analysis exceeded its resource budget."
         session.commit()
 
     def _reconcile_stale(self, session: Session, job: AnalysisJob, now: datetime) -> bool:
@@ -811,14 +893,27 @@ class AnalysisWorker:
     @staticmethod
     def _check_heartbeat(ctx: _StageContext) -> None:
         state = ctx.heartbeat
-        if state is None:
-            return
-        if state.ownership_lost.is_set():
-            raise _LeaseLostError(ctx.job.id)
-        if state.cancel_requested.is_set():
-            raise _CancellationObserved(ctx.job.id)
-        if state.failure is not None:
-            raise state.failure
+        if state is not None:
+            if state.ownership_lost.is_set():
+                raise _LeaseLostError(ctx.job.id)
+            if state.cancel_requested.is_set():
+                raise _CancellationObserved(ctx.job.id)
+            if state.failure is not None:
+                raise state.failure
+        if ctx.resource_budget is not None:
+            ctx.resource_budget.check()
+
+    def _new_resource_budget(self) -> AnalysisResourceBudget:
+        kwargs: dict[str, object] = {
+            "max_source_bytes": self.max_repository_source_bytes,
+            "max_rss_bytes": self.max_process_rss_bytes,
+            "max_seconds": self.max_analysis_seconds,
+        }
+        if self._rss_reader is not None:
+            kwargs["rss_reader"] = self._rss_reader
+        if self._monotonic is not None:
+            kwargs["monotonic"] = self._monotonic
+        return AnalysisResourceBudget(**kwargs)  # type: ignore[arg-type]
 
     def _complete_sealed_snapshot(self, ctx: _StageContext, snapshot: RiSnapshot) -> None:
         """Make an already-sealed snapshot authoritative over cancellation."""
@@ -846,44 +941,6 @@ class AnalysisWorker:
             ctx.record.error_message = None
             ctx.record.analysed_at = completed_at
         ctx.session.commit()
-
-    def _read_sources(self, record: RepositoryRecord, ctx: _StageContext | None = None) -> Mapping[str, bytes]:
-        """Read repository source bytes keyed by normalized repo-relative path.
-
-        Paths come from ``record.file_tree`` (already computed at ingestion) rather
-        than a fresh filesystem walk. Each file is read to at most
-        ``max_source_bytes + 1`` so an oversized file stays bounded in memory and
-        the pipeline emits its documented ``RI-LIMIT-SKIP`` diagnostic.
-        """
-
-        root = Path(record.local_path)
-        sources: dict[str, bytes] = {}
-        for raw_path in self._iter_file_paths(record.file_tree or []):
-            if ctx is not None:
-                self._check_heartbeat(ctx)
-            try:
-                path = canonical.normalize_repo_path(raw_path.lstrip("/"))
-            except canonical.PathEscapeError:
-                continue
-            if not path:
-                continue
-            try:
-                with (root / path).open("rb") as handle:
-                    sources[path] = handle.read(self.max_source_bytes + 1)
-            except OSError:
-                continue
-        return sources
-
-    @classmethod
-    def _iter_file_paths(cls, nodes: list) -> Iterator[str]:
-        for node in nodes:
-            if not isinstance(node, Mapping):
-                continue
-            if node.get("type") == "file" and node.get("path"):
-                yield str(node["path"])
-            children = node.get("children")
-            if children:
-                yield from cls._iter_file_paths(children)
 
     @staticmethod
     def _merge_dependency_declarations(

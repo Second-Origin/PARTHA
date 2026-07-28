@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     analysis_worker_autostart: bool = True
     analysis_job_poll_interval_seconds: int = 5
     analysis_job_lease_seconds: int = 300
+    analysis_max_repository_source_bytes: int = 1024 * 1024 * 1024
+    analysis_max_process_rss_bytes: int = 2 * 1024 * 1024 * 1024
+    analysis_max_duration_seconds: int = 30 * 60
     clone_timeout_seconds: int = 120
     max_upload_size_bytes: int = 100 * 1024 * 1024
     max_clone_size_bytes: int = 500 * 1024 * 1024
@@ -211,6 +214,9 @@ class Settings(BaseSettings):
     @field_validator(
         "analysis_job_poll_interval_seconds",
         "analysis_job_lease_seconds",
+        "analysis_max_repository_source_bytes",
+        "analysis_max_process_rss_bytes",
+        "analysis_max_duration_seconds",
         "clone_timeout_seconds",
         "max_upload_size_bytes",
         "max_clone_size_bytes",
