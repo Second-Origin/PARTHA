@@ -31,6 +31,24 @@ def test_pipeline_enforces_real_configured_size_budget():
     assert [node.stable_key for node in nodes] == ["repo:root"]
 
 
+def test_iter_run_consumes_only_one_source_at_a_time():
+    consumed: list[str] = []
+
+    def sources():
+        for path in ("a.txt", "b.txt"):
+            consumed.append(path)
+            yield path, b"content\n"
+
+    results = _pipeline().iter_run(sources())
+
+    first = next(results)
+    assert consumed == ["a.txt"]
+    assert first.producer == "repository-inventory@1.1.0"
+
+    next(results)
+    assert consumed == ["a.txt", "b.txt"]
+
+
 def test_pipeline_emits_repository_root_for_diagnostics_only_text_source():
     runs = _pipeline().run({"src/broken.py": b"def broken(:\n    return\n"})
 

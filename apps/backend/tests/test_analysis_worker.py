@@ -259,7 +259,13 @@ def test_run_once_reuses_an_already_sealed_snapshot(session_factory, tmp_path):
         session.commit()
         before = session.scalar(select(func.count()).select_from(RiSnapshot))
 
-    worker = AnalysisWorker(session_factory, worker_id="w", lease_seconds=60)
+    worker = AnalysisWorker(
+        session_factory,
+        worker_id="w",
+        lease_seconds=60,
+        max_process_rss_bytes=1,
+        rss_reader=lambda: 2,
+    )
     assert worker.run_once() is True
 
     with session_factory() as session:
@@ -322,9 +328,7 @@ def test_bounded_retry_requeues_with_backoff_then_fails(session_factory, tmp_pat
     assert worker.run_once() is False
 
 
-def test_retry_fails_the_first_snapshot_before_the_next_attempt_succeeds(
-    session_factory, tmp_path, monkeypatch
-):
+def test_retry_fails_the_first_snapshot_before_the_next_attempt_succeeds(session_factory, tmp_path, monkeypatch):
     with session_factory() as session:
         owner = _owner(session)
         record = _repository_with_sources(session, owner, tmp_path / "repo")
@@ -352,9 +356,7 @@ def test_retry_fails_the_first_snapshot_before_the_next_attempt_succeeds(
 
     assert worker.run_once() is True
     with session_factory() as session:
-        job = session.scalars(
-            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
-        ).one()
+        job = session.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
         first_snapshot_id = job.snapshot_id
         assert job.status == "queued"
         assert job.attempt == 1
@@ -365,21 +367,15 @@ def test_retry_fails_the_first_snapshot_before_the_next_attempt_succeeds(
     assert worker.run_once() is True
 
     with session_factory() as session:
-        job = session.scalars(
-            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
-        ).one()
+        job = session.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
         assert job.status == "completed"
         assert job.attempt == 2
         assert job.snapshot_id is not None
         assert job.snapshot_id != first_snapshot_id
         assert session.get(RiSnapshot, first_snapshot_id).state == "failed"
         assert session.get(RiSnapshot, job.snapshot_id).state == "completed"
-        assert session.scalar(
-            select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "building")
-        ) == 0
-        assert session.scalar(
-            select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")
-        ) == 1
+        assert session.scalar(select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "building")) == 0
+        assert session.scalar(select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")) == 1
 
 
 def test_cooperative_cancellation_fails_open_snapshot_and_cancels_job(session_factory, tmp_path):
@@ -457,9 +453,7 @@ def test_cancellation_after_snapshot_seal_is_immediately_completed(session_facto
         assert completed.worker_id is None
         assert completed.lease_expires_at is None
         assert completed.completed_at is not None
-        assert session.scalar(
-            select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")
-        ) == 1
+        assert session.scalar(select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")) == 1
         assert session.scalar(select(func.count()).select_from(AnalysisJob)) == 1
         session.refresh(record)
         assert record.status == "completed"
@@ -470,9 +464,7 @@ def test_cancellation_after_snapshot_seal_is_immediately_completed(session_facto
         session.close()
 
 
-def test_heartbeat_keeps_a_long_stage_from_being_reclaimed(
-    session_factory, tmp_path, monkeypatch
-):
+def test_heartbeat_keeps_a_long_stage_from_being_reclaimed(session_factory, tmp_path, monkeypatch):
     now = [datetime(2026, 1, 1, tzinfo=UTC)]
     with session_factory() as session:
         owner = _owner(session)
@@ -529,21 +521,16 @@ def test_heartbeat_keeps_a_long_stage_from_being_reclaimed(
     thread.join(timeout=5)
     assert not thread.is_alive()
     assert not any(
-        candidate.name.startswith("analysis-heartbeat-") and candidate.is_alive()
-        for candidate in threading.enumerate()
+        candidate.name.startswith("analysis-heartbeat-") and candidate.is_alive() for candidate in threading.enumerate()
     )
 
     with session_factory() as reader:
-        job = reader.scalars(
-            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
-        ).one()
+        job = reader.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
         assert job.status == "completed"
         assert job.attempt == 1
 
 
-def test_sqlite_write_lock_does_not_leave_a_heartbeat_thread_running(
-    session_factory, tmp_path
-):
+def test_sqlite_write_lock_does_not_leave_a_heartbeat_thread_running(session_factory, tmp_path):
     with session_factory() as session:
         owner = _owner(session)
         record = _repository_with_sources(session, owner, tmp_path / "repo")
@@ -564,9 +551,7 @@ def test_sqlite_write_lock_does_not_leave_a_heartbeat_thread_running(
     blocker = session_factory()
     try:
         blocker.execute(
-            update(RepositoryRecord)
-            .where(RepositoryRecord.id == record_id)
-            .values(updated_at=datetime.now(UTC))
+            update(RepositoryRecord).where(RepositoryRecord.id == record_id).values(updated_at=datetime.now(UTC))
         )
         state = _HeartbeatState()
         thread = threading.Thread(target=worker._heartbeat_once, args=(job_id, state))
@@ -582,9 +567,7 @@ def test_sqlite_write_lock_does_not_leave_a_heartbeat_thread_running(
         blocker.close()
 
 
-def test_heartbeat_ownership_loss_abandons_stage_writes(
-    session_factory, tmp_path, monkeypatch
-):
+def test_heartbeat_ownership_loss_abandons_stage_writes(session_factory, tmp_path, monkeypatch):
     with session_factory() as session:
         owner = _owner(session)
         record = _repository_with_sources(session, owner, tmp_path / "repo")
@@ -631,15 +614,13 @@ def test_heartbeat_ownership_loss_abandons_stage_writes(
     assert not thread.is_alive()
 
     with session_factory() as reader:
-        job = reader.scalars(
-            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
-        ).one()
+        job = reader.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
         assert job.status == "running"
         assert job.worker_id == "worker-b"
         assert reader.scalar(select(func.count()).select_from(RiSnapshot)) == 0
 
 
-def test_cancellation_interrupts_in_flight_snapshot_extraction(session_factory, tmp_path):
+def test_cancellation_interrupts_in_flight_snapshot_extraction(session_factory, tmp_path, monkeypatch):
     with session_factory() as session:
         owner = _owner(session)
         record = _repository_with_sources(session, owner, tmp_path / "repo")
@@ -655,13 +636,18 @@ def test_cancellation_interrupts_in_flight_snapshot_extraction(session_factory, 
         heartbeat_interval_seconds=0.02,
     )
 
-    def _interruptible_sources(_record, ctx):
-        entered.set()
-        while True:
-            worker._check_heartbeat(ctx)
-            time.sleep(0.005)
+    class _InterruptibleSourceStream:
+        def __init__(self, **kwargs):
+            self.check_cancelled = kwargs["check_cancelled"]
 
-    worker._read_sources = _interruptible_sources  # type: ignore[method-assign]
+        def __iter__(self):
+            entered.set()
+            while True:
+                self.check_cancelled()
+                time.sleep(0.005)
+            yield  # pragma: no cover - makes this an iterator
+
+    monkeypatch.setattr("app.workers.analysis_worker.RepositorySourceStream", _InterruptibleSourceStream)
     thread = threading.Thread(target=worker.run_once)
     thread.start()
     assert entered.wait(timeout=3)
@@ -674,14 +660,68 @@ def test_cancellation_interrupts_in_flight_snapshot_extraction(session_factory, 
     assert not thread.is_alive()
 
     with session_factory() as reader:
-        job = reader.scalars(
-            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
-        ).one()
+        job = reader.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
         assert job.status == "cancelled"
         assert reader.get(RepositoryRecord, record_id).status == "cancelled"
         snapshots = list(reader.scalars(select(RiSnapshot)))
         assert len(snapshots) == 1
         assert snapshots[0].state == "failed"
+
+
+def test_repository_byte_budget_is_terminal_and_never_seals(session_factory, tmp_path):
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "repo")
+        record_id = record.id
+        AnalysisJobService(session, owner.id).submit(record_id)
+
+    worker = AnalysisWorker(
+        session_factory,
+        worker_id="worker-a",
+        lease_seconds=60,
+        max_repository_source_bytes=1,
+        rss_reader=lambda: 1,
+    )
+
+    assert worker.run_once() is True
+
+    with session_factory() as session:
+        job = session.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
+        assert job.status == "failed"
+        assert job.attempt == 1
+        assert job.error_code == "resource_exceeded"
+        assert "source_bytes budget exceeded" in (job.error_message or "")
+        snapshot = session.get(RiSnapshot, job.snapshot_id)
+        assert snapshot is not None
+        assert snapshot.state == "failed"
+        assert snapshot.failure_code == "resource_exceeded"
+        assert session.scalar(select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")) == 0
+
+
+def test_process_rss_budget_fails_before_repository_work(session_factory, tmp_path):
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "repo")
+        record_id = record.id
+        AnalysisJobService(session, owner.id).submit(record_id)
+
+    worker = AnalysisWorker(
+        session_factory,
+        worker_id="worker-a",
+        lease_seconds=60,
+        max_process_rss_bytes=10,
+        rss_reader=lambda: 11,
+    )
+
+    assert worker.run_once() is True
+
+    with session_factory() as session:
+        job = session.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
+        assert job.status == "failed"
+        assert job.attempt == 1
+        assert job.error_code == "resource_exceeded"
+        assert "rss_bytes budget exceeded" in (job.error_message or "")
+        assert job.snapshot_id is None
 
 
 def test_sweep_stale_requeues_and_fails_orphaned_building_snapshot(session_factory, tmp_path):
@@ -707,9 +747,7 @@ def test_sweep_stale_requeues_and_fails_orphaned_building_snapshot(session_facto
 
 def test_sweep_stale_fails_job_at_attempt_limit(session_factory, tmp_path):
     now = [datetime(2026, 1, 1, tzinfo=UTC)]
-    worker, record_id, snapshot_id = _claim_with_snapshot(
-        session_factory, tmp_path, now, max_attempts=1
-    )
+    worker, record_id, snapshot_id = _claim_with_snapshot(session_factory, tmp_path, now, max_attempts=1)
 
     now[0] += timedelta(seconds=61)
     assert worker.sweep_stale() == 1
@@ -727,9 +765,7 @@ def test_sweep_stale_fails_job_at_attempt_limit(session_factory, tmp_path):
 
 def test_sweep_stale_self_heals_job_after_snapshot_seal(session_factory, tmp_path):
     now = [datetime(2026, 1, 1, tzinfo=UTC)]
-    worker, record_id, snapshot_id = _claim_with_snapshot(
-        session_factory, tmp_path, now, completed_snapshot=True
-    )
+    worker, record_id, snapshot_id = _claim_with_snapshot(session_factory, tmp_path, now, completed_snapshot=True)
 
     now[0] += timedelta(seconds=61)
     assert worker.sweep_stale() == 1
@@ -759,9 +795,7 @@ def test_sweep_stale_leaves_unexpired_job_untouched(session_factory, tmp_path):
         assert session.get(RiSnapshot, snapshot_id).state == "building"
 
 
-def test_reclaimed_job_is_not_overwritten_by_the_worker_that_lost_its_lease(
-    session_factory, tmp_path
-):
+def test_reclaimed_job_is_not_overwritten_by_the_worker_that_lost_its_lease(session_factory, tmp_path):
     now = [datetime(2026, 1, 1, tzinfo=UTC)]
     session_a = session_factory()
     session_b = session_factory()
@@ -824,9 +858,7 @@ def test_reclaimed_job_is_not_overwritten_by_the_worker_that_lost_its_lease(
         assert session.get(RiSnapshot, job.snapshot_id).state == "completed"
 
 
-def test_exception_from_reclaimed_attempt_does_not_overwrite_replacement(
-    session_factory, tmp_path, monkeypatch
-):
+def test_exception_from_reclaimed_attempt_does_not_overwrite_replacement(session_factory, tmp_path, monkeypatch):
     now = [datetime(2026, 1, 1, tzinfo=UTC)]
     session_a = session_factory()
     session_b = session_factory()
@@ -886,9 +918,7 @@ def test_exception_from_reclaimed_attempt_does_not_overwrite_replacement(
         session_b.close()
 
     with session_factory() as session:
-        job = session.scalars(
-            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
-        ).one()
+        job = session.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
         assert job.status == "completed"
         assert job.attempt == 2
         assert job.snapshot_id is not None

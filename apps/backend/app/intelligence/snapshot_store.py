@@ -27,7 +27,7 @@ from __future__ import annotations
 import uuid
 import re
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -708,7 +708,12 @@ class SnapshotStore:
 
     # -- sealing -------------------------------------------------------------
 
-    def seal(self, snapshot: RiSnapshot) -> RiSnapshot:
+    def seal(
+        self,
+        snapshot: RiSnapshot,
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> RiSnapshot:
         """Validate, hash, and complete a snapshot in one transaction (RFC §11.2)."""
 
         self._require_building(snapshot)
@@ -716,12 +721,13 @@ class SnapshotStore:
         # invariant is caught by _validate (and turned into a clean ``failed``
         # transition) instead of tripping a database constraint mid-flush.
         with self.db.no_autoflush:
-            facts = self._load_facts(snapshot)
+            facts = self._load_facts(snapshot, check_cancelled=check_cancelled)
         try:
-            self._validate(snapshot, facts)
-            graph_hash = self._compute_hash(snapshot, facts)
+            self._check_cancelled(check_cancelled)
+            self._validate(snapshot, facts, check_cancelled=check_cancelled)
+            graph_hash = self._compute_hash(snapshot, facts, check_cancelled=check_cancelled)
             # Reproducibility check (RFC §11.2 rule 10): recomputation is stable.
-            if graph_hash != self._compute_hash(snapshot, facts):
+            if graph_hash != self._compute_hash(snapshot, facts, check_cancelled=check_cancelled):
                 raise SnapshotSealError("canonical graph hash is not reproducible")
         except SnapshotSealError:
             self._fail_seal(snapshot)
@@ -951,18 +957,52 @@ class SnapshotStore:
         self.db.flush()
         return derivation
 
-    def _load_facts(self, snapshot: RiSnapshot) -> "_Facts":
+    def _load_facts(
+        self,
+        snapshot: RiSnapshot,
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> "_Facts":
         snapshot_id = snapshot.snapshot_id
-        nodes = list(self.db.scalars(select(RiNode).where(RiNode.snapshot_id == snapshot_id)))
-        edges = list(self.db.scalars(select(RiEdge).where(RiEdge.snapshot_id == snapshot_id)))
-        assertions = list(self.db.scalars(select(RiAssertion).where(RiAssertion.snapshot_id == snapshot_id)))
-        observations = list(self.db.scalars(select(RiObservation).where(RiObservation.snapshot_id == snapshot_id)))
-        evidence = list(self.db.scalars(select(RiEvidence).where(RiEvidence.snapshot_id == snapshot_id)))
-        derivations = list(self.db.scalars(select(RiDerivation).where(RiDerivation.snapshot_id == snapshot_id)))
-        diagnostics = list(self.db.scalars(select(RiDiagnostic).where(RiDiagnostic.snapshot_id == snapshot_id)))
+        nodes: list[RiNode] = []
+        for item in self.db.scalars(select(RiNode).where(RiNode.snapshot_id == snapshot_id)).yield_per(500):
+            self._check_cancelled(check_cancelled)
+            nodes.append(item)
+        edges: list[RiEdge] = []
+        for item in self.db.scalars(select(RiEdge).where(RiEdge.snapshot_id == snapshot_id)).yield_per(500):
+            self._check_cancelled(check_cancelled)
+            edges.append(item)
+        assertions: list[RiAssertion] = []
+        for item in self.db.scalars(select(RiAssertion).where(RiAssertion.snapshot_id == snapshot_id)).yield_per(500):
+            self._check_cancelled(check_cancelled)
+            assertions.append(item)
+        observations: list[RiObservation] = []
+        for item in self.db.scalars(select(RiObservation).where(RiObservation.snapshot_id == snapshot_id)).yield_per(
+            500
+        ):
+            self._check_cancelled(check_cancelled)
+            observations.append(item)
+        evidence: list[RiEvidence] = []
+        for item in self.db.scalars(select(RiEvidence).where(RiEvidence.snapshot_id == snapshot_id)).yield_per(500):
+            self._check_cancelled(check_cancelled)
+            evidence.append(item)
+        derivations: list[RiDerivation] = []
+        for item in self.db.scalars(select(RiDerivation).where(RiDerivation.snapshot_id == snapshot_id)).yield_per(500):
+            self._check_cancelled(check_cancelled)
+            derivations.append(item)
+        diagnostics: list[RiDiagnostic] = []
+        for item in self.db.scalars(select(RiDiagnostic).where(RiDiagnostic.snapshot_id == snapshot_id)).yield_per(500):
+            self._check_cancelled(check_cancelled)
+            diagnostics.append(item)
         return _Facts(nodes, edges, assertions, observations, evidence, derivations, diagnostics)
 
-    def _validate(self, snapshot: RiSnapshot, facts: "_Facts") -> None:
+    def _validate(
+        self,
+        snapshot: RiSnapshot,
+        facts: "_Facts",
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> None:
         producer_set = set(snapshot.producer_version_set)
         normalized_producers = canonical.normalize_producer_version_set(snapshot.producer_version_set)
         if snapshot.producer_version_set != normalized_producers:
@@ -986,6 +1026,7 @@ class SnapshotStore:
         node_keys = {node.stable_key for node in facts.nodes}
         node_kind_by_key: dict[str, str] = {}
         for node in facts.nodes:
+            self._check_cancelled(check_cancelled)
             try:
                 normalized_key = canonical.normalize_stable_key(node.node_kind, node.stable_key)
             except (canonical.CanonicalizationError, canonical.PathEscapeError) as exc:
@@ -1000,6 +1041,7 @@ class SnapshotStore:
         evidence_by_edge = defaultdict(list)
         evidence_by_observation = defaultdict(list)
         for record in facts.evidence:
+            self._check_cancelled(check_cancelled)
             if record.node_ref is not None:
                 evidence_by_node[record.node_ref].append(record)
             elif record.edge_ref is not None:
@@ -1014,11 +1056,13 @@ class SnapshotStore:
 
         # Rule 1: every observed node has >=1 valid evidence record.
         for node in facts.nodes:
+            self._check_cancelled(check_cancelled)
             if node.truth_class == "observed" and not evidence_by_node.get(node.id):
                 raise SnapshotSealError(f"observed node {node.stable_key!r} has no evidence")
 
         # Every observation has exactly one evidence record (RFC §6.4).
         for observation in facts.observations:
+            self._check_cancelled(check_cancelled)
             if len(evidence_by_observation.get(observation.id, [])) != 1:
                 raise SnapshotSealError(
                     f"observation {observation.observation_id} must have exactly one evidence record"
@@ -1043,6 +1087,7 @@ class SnapshotStore:
         derivations_by_edge = defaultdict(list)
         derivations_by_assertion = defaultdict(list)
         for derivation in facts.derivations:
+            self._check_cancelled(check_cancelled)
             if derivation.edge_ref is not None:
                 derivations_by_edge[derivation.edge_ref].append(derivation)
             elif derivation.assertion_ref is not None:
@@ -1054,6 +1099,7 @@ class SnapshotStore:
 
         # Rule 2: edge endpoints resolve to nodes in this snapshot (also a DB FK).
         for edge in facts.edges:
+            self._check_cancelled(check_cancelled)
             if (
                 node_kind_by_key.get(edge.subject_key) != edge.subject_kind
                 or node_kind_by_key.get(edge.object_key) != edge.object_kind
@@ -1070,6 +1116,7 @@ class SnapshotStore:
 
         # Assertion subjects resolve; assertion identity recomputes (rule 8).
         for assertion in facts.assertions:
+            self._check_cancelled(check_cancelled)
             if node_kind_by_key.get(assertion.subject_key) != assertion.subject_kind:
                 raise SnapshotSealError(f"assertion {assertion.assertion_id} references a node outside the snapshot")
             references = self._derivation_refs(derivations_by_assertion.get(assertion.id, []))
@@ -1107,6 +1154,7 @@ class SnapshotStore:
 
         # Diagnostic producers must be declared too (RFC §11.2 rule 6).
         for diagnostic in facts.diagnostics:
+            self._check_cancelled(check_cancelled)
             if diagnostic.producer not in producer_set:
                 raise SnapshotSealError(f"diagnostic producer {diagnostic.producer!r} is not in the producer set")
             if (diagnostic.span_start_line is None) != (diagnostic.span_end_line is None):
@@ -1225,11 +1273,18 @@ class SnapshotStore:
             producers.add(diagnostic.producer)
         return sorted(producers)
 
-    def _compute_hash(self, snapshot: RiSnapshot, facts: "_Facts") -> str:
+    def _compute_hash(
+        self,
+        snapshot: RiSnapshot,
+        facts: "_Facts",
+        *,
+        check_cancelled: Callable[[], None] | None = None,
+    ) -> str:
         evidence_by_node = defaultdict(list)
         evidence_by_edge = defaultdict(list)
         evidence_by_observation: dict[int, RiEvidence] = {}
         for record in facts.evidence:
+            self._check_cancelled(check_cancelled)
             if record.node_ref is not None:
                 evidence_by_node[record.node_ref].append(self._evidence_dict(record))
             elif record.edge_ref is not None:
@@ -1240,6 +1295,7 @@ class SnapshotStore:
         derivations_by_edge = defaultdict(list)
         derivations_by_assertion = defaultdict(list)
         for derivation in facts.derivations:
+            self._check_cancelled(check_cancelled)
             reference = {
                 "kind": derivation.ref_kind,
                 canonical._REFERENCE_IDENTITY_FIELD[derivation.ref_kind]: derivation.ref_identity,
@@ -1249,77 +1305,87 @@ class SnapshotStore:
             elif derivation.assertion_ref is not None:
                 derivations_by_assertion[derivation.assertion_ref].append(reference)
 
-        nodes = [
-            {
-                "node_kind": node.node_kind,
-                "stable_key": node.stable_key,
-                "truth_class": node.truth_class,
-                "name": node.name,
-                "language": node.language,
-                "properties": node.properties,
-                "evidence": evidence_by_node.get(node.id, []),
-            }
-            for node in facts.nodes
-        ]
-        edges = [
-            {
-                "edge_id": edge.edge_id,
-                "subject_kind": edge.subject_kind,
-                "subject_key": edge.subject_key,
-                "predicate": edge.predicate,
-                "object_kind": edge.object_kind,
-                "object_key": edge.object_key,
-                "truth_class": edge.truth_class,
-                "producer": edge.producer,
-                "producer_version": edge.producer_version,
-                "evidence": evidence_by_edge.get(edge.id, []),
-                "derived_from": derivations_by_edge.get(edge.id, []),
-            }
-            for edge in facts.edges
-        ]
-        assertions = [
-            {
-                "assertion_id": assertion.assertion_id,
-                "subject_kind": assertion.subject_kind,
-                "subject_key": assertion.subject_key,
-                "predicate": assertion.predicate,
-                "value": assertion.value,
-                "truth_class": assertion.truth_class,
-                "producer": assertion.producer,
-                "producer_version": assertion.producer_version,
-                "derived_from": derivations_by_assertion.get(assertion.id, []),
-            }
-            for assertion in facts.assertions
-        ]
-        observations = [
-            {
-                "observation_id": observation.observation_id,
-                "observed_kind": observation.observed_kind,
-                "subject_kind": observation.subject_kind,
-                "subject_key": observation.subject_key,
-                "referent_text": observation.referent_text,
-                "ordinal": observation.ordinal,
-                "evidence": evidence_by_observation[observation.id],
-            }
-            for observation in facts.observations
-        ]
-        diagnostics = [
-            {
-                "code": diagnostic.code,
-                "category": diagnostic.category,
-                "severity": diagnostic.severity,
-                "message": diagnostic.message,
-                "producer": diagnostic.producer,
-                "path": diagnostic.path,
-                "span": {"start_line": diagnostic.span_start_line, "end_line": diagnostic.span_end_line}
-                if diagnostic.span_start_line is not None
-                else None,
-                "subject": diagnostic.subject_key,
-                "object": diagnostic.object_key,
-                "details": diagnostic.details,
-            }
-            for diagnostic in facts.diagnostics
-        ]
+        nodes: list[dict[str, object]] = []
+        for node in facts.nodes:
+            self._check_cancelled(check_cancelled)
+            nodes.append(
+                {
+                    "node_kind": node.node_kind,
+                    "stable_key": node.stable_key,
+                    "truth_class": node.truth_class,
+                    "name": node.name,
+                    "language": node.language,
+                    "properties": node.properties,
+                    "evidence": evidence_by_node.get(node.id, []),
+                }
+            )
+        edges: list[dict[str, object]] = []
+        for edge in facts.edges:
+            self._check_cancelled(check_cancelled)
+            edges.append(
+                {
+                    "edge_id": edge.edge_id,
+                    "subject_kind": edge.subject_kind,
+                    "subject_key": edge.subject_key,
+                    "predicate": edge.predicate,
+                    "object_kind": edge.object_kind,
+                    "object_key": edge.object_key,
+                    "truth_class": edge.truth_class,
+                    "producer": edge.producer,
+                    "producer_version": edge.producer_version,
+                    "evidence": evidence_by_edge.get(edge.id, []),
+                    "derived_from": derivations_by_edge.get(edge.id, []),
+                }
+            )
+        assertions: list[dict[str, object]] = []
+        for assertion in facts.assertions:
+            self._check_cancelled(check_cancelled)
+            assertions.append(
+                {
+                    "assertion_id": assertion.assertion_id,
+                    "subject_kind": assertion.subject_kind,
+                    "subject_key": assertion.subject_key,
+                    "predicate": assertion.predicate,
+                    "value": assertion.value,
+                    "truth_class": assertion.truth_class,
+                    "producer": assertion.producer,
+                    "producer_version": assertion.producer_version,
+                    "derived_from": derivations_by_assertion.get(assertion.id, []),
+                }
+            )
+        observations: list[dict[str, object]] = []
+        for observation in facts.observations:
+            self._check_cancelled(check_cancelled)
+            observations.append(
+                {
+                    "observation_id": observation.observation_id,
+                    "observed_kind": observation.observed_kind,
+                    "subject_kind": observation.subject_kind,
+                    "subject_key": observation.subject_key,
+                    "referent_text": observation.referent_text,
+                    "ordinal": observation.ordinal,
+                    "evidence": evidence_by_observation[observation.id],
+                }
+            )
+        diagnostics: list[dict[str, object]] = []
+        for diagnostic in facts.diagnostics:
+            self._check_cancelled(check_cancelled)
+            diagnostics.append(
+                {
+                    "code": diagnostic.code,
+                    "category": diagnostic.category,
+                    "severity": diagnostic.severity,
+                    "message": diagnostic.message,
+                    "producer": diagnostic.producer,
+                    "path": diagnostic.path,
+                    "span": {"start_line": diagnostic.span_start_line, "end_line": diagnostic.span_end_line}
+                    if diagnostic.span_start_line is not None
+                    else None,
+                    "subject": diagnostic.subject_key,
+                    "object": diagnostic.object_key,
+                    "details": diagnostic.details,
+                }
+            )
         return canonical.compute_canonical_graph_hash(
             revision_kind=snapshot.revision_kind,
             revision_value=snapshot.revision_value,
@@ -1332,6 +1398,11 @@ class SnapshotStore:
             diagnostics=diagnostics,
             schema_version=snapshot.schema_version,
         )
+
+    @staticmethod
+    def _check_cancelled(check_cancelled: Callable[[], None] | None) -> None:
+        if check_cancelled is not None:
+            check_cancelled()
 
     @staticmethod
     def _evidence_dict(record: RiEvidence) -> dict[str, object]:

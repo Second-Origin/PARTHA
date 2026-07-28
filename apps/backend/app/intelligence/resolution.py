@@ -105,15 +105,27 @@ class RelationshipResolver:
             raise ValueError(f"snapshot producer_version_set is missing {self.producer!r}")
         self._snapshot = snapshot
 
-        nodes = list(self.store.db.scalars(select(RiNode).where(RiNode.snapshot_id == snapshot.snapshot_id)))
+        nodes: list[RiNode] = []
+        for node in self.store.db.scalars(select(RiNode).where(RiNode.snapshot_id == snapshot.snapshot_id)).yield_per(
+            500
+        ):
+            self._check_cancelled(check_cancelled)
+            nodes.append(node)
         nodes_by_key = {node.stable_key: node for node in nodes}
-        observations = sorted(
-            self.store.db.scalars(select(RiObservation).where(RiObservation.snapshot_id == snapshot.snapshot_id)),
-            key=lambda item: item.observation_id,
-        )
+        self._check_cancelled(check_cancelled)
+        observations: list[RiObservation] = []
+        for observation in self.store.db.scalars(
+            select(RiObservation)
+            .where(RiObservation.snapshot_id == snapshot.snapshot_id)
+            .order_by(RiObservation.observation_id)
+        ).yield_per(500):
+            self._check_cancelled(check_cancelled)
+            observations.append(observation)
         evidence_by_observation: dict[int, list[RiEvidence]] = defaultdict(list)
         evidence_by_node: dict[int, list[RiEvidence]] = defaultdict(list)
-        for evidence in self.store.db.scalars(select(RiEvidence).where(RiEvidence.snapshot_id == snapshot.snapshot_id)):
+        for evidence in self.store.db.scalars(
+            select(RiEvidence).where(RiEvidence.snapshot_id == snapshot.snapshot_id)
+        ).yield_per(500):
             self._check_cancelled(check_cancelled)
             if evidence.observation_ref is not None:
                 evidence_by_observation[evidence.observation_ref].append(evidence)
