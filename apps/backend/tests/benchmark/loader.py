@@ -18,7 +18,7 @@ Golden facts are *loaded and checked* here, never generated: there is no
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
@@ -43,6 +43,22 @@ from benchmark.sourcefiles import (
 
 class ManifestError(ValueError):
     """A fixture, capability mapping, or thresholds file failed strict validation."""
+
+
+_BENCHMARK_LANGUAGE_BY_PREFIX = {
+    "py": "python",
+    "src": "source",
+    "ts": "typescript",
+}
+_CROSS_LANGUAGE_SOURCE_CONSTRUCTS = {"file", "malformed-source", "repository"}
+
+
+def _benchmark_language(construct_id: str, *, path: Path) -> str:
+    prefix, separator, _ = construct_id.partition(".")
+    language = _BENCHMARK_LANGUAGE_BY_PREFIX.get(prefix)
+    if not separator or language is None:
+        raise ManifestError(f"{path}: construct {construct_id!r} has an unsupported benchmark id prefix")
+    return language
 
 
 # ---------------------------------------------------------------------------
@@ -94,18 +110,14 @@ def _read_json(path: Path) -> Any:
 def load_support_matrix(path: Path) -> SupportMatrix:
     data = _read_json(path)
     if data.get("schemaVersion") != schema.SUPPORT_MATRIX_SCHEMA_VERSION:
-        raise ManifestError(
-            f"{path}: unsupported capability-mapping schema version {data.get('schemaVersion')!r}"
-        )
+        raise ManifestError(f"{path}: unsupported capability-mapping schema version {data.get('schemaVersion')!r}")
     constructs: dict[str, ConstructSpec] = {}
     raw = data.get("constructs")
     if not isinstance(raw, dict) or not raw:
         raise ManifestError(f"{path}: 'constructs' must be a non-empty object")
     mappings = data.get("productionMappings")
     if not isinstance(mappings, dict) or set(mappings) != set(raw):
-        raise ManifestError(
-            f"{path}: productionMappings must map every benchmark construct exactly once"
-        )
+        raise ManifestError(f"{path}: productionMappings must map every benchmark construct exactly once")
     try:
         validate_registry()
     except ValueError as exc:
@@ -133,7 +145,7 @@ def load_support_matrix(path: Path) -> SupportMatrix:
         covered_capabilities.add(capability_id)
         constructs[construct_id] = ConstructSpec(
             construct_id=construct_id,
-            language=capability.language,
+            language=_benchmark_language(construct_id, path=path),
             supported=supported,
             description=str(spec.get("description", "")),
             expected_diagnostic=expected_diagnostic,
@@ -378,9 +390,7 @@ def _build_fact(group: str, raw: dict[str, Any], *, where: str, producers: set[s
     raise ManifestError(f"{where}: unknown fact group {group!r}")
 
 
-def _validate_evidence_against_source(
-    sources: Mapping[str, bytes], span: EvidenceSpan, *, where: str
-) -> None:
+def _validate_evidence_against_source(sources: Mapping[str, bytes], span: EvidenceSpan, *, where: str) -> None:
     """Enforce RFC-0001 §6.2: the cited file exists, decodes, and the span is in range."""
 
     data = sources.get(span.path)
@@ -460,7 +470,10 @@ def load_fixture(directory: Path, support_matrix: SupportMatrix) -> LoadedFixtur
     _require(isinstance(producer_list, list) and bool(producer_list), f"{where0}: producerVersionSet must be non-empty")
     for producer in producer_list:
         _require(
-            isinstance(producer, str) and "@" in producer and not producer.startswith("@") and not producer.endswith("@"),
+            isinstance(producer, str)
+            and "@" in producer
+            and not producer.startswith("@")
+            and not producer.endswith("@"),
             f"{where0}: producerVersionSet entry {producer!r} must be 'name@version'",
         )
     producers = set(producer_list)
@@ -475,10 +488,11 @@ def load_fixture(directory: Path, support_matrix: SupportMatrix) -> LoadedFixtur
     )
     for construct_id in constructs_covered:
         _require(construct_id in support_matrix, f"{where0}: undeclared benchmark construct {construct_id!r}")
+        spec = support_matrix.constructs[construct_id]
         _require(
-            support_matrix.constructs[construct_id].language in (language, "mixed")
+            spec.language == language
             or language == "mixed"
-            or support_matrix.constructs[construct_id].matrix_language == "source",
+            or (spec.language == "source" and spec.matrix_construct in _CROSS_LANGUAGE_SOURCE_CONSTRUCTS),
             f"{where0}: construct {construct_id!r} language mismatch with fixture language {language!r}",
         )
 

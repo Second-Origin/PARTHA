@@ -29,6 +29,7 @@ from app.intelligence import canonical
 from app.extraction.support_matrix import supported_manifest_filenames
 
 
+SUPPORTED_MANIFEST_FILENAMES = supported_manifest_filenames()
 _NPM_SECTIONS = ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies")
 _NPM_DEPENDENCY_TYPES = {
     "dependencies": "production",
@@ -85,7 +86,7 @@ class DependencyManifestExtractor:
         return f"{self.name}@{self.version}"
 
     def supports(self, path: str) -> bool:
-        return posixpath.basename(path) in supported_manifest_filenames()
+        return posixpath.basename(path) in SUPPORTED_MANIFEST_FILENAMES
 
     def extract(self, path: str, source: bytes) -> ExtractionResult:
         text, source_diagnostic = decode_source(path, source, producer=self.producer)
