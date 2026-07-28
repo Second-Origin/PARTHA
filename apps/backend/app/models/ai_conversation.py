@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -16,13 +16,31 @@ class AiConversationMessageRecord(Base):
     ``sequence`` orders turns within a thread explicitly rather than relying
     on timestamp precision, since the user and assistant turns of one query
     are written back to back in the same commit.
+
+    The ``(owner_id, repository_id, sequence)`` uniqueness constraint is the
+    concurrency guard: two simultaneous ``MAX(sequence) + 1`` allocations
+    collide here instead of silently interleaving user/assistant pairs. The
+    repository FK cascades, so deleting a repository removes its conversation
+    turns without a foreign-key violation.
     """
 
     __tablename__ = "ai_conversation_messages"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id",
+            "repository_id",
+            "sequence",
+            name="uq_ai_conversation_owner_repo_sequence",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
-    repository_id: Mapped[str] = mapped_column(String(36), ForeignKey("repositories.id"), index=True)
+    repository_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        index=True,
+    )
     sequence: Mapped[int] = mapped_column(Integer)
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)

@@ -9,6 +9,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.ai_conversation import AiConversationMessageRecord
@@ -16,6 +17,11 @@ from app.schemas.ai import AiCitation, AiMessage
 
 # (role, content, citations, created_at) — one turn awaiting a sequence number.
 AiConversationTurn = tuple[str, str, list[dict] | None, datetime]
+
+# Bound the retries for sequence collisions. Concurrent allocations are rare in
+# practice (one user, one thread), so a small cap is plenty and prevents an
+# infinite loop if something else is wrong.
+_MAX_SEQUENCE_RETRIES = 5
 
 
 class AiConversationRepository:
@@ -48,8 +54,26 @@ class AiConversationRepository:
         Called with both the user turn and its assistant reply together, so a
         query can never leave a user turn stored without its answer, or
         vice versa.
+
+        The ``(owner_id, repository_id, sequence)`` uniqueness constraint is
+        the concurrency guard: if two requests allocate the same next sequence
+        simultaneously, one of them hits IntegrityError. We retry the whole
+        allocation a bounded number of times so the collision resolves instead
+        of silently interleaving pairs or 500-ing.
         """
 
+        last_error: Exception | None = None
+        for _ in range(_MAX_SEQUENCE_RETRIES):
+            try:
+                self._append_turns_once(repository_id, owner_id, turns)
+                return
+            except IntegrityError as exc:
+                last_error = exc
+                self.db.rollback()
+        assert last_error is not None
+        raise last_error
+
+    def _append_turns_once(self, repository_id: str, owner_id: str, turns: list[AiConversationTurn]) -> None:
         next_sequence = self._next_sequence(repository_id, owner_id)
         for offset, (role, content, citations, created_at) in enumerate(turns):
             self.db.add(

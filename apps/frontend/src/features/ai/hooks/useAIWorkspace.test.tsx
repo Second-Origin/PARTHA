@@ -131,4 +131,29 @@ describe('useAIWorkspace', () => {
     await waitFor(() => expect(result.current.messages).toEqual(secondThread.messages));
     expect(aiService.listConversations).toHaveBeenCalledWith('repo-2');
   });
+
+  it('surfaces a history load failure instead of rendering an empty thread', async () => {
+    vi.mocked(aiService.listConversations).mockRejectedValue(new Error('network down'));
+
+    const { result } = renderHook(() => useAIWorkspace());
+
+    await waitFor(() => expect(result.current.historyError).not.toBeNull());
+    // The failure must be visible through the unified error channel too, so the
+    // page renders an error state rather than the misleading empty state.
+    expect(result.current.error).not.toBeNull();
+    expect(result.current.messages).toHaveLength(0);
+  });
+
+  it('retryLoad clears the history error and reloads', async () => {
+    vi.mocked(aiService.listConversations)
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce({ repositoryId: 'repo-1', messages: [] });
+
+    const { result } = renderHook(() => useAIWorkspace());
+    await waitFor(() => expect(result.current.historyError).not.toBeNull());
+
+    act(() => result.current.retryLoad());
+    await waitFor(() => expect(result.current.historyError).toBeNull());
+    expect(aiService.listConversations).toHaveBeenCalledTimes(2);
+  });
 });

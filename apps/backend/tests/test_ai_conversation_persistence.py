@@ -164,3 +164,82 @@ def test_conversation_returns_404_for_an_unknown_repository(auth_client):
         params={"repositoryId": "11111111-1111-1111-1111-111111111111"},
     )
     assert response.status_code == 404
+
+
+def test_deleting_repository_removes_its_conversation_turns(auth_client):
+    provider = RecordingProvider()
+    registry = ProviderRegistry()
+    registry.register("openai", provider)
+    auth_client.app.dependency_overrides[get_provider_registry] = lambda: registry
+
+    try:
+        repository_id = _analysed_repository(auth_client, auth_client.headers)
+        _configure_provider(auth_client, auth_client.headers)
+        assert auth_client.post(
+            "/ai/query", json={"repositoryId": repository_id, "query": "Keep me"}
+        ).status_code == 200
+
+        # The conversation turns exist before deletion.
+        thread = auth_client.get("/ai/conversations", params={"repositoryId": repository_id})
+        assert thread.status_code == 200
+        assert len(thread.json()["messages"]) == 2
+
+        # Deleting the repository must cascade to its conversation turns
+        # instead of raising a foreign-key violation.
+        delete = auth_client.delete(f"/repositories/{repository_id}")
+        assert delete.status_code == 204, delete.text
+
+        # The thread is gone with the repository.
+        assert auth_client.get(
+            "/ai/conversations", params={"repositoryId": repository_id}
+        ).status_code == 404
+    finally:
+        auth_client.app.dependency_overrides.pop(get_provider_registry, None)
+
+
+def test_concurrent_queries_do_not_interleave_turns(auth_client):
+    import threading
+
+    provider = RecordingProvider()
+    registry = ProviderRegistry()
+    registry.register("openai", provider)
+    auth_client.app.dependency_overrides[get_provider_registry] = lambda: registry
+
+    errors: list[Exception] = []
+    try:
+        repository_id = _analysed_repository(auth_client, auth_client.headers)
+        _configure_provider(auth_client, auth_client.headers)
+
+        def fire() -> None:
+            try:
+                auth_client.post(
+                    "/ai/query",
+                    json={"repositoryId": repository_id, "query": "Concurrent question"},
+                )
+            except Exception as exc:  # noqa: BLE001 - surface in the main thread
+                errors.append(exc)
+
+        # Fire several queries concurrently. The unique constraint on
+        # (owner_id, repository_id, sequence) plus the bounded retry in
+        # append_turns must keep every user/assistant pair intact and allocate
+        # distinct sequences rather than interleaving or 500-ing.
+        threads = [threading.Thread(target=fire) for _ in range(5)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert not errors, [str(e) for e in errors]
+
+        conversation = auth_client.get(
+            "/ai/conversations", params={"repositoryId": repository_id}
+        )
+        assert conversation.status_code == 200
+        messages = conversation.json()["messages"]
+        # Five queries => ten turns, alternating user/assistant, all distinct
+        # sequences (asserted by the DB constraint, surfaced here as ordering).
+        assert len(messages) == 10
+        roles = [message["role"] for message in messages]
+        assert roles == ["user", "assistant"] * 5
+    finally:
+        auth_client.app.dependency_overrides.pop(get_provider_registry, None)
