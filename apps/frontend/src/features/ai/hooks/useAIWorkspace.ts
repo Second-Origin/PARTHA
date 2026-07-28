@@ -24,12 +24,23 @@ export function useAIWorkspace() {
     };
   }, []);
 
+  // Tracks the currently active repository id so in-flight requests can check
+  // (at resolution time, not call time) whether their repository is still the
+  // one being viewed. The ask/load closures capture a stale repositoryFeature,
+  // so they must read this ref instead.
+  const activeRepoIdRef = useRef(repositoryFeature.activeRepository?.id);
+
   // Monotonic token for the most recent history load. Every loadHistory call
   // bumps it; a response whose captured token no longer matches is stale and
   // must be discarded. This is what keeps a retried load (whose cleanup is
   // dropped by callers) from installing another repository's thread after the
   // active repository has changed.
   const loadSeq = useRef(0);
+
+  // Monotonic token for queries. A query whose token no longer matches the
+  // latest ask is stale and must not mutate state (e.g. the user asked again,
+  // or switched repositories while the provider was responding).
+  const askSeq = useRef(0);
 
   const loadHistory = useCallback((repositoryId: string | undefined) => {
     setMessages([]);
@@ -59,6 +70,7 @@ export function useAIWorkspace() {
   }, []);
 
   useEffect(() => {
+    activeRepoIdRef.current = repositoryFeature.activeRepository?.id;
     loadHistory(repositoryFeature.activeRepository?.id);
   }, [repositoryFeature.activeRepository?.id, loadHistory]);
 
@@ -66,6 +78,9 @@ export function useAIWorkspace() {
     const activeRepository = repositoryFeature.activeRepository;
     const trimmed = query.trim();
     if (!activeRepository || !trimmed) return;
+
+    const requestedId = activeRepository.id;
+    const seq = ++askSeq.current;
 
     const userMessage: AiMessage = {
       role: 'user',
@@ -80,16 +95,23 @@ export function useAIWorkspace() {
 
     try {
       const response = await aiService.query({
-        repositoryId: activeRepository.id,
+        repositoryId: requestedId,
         query: trimmed,
         context: { conversationHistory: messages.slice(-8) },
       });
+      // Discard if a newer ask started (e.g. asking again) or the user switched
+      // away from the repository this answer belongs to. A late answer for repo
+      // A must never land in repo B's thread.
+      if (seq !== askSeq.current) return;
+      if (activeRepoIdRef.current !== requestedId) return;
       setMessages((current) => [...current, response.message]);
       setSuggestions(response.suggestions || []);
     } catch (caught) {
+      if (seq !== askSeq.current) return;
+      if (activeRepoIdRef.current !== requestedId) return;
       setError(getErrorMessage(caught));
     } finally {
-      setLoading(false);
+      if (seq === askSeq.current) setLoading(false);
     }
   }, [messages, query, repositoryFeature.activeRepository]);
 

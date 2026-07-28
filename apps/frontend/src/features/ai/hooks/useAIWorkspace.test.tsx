@@ -202,4 +202,55 @@ describe('useAIWorkspace', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(result.current.messages).toHaveLength(0);
   });
+
+  it('discards an in-flight assistant answer when the repository switches', async () => {
+    // Ask on repo A; while the provider responds, switch to empty repo B.
+    // A's assistant answer must not land in B's thread.
+    let resolveQuery!: (value: unknown) => void;
+    const queryPending = new Promise((resolve) => {
+      resolveQuery = resolve;
+    });
+    const secondRepository: Repository = { ...repository, id: 'repo-2', name: 'other' };
+
+    vi.mocked(aiService.query).mockReturnValue(queryPending as unknown as Promise<AiQueryResponse>);
+    vi.mocked(aiService.listConversations).mockResolvedValue({ repositoryId: 'repo-2', messages: [] });
+
+    const { result, rerender } = renderHook(() => useAIWorkspace());
+    await waitFor(() => expect(result.current.messages).toHaveLength(0));
+
+    act(() => result.current.setQuery('question for A'));
+    // Fire ask without awaiting the (mocked-pending) provider response.
+    act(() => {
+      void result.current.ask();
+    });
+    // The optimistic user message for A is now shown.
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    // Switch to repo-2 (empty) while the query is still pending.
+    vi.mocked(useRepositoryFeatureStatus).mockReturnValue({
+      activeRepository: secondRepository,
+      completedRepositories: [secondRepository],
+      status: 'success',
+      loading: false,
+      error: null,
+      empty: false,
+      success: true,
+      source: 'upload',
+      emptyReason: null,
+      retry: vi.fn(),
+      refresh: vi.fn(),
+    });
+    rerender();
+    await waitFor(() => expect(aiService.listConversations).toHaveBeenCalledWith('repo-2'));
+
+    // The late answer for repo A arrives; it must be discarded for repo B.
+    act(() => {
+      resolveQuery({
+        message: { role: 'assistant', content: 'ANSWER FOR A', timestamp: '2026-07-22T00:00:05Z', citations: [] },
+        suggestions: [],
+      });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(result.current.messages).toHaveLength(0);
+  });
 });
