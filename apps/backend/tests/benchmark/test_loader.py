@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from app.extraction.support_matrix import CONSTRUCT_CAPABILITIES, MANIFEST_CAPABILITIES
 from benchmark import paths
 from benchmark.loader import (
     ManifestError,
@@ -31,6 +32,15 @@ def test_committed_corpus_loads_cleanly():
     ids = [fixture.fixture_id for fixture in fixtures]
     assert ids == sorted(ids), "fixtures must load in deterministic id order"
     assert len(ids) == len(set(ids)), "fixture ids must be unique"
+
+
+def test_benchmark_mapping_is_complete_and_registry_authoritative():
+    for capability in CONSTRUCT_CAPABILITIES:
+        for benchmark_id in capability.benchmark_ids:
+            assert benchmark_id in SUPPORT_MATRIX.constructs
+            assert SUPPORT_MATRIX.constructs[benchmark_id].capability_id == capability.id
+    for capability in MANIFEST_CAPABILITIES:
+        assert capability.benchmark_disclosure
 
 
 def test_thresholds_load_with_exact_fractions():
@@ -76,7 +86,13 @@ def _base_manifest() -> dict:
                     "stableKey": "repo:root",
                     "name": "repository",
                     "evidence": [
-                        {"path": "README.md", "startLine": 1, "endLine": 1, "extractor": "repository-inventory", "extractorVersion": "1.1.0"}
+                        {
+                            "path": "README.md",
+                            "startLine": 1,
+                            "endLine": 1,
+                            "extractor": "repository-inventory",
+                            "extractorVersion": "1.1.0",
+                        }
                     ],
                 },
                 {
@@ -86,7 +102,13 @@ def _base_manifest() -> dict:
                     "language": "python",
                     "constructs": ["py.function.def"],
                     "evidence": [
-                        {"path": "src/a.py", "startLine": 1, "endLine": 1, "extractor": "python-ast", "extractorVersion": "1.0.0"}
+                        {
+                            "path": "src/a.py",
+                            "startLine": 1,
+                            "endLine": 1,
+                            "extractor": "python-ast",
+                            "extractorVersion": "1.0.0",
+                        }
                     ],
                 },
             ]
@@ -121,6 +143,15 @@ def test_sanity_base_manifest_loads(tmp_path: Path):
     symbol = next(record.fact for record in fixture.expected if record.fact.subject == "src/a.py::f")
     assert symbol.name == "f"
     assert symbol.language == "python"
+
+
+def test_source_policy_construct_cannot_bypass_fixture_language(tmp_path: Path):
+    manifest = _base_manifest()
+    manifest["constructsCovered"] = ["src.path_escape"]
+    directory = _write_fixture(tmp_path, manifest)
+
+    with pytest.raises(ManifestError, match="language mismatch"):
+        load_fixture(directory, SUPPORT_MATRIX)
 
 
 def test_manifest_synthetic_sources_are_deterministic_and_do_not_need_host_paths(tmp_path: Path):
@@ -166,11 +197,14 @@ def test_loader_rejects_invalid_synthetic_sources(tmp_path: Path, synthetic_file
         (lambda m: m.update(revisionIdentity="git-sha"), "unsupported revisionIdentity"),
         (lambda m: m.update(blessed=True), "forbidden key"),
         (lambda m: m.update(producerVersionSet=["badproducer"]), "must be 'name@version'"),
-        (lambda m: m.update(constructsCovered=["py.not_a_construct"]), "undeclared support-matrix construct"),
+        (lambda m: m.update(constructsCovered=["py.not_a_construct"]), "undeclared benchmark construct"),
         (lambda m: m["expected"]["nodes"][1]["evidence"][0].update(path="/etc/passwd"), "absolute or escapes"),
         (lambda m: m["expected"]["nodes"][1]["evidence"][0].update(path="../escape.py"), "absolute or escapes"),
         (lambda m: m["expected"]["nodes"][1]["evidence"][0].update(startLine=0), "start_line must be >= 1"),
-        (lambda m: m["expected"]["nodes"][1]["evidence"][0].update(startLine=2, endLine=1), "end_line must be >= start_line"),
+        (
+            lambda m: m["expected"]["nodes"][1]["evidence"][0].update(startLine=2, endLine=1),
+            "end_line must be >= start_line",
+        ),
         (lambda m: m["expected"]["nodes"][1]["evidence"][0].update(endLine=999), "exceeds logical_line_count"),
         (lambda m: m["expected"]["nodes"][1]["evidence"][0].update(extractor="ghost"), "not in producerVersionSet"),
         (lambda m: m["expected"]["nodes"][1].__setitem__("evidence", []), "must carry >=1 evidence"),

@@ -103,6 +103,7 @@ def test_a_silent_extractor_fails_the_recall_gate():
     assert result.scoring.report.overall.recall < result.thresholds.recall
     assert not result.passed
     assert result.exit_code == 1
+    assert not result.golden_regression_passed
 
 
 def test_an_inventing_extractor_fails_the_precision_gate():
@@ -111,6 +112,7 @@ def test_an_inventing_extractor_fails_the_precision_gate():
     assert result.scoring.report.overall.precision < result.thresholds.precision
     assert not result.passed
     assert result.exit_code == 1
+    assert not result.golden_regression_passed
 
 
 def test_an_invalid_emitted_citation_fails_even_if_scoring_is_high():
@@ -134,14 +136,14 @@ def test_a_broken_manifest_fails_the_build(tmp_path: Path):
 def test_a_support_matrix_mismatch_fails_the_build(tmp_path: Path):
     source = runner.paths.SUPPORT_MATRIX_PATH
     matrix = json.loads(source.read_text(encoding="utf-8"))
-    matrix["productionMappings"]["py.function.def"]["construct"] = "not-a-real-construct"
+    matrix["productionMappings"]["py.function.def"] = "not-a-real-capability"
     matrix_path = tmp_path / "support-matrix.json"
     matrix_path.write_text(json.dumps(matrix), encoding="utf-8")
 
     result = runner.run(support_matrix_path=matrix_path)
 
     assert result.load_error is not None
-    assert "unknown production construct" in result.load_error
+    assert "unknown production capability" in result.load_error
     assert not result.passed
     assert result.exit_code == 1
 
