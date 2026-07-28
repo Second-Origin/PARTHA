@@ -1,6 +1,6 @@
 """enforce conversation FK cascade and sequence uniqueness
 
-Revision ID: 0010_ai_conversation_cascade_and_sequence_unique
+Revision ID: 0010_ai_conv_cascade_seq
 Revises: 0009_ai_conversation_messages
 Create Date: 2026-07-28
 
@@ -23,7 +23,7 @@ from sqlalchemy import Column, ForeignKey, String
 
 from alembic import op
 
-revision = "0010_ai_conversation_cascade_and_sequence_unique"
+revision = "0010_ai_conv_cascade_seq"
 down_revision = "0009_ai_conversation_messages"
 branch_labels = None
 depends_on = None
