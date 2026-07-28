@@ -32,27 +32,7 @@ function loadOpenApiDocument() {
   if (result.status !== 0) {
     throw new Error(`Backend OpenAPI generation failed:\n${result.stderr || result.stdout}`);
   }
-  const document = JSON.parse(result.stdout);
-  stripDynamicDefaults(document);
-  return document;
-}
-
-// Pydantic evaluates datetime defaults while importing the backend module.
-// Those values are runtime metadata, not part of the TypeScript contract, and
-// must not make two generations from the same source differ.
-function stripDynamicDefaults(value) {
-  if (!value || typeof value !== 'object') return;
-  if (Array.isArray(value)) {
-    value.forEach(stripDynamicDefaults);
-    return;
-  }
-  for (const [key, child] of Object.entries(value)) {
-    if (key === 'default' && typeof child === 'string' && /^\d{4}-\d{2}-\d{2}T.*Z$/.test(child)) {
-      delete value[key];
-    } else {
-      stripDynamicDefaults(child);
-    }
-  }
+  return JSON.parse(result.stdout);
 }
 
 function assertSafeGeneratedOutput(content) {

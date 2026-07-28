@@ -155,8 +155,8 @@ function getBackendMessage(body: unknown): string | null {
 }
 
 function getBackendDetails(body: unknown): string[] {
-  if (!body || typeof body !== 'object') return [];
-  const raw = (body as { details?: unknown }).details;
+  if (!isErrorResponse(body)) return [];
+  const raw = body.details;
   if (Array.isArray(raw)) {
     return raw
       .map((item) => {
