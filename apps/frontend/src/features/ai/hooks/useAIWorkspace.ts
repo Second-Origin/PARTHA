@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { aiService, getErrorMessage } from '@/shared/services/api';
 import type { AiMessage } from '@/shared/services/api/types';
 import { useRepositoryFeatureStatus } from '@/shared/feature-state/useRepositoryFeatureStatus';
@@ -24,38 +24,42 @@ export function useAIWorkspace() {
     };
   }, []);
 
-  const loadHistory = useCallback(
-    (repositoryId: string | undefined) => {
-      setMessages([]);
-      setHistoryError(null);
-      if (!repositoryId) return;
+  // Monotonic token for the most recent history load. Every loadHistory call
+  // bumps it; a response whose captured token no longer matches is stale and
+  // must be discarded. This is what keeps a retried load (whose cleanup is
+  // dropped by callers) from installing another repository's thread after the
+  // active repository has changed.
+  const loadSeq = useRef(0);
 
-      let cancelled = false;
-      aiService
-        .listConversations(repositoryId)
-        .then((response) => {
-          if (cancelled) return;
-          // If the user has already asked a question before this load
-          // resolved, keep the in-progress thread instead of overwriting it.
-          setMessages((current) => (current.length === 0 ? response.messages : current));
-        })
-        .catch((caught) => {
-          if (cancelled) return;
-          // A transient network/server failure must not look like lost
-          // history: surface it so the UI shows an error + retry rather than
-          // the empty state.
-          setHistoryError(getErrorMessage(caught));
-        });
-      return () => {
-        cancelled = true;
-      };
-    },
-    [],
-  );
+  const loadHistory = useCallback((repositoryId: string | undefined) => {
+    setMessages([]);
+    setHistoryError(null);
+    if (!repositoryId) return;
+
+    const seq = ++loadSeq.current;
+    aiService
+      .listConversations(repositoryId)
+      .then((response) => {
+        // Discard if a newer load started (e.g. a retry, or a repository
+        // switch) or if the response is for a different repository than the
+        // one we asked about.
+        if (seq !== loadSeq.current) return;
+        if (response.repositoryId !== repositoryId) return;
+        // If the user has already asked a question before this load
+        // resolved, keep the in-progress thread instead of overwriting it.
+        setMessages((current) => (current.length === 0 ? response.messages : current));
+      })
+      .catch((caught) => {
+        if (seq !== loadSeq.current) return;
+        // A transient network/server failure must not look like lost
+        // history: surface it so the UI shows an error + retry rather than
+        // the empty state.
+        setHistoryError(getErrorMessage(caught));
+      });
+  }, []);
 
   useEffect(() => {
-    const cleanup = loadHistory(repositoryFeature.activeRepository?.id);
-    return cleanup;
+    loadHistory(repositoryFeature.activeRepository?.id);
   }, [repositoryFeature.activeRepository?.id, loadHistory]);
 
   const ask = useCallback(async () => {

@@ -156,4 +156,50 @@ describe('useAIWorkspace', () => {
     await waitFor(() => expect(result.current.historyError).toBeNull());
     expect(aiService.listConversations).toHaveBeenCalledTimes(2);
   });
+
+  it('discards a stale retried response when the active repository changes', async () => {
+    // Repo A's response resolves late; meanwhile the user switches to an empty
+    // repo B. The late A response must not install A's thread into B.
+    let resolveA!: (value: unknown) => void;
+    const aPending = new Promise((resolve) => {
+      resolveA = resolve;
+    });
+    const secondRepository: Repository = { ...repository, id: 'repo-2', name: 'other' };
+
+    vi.mocked(aiService.listConversations).mockImplementation((repositoryId: string) => {
+      if (repositoryId === 'repo-1') return aPending as unknown as Promise<AiConversationResponse>;
+      return Promise.resolve({ repositoryId: 'repo-2', messages: [] });
+    });
+
+    const { result, rerender } = renderHook(() => useAIWorkspace());
+    // Trigger a retried load of repo-1 that stays pending.
+    act(() => result.current.retryLoad());
+    await waitFor(() => expect(aiService.listConversations).toHaveBeenCalledWith('repo-1'));
+
+    // Switch to repo-2 (empty), then let the stale repo-1 response arrive.
+    vi.mocked(useRepositoryFeatureStatus).mockReturnValue({
+      activeRepository: secondRepository,
+      completedRepositories: [secondRepository],
+      status: 'success',
+      loading: false,
+      error: null,
+      empty: false,
+      success: true,
+      source: 'upload',
+      emptyReason: null,
+      retry: vi.fn(),
+      refresh: vi.fn(),
+    });
+    rerender();
+    await waitFor(() => expect(aiService.listConversations).toHaveBeenCalledWith('repo-2'));
+
+    act(() => {
+      resolveA({ repositoryId: 'repo-1', messages: [{ role: 'user', content: 'LEAK', timestamp: '2026-07-22T00:00:00Z' }] });
+    });
+
+    // The active repository is repo-2 (empty), so the stale repo-1 payload is
+    // discarded and must never appear in messages.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(result.current.messages).toHaveLength(0);
+  });
 });
