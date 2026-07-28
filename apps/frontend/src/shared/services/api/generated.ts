@@ -25,6 +25,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ai/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ai Conversation */
+        get: operations["list_ai_conversation_ai_conversations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ai/query": {
         parameters: {
             query?: never;
@@ -658,6 +675,13 @@ export interface components {
              * @default 1
              */
             startLine: number;
+        };
+        /** AiConversationResponse */
+        AiConversationResponse: {
+            /** Messages */
+            messages: components["schemas"]["AiMessage"][];
+            /** Repositoryid */
+            repositoryId: string;
         };
         /** AiMessage */
         AiMessage: {
@@ -2460,6 +2484,142 @@ export interface operations {
                      * @example {
                      *       "code": "unauthorized",
                      *       "message": "Not authenticated.",
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request could not be validated. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "request_validation_error",
+                     *       "message": "Request validation failed.",
+                     *       "details": {
+                     *         "errors": [
+                     *           {
+                     *             "loc": [
+                     *               "body",
+                     *               "url"
+                     *             ],
+                     *             "msg": "Field required"
+                     *           }
+                     *         ]
+                     *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request-rate limit has been exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "rate_limited",
+                     *       "message": "Too many requests. Try again shortly.",
+                     *       "details": {
+                     *         "retryAfterSeconds": 30
+                     *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description An unexpected server error occurred. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "internal_server_error",
+                     *       "message": "An unexpected error occurred.",
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_ai_conversation_ai_conversations_get: {
+        parameters: {
+            query: {
+                repositoryId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted conversation thread for a repository, oldest turn first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "repositoryId": "11111111-1111-1111-1111-111111111111",
+                     *       "messages": [
+                     *         {
+                     *           "role": "user",
+                     *           "content": "Which modules handle authentication?",
+                     *           "timestamp": "2026-07-17T00:00:00Z"
+                     *         },
+                     *         {
+                     *           "role": "assistant",
+                     *           "content": "Authentication is handled by the auth module.",
+                     *           "timestamp": "2026-07-17T00:00:01Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AiConversationResponse"];
+                };
+            };
+            /** @description Authentication is required or the access token is invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "unauthorized",
+                     *       "message": "Not authenticated.",
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The requested resource does not exist or is not accessible to this user. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "not_found",
+                     *       "message": "Repository not found.",
+                     *       "details": {
+                     *         "repositoryId": "11111111-1111-1111-1111-111111111111"
+                     *       },
                      *       "request_id": "req_01HXYZEXAMPLE"
                      *     }
                      */
