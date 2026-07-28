@@ -31,6 +31,7 @@ from app.intelligence.query_service import SnapshotQueryService
 from app.models.repository import RepositoryRecord
 from app.models.user import User
 from app.parsers.repository_parser import RepositoryParser
+from app.repositories.ai_conversation_repository import AiConversationRepository
 from app.repositories.repository_repository import RepositoryRepository
 from app.reports.export_service import ExportService
 from app.review.review_service import EngineeringReviewBuilder
@@ -256,12 +257,17 @@ def get_analysis_job_service(
     return AnalysisJobService(db, owner_id=current_user.id)
 
 
+def get_ai_conversation_repository(db: Session = Depends(get_db)) -> AiConversationRepository:
+    return AiConversationRepository(db)
+
+
 def get_ai_service(
     repository: RepositoryRepository = Depends(get_repository_repository),
     config_store: EncryptedProviderConfigStore = Depends(get_ai_config_store),
     context_builder: RepositoryContextBuilder = Depends(get_repository_context_builder),
     prompt_builder: PromptBuilder = Depends(get_prompt_builder),
     provider_factory: ProviderFactory = Depends(get_provider_factory),
+    conversation_repository: AiConversationRepository = Depends(get_ai_conversation_repository),
     current_user: User = Depends(get_current_user),
 ) -> AiService:
     orchestrator = AiOrchestrator(
@@ -270,6 +276,7 @@ def get_ai_service(
         context_builder=context_builder,
         prompt_builder=prompt_builder,
         provider_factory=provider_factory,
+        conversation_repository=conversation_repository,
         owner_id=current_user.id,
     )
     return AiService(orchestrator)

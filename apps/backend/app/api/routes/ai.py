@@ -1,10 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, Query
 
 from app.api.deps import get_ai_service, get_current_user
 from app.api.openapi import documented_responses
 from app.schemas.ai import (
+    AiConversationResponse,
     AiProviderConfig,
     AiProviderPublicConfig,
     AiProviderTestRequest,
@@ -47,6 +48,23 @@ _QUERY_RESPONSE_EXAMPLE = {
         "citations": [],
     },
     "suggestions": [],
+}
+_CONVERSATION_RESPONSE_EXAMPLE = {
+    "repositoryId": _REPOSITORY_ID,
+    "messages": [
+        {
+            "role": "user",
+            "content": "Which modules handle authentication?",
+            "timestamp": "2026-07-17T00:00:00Z",
+            "citations": None,
+        },
+        {
+            "role": "assistant",
+            "content": "Authentication is handled by the auth module.",
+            "timestamp": "2026-07-17T00:00:01Z",
+            "citations": None,
+        },
+    ],
 }
 
 
@@ -127,3 +145,25 @@ async def query_ai(
     service: AiService = Depends(get_ai_service),
 ) -> AiQueryResponse:
     return await service.query(request)
+
+
+@router.get(
+    "/conversations",
+    response_model=AiConversationResponse,
+    responses=documented_responses(
+        200,
+        "Persisted conversation thread for a repository, oldest turn first.",
+        _CONVERSATION_RESPONSE_EXAMPLE,
+        401,
+        404,
+        422,
+        429,
+        500,
+    ),
+)
+def list_ai_conversation(
+    repository_id: Annotated[str, Query(alias="repositoryId", min_length=1)],
+    service: AiService = Depends(get_ai_service),
+) -> AiConversationResponse:
+    messages = service.list_conversation(repository_id)
+    return AiConversationResponse(repository_id=repository_id, messages=messages)

@@ -2,12 +2,15 @@ import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from app.ai.orchestrator import AiOrchestrator
 from app.ai.prompt_builder import PromptBuilder
 from app.ai.providers.factory import ProviderFactory
 from app.ai.providers.registry import ProviderRegistry
 from app.ai.repository_context import RepositoryContextBuilder
 from app.ai.types import AiProviderConfig, AiProviderResponse, PromptBundle
+from app.core.exceptions import NotFoundError
 from app.intelligence.query_service import (
     ProductSnapshotProjection,
     SnapshotDependencyDeclaration,
@@ -16,7 +19,7 @@ from app.intelligence.query_service import (
     SnapshotModuleFact,
 )
 from app.models.repository import RepositoryRecord
-from app.schemas.ai import AiQueryRequest
+from app.schemas.ai import AiCitation, AiMessage, AiQueryRequest
 
 
 def _record(root: Path) -> RepositoryRecord:
@@ -127,6 +130,29 @@ class StaticConfigStore:
         return AiProviderConfig(provider="openai", api_key="key", model="test-model")
 
 
+class FakeConversationRepository:
+    """In-memory stand-in for ``AiConversationRepository`` in orchestrator tests."""
+
+    def __init__(self) -> None:
+        self.rows: list[tuple[str, str, str, str, list[dict] | None, datetime]] = []
+
+    def append_turns(self, repository_id: str, owner_id: str, turns) -> None:
+        for role, content, citations, created_at in turns:
+            self.rows.append((repository_id, owner_id, role, content, citations, created_at))
+
+    def list_conversation(self, repository_id: str, owner_id: str) -> list[AiMessage]:
+        return [
+            AiMessage(
+                role=role,
+                content=content,
+                timestamp=created_at,
+                citations=[AiCitation(**citation) for citation in citations] if citations else None,
+            )
+            for repo_id, owner, role, content, citations, created_at in self.rows
+            if repo_id == repository_id and owner == owner_id
+        ]
+
+
 class FakeProvider:
     def __init__(self) -> None:
         self.prompt: PromptBundle | None = None
@@ -190,7 +216,7 @@ def test_provider_factory_resolves_registered_provider():
 
 
 def test_ai_orchestrator_preserves_query_response_shape(tmp_path: Path):
-    response, provider = asyncio.run(_query_with_fake_provider(tmp_path))
+    response, provider, _orchestrator = asyncio.run(_query_with_fake_provider(tmp_path))
 
     assert response.message.role == "assistant"
     assert response.message.content == "answer from openai"
@@ -199,6 +225,32 @@ def test_ai_orchestrator_preserves_query_response_shape(tmp_path: Path):
     assert response.suggestions == []
     assert provider.prompt is not None
     assert provider.prompt.user_prompt == "Explain this repo"
+
+
+def test_ai_orchestrator_persists_both_turns_and_lists_them_back(tmp_path: Path):
+    response, _provider, orchestrator = asyncio.run(_query_with_fake_provider(tmp_path))
+
+    thread = orchestrator.list_conversation("repo-1")
+
+    assert [message.role for message in thread] == ["user", "assistant"]
+    assert thread[0].content == "Explain this repo"
+    assert thread[1].content == response.message.content
+
+
+def test_ai_orchestrator_list_conversation_404s_for_a_repository_the_caller_does_not_own(tmp_path: Path):
+    record = _record(tmp_path)
+    orchestrator = AiOrchestrator(
+        repository=StaticRepository(record),  # type: ignore[arg-type]
+        config_store=StaticConfigStore(),  # type: ignore[arg-type]
+        context_builder=RepositoryContextBuilder(StaticSnapshots(_projection())),  # type: ignore[arg-type]
+        prompt_builder=PromptBuilder(),
+        provider_factory=ProviderFactory(ProviderRegistry()),
+        conversation_repository=FakeConversationRepository(),
+        owner_id="someone-else",
+    )
+
+    with pytest.raises(NotFoundError):
+        orchestrator.list_conversation("repo-1")
 
 
 async def _query_with_fake_provider(tmp_path: Path):
@@ -212,8 +264,9 @@ async def _query_with_fake_provider(tmp_path: Path):
         context_builder=RepositoryContextBuilder(StaticSnapshots(_projection())),  # type: ignore[arg-type]
         prompt_builder=PromptBuilder(),
         provider_factory=ProviderFactory(registry),
+        conversation_repository=FakeConversationRepository(),
         owner_id="owner-1",
     )
 
     response = await orchestrator.query(AiQueryRequest(repository_id="repo-1", query="Explain this repo"))
-    return response, provider
+    return response, provider, orchestrator

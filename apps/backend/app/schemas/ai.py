@@ -39,6 +39,11 @@ class AiQueryResponse(CamelModel):
     suggestions: list[str] = []
 
 
+class AiConversationResponse(CamelModel):
+    repository_id: str
+    messages: list[AiMessage]
+
+
 class AiProviderConfig(CamelModel):
     provider: AiProvider
     api_key: str | None = None

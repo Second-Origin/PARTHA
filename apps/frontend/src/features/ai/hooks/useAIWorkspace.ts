@@ -23,6 +23,26 @@ export function useAIWorkspace() {
     };
   }, []);
 
+  useEffect(() => {
+    const repositoryId = repositoryFeature.activeRepository?.id;
+    setMessages([]);
+    if (!repositoryId) return;
+
+    let cancelled = false;
+    aiService
+      .listConversations(repositoryId)
+      .then((response) => {
+        if (cancelled) return;
+        // If the user has already asked a question before this load
+        // resolved, keep the in-progress thread instead of overwriting it.
+        setMessages((current) => (current.length === 0 ? response.messages : current));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [repositoryFeature.activeRepository?.id]);
+
   const ask = useCallback(async () => {
     const activeRepository = repositoryFeature.activeRepository;
     const trimmed = query.trim();

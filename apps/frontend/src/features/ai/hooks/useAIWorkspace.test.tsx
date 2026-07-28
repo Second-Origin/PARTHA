@@ -1,9 +1,9 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAIWorkspace } from './useAIWorkspace';
 import { useRepositoryFeatureStatus } from '@/shared/feature-state/useRepositoryFeatureStatus';
 import { aiService } from '@/shared/services/api';
-import type { AiQueryResponse } from '@/shared/services/api/types';
+import type { AiConversationResponse, AiQueryResponse } from '@/shared/services/api/types';
 import type { Repository } from '@/shared/types';
 
 vi.mock('@/shared/feature-state/useRepositoryFeatureStatus', () => ({
@@ -14,6 +14,7 @@ vi.mock('@/shared/services/api', () => ({
   aiService: {
     query: vi.fn(),
     getConfig: vi.fn().mockResolvedValue({ provider: 'anthropic', hasKey: true }),
+    listConversations: vi.fn().mockResolvedValue({ repositoryId: 'repo-1', messages: [] }),
   },
   getErrorMessage: vi.fn((error: unknown) => String(error)),
 }));
@@ -77,5 +78,57 @@ describe('useAIWorkspace', () => {
     expect(result.current.messages).toHaveLength(2);
     expect(result.current.messages[1]).toEqual(response.message);
     expect(result.current.suggestions).toEqual(response.suggestions);
+  });
+
+  it('restores the persisted conversation thread on mount', async () => {
+    const persisted: AiConversationResponse = {
+      repositoryId: 'repo-1',
+      messages: [
+        { role: 'user', content: 'What does this repo do?', timestamp: '2026-07-22T00:00:00Z' },
+        { role: 'assistant', content: 'It is a sample app.', timestamp: '2026-07-22T00:00:01Z', citations: [] },
+      ],
+    };
+    vi.mocked(aiService.listConversations).mockResolvedValue(persisted);
+
+    const { result } = renderHook(() => useAIWorkspace());
+
+    await waitFor(() => expect(result.current.messages).toEqual(persisted.messages));
+    expect(aiService.listConversations).toHaveBeenCalledWith('repo-1');
+  });
+
+  it('reloads the thread when the active repository changes', async () => {
+    const firstThread: AiConversationResponse = {
+      repositoryId: 'repo-1',
+      messages: [{ role: 'user', content: 'About repo one', timestamp: '2026-07-22T00:00:00Z' }],
+    };
+    const secondRepository: Repository = { ...repository, id: 'repo-2', name: 'other' };
+    const secondThread: AiConversationResponse = {
+      repositoryId: 'repo-2',
+      messages: [{ role: 'user', content: 'About repo two', timestamp: '2026-07-22T00:00:05Z' }],
+    };
+    vi.mocked(aiService.listConversations).mockImplementation((repositoryId: string) =>
+      Promise.resolve(repositoryId === 'repo-1' ? firstThread : secondThread),
+    );
+
+    const { result, rerender } = renderHook(() => useAIWorkspace());
+    await waitFor(() => expect(result.current.messages).toEqual(firstThread.messages));
+
+    vi.mocked(useRepositoryFeatureStatus).mockReturnValue({
+      activeRepository: secondRepository,
+      completedRepositories: [secondRepository],
+      status: 'success',
+      loading: false,
+      error: null,
+      empty: false,
+      success: true,
+      source: 'upload',
+      emptyReason: null,
+      retry: vi.fn(),
+      refresh: vi.fn(),
+    });
+    rerender();
+
+    await waitFor(() => expect(result.current.messages).toEqual(secondThread.messages));
+    expect(aiService.listConversations).toHaveBeenCalledWith('repo-2');
   });
 });
