@@ -104,7 +104,7 @@ results here.
 | Authenticated shell | Notification and account icon buttons have no accessible names (`button-name`). | 4.1.2 Name, Role, Value | Critical/high impact; screen-reader and voice-control users cannot identify persistent controls. | [#236](https://github.com/Second-Origin/PARTHA/issues/236) |
 | `/repositories`, success list | Every open/delete icon action lacks a repository-specific accessible name (`button-name`). | 4.1.2 Name, Role, Value | Critical/high impact; actions, including deletion, cannot be distinguished non-visually. | [#235](https://github.com/Second-Origin/PARTHA/issues/235) |
 | Authenticated expanded sidebar | `More` section label is approximately 4.23:1 at 10px (`color-contrast`). | 1.4.3 Contrast (Minimum) | Serious; the navigation grouping can be difficult to perceive. | [#238](https://github.com/Second-Origin/PARTHA/issues/238) |
-| `/upload`, GitHub URL mode | Helper copy and field label are approximately 3.78:1 at 12px (`color-contrast`). | 1.4.3 Contrast (Minimum) | Serious; low-vision users can miss the field purpose and public-URL constraint. | [#237](https://github.com/Second-Origin/PARTHA/issues/237) |
+| `/upload`, GitHub URL mode | Helper copy and field label are approximately 3.78:1 at 12px (`color-contrast`). axe 4.12 reports both targets in the recorded Windows run and the field label only in Linux CI, so the automated assertion keeps an exact per-platform count while the shared computed-color finding remains tracked. | 1.4.3 Contrast (Minimum) | Serious; low-vision users can miss the field purpose and public-URL constraint. | [#237](https://github.com/Second-Origin/PARTHA/issues/237) |
 
 No confirmed automated violation is left only in this report.
 

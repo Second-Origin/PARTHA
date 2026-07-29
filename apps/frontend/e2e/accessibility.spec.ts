@@ -31,6 +31,7 @@ const AXE_SOURCE_PATH = fileURLToPath(
   new URL('../node_modules/axe-core/axe.min.js', import.meta.url),
 );
 const WCAG_22_AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
+const GITHUB_IMPORT_HELPER_FINDING_COUNT = process.platform === 'win32' ? 1 : 0;
 
 interface KnownFinding {
   issue: number;
@@ -205,7 +206,14 @@ test.describe('WCAG 2.2 AA automated baseline (#118)', () => {
     await expect(page.getByText('Import from GitHub')).toBeVisible();
     await expectWcagBaseline(page, 'repository import: empty GitHub URL form', [
       ...SHELL_FINDINGS,
-      { issue: 237, rule: 'color-contrast', testId: 'github-import-helper', count: 1 },
+      {
+        issue: 237,
+        rule: 'color-contrast',
+        testId: 'github-import-helper',
+        // axe 4.12 classifies this target differently across the Windows and
+        // Linux Chromium builds; keep each supported CI/dev platform exact.
+        count: GITHUB_IMPORT_HELPER_FINDING_COUNT,
+      },
       { issue: 237, rule: 'color-contrast', testId: 'github-import-label', count: 1 },
     ]);
   });
