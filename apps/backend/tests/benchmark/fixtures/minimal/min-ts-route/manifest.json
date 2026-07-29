@@ -7,7 +7,7 @@
   "description": "A createBrowserRouter route-table entry exercises the actual declared TypeScript route support.",
   "sourceRoot": ".",
   "revisionIdentity": "upload-sha256",
-  "producerVersionSet": ["repository-inventory@1.1.0", "typescript-ast@1.1.0"],
+  "producerVersionSet": ["repository-inventory@1.1.0", "typescript-ast@1.2.0"],
   "constructsCovered": ["src.repository", "ts.module", "ts.directory_module", "ts.const", "ts.route"],
   "deterministic": true,
   "expected": {
@@ -15,22 +15,22 @@
       {"nodeKind": "repository", "stableKey": "repo:root", "name": "repository", "constructs": ["src.repository"],
        "evidence": [{"path": "src/router.ts", "startLine": 1, "endLine": 1, "extractor": "repository-inventory", "extractorVersion": "1.1.0"}]},
       {"nodeKind": "file", "stableKey": "file:src/router.ts", "properties": {"content_sha256": "sha256:1f2ed43ce38cdff374e03d9455b0ce7b65189df98f4d1e5914f48abcfdc5cdbd"}, "name": "router.ts", "language": "typescript", "constructs": ["ts.module"],
-       "evidence": [{"path": "src/router.ts", "startLine": 1, "endLine": 4, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}]},
+       "evidence": [{"path": "src/router.ts", "startLine": 1, "endLine": 4, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.2.0"}]},
       {"nodeKind": "module", "stableKey": "mod:src", "name": "src", "constructs": ["ts.directory_module"],
-       "evidence": [{"path": "src/router.ts", "startLine": 1, "endLine": 4, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.1.0"}]},
+       "evidence": [{"path": "src/router.ts", "startLine": 1, "endLine": 4, "granularity": "file", "extractor": "typescript-ast", "extractorVersion": "1.2.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/router.ts::router", "name": "router", "language": "typescript", "constructs": ["ts.const"],
-       "evidence": [{"path": "src/router.ts", "startLine": 1, "endLine": 3, "extractor": "typescript-ast", "extractorVersion": "1.1.0"}]},
+       "evidence": [{"path": "src/router.ts", "startLine": 1, "endLine": 3, "extractor": "typescript-ast", "extractorVersion": "1.2.0"}]},
       {"nodeKind": "symbol", "stableKey": "src/router.ts::(anonymous:route#1)", "name": "route", "language": "typescript", "properties": {"route_path": "/status"}, "constructs": ["ts.route"],
-       "evidence": [{"path": "src/router.ts", "startLine": 2, "endLine": 2, "extractor": "typescript-ast", "extractorVersion": "1.1.0"}]}
+       "evidence": [{"path": "src/router.ts", "startLine": 2, "endLine": 2, "extractor": "typescript-ast", "extractorVersion": "1.2.0"}]}
     ],
     "edges": [],
     "observations": [
       {"observedKind": "definition", "subjectKind": "symbol", "subjectKey": "src/router.ts::router", "ordinal": 1, "constructs": ["ts.const"],
-       "evidence": {"path": "src/router.ts", "startLine": 1, "endLine": 3, "extractor": "typescript-ast", "extractorVersion": "1.1.0"}},
+       "evidence": {"path": "src/router.ts", "startLine": 1, "endLine": 3, "extractor": "typescript-ast", "extractorVersion": "1.2.0"}},
       {"observedKind": "call", "subjectKind": "file", "subjectKey": "file:src/router.ts", "referentText": "createBrowserRouter", "ordinal": 1, "constructs": ["ts.route"],
-       "evidence": {"path": "src/router.ts", "startLine": 1, "endLine": 3, "extractor": "typescript-ast", "extractorVersion": "1.1.0"}},
+       "evidence": {"path": "src/router.ts", "startLine": 1, "endLine": 3, "extractor": "typescript-ast", "extractorVersion": "1.2.0"}},
       {"observedKind": "route", "subjectKind": "symbol", "subjectKey": "src/router.ts::(anonymous:route#1)", "referentText": "/status", "ordinal": 1, "constructs": ["ts.route"],
-       "evidence": {"path": "src/router.ts", "startLine": 2, "endLine": 2, "extractor": "typescript-ast", "extractorVersion": "1.1.0"}}
+       "evidence": {"path": "src/router.ts", "startLine": 2, "endLine": 2, "extractor": "typescript-ast", "extractorVersion": "1.2.0"}}
     ],
     "assertions": [], "diagnostics": []
   }

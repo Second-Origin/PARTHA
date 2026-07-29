@@ -65,7 +65,7 @@ def test_pipeline_emits_repository_root_for_diagnostics_only_text_source():
 def test_pipeline_uses_supports_and_inventory_for_unsupported_text():
     runs = _pipeline().run({"README.md": b"# title\n", "src/a.py": b"def f():\n    pass\n"})
     producers = [run.producer for run in runs]
-    assert producers == ["repository-inventory@1.1.0", "python-ast@1.0.0"]
+    assert producers == ["repository-inventory@1.1.0", "python-ast@1.1.0"]
     nodes = [node for run in runs for node in run.result.nodes]
     readme = next(node for node in nodes if node.stable_key == "file:README.md")
     assert readme.properties == {"content_sha256": canonical.sha256_prefixed(b"# title\n")}

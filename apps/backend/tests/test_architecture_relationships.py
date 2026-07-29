@@ -60,7 +60,7 @@ def _persist_snapshot(
     runs = pipeline.run(snapshot_sources or sources)
     producer_version_set = sorted(
         {run.producer for run in runs}
-        | {"relationship-resolver@1.0.0", f"{RoleClassifier.name}@{RoleClassifier.version}"}
+        | {"relationship-resolver@1.1.0", f"{RoleClassifier.name}@{RoleClassifier.version}"}
     )
 
     with SessionLocal() as session:
@@ -120,7 +120,7 @@ def _persist_snapshot(
                 category="syntax extraction",
                 severity="info",
                 message=f"Irrelevant parser diagnostic {index}.",
-                producer="relationship-resolver@1.0.0",
+                producer="relationship-resolver@1.1.0",
                 path=f"src/generated/{index}.ts",
                 span=(1, 1),
             )

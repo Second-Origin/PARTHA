@@ -22,14 +22,14 @@ def _fixture(directory: Path) -> LoadedFixture:
         directory=directory,
         source_root=".",
         revision_identity="upload-sha256",
-        producer_version_set=("python-ast@1.0.0",),
+        producer_version_set=("python-ast@1.1.0",),
         constructs_covered=(),
         deterministic=False,
         expected=(),
     )
 
 
-def _node(path: str, start: int, end: int, *, extractor: str = "python-ast", version: str = "1.0.0", granularity: str = "span") -> Fact:
+def _node(path: str, start: int, end: int, *, extractor: str = "python-ast", version: str = "1.1.0", granularity: str = "span") -> Fact:
     return Fact(
         fact_type="node",
         kind="symbol",

@@ -132,6 +132,32 @@ CONSTRUCT_CAPABILITIES: tuple[Capability, ...] = (
         "py.duplicate_symbol",
     ),
     _capability(
+        "python.http-client",
+        "python",
+        "http-client",
+        SupportStatus.SUPPORTED,
+        "Outbound HTTP call sites on requests/httpx attribute calls, including module aliases and client/session objects.",
+        (
+            "Only attribute-form calls on a module-level requests/httpx binding, or on a local name assigned directly "
+            "from requests.Session()/httpx.Client()/httpx.AsyncClient(), are recognized. Both the method and an "
+            "absolute literal URL must be syntax-visible; nothing is inferred from configuration, base URLs, or "
+            "runtime values."
+        ),
+        "py.http_requests",
+        "py.http_httpx",
+        "py.http_session",
+    ),
+    _capability(
+        "python.http-dynamic-destination",
+        "python",
+        "http-dynamic-destination",
+        SupportStatus.UNSUPPORTED,
+        "HTTP call sites whose method or destination is not a syntax-visible absolute literal.",
+        "Computed URLs, f-strings, relative paths, computed methods, shadowed client names, and bare imported client functions produce a diagnostic and no destination fact.",
+        "py.http_dynamic",
+        expected_diagnostic="RI-EXT-UNSUPPORTED",
+    ),
+    _capability(
         "python.import",
         "python",
         "import",
@@ -384,6 +410,30 @@ CONSTRUCT_CAPABILITIES: tuple[Capability, ...] = (
         "ts.async_function",
     ),
     _capability(
+        "typescript.http-client",
+        "typescript",
+        "http-client",
+        SupportStatus.SUPPORTED,
+        "Outbound HTTP call sites on fetch and axios, including a default-import axios alias.",
+        (
+            "Only a global fetch() call or an attribute call on a module-level axios default import is recognized. "
+            "The destination must be an absolute literal URL, and the method must be either fetch's specified GET "
+            "default, a literal 'method' in an inline init object, or the axios method name."
+        ),
+        "ts.http_fetch",
+        "ts.http_axios",
+    ),
+    _capability(
+        "typescript.http-dynamic-destination",
+        "typescript",
+        "http-dynamic-destination",
+        SupportStatus.UNSUPPORTED,
+        "HTTP call sites whose method or destination is not a syntax-visible absolute literal.",
+        "Template literals with substitutions, variable URLs, relative paths, computed init objects, and shadowed fetch/axios bindings produce a diagnostic and no destination fact.",
+        "ts.http_dynamic",
+        expected_diagnostic="RI-EXT-UNSUPPORTED",
+    ),
+    _capability(
         "typescript.import",
         "typescript",
         "import",
@@ -482,6 +532,78 @@ MANIFEST_CAPABILITIES: tuple[Capability, ...] = (
 )
 
 
+LOCKFILE_CAPABILITIES: tuple[Capability, ...] = (
+    _capability(
+        "lockfile.npm-package-lock",
+        "source",
+        "lockfile:package-lock.json",
+        SupportStatus.SUPPORTED,
+        "Resolved npm versions from package-lock.json lockfileVersion 2 and 3.",
+        (
+            "Only entries under a node_modules/ path with a concrete version string are read; workspace link entries "
+            "are skipped. A resolution records that a version was installed, not that the repository depends on the "
+            "package directly, so no transitive dependency graph or depends_on edge is derived from a lockfile alone. "
+            "yarn.lock, pnpm-lock.yaml, and npm-shrinkwrap.json are not read."
+        ),
+        "src.npm_lockfile",
+        "src.npm_lockfile_nested",
+    ),
+    _capability(
+        "lockfile.npm-package-lock-v1",
+        "source",
+        "lockfile:package-lock.json@v1",
+        SupportStatus.UNSUPPORTED,
+        "package-lock.json lockfileVersion 1.",
+        "Version 1 predates the packages table this extractor reads; it is disclosed rather than parsed from the legacy dependencies tree.",
+        "src.npm_lockfile_v1",
+        expected_diagnostic="RI-EXT-UNSUPPORTED",
+    ),
+    _capability(
+        "lockfile.poetry-lock",
+        "source",
+        "lockfile:poetry.lock",
+        SupportStatus.SUPPORTED,
+        "Resolved PyPI versions from poetry.lock with lock-version major 1 or 2.",
+        (
+            "Only each [[package]] table's name and version are read. Lock-version 2 removed the per-package category "
+            "field, so the production/development split is reported as unknown rather than guessed. Pipfile.lock, "
+            "uv.lock, and pdm.lock are not read."
+        ),
+        "src.poetry_lockfile",
+    ),
+)
+
+
+IAC_CAPABILITIES: tuple[Capability, ...] = (
+    _capability(
+        "iac.docker-compose",
+        "source",
+        "iac:docker-compose",
+        SupportStatus.SUPPORTED,
+        "Declared services, volumes, and networks in Docker Compose manifests.",
+        (
+            "Only the four canonical Compose filenames are read, and only the services, volumes, and networks "
+            "sections. Provenance is the resource's declaration line, not its whole block. Deployment topology, "
+            "profiles, and the configs/secrets sections are not modelled, and Terraform, Kubernetes, Helm, "
+            "CloudFormation, Pulumi, and Ansible are not read at all."
+        ),
+        "src.compose_service",
+        "src.compose_volume",
+        "src.compose_network",
+    ),
+    _capability(
+        "iac.templated-value",
+        "source",
+        "iac:templated-value",
+        SupportStatus.UNSUPPORTED,
+        "Interpolated Compose values such as image: ${TAG}.",
+        "A templated value is not an observed concrete value; the property is omitted and the blind spot is disclosed at the resource's span.",
+        "src.compose_templated",
+        expected_diagnostic="RI-EXT-UNSUPPORTED",
+    ),
+)
+
+
 def _product_capability(
     id: str,
     status: SupportStatus,
@@ -548,8 +670,12 @@ PRODUCT_CAPABILITIES: tuple[Capability, ...] = (
     _product_capability(
         "dependency-graph",
         SupportStatus.LIMITED,
-        "Direct dependency graph.",
-        "Lockfiles, transitive resolution, vulnerability scanning, and outdated-version scanning are not implemented.",
+        "Direct dependency graph with supported lockfile resolutions.",
+        (
+            "Declarations come from supported manifests and resolved pins from supported lockfiles only. A lockfile "
+            "resolution never becomes a depends_on edge on its own, so transitive resolution is still not claimed, "
+            "and vulnerability and outdated-version scanning are not implemented."
+        ),
     ),
     _product_capability(
         "dependency-scanning",
@@ -568,6 +694,12 @@ PRODUCT_CAPABILITIES: tuple[Capability, ...] = (
         SupportStatus.LIMITED,
         "Evidence-addressed engineering review.",
         "No overall score, grade, health percentage, vulnerability result, or generated roadmap is produced.",
+    ),
+    _product_capability(
+        "iac-resources",
+        SupportStatus.LIMITED,
+        "Infrastructure-as-code resource inventory.",
+        "Only Docker Compose services, volumes, and networks are extracted; no other IaC format is read and no deployment behaviour is inferred.",
     ),
     _product_capability(
         "grounded-ai",
@@ -594,6 +726,12 @@ PRODUCT_CAPABILITIES: tuple[Capability, ...] = (
         "Semantic extraction is strongest for supported Python and TypeScript/JavaScript constructs.",
     ),
     _product_capability(
+        "service-interactions",
+        SupportStatus.LIMITED,
+        "Outbound service-interaction discovery.",
+        "Only syntax-proven absolute literal destinations on supported Python and TS/JS HTTP clients become edges; every other call site stays a diagnostic.",
+    ),
+    _product_capability(
         "revision-comparison",
         SupportStatus.NOT_ASSESSED,
         "Incremental re-analysis and revision comparison.",
@@ -602,12 +740,37 @@ PRODUCT_CAPABILITIES: tuple[Capability, ...] = (
 )
 
 
-_SUPPORTED_MANIFEST_FILENAMES = tuple(
-    sorted(
-        item.construct.removeprefix("manifest:")
-        for item in MANIFEST_CAPABILITIES
-        if item.status == SupportStatus.SUPPORTED
+def _supported_filenames(capabilities: tuple[Capability, ...], prefix: str) -> tuple[str, ...]:
+    """Derive the accepted filename set from the registry's supported entries.
+
+    Source selection must never drift from what the registry claims, so the
+    extractors read their ``supports()`` filenames from here rather than keeping
+    a second hand-maintained list. A construct id carrying a format qualifier
+    (``lockfile:package-lock.json@v1``) contributes no filename of its own — it
+    describes an unsupported revision of a filename already listed.
+    """
+
+    return tuple(
+        sorted(
+            {
+                item.construct.removeprefix(prefix)
+                for item in capabilities
+                if item.status == SupportStatus.SUPPORTED and "@" not in item.construct
+            }
+        )
     )
+
+
+_SUPPORTED_MANIFEST_FILENAMES = _supported_filenames(MANIFEST_CAPABILITIES, "manifest:")
+_SUPPORTED_LOCKFILE_FILENAMES = _supported_filenames(LOCKFILE_CAPABILITIES, "lockfile:")
+
+# Compose accepts four canonical filenames for one format, so the registry
+# carries the format id and the filename set is spelled out beside it.
+_SUPPORTED_IAC_FILENAMES: tuple[str, ...] = (
+    "compose.yaml",
+    "compose.yml",
+    "docker-compose.yaml",
+    "docker-compose.yml",
 )
 
 
@@ -615,6 +778,9 @@ def _code_list(items: tuple[str, ...]) -> str:
     rendered = [f"`{item}`" for item in items]
     if len(rendered) == 1:
         return rendered[0]
+    # Two items take a plain "a and b"; the serial comma only applies from three.
+    if len(rendered) == 2:
+        return f"{rendered[0]} and {rendered[1]}"
     return f"{', '.join(rendered[:-1])}, and {rendered[-1]}"
 
 
@@ -665,8 +831,31 @@ PUBLIC_CAPABILITIES: tuple[PublicCapability, ...] = (
         "dependency-graph",
         "Dependency Graph",
         PublicStatus.IMPLEMENTED_WITH_DISCLOSED_LIMITS,
-        f"Direct declarations from {_code_list(_SUPPORTED_MANIFEST_FILENAMES)}, including repeated workspace declarations and exact manifest spans. No lockfiles or transitive resolution.",
-        ("product.dependency-graph", *(item.id for item in MANIFEST_CAPABILITIES)),
+        (
+            f"Direct declarations from {_code_list(_SUPPORTED_MANIFEST_FILENAMES)} plus resolved pins from "
+            f"{_code_list(_SUPPORTED_LOCKFILE_FILENAMES)}, merged onto one dependency identity with repeated "
+            "workspace declarations and exact spans. A lockfile pin is recorded as a resolution, never as a direct "
+            "dependency edge, so transitive resolution is still not claimed."
+        ),
+        (
+            "product.dependency-graph",
+            *(item.id for item in MANIFEST_CAPABILITIES),
+            *(item.id for item in LOCKFILE_CAPABILITIES if item.status == SupportStatus.SUPPORTED),
+        ),
+    ),
+    PublicCapability(
+        "service-interactions",
+        "Service-interaction discovery",
+        PublicStatus.IMPLEMENTED_WITH_DISCLOSED_LIMITS,
+        "Outbound HTTP call sites on `requests`, `httpx`, `fetch`, and `axios` resolve to a service node identified by its absolute origin, with the literal method and path on the call's own observation. A computed, relative, or shadowed destination is a diagnostic, never an edge.",
+        ("product.service-interactions", "python.http-client", "typescript.http-client"),
+    ),
+    PublicCapability(
+        "iac-resources",
+        "Infrastructure-as-code resources",
+        PublicStatus.IMPLEMENTED_WITH_DISCLOSED_LIMITS,
+        "Declared Docker Compose services, volumes, and networks with their exact declaration spans. Templated values are disclosed rather than reported as observed, and no other IaC format is read.",
+        ("product.iac-resources", "iac.docker-compose"),
     ),
     PublicCapability(
         "engineering-review",
@@ -736,7 +925,13 @@ PUBLIC_CAPABILITIES: tuple[PublicCapability, ...] = (
 
 CAPABILITY_REGISTRY: tuple[Capability, ...] = tuple(
     sorted(
-        (*CONSTRUCT_CAPABILITIES, *MANIFEST_CAPABILITIES, *PRODUCT_CAPABILITIES),
+        (
+            *CONSTRUCT_CAPABILITIES,
+            *IAC_CAPABILITIES,
+            *LOCKFILE_CAPABILITIES,
+            *MANIFEST_CAPABILITIES,
+            *PRODUCT_CAPABILITIES,
+        ),
         key=lambda item: item.id,
     )
 )
@@ -811,10 +1006,15 @@ def validate_registry(
 # extractors and public claims must never run from an invalid truth contract.
 validate_registry()
 
+# The compatibility view covers language constructs only. Manifest-family
+# capabilities (manifest, lockfile, IaC) are keyed by filename or format rather
+# than by a syntax construct, so they are projected out here and consumed
+# through their own filename accessors.
+_MATRIX_EXCLUDED_PREFIXES = ("iac:", "lockfile:", "manifest:")
 _MATRIX_CAPABILITIES = tuple(
     item
     for item in CAPABILITY_REGISTRY
-    if item.language in {"python", "source", "typescript"} and not item.construct.startswith("manifest:")
+    if item.language in {"python", "source", "typescript"} and not item.construct.startswith(_MATRIX_EXCLUDED_PREFIXES)
 )
 SUPPORT_MATRIX: dict[str, LanguageSupport] = {
     language: LanguageSupport(
@@ -835,6 +1035,14 @@ SUPPORT_MATRIX: dict[str, LanguageSupport] = {
 
 def supported_manifest_filenames() -> tuple[str, ...]:
     return _SUPPORTED_MANIFEST_FILENAMES
+
+
+def supported_lockfile_filenames() -> tuple[str, ...]:
+    return _SUPPORTED_LOCKFILE_FILENAMES
+
+
+def supported_iac_filenames() -> tuple[str, ...]:
+    return _SUPPORTED_IAC_FILENAMES
 
 
 def render_readme_capabilities() -> str:

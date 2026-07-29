@@ -1,0 +1,13 @@
+{
+  "schemaVersion":"ri-benchmark.v1","fixtureId":"adv-src-lockfile-v1","fixtureClass":"adversarial","language":"mixed",
+  "title":"Adversarial lockfile — unsupported npm lockfileVersion 1","description":"A lockfileVersion 1 package-lock.json has real resolved versions in a legacy dependencies tree, and none of them are claimed: the unsupported revision is disclosed and no dependency fact is invented.",
+  "sourceRoot":".","revisionIdentity":"upload-sha256","producerVersionSet":["dependency-lockfile@1.0.0","repository-inventory@1.1.0"],
+  "constructsCovered":["src.repository","src.npm_lockfile_v1"],"deterministic":true,
+  "expected":{"nodes":[
+    {"comment":"The repository entity is established from stored bytes before extractor dispatch, so a diagnostics-only revision is still sealable. There is deliberately no file node and no dependency node: the extractor emitted no facts at all for this revision.",
+     "nodeKind":"repository","stableKey":"repo:root","name":"repository","constructs":["src.repository"],"evidence":[{"path":"package-lock.json","startLine":1,"endLine":1,"extractor":"repository-inventory","extractorVersion":"1.1.0"}]}
+  ],"edges":[],"observations":[],"assertions":[],"diagnostics":[
+    {"comment":"An unsupported format revision is a disclosure, not a parse failure: the file is well-formed JSON, so RI-SRC-MALFORMED would be a false claim about the source.",
+     "code":"RI-EXT-UNSUPPORTED","category":"unsupported construct","severity":"info","message":"package-lock.json lockfileVersion is outside the supported set [2, 3] and no resolutions are claimed","producer":"dependency-lockfile@1.0.0","path":"package-lock.json","subject":"file:package-lock.json","constructs":["src.npm_lockfile_v1"]}
+  ]}
+}

@@ -25,10 +25,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictServiceError, NotFoundError, ServiceError
-from app.extraction.manifests import DependencyManifestExtractor
+from app.extraction import production_extractors
 from app.extraction.pipeline import ExtractionPipeline
-from app.extraction.python import PythonExtractor
-from app.extraction.typescript import TypeScriptExtractor
 from app.intelligence import canonical
 from app.intelligence.classification import RoleClassifier
 from app.intelligence.resolution import RelationshipResolver
@@ -54,9 +52,7 @@ def _analysis_producer_version_set() -> tuple[str, ...]:
         sorted(
             {
                 f"{ExtractionPipeline.inventory_name}@{ExtractionPipeline.inventory_version}",
-                f"{PythonExtractor.name}@{PythonExtractor.version}",
-                f"{TypeScriptExtractor.name}@{TypeScriptExtractor.version}",
-                f"{DependencyManifestExtractor.name}@{DependencyManifestExtractor.version}",
+                *(f"{extractor.name}@{extractor.version}" for extractor in production_extractors()),
                 f"{RelationshipResolver.name}@{RelationshipResolver.version}",
                 f"{RoleClassifier.name}@{RoleClassifier.version}",
             }

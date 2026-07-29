@@ -1,0 +1,44 @@
+{
+  "schemaVersion":"ri-benchmark.v1","fixtureId":"real-mixed-lockfiles","fixtureClass":"realistic","language":"mixed",
+  "title":"Realistic lockfiles — npm and poetry resolved pins","description":"Resolved versions from package-lock.json v3 and poetry.lock land on the logical dependency identity as resolutions, never as declarations, including two installed versions of one npm package and a PEP 503 name fold.",
+  "sourceRoot":".","revisionIdentity":"upload-sha256","producerVersionSet":["dependency-lockfile@1.0.0","repository-inventory@1.1.0"],
+  "constructsCovered":["src.file","src.repository","src.npm_lockfile","src.npm_lockfile_nested","src.poetry_lockfile"],"deterministic":true,
+  "expected":{"nodes":[
+    {"nodeKind":"repository","stableKey":"repo:root","name":"repository","constructs":["src.repository"],"evidence":[{"path":"package-lock.json","startLine":1,"endLine":1,"extractor":"repository-inventory","extractorVersion":"1.1.0"}]},
+    {"nodeKind":"file","stableKey":"file:package-lock.json","properties":{"content_sha256":"sha256:890a22fc5820add670eda1bfd4dae934eddd83ae24802e90545ec83c2c6fd277"},"name":"package-lock.json","constructs":["src.file"],"evidence":[{"path":"package-lock.json","startLine":1,"endLine":20,"granularity":"file","extractor":"repository-inventory","extractorVersion":"1.1.0"}]},
+    {"nodeKind":"file","stableKey":"file:poetry.lock","properties":{"content_sha256":"sha256:731ff7439917d7886c3f0edd2d7e42e60b9706c83f5c98ad07049efad1182787"},"name":"poetry.lock","constructs":["src.file"],"evidence":[{"path":"poetry.lock","startLine":1,"endLine":13,"granularity":"file","extractor":"repository-inventory","extractorVersion":"1.1.0"}]},
+
+    {"comment":"Two installed versions of one package — the root tree and a nested one under node_modules/util — are two resolutions of a single dep:npm:left-pad identity, not two dependencies. declarations is empty because no manifest in this fixture asked for it: 'resolved but not declared here' is stated, not implied.",
+     "nodeKind":"dependency","stableKey":"dep:npm:left-pad","name":"left-pad","constructs":["src.npm_lockfile","src.npm_lockfile_nested"],
+     "properties":{"ecosystem":"npm","declarations":[],"resolutions":[
+       {"name":"left-pad","start_line":8,"end_line":8,"extractor":"dependency-lockfile","extractor_version":"1.0.0","resolved_version":"1.3.0","dependency_scope":"production","lockfile_path":"package-lock.json","lockfile_format":"npm-package-lock","lockfile_entry":"node_modules/left-pad","workspace_path":"."},
+       {"name":"left-pad","start_line":15,"end_line":15,"extractor":"dependency-lockfile","extractor_version":"1.0.0","resolved_version":"1.2.0","dependency_scope":"production","lockfile_path":"package-lock.json","lockfile_format":"npm-package-lock","lockfile_entry":"node_modules/util/node_modules/left-pad","workspace_path":"."}]},
+     "evidence":[
+      {"path":"package-lock.json","startLine":8,"endLine":8,"extractor":"dependency-lockfile","extractorVersion":"1.0.0"},
+      {"path":"package-lock.json","startLine":15,"endLine":15,"extractor":"dependency-lockfile","extractorVersion":"1.0.0"}]},
+
+    {"comment":"npm's dev flag maps onto the manifest dependency vocabulary.",
+     "nodeKind":"dependency","stableKey":"dep:npm:util","name":"util","constructs":["src.npm_lockfile"],
+     "properties":{"ecosystem":"npm","declarations":[],"resolutions":[
+       {"name":"util","start_line":11,"end_line":11,"extractor":"dependency-lockfile","extractor_version":"1.0.0","resolved_version":"0.12.5","dependency_scope":"development","lockfile_path":"package-lock.json","lockfile_format":"npm-package-lock","lockfile_entry":"node_modules/util","workspace_path":"."}]},
+     "evidence":[{"path":"package-lock.json","startLine":11,"endLine":11,"extractor":"dependency-lockfile","extractorVersion":"1.0.0"}]},
+
+    {"comment":"Poetry keeps the pre-2.0 category field here, so the development scope is recorded rather than guessed.",
+     "nodeKind":"dependency","stableKey":"dep:pypi:pytest","name":"pytest","constructs":["src.poetry_lockfile"],
+     "properties":{"ecosystem":"pypi","declarations":[],"resolutions":[
+       {"name":"pytest","start_line":6,"end_line":6,"extractor":"dependency-lockfile","extractor_version":"1.0.0","resolved_version":"8.3.4","dependency_scope":"development","lockfile_path":"poetry.lock","lockfile_format":"poetry-lock","lockfile_entry":"pytest","workspace_path":"."}]},
+     "evidence":[{"path":"poetry.lock","startLine":6,"endLine":6,"extractor":"dependency-lockfile","extractorVersion":"1.0.0"}]},
+
+    {"comment":"Requests-Toolbelt folds to the PEP 503 identity dep:pypi:requests-toolbelt so a manifest spelling it differently would share this node, while the record keeps the name the lockfile actually wrote. dependency_scope is null: this entry carries no category, and inventing production would be a guess.",
+     "nodeKind":"dependency","stableKey":"dep:pypi:requests-toolbelt","name":"Requests-Toolbelt","constructs":["src.poetry_lockfile"],
+     "properties":{"ecosystem":"pypi","declarations":[],"resolutions":[
+       {"name":"Requests-Toolbelt","start_line":1,"end_line":1,"extractor":"dependency-lockfile","extractor_version":"1.0.0","resolved_version":"1.0.0","dependency_scope":null,"lockfile_path":"poetry.lock","lockfile_format":"poetry-lock","lockfile_entry":"Requests-Toolbelt","workspace_path":"."}]},
+     "evidence":[{"path":"poetry.lock","startLine":1,"endLine":1,"extractor":"dependency-lockfile","extractorVersion":"1.0.0"}]}
+  ],"edges":[],"observations":[
+    {"observedKind":"resolution","subjectKind":"dependency","subjectKey":"dep:npm:left-pad","referentText":"1.3.0","ordinal":1,"constructs":["src.npm_lockfile"],"evidence":{"path":"package-lock.json","startLine":8,"endLine":8,"extractor":"dependency-lockfile","extractorVersion":"1.0.0"}},
+    {"observedKind":"resolution","subjectKind":"dependency","subjectKey":"dep:npm:util","referentText":"0.12.5","ordinal":1,"constructs":["src.npm_lockfile"],"evidence":{"path":"package-lock.json","startLine":11,"endLine":11,"extractor":"dependency-lockfile","extractorVersion":"1.0.0"}},
+    {"observedKind":"resolution","subjectKind":"dependency","subjectKey":"dep:npm:left-pad","referentText":"1.2.0","ordinal":1,"constructs":["src.npm_lockfile_nested"],"evidence":{"path":"package-lock.json","startLine":15,"endLine":15,"extractor":"dependency-lockfile","extractorVersion":"1.0.0"}},
+    {"observedKind":"resolution","subjectKind":"dependency","subjectKey":"dep:pypi:requests-toolbelt","referentText":"1.0.0","ordinal":1,"constructs":["src.poetry_lockfile"],"evidence":{"path":"poetry.lock","startLine":1,"endLine":1,"extractor":"dependency-lockfile","extractorVersion":"1.0.0"}},
+    {"observedKind":"resolution","subjectKind":"dependency","subjectKey":"dep:pypi:pytest","referentText":"8.3.4","ordinal":1,"constructs":["src.poetry_lockfile"],"evidence":{"path":"poetry.lock","startLine":6,"endLine":6,"extractor":"dependency-lockfile","extractorVersion":"1.0.0"}}
+  ],"assertions":[],"diagnostics":[]}
+}

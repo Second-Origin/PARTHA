@@ -20,7 +20,7 @@ from app.models.snapshot import RiDiagnostic, RiEdge
 REVISION = "sha256:" + "b" * 64
 SOURCE_PRODUCER = "fixture-extractor"
 SOURCE_VERSION = "1.0.0"
-RESOLVER_PRODUCER = "relationship-resolver@1.0.0"
+RESOLVER_PRODUCER = "relationship-resolver@1.1.0"
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "resolution"
 
 
@@ -303,9 +303,9 @@ def _persist_extraction(store, snapshot, result, producer: str):
 
 
 def test_typescript_extractor_inputs_resolve_import_and_aliased_call(session):
-    store, snapshot = _store(session, ["typescript-ast@1.1.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["typescript-ast@1.2.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/source.ts", 1, 1, "typescript-ast", "1.1.0", 3)
+        Evidence("src/source.ts", 1, 1, "typescript-ast", "1.2.0", 3)
     ])
     extractor = TypeScriptExtractor()
     _persist_extraction(
@@ -332,12 +332,12 @@ def test_typescript_extractor_inputs_resolve_import_and_aliased_call(session):
 
 
 def test_python_extractor_route_inputs_resolve_to_the_decorated_handler(session):
-    store, snapshot = _store(session, ["python-ast@1.0.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["python-ast@1.1.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("app/routes.py", 1, 1, "python-ast", "1.0.0", 3)
+        Evidence("app/routes.py", 1, 1, "python-ast", "1.1.0", 3)
     ])
     store.add_node(snapshot, node_kind="file", stable_key="file:app/routes.py", evidence=[
-        Evidence("app/routes.py", 1, 3, "python-ast", "1.0.0", 3, "file")
+        Evidence("app/routes.py", 1, 3, "python-ast", "1.1.0", 3, "file")
     ])
     _persist_extraction(
         store,
@@ -364,9 +364,9 @@ def test_golden_ambiguous_call_fixture_emits_a_diagnostic_not_an_edge(session):
     # nothing, so the honest outcome is a single unresolved diagnostic and no
     # `calls` edge — never a guess at one of the same-named repository symbols.
     fixture = FIXTURE_ROOT / "ambiguous-call"
-    store, snapshot = _store(session, ["typescript-ast@1.1.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["typescript-ast@1.2.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/source.ts", 1, 1, "typescript-ast", "1.1.0", 3)
+        Evidence("src/source.ts", 1, 1, "typescript-ast", "1.2.0", 3)
     ])
     extractor = TypeScriptExtractor()
     for source_path in sorted(fixture.rglob("*.ts")):
@@ -388,17 +388,17 @@ def _python_import_snapshot(session, source: bytes, *, files: list[str], depende
     Python extractor in production; the resolver reads only stored nodes.
     """
 
-    store, snapshot = _store(session, ["python-ast@1.0.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["python-ast@1.1.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("app/main.py", 1, 1, "python-ast", "1.0.0", 3)
+        Evidence("app/main.py", 1, 1, "python-ast", "1.1.0", 3)
     ])
     for path in files:
         store.add_node(snapshot, node_kind="file", stable_key=f"file:{path}", evidence=[
-            Evidence(path, 1, 1, "python-ast", "1.0.0", 1, "file")
+            Evidence(path, 1, 1, "python-ast", "1.1.0", 1, "file")
         ])
     for name in dependencies:
         store.add_node(snapshot, node_kind="dependency", stable_key=f"dep:pypi:{name}", name=name, evidence=[
-            Evidence("pyproject.toml", 1, 1, "python-ast", "1.0.0", 1)
+            Evidence("pyproject.toml", 1, 1, "python-ast", "1.1.0", 1)
         ])
     _persist_extraction(store, snapshot, PythonExtractor().extract("app/main.py", source), "python-ast")
     return store, snapshot
@@ -461,9 +461,9 @@ def test_python_absolute_from_import_with_two_module_candidates_is_ambiguous(ses
 
 
 def test_shadowed_typescript_parameter_does_not_resolve_to_same_file_global(session):
-    store, snapshot = _store(session, ["typescript-ast@1.1.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["typescript-ast@1.2.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/main.ts", 1, 1, "typescript-ast", "1.1.0", 2)
+        Evidence("src/main.ts", 1, 1, "typescript-ast", "1.2.0", 2)
     ])
     _persist_extraction(
         store,
@@ -495,12 +495,12 @@ def test_shadowed_typescript_parameter_does_not_resolve_to_same_file_global(sess
 
 
 def test_shadowed_python_parameter_does_not_resolve_to_same_file_global(session):
-    store, snapshot = _store(session, ["python-ast@1.0.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["python-ast@1.1.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("app/main.py", 1, 1, "python-ast", "1.0.0", 4)
+        Evidence("app/main.py", 1, 1, "python-ast", "1.1.0", 4)
     ])
     store.add_node(snapshot, node_kind="file", stable_key="file:app/main.py", evidence=[
-        Evidence("app/main.py", 1, 4, "python-ast", "1.0.0", 4, "file")
+        Evidence("app/main.py", 1, 4, "python-ast", "1.1.0", 4, "file")
     ])
     _persist_extraction(
         store,
@@ -524,9 +524,9 @@ def test_shadowed_python_parameter_does_not_resolve_to_same_file_global(session)
 
 
 def test_default_imported_react_route_handler_resolves(session):
-    store, snapshot = _store(session, ["typescript-ast@1.1.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["typescript-ast@1.2.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/routes.tsx", 1, 1, "typescript-ast", "1.1.0", 2)
+        Evidence("src/routes.tsx", 1, 1, "typescript-ast", "1.2.0", 2)
     ])
     extractor = TypeScriptExtractor()
     _persist_extraction(
@@ -559,9 +559,9 @@ def test_default_imported_react_route_handler_resolves(session):
 
 
 def test_top_level_and_recursive_calls_resolve_without_dropping_self_edges(session):
-    store, snapshot = _store(session, ["typescript-ast@1.1.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["typescript-ast@1.2.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/main.ts", 1, 1, "typescript-ast", "1.1.0", 4)
+        Evidence("src/main.ts", 1, 1, "typescript-ast", "1.2.0", 4)
     ])
     _persist_extraction(
         store,
@@ -593,9 +593,9 @@ def test_top_level_and_recursive_calls_resolve_without_dropping_self_edges(sessi
 
 
 def test_abstract_generic_implements_resolves_to_base_interface(session):
-    store, snapshot = _store(session, ["typescript-ast@1.1.0", RESOLVER_PRODUCER])
+    store, snapshot = _store(session, ["typescript-ast@1.2.0", RESOLVER_PRODUCER])
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/worker.ts", 1, 1, "typescript-ast", "1.1.0", 2)
+        Evidence("src/worker.ts", 1, 1, "typescript-ast", "1.2.0", 2)
     ])
     _persist_extraction(
         store,

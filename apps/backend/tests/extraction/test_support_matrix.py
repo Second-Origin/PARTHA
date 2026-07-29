@@ -20,6 +20,7 @@ PYTHON_BLIND_SPOTS = {
     "reflection": ("app/a.py", "x = getattr(object(), 'name', None)\n"),
     "monkeypatch": ("app/a.py", "import os\nos.sep = '/'\n"),
     "metaclass": ("app/a.py", "class A(metaclass=Meta):\n    pass\n"),
+    "http-dynamic-destination": ("app/a.py", "import requests\n\n\ndef f(host):\n    requests.get(host)\n"),
 }
 
 # One fixture per declared TypeScript blind spot: construct -> (path, source)
@@ -29,6 +30,7 @@ TYPESCRIPT_BLIND_SPOTS = {
     "namespace": ("src/a.ts", "namespace N { export const a = 1; }\n"),
     "commonjs-require": ("src/a.ts", "const fs = require('fs');\n"),
     "ambient-module": ("src/a.ts", "declare module 'foo' { }\n"),
+    "http-dynamic-destination": ("src/a.ts", "export function f(host: string) {\n  return fetch(`https://${host}/v1`);\n}\n"),
 }
 
 

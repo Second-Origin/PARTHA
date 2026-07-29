@@ -270,6 +270,22 @@ def normalize_stable_key(node_kind: str, stable_key: str) -> str:
         if not key.startswith("dep:") or key.count(":") < 2:
             raise CanonicalizationError("dependency stable keys require 'dep:<ecosystem>:<name>'")
         return key
+    if kind == "service":
+        # An outbound service is identified by its absolute origin. Registering
+        # the form here (rather than letting it fall through as an unknown kind)
+        # is what stops a relative path or a bare host from entering a snapshot
+        # as if it were a proven destination.
+        if not key.startswith("svc:") or "://" not in key[4:]:
+            raise CanonicalizationError("service stable keys require 'svc:<scheme>://<host>[:<port>]'")
+        return key
+    if kind == "iac_resource":
+        if not key.startswith("iac:") or "::" not in key[4:]:
+            raise CanonicalizationError("iac_resource stable keys require 'iac:<manifest-path>::<type>/<name>'")
+        path, qualified = key[4:].split("::", 1)
+        normalized_path = normalize_repo_path(path)
+        if not normalized_path or "/" not in qualified:
+            raise CanonicalizationError("iac_resource stable keys require a manifest path and '<type>/<name>'")
+        return f"iac:{normalized_path}::{qualified}"
     return key
 
 
