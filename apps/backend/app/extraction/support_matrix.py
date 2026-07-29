@@ -1014,8 +1014,7 @@ _MATRIX_EXCLUDED_PREFIXES = ("iac:", "lockfile:", "manifest:")
 _MATRIX_CAPABILITIES = tuple(
     item
     for item in CAPABILITY_REGISTRY
-    if item.language in {"python", "source", "typescript"}
-    and not item.construct.startswith(_MATRIX_EXCLUDED_PREFIXES)
+    if item.language in {"python", "source", "typescript"} and not item.construct.startswith(_MATRIX_EXCLUDED_PREFIXES)
 )
 SUPPORT_MATRIX: dict[str, LanguageSupport] = {
     language: LanguageSupport(

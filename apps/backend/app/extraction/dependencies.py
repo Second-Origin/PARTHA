@@ -108,9 +108,7 @@ def merge_dependency_facts(produced: tuple[ProducedExtraction, ...]) -> tuple[Pr
         kept = tuple(
             node for node in item.result.nodes if not (node.node_kind == "dependency" and node.stable_key in mergeable)
         )
-        rewritten.append(
-            item if kept == item.result.nodes else replace(item, result=replace(item.result, nodes=kept))
-        )
+        rewritten.append(item if kept == item.result.nodes else replace(item, result=replace(item.result, nodes=kept)))
     return tuple(merged_entries) + tuple(rewritten)
 
 
