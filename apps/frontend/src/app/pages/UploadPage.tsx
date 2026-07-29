@@ -227,7 +227,7 @@ export function UploadPage() {
                   <p className="text-sm font-medium text-foreground">
                     Import from GitHub
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p data-testid="github-import-helper" className="text-xs text-muted-foreground">
                     Paste a public repository URL
                   </p>
                 </div>
@@ -235,7 +235,10 @@ export function UploadPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  <label
+                    data-testid="github-import-label"
+                    className="block text-xs font-medium text-muted-foreground mb-1.5"
+                  >
                     Repository URL
                   </label>
                   <input

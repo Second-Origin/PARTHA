@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { access, mkdtemp, rm } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,8 +10,32 @@ const backendRoot = join(repositoryRoot, 'apps', 'backend');
 const frontendRoot = join(repositoryRoot, 'apps', 'frontend');
 const runtimeRoot = await mkdtemp(join(tmpdir(), 'partha-prototype-acceptance-'));
 const fixtureManifest = join(runtimeRoot, 'prototype-fixtures.json');
-const apiUrl = 'http://127.0.0.1:8000';
-const appUrl = 'http://127.0.0.1:5173';
+
+function availableLoopbackPort() {
+  return new Promise((resolvePort, reject) => {
+    const server = createServer();
+    server.unref();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        server.close();
+        reject(new Error('Could not allocate a disposable loopback port.'));
+        return;
+      }
+      const { port } = address;
+      server.close((error) => {
+        if (error) reject(error);
+        else resolvePort(port);
+      });
+    });
+  });
+}
+
+const apiPort = process.env.PARTHA_E2E_API_PORT ?? await availableLoopbackPort();
+const appPort = process.env.PARTHA_E2E_APP_PORT ?? await availableLoopbackPort();
+const apiUrl = `http://127.0.0.1:${apiPort}`;
+const appUrl = `http://127.0.0.1:${appPort}`;
 const screenshotDirectory = process.env.PARTHA_VISUAL_SCREENSHOT_DIR
   ? resolve(repositoryRoot, process.env.PARTHA_VISUAL_SCREENSHOT_DIR)
   : undefined;
@@ -18,13 +43,18 @@ const children = [];
 let shuttingDown = false;
 
 async function pythonExecutable() {
-  const virtualenvPython = join(backendRoot, '.venv', 'bin', 'python');
-  try {
-    await access(virtualenvPython);
-    return virtualenvPython;
-  } catch {
-    return process.platform === 'win32' ? 'python' : 'python3';
+  const virtualenvCandidates = process.platform === 'win32'
+    ? [join(backendRoot, '.venv', 'Scripts', 'python.exe')]
+    : [join(backendRoot, '.venv', 'bin', 'python')];
+  for (const virtualenvPython of virtualenvCandidates) {
+    try {
+      await access(virtualenvPython);
+      return virtualenvPython;
+    } catch {
+      // Try the next platform-appropriate candidate.
+    }
   }
+  return process.platform === 'win32' ? 'python' : 'python3';
 }
 
 function start(command, args, options) {
@@ -87,7 +117,7 @@ try {
   const python = await pythonExecutable();
   const backend = start(
     python,
-    ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000', '--log-level', 'warning'],
+    ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', String(apiPort), '--log-level', 'warning'],
     {
       cwd: backendRoot,
       env: {
@@ -112,7 +142,13 @@ try {
 
   const frontend = start(
     process.execPath,
-    [join(frontendRoot, 'node_modules', 'vite', 'bin', 'vite.js'), '--host', '127.0.0.1', '--port', '5173'],
+    [
+      join(frontendRoot, 'node_modules', 'vite', 'bin', 'vite.js'),
+      '--host',
+      '127.0.0.1',
+      '--port',
+      String(appPort),
+    ],
     {
       cwd: frontendRoot,
       env: { ...process.env, VITE_API_URL: apiUrl },
@@ -130,6 +166,7 @@ try {
     env: {
       ...process.env,
       PARTHA_FIXTURE_API_URL: apiUrl,
+      PARTHA_FIXTURE_PYTHON: python,
       PARTHA_VISUAL_FIXTURES: fixtureManifest,
     },
   });
@@ -137,7 +174,11 @@ try {
 
   const playwright = start(
     process.execPath,
-    [join(frontendRoot, 'node_modules', '@playwright', 'test', 'cli.js'), 'test'],
+    [
+      join(frontendRoot, 'node_modules', '@playwright', 'test', 'cli.js'),
+      'test',
+      ...process.argv.slice(2),
+    ],
     {
       cwd: frontendRoot,
       env: {

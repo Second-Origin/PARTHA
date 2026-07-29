@@ -247,6 +247,7 @@ export function TopBar() {
         <div ref={notifRef} className="relative hidden sm:block">
           <button
             onClick={() => setNotifOpen(!notifOpen)}
+            data-testid="notification-menu-trigger"
             className="relative flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <Bell className="h-4 w-4" />
@@ -288,6 +289,7 @@ export function TopBar() {
         <div ref={userRef} className="relative">
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
+            data-testid="user-menu-trigger"
             className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
           >
             <User className="h-4 w-4" />

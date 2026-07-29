@@ -131,6 +131,7 @@ export function RepositoriesPage() {
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-1">
                     <button
+                      data-testid="repository-open-action"
                       onClick={() => {
                         selectRepository(repo);
                         if (repo.status === 'analysing' || repo.status === 'cancelled') navigate(`/analysis/${repo.id}`);
@@ -141,6 +142,7 @@ export function RepositoriesPage() {
                       <ExternalLink className="h-3.5 w-3.5" />
                     </button>
                     <button
+                      data-testid="repository-delete-action"
                       onClick={() => {
                         setActionError(null);
                         void removeRepository(repo.id).catch((caught: unknown) => {
