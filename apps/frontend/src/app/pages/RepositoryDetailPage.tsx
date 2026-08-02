@@ -37,6 +37,7 @@ export function RepositoryDetailPage() {
   const repositoryTree = useRepositoryTree(repo);
 
   const citation = useMemo(() => parseEvidenceCitation(searchParams), [searchParams]);
+  const initialFilePath = searchParams.get('path');
 
   if (!repo) {
     return (
@@ -190,7 +191,12 @@ export function RepositoryDetailPage() {
 
           {activeTab === 'Explorer' && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-              <RepositoryExplorer fileTree={repositoryTree.fileTree} repositoryId={repo.id} citation={citation} />
+              <RepositoryExplorer
+                fileTree={repositoryTree.fileTree}
+                repositoryId={repo.id}
+                initialPath={initialFilePath}
+                citation={citation}
+              />
             </motion.div>
           )}
         </>

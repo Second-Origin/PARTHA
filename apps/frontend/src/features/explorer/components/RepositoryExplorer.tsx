@@ -18,13 +18,15 @@ const normalizedPath = (path: string) => path.replace(/^\/+/, '');
 interface RepositoryExplorerProps {
   fileTree: FileTreeNode[];
   repositoryId: string;
+  /** File path selected outside Explorer, such as an authenticated global-search result. */
+  initialPath?: string | null;
   /** Deep-link from an evidence citation: opens and highlights an exact span. */
   citation?: ExplorerCitation | null;
 }
 
-export function RepositoryExplorer({ fileTree, repositoryId, citation }: RepositoryExplorerProps) {
+export function RepositoryExplorer({ fileTree, repositoryId, initialPath, citation }: RepositoryExplorerProps) {
   const {
-    selectedNode, selectFile, detailsTab, setDetailsTab, expandedFolders, expandFolder,
+    selectedNode, selectFile, clearSelection, detailsTab, setDetailsTab, expandedFolders, expandFolder,
   } = useExplorerStore();
 
   const { width: explorerWidth, onMouseDown } = useResizable({
@@ -44,11 +46,15 @@ export function RepositoryExplorer({ fileTree, repositoryId, citation }: Reposit
   }, [expandedFolders.size, expandFolder, rootFolders]);
 
   useEffect(() => {
-    if (!citation) return;
+    const requestedPath = citation?.path ?? initialPath;
+    if (!requestedPath) return;
     const match = flattenTree(fileTree).find(
-      (node) => node.type === 'file' && normalizedPath(node.path) === normalizedPath(citation.path),
+      (node) => node.type === 'file' && normalizedPath(node.path) === normalizedPath(requestedPath),
     );
-    if (!match) return;
+    if (!match) {
+      clearSelection();
+      return;
+    }
     selectFile(match);
     setDetailsTab('preview');
     const segments = match.path.split('/').slice(0, -1);
@@ -60,7 +66,7 @@ export function RepositoryExplorer({ fileTree, repositoryId, citation }: Reposit
       );
       if (folder) expandFolder(folder.id);
     }
-  }, [citation, fileTree, selectFile, setDetailsTab, expandFolder]);
+  }, [citation, initialPath, fileTree, selectFile, clearSelection, setDetailsTab, expandFolder]);
 
   const fileDetails = useMemo(() => {
     if (!selectedNode || selectedNode.type === 'folder') return null;

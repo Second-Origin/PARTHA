@@ -155,4 +155,37 @@ describe('RepositoryExplorer citation deep-link', () => {
     expect(screen.queryByText(/Cited lines/)).not.toBeInTheDocument();
     expect(mockedGetEvidenceSource).not.toHaveBeenCalled();
   });
+
+  it('opens a file selected by global search without treating it as an evidence citation', async () => {
+    render(
+      <RepositoryExplorer
+        fileTree={FILE_TREE}
+        repositoryId="repo-1"
+        initialPath="src/dependencies.py"
+      />,
+    );
+
+    expect(await screen.findByTestId('editor-stub')).toHaveTextContent('def get_current_user');
+    expect(mockedGetFile).toHaveBeenCalledWith('repo-1', '/src/dependencies.py');
+    expect(mockedGetEvidenceSource).not.toHaveBeenCalled();
+  });
+
+  it('fails safely when a global-search file path is stale', () => {
+    useExplorerStore.setState({
+      selectedFileId: 'old-file',
+      selectedNode: FILE_TREE[0].children![0],
+    });
+
+    render(
+      <RepositoryExplorer
+        fileTree={FILE_TREE}
+        repositoryId="repo-1"
+        initialPath="src/removed.py"
+      />,
+    );
+
+    expect(screen.getByText('Select a file from the explorer')).toBeInTheDocument();
+    expect(mockedGetFile).not.toHaveBeenCalled();
+    expect(mockedGetEvidenceSource).not.toHaveBeenCalled();
+  });
 });
