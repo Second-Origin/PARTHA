@@ -197,7 +197,7 @@ export function SettingsPage() {
                   >
                     <div
                       aria-hidden="true"
-                      className="absolute right-0.5 top-0.5 h-4 w-4 rounded-full bg-primary-foreground transition-transform"
+                      className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-primary-foreground transition-transform"
                     />
                   </button>
                 </div>

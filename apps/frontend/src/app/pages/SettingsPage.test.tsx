@@ -26,7 +26,10 @@ describe('SettingsPage notification preferences', () => {
 
       expect(control).toBeDisabled();
       expect(control).toHaveAttribute('aria-checked', 'false');
-      expect(within(control).getByRole('generic', { hidden: true })).toHaveAttribute('aria-hidden', 'true');
+      const thumb = within(control).getByRole('generic', { hidden: true });
+      expect(thumb).toHaveAttribute('aria-hidden', 'true');
+      expect(thumb).toHaveClass('left-0.5');
+      expect(thumb).not.toHaveClass('right-0.5');
     }
   });
 });
