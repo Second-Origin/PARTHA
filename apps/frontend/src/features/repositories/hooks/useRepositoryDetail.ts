@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useRepository } from './useRepository';
 
@@ -15,6 +15,11 @@ export function useRepositoryDetail(repositoryId: string | undefined) {
   const [activeTab, setActiveTab] = useState<RepositoryDetailTab>(
     isRepositoryDetailTab(searchParams.get('tab')) ? (searchParams.get('tab') as RepositoryDetailTab) : 'Overview',
   );
+
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    setActiveTab(isRepositoryDetailTab(requestedTab) ? requestedTab : 'Overview');
+  }, [repositoryId, searchParams]);
 
   const repository = useMemo(
     () => repositoryState.repositories.find((repo) => repo.id === repositoryId) || null,
