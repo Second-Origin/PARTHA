@@ -172,13 +172,33 @@ export function SettingsPage() {
         )}
         {activeTab === 'Notifications' && (
           <div className="rounded-xl border border-border bg-card p-6">
-            <h2 className="text-sm font-medium text-foreground mb-4">Notification Preferences</h2>
+            <div className="mb-4">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-medium text-foreground">Notification Preferences</h2>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  Coming Soon
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Notification preferences are in development and cannot be configured yet.
+              </p>
+            </div>
             <div className="space-y-4">
               {['Analysis complete', 'Error alerts', 'New insights available'].map((item) => (
                 <div key={item} className="flex items-center justify-between">
                   <span className="text-sm text-foreground">{item}</span>
-                  <button disabled className="relative h-5 w-9 rounded-full bg-muted transition-colors cursor-not-allowed">
-                    <div className="absolute right-0.5 top-0.5 h-4 w-4 rounded-full bg-primary-foreground transition-transform" />
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked="false"
+                    aria-label={`${item} notifications (coming soon)`}
+                    disabled
+                    className="relative h-5 w-9 rounded-full bg-muted transition-colors cursor-not-allowed"
+                  >
+                    <div
+                      aria-hidden="true"
+                      className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-primary-foreground transition-transform"
+                    />
                   </button>
                 </div>
               ))}
