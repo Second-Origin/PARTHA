@@ -12,6 +12,7 @@ that PARTHA conforms to WCAG 2.2 AA.
 | Audit date | 2026-07-29 |
 | Source revision | `5bb63ca4e74882b0a08b5e8c761e1997590a5755` plus the issue #118 audit changes in this report's pull request |
 | Operating system | Microsoft Windows NT 10.0.26200.0 |
+| Revalidation | 2026-08-03 on macOS after rebasing onto the source revision above: 6/6 focused accessibility states and 22/22 full prototype journeys passed |
 | Automated browser | Playwright Chrome for Testing 151.0.7922.34, headless Chromium project |
 | Automated viewport | 1440 x 900 CSS pixels |
 | Automated zoom | 100% browser zoom |
