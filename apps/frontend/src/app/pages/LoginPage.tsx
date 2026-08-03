@@ -63,7 +63,12 @@ export function LoginPage() {
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{' '}
-          <Link to="/register" state={redirectState} className="text-primary hover:underline">
+          <Link
+            to="/register"
+            state={redirectState}
+            data-testid="login-register-link"
+            className="text-primary hover:underline"
+          >
             Create one
           </Link>
         </p>

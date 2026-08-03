@@ -164,7 +164,26 @@ async function archiveFixture(root, fixture) {
     await writeFile(fullPath, content, 'utf8');
   }
   const archivePath = join(root, `${fixture.label}.zip`);
-  await execFileAsync('zip', ['-qr', archivePath, '.'], { cwd: sourceDir });
+  const python = process.env.PARTHA_FIXTURE_PYTHON
+    ?? (process.platform === 'win32' ? 'python' : 'python3');
+  await execFileAsync(
+    python,
+    [
+      '-c',
+      [
+        'from pathlib import Path',
+        'from zipfile import ZIP_DEFLATED, ZipFile',
+        'import sys',
+        'root = Path(sys.argv[1])',
+        'with ZipFile(sys.argv[2], "w", ZIP_DEFLATED) as archive:',
+        '    for path in sorted(root.rglob("*")):',
+        '        if path.is_file():',
+        '            archive.write(path, path.relative_to(root).as_posix())',
+      ].join('\n'),
+      sourceDir,
+      archivePath,
+    ],
+  );
   return archivePath;
 }
 

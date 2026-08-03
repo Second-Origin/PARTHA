@@ -202,6 +202,7 @@ export function Sidebar() {
             <AnimatePresence>
               {(isMobile || !sidebarCollapsed) && (
                 <motion.p
+                  data-testid="secondary-navigation-label"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
