@@ -213,6 +213,8 @@ test.describe('WCAG 2.2 AA automated baseline (#118)', () => {
         maxCount: 1,
       },
       { issue: 237, rule: 'color-contrast', testId: 'github-import-label', maxCount: 1 },
+      { issue: 237, rule: 'color-contrast', testId: 'github-import-title', maxCount: 1 },
+      { issue: 237, rule: 'color-contrast', testId: 'github-import-url', maxCount: 1 },
     ]);
   });
 

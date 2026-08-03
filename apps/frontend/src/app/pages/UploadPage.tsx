@@ -224,7 +224,10 @@ export function UploadPage() {
                   <Github className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-foreground">
+                  <p
+                    data-testid="github-import-title"
+                    className="text-sm font-medium text-foreground"
+                  >
                     Import from GitHub
                   </p>
                   <p data-testid="github-import-helper" className="text-xs text-muted-foreground">
@@ -242,6 +245,7 @@ export function UploadPage() {
                     Repository URL
                   </label>
                   <input
+                    data-testid="github-import-url"
                     type="url"
                     value={githubImport.githubUrl}
                     onChange={(e) => githubImport.setGithubUrl(e.target.value)}
