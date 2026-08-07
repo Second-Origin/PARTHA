@@ -16,6 +16,7 @@ import { toPng, toSvg } from 'html-to-image';
 import { AnimatePresence } from 'framer-motion';
 
 import { ArchitectureNode } from './ArchitectureNode';
+import { ArchitectureListView } from './ArchitectureListView';
 import { NodeInspector } from './NodeInspector';
 import { ModuleExplorer } from './ModuleExplorer';
 import { GraphToolbar } from './GraphToolbar';
@@ -323,6 +324,9 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
           <TabButton active={activeTab === 'heatmap'} onClick={() => setActiveTab('heatmap')}>
             Heatmap
           </TabButton>
+          <TabButton active={activeTab === 'list'} onClick={() => setActiveTab('list')}>
+            List View
+          </TabButton>
         </div>
         {activeTab === 'heatmap' && <HeatmapControls />}
         {isolatedSubtree && (
@@ -396,10 +400,12 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
                   )}
                 </ReactFlow>
               </>
-            ) : (
+            ) : activeTab === 'request-flow' ? (
               <div className="flex-1 overflow-y-auto scrollbar-thin">
                 <RequestFlow steps={model.requestFlow} />
               </div>
+            ) : (
+              <ArchitectureListView />
             )}
           </div>
           <RelationshipPanel />
