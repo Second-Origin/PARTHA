@@ -28,8 +28,8 @@ interface ArchitectureState {
   showGrid: boolean;
   setShowGrid: (show: boolean) => void;
 
-  activeTab: 'graph' | 'request-flow' | 'heatmap';
-  setActiveTab: (tab: 'graph' | 'request-flow' | 'heatmap') => void;
+  activeTab: 'graph' | 'request-flow' | 'heatmap' | 'list';
+  setActiveTab: (tab: 'graph' | 'request-flow' | 'heatmap' | 'list') => void;
 
   inspectorOpen: boolean;
   setInspectorOpen: (open: boolean) => void;
