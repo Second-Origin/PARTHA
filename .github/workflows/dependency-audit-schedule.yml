@@ -1,0 +1,108 @@
+name: Dependency Audit (scheduled)
+
+# Proactively re-runs the same live dependency-audit gate that blocks every
+# PR's required Frontend job (see ci.yml) against dev on a schedule,
+# independent of any PR being open. The advisory database it queries updates
+# on its own timeline, not ours, so without this a PR can be blindsided by a
+# brand-new CVE with zero code changes of its own (#256, #258, #263). This
+# keeps dev caught up so that's rare, and files a same-day alert when it
+# isn't, instead of leaving the next unlucky PR to discover it.
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+
+    name: Scheduled dependency audit (dev)
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix apps/frontend
+
+      - name: Run dependency audit
+        id: audit
+        run: |
+          set +e
+          node scripts/dependency-audit.mjs > audit-output.txt 2>&1
+          exit_code=$?
+          cat audit-output.txt
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure alert label exists
+        if: steps.audit.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create dependency-audit-alert \
+            --color b60205 \
+            --description "Auto-filed by the scheduled dependency-audit workflow" \
+            --force
+
+      - name: File or update alert issue on new blocking findings
+        if: steps.audit.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing=$(gh issue list --label dependency-audit-alert --state open --json number --jq '.[0].number // empty')
+
+          {
+            echo "Scheduled \`node scripts/dependency-audit.mjs\` run against \`dev\` found blocking findings."
+            echo
+            echo "This is the same gate that blocks every PR's Frontend CI check. Catching it here,"
+            echo "independent of any open PR, keeps a same-day fix available instead of it blindsiding"
+            echo "unrelated work later."
+            echo
+            echo '```'
+            cat audit-output.txt
+            echo '```'
+            echo
+            echo "Fix: bump the affected package(s) via \`apps/frontend/package.json\`'s \`overrides\` to a"
+            echo "patched version (confirm via the GitHub Advisory API's \`first_patched_version\`, not just"
+            echo "\`npm audit\`'s summary text -- it can be misleading about which version line a fix landed"
+            echo "on). Regenerate the lockfile with \`npm install --prefix apps/frontend\` specifically (not"
+            echo "from the repo root -- see \`scripts/dependency-audit.mjs\`'s own comment on why), then verify"
+            echo "\`node scripts/dependency-audit.mjs\` exits 0 before pushing."
+          } > alert-body.txt
+
+          if [ -z "$existing" ]; then
+            gh issue create \
+              --title "security: scheduled dependency audit found new blocking advisories on dev" \
+              --label dependency-audit-alert \
+              --assignee parthrohit22 \
+              --body-file alert-body.txt
+          else
+            gh issue comment "$existing" --body-file alert-body.txt
+          fi
+
+      - name: Close alert issue if the audit is clean
+        if: steps.audit.outputs.exit_code == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing=$(gh issue list --label dependency-audit-alert --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Scheduled audit is now clean against \`dev\` -- closing."
+            gh issue close "$existing"
+          fi
