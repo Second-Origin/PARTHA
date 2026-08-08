@@ -232,6 +232,73 @@ def test_github_import_with_file_tree_over_file_count_limit_is_rejected_and_clea
     assert _repositories_dir_is_empty(file_count_limited_client.storage_path)  # type: ignore[attr-defined]
 
 
+# --- archive path safety ------------------------------------------------------
+#
+# These cover the guards in ``LocalStorage._safe_extract_tar`` /
+# ``_safe_extract_zip`` that reject traversal and link members. They were
+# previously untested, so a regression would have been silent — and the tar
+# path additionally relies on ``extractall(filter="data")`` as defence in depth.
+
+
+def _malicious_tar_gz_bytes(members: list[tarfile.TarInfo], payload: bytes = b"pwned") -> bytes:
+    """A tar built from raw ``TarInfo`` objects, so unsafe members can be forged."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        for info in members:
+            if info.isreg():
+                info.size = len(payload)
+                archive.addfile(info, io.BytesIO(payload))
+            else:
+                archive.addfile(info)
+    return buffer.getvalue()
+
+
+def test_tar_archive_with_parent_traversal_path_is_rejected(auth_client):
+    """A member escaping the destination via ``..`` must never be written."""
+    escaping = tarfile.TarInfo("../escaped.txt")
+    escaping.type = tarfile.REGTYPE
+
+    response = _upload(auth_client, "evil.tar.gz", _malicious_tar_gz_bytes([escaping]))
+
+    error = assert_error_response(response, 422, "validation_error")
+    assert error.message == "Archive contains unsafe paths."
+
+
+def test_tar_archive_with_absolute_path_is_rejected(auth_client):
+    """An absolute member path must not be able to write outside the sandbox."""
+    absolute = tarfile.TarInfo("/tmp/partha-escaped.txt")
+    absolute.type = tarfile.REGTYPE
+
+    response = _upload(auth_client, "evil.tar.gz", _malicious_tar_gz_bytes([absolute]))
+
+    error = assert_error_response(response, 422, "validation_error")
+    assert error.message == "Archive contains unsafe paths."
+
+
+def test_tar_archive_with_symlink_member_is_rejected(auth_client):
+    """Symlinks are refused outright: they are the classic extraction escape."""
+    link = tarfile.TarInfo("sample/link")
+    link.type = tarfile.SYMTYPE
+    link.linkname = "/etc/passwd"
+
+    response = _upload(auth_client, "evil.tar.gz", _malicious_tar_gz_bytes([link]))
+
+    error = assert_error_response(response, 422, "validation_error")
+    assert error.message == "Archive contains unsupported link or device entries."
+
+
+def test_zip_archive_with_parent_traversal_path_is_rejected(auth_client):
+    """The zip path enforces the same containment rule as the tar path."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("../escaped.txt", "pwned")
+
+    response = _upload(auth_client, "evil.zip", buffer.getvalue())
+
+    error = assert_error_response(response, 422, "validation_error")
+    assert error.message == "Archive contains unsafe paths."
+
+
 # --- regression: unaffected happy path --------------------------------------
 
 
