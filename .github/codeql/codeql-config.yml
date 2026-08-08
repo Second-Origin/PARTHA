@@ -26,4 +26,11 @@ name: PARTHA CodeQL config
 paths-ignore:
   # Golden benchmark fixture corpus: adversarial inputs to the RI engine,
   # intentionally including unparseable sources. Not application code.
+  #
+  # Both the bare directory and an explicit glob are listed. The bare path
+  # alone did not take effect on the first attempt (CodeQL still scanned
+  # 248/248 Python files and re-reported the parse errors), so the glob makes
+  # the intent unambiguous. Note `**` is only valid at the start or end of a
+  # segment, which is why this is `<dir>/**` and not `**fixtures**`.
   - apps/backend/tests/benchmark/fixtures
+  - apps/backend/tests/benchmark/fixtures/**
