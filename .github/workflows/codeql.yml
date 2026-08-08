@@ -5,6 +5,16 @@
 name: CodeQL
 
 on:
+  # Analysing the default branch on every push is what keeps the Security tab
+  # current. Without this, `dev`'s own analysis only refreshed on the weekly
+  # cron, so the Code scanning page reported "warnings detected in 2
+  # configurations" — the scans were 5 days and 37 commits stale, not finding
+  # anything. PR runs analyse a merge ref, which never updates the branch's
+  # own result.
+  push:
+    branches:
+      - dev
+      - main
   pull_request:
     branches:
       - dev
@@ -13,19 +23,26 @@ on:
     # Weekly, Monday 03:17 UTC. Off-the-hour on purpose: GitHub drops scheduled
     # runs when too many land on the same minute.
     #
-    # Note: scheduled workflows only ever run on the DEFAULT branch. Until `dev`
-    # becomes the default (§2.2 / E3.1), this weekly scan analyses stale `main`.
-    # The pull_request trigger above is what actually guards day-to-day work.
+    # Scheduled workflows only ever run on the default branch, which is now
+    # `dev`. This backstop catches newly-published CodeQL queries finding
+    # issues in code that has not changed; the push trigger above is what keeps
+    # results fresh as work lands.
     - cron: '17 3 * * 1'
 
 # Least privilege by default; the analyze job widens only what it needs.
 permissions:
   contents: read
 
-# A newer push to the same PR makes an in-flight scan irrelevant.
+# A newer push to the same PR makes an in-flight scan irrelevant. Keyed on the
+# ref, so a push run on `dev` (refs/heads/dev) and a PR run (refs/pull/N/merge)
+# never cancel each other.
+#
+# Default-branch runs are never cancelled: that result is what the Security tab
+# reports, and cancelling one during a run of merges would leave it stale again
+# — the exact problem the push trigger exists to fix.
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
 
 jobs:
   analyze:
