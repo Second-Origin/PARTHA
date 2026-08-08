@@ -1,0 +1,29 @@
+# CodeQL analysis configuration for PARTHA.
+#
+# Referenced by .github/workflows/codeql.yml via the `config-file` input.
+#
+# Why this file exists
+# --------------------
+# The Repository Intelligence golden benchmark corpus under
+# apps/backend/tests/benchmark/fixtures/ deliberately contains files that do
+# not parse. They are inputs to the RI engine, not code PARTHA executes:
+#
+#   adversarial/adv-py-malformed/src/broken.py   ->  def broken(:
+#   adversarial/adv-ts-malformed/src/broken.ts   ->  export function broken( {
+#
+# Each is pinned by a manifest asserting the RI-SRC-MALFORMED diagnostic
+# (RFC-0001 §4.3, §6.2, §8), so the malformed syntax IS the fixture contract —
+# "correcting" it would silently delete coverage of py.syntax_error and
+# ts.syntax_error from the benchmark.
+#
+# CodeQL cannot parse them either, and reported:
+#   "Could not process some files due to syntax errors"
+# once per language, which is the entire contents of the Security tab warning.
+# Excluding the fixture corpus removes the false signal without weakening any
+# analysis of real application code.
+name: PARTHA CodeQL config
+
+paths-ignore:
+  # Golden benchmark fixture corpus: adversarial inputs to the RI engine,
+  # intentionally including unparseable sources. Not application code.
+  - apps/backend/tests/benchmark/fixtures

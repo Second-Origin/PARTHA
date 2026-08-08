@@ -77,6 +77,9 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
+          # Excludes the RI golden benchmark fixture corpus, which contains
+          # deliberately unparseable sources. See the config file for why.
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
