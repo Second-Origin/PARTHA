@@ -70,5 +70,5 @@ urllib3==2.7.0
 uvicorn==0.52.1
 watchfiles==1.2.0
 webencodings==0.5.1
-websockets==16.1
+websockets==17.0.1
 xhtml2pdf==0.2.17
