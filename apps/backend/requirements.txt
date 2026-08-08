@@ -5,16 +5,16 @@
 # Regenerate after changing pyproject.toml dependencies:
 #   python -m venv /tmp/lock && /tmp/lock/bin/pip install ./apps/backend
 #   /tmp/lock/bin/pip freeze | grep -v partha-backend > apps/backend/requirements.txt
-alembic==1.18.5
-annotated-doc==0.0.4
-annotated-types==0.7.0
-anyio==4.14.1
+alembic==1.19.0
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.14.2
 arabic-reshaper==3.0.1
 argon2-cffi==25.1.0
 argon2-cffi-bindings==25.1.0
 asn1crypto==1.5.1
-certifi==2026.6.17
-cffi==2.1.0
+certifi==2026.7.22
+cffi==2.1.1
 charset-normalizer==3.4.9
 click==8.4.2
 colorama==0.4.6
@@ -22,8 +22,8 @@ cryptography==50.0.0
 cssselect2==0.9.0
 dnspython==2.8.0
 email-validator==2.3.0
-fastapi==0.139.0
-greenlet==3.5.3
+fastapi==0.141.1
+greenlet==3.5.4
 h11==0.16.0
 html5lib==1.1
 httpcore==1.0.9
@@ -31,10 +31,10 @@ httptools==0.8.0
 httpx==0.28.1
 idna==3.18
 lxml==6.1.1
-Mako==1.3.12
+Mako==1.4.1
 MarkupSafe==3.0.3
 oscrypto==1.3.0
-packaging==26.2
+packaging==26.3
 pillow==12.3.0
 psycopg-binary==3.3.4
 psycopg==3.3.4
@@ -43,21 +43,21 @@ pydantic-settings==2.14.2
 pydantic==2.13.4
 pydantic_core==2.46.4
 Pygments==2.20.0
-pyhanko-certvalidator==0.31.1
-pyHanko==0.35.2
+pyhanko-certvalidator==0.31.4
+pyHanko==0.36.2
 PyJWT==2.13.0
 pypdf==6.15.0
 python-bidi==0.6.11
 python-dotenv==1.2.2
 python-multipart==0.0.32
 PyYAML==6.0.3
-redis==8.0.1
+redis==8.1.0
 reportlab==4.5.1
 requests==2.34.2
 six==1.17.0
 SQLAlchemy==2.0.51
-starlette==1.3.1
-svglib==2.0.2
+starlette==1.4.1
+svglib==2.1.0
 tinycss2==1.5.1
 tree-sitter==0.26.0
 tree-sitter-typescript==0.23.2
@@ -65,9 +65,9 @@ typing-inspection==0.4.2
 typing_extensions==4.16.0
 tzdata==2026.3
 tzlocal==5.4.4
-uritools==6.1.2
+uritools==6.1.3
 urllib3==2.7.0
-uvicorn==0.51.0
+uvicorn==0.52.1
 watchfiles==1.2.0
 webencodings==0.5.1
 websockets==16.1
