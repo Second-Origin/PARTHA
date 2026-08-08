@@ -136,7 +136,17 @@ class LocalStorage:
                     "Archive would decompress to more than the configured maximum size.",
                     {"maxExtractedSizeBytes": self.max_extracted_size_bytes},
                 )
-        archive.extractall(destination)
+        # `filter="data"` applies CPython's own extraction hardening: it strips
+        # absolute paths and `..` traversal, and rejects links, devices, setuid
+        # bits and other unsafe metadata as the members are written.
+        #
+        # The loop above already rejects those cases, so this is defence in
+        # depth on untrusted uploads rather than the primary control — the two
+        # have to disagree for it to matter, which is exactly when a check is
+        # worth having. It also settles the DeprecationWarning: tar extraction
+        # is unfiltered by default until Python 3.14, which would switch this
+        # behaviour on silently. Being explicit keeps it a decision.
+        archive.extractall(destination, filter="data")
 
     def _normalise_single_root(self, destination: Path) -> Path:
         children = [child for child in destination.iterdir() if child.name != "__MACOSX"]
