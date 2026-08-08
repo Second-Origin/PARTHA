@@ -56,7 +56,7 @@ reportlab==4.5.1
 requests==2.34.2
 six==1.17.0
 SQLAlchemy==2.0.51
-starlette==1.4.0
+starlette==1.4.1
 svglib==2.1.0
 tinycss2==1.5.1
 tree-sitter==0.26.0

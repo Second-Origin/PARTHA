@@ -119,3 +119,19 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # `pydantic-core` is not a direct dependency: pyproject.toml declares
+      # `pydantic`, and requirements.txt is `pip freeze` output, so the core
+      # only appears there as a resolved transitive pin. `pydantic` pins it to
+      # an exact version, so it has no independent upgrade path — the correct
+      # version is always whatever the installed `pydantic` asks for.
+      #
+      # Grouping alone does not stop this. A group only forms when one of its
+      # members actually has an update; with `pydantic` already at the latest
+      # release, a lone `pydantic-core` bump falls through to the catch-all
+      # `backend-minor-and-patch` group and breaks the build exactly as before
+      # (#266, then #277 again after the groups landed). Ignoring it outright
+      # is the only thing that holds: it now moves only when `pydantic` moves
+      # and drags it along.
+      - dependency-name: pydantic-core
+      - dependency-name: pydantic_core
