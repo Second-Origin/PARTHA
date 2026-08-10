@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Hexagon } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useAppStore } from '@/app/store/useAppStore';
 import { useAuthStore } from '@/app/store/useAuthStore';
 import { primaryNavigationSurfaces, type NavigableProductSurface } from '@/app/routes/productSurfaces';
+import { BrandLogo } from '@/shared/components/ui/BrandLogo';
 
 const flagshipNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'flagship');
 const secondaryNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'secondary');
@@ -35,11 +36,11 @@ function NavLink({
       aria-label={item.label}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors',
+        'flex min-h-9 items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors',
         muted ? 'font-normal' : 'font-medium',
         isActive
-          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-          : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+          : 'text-muted-foreground hover:bg-accent hover:text-sidebar-foreground'
       )}
     >
       <item.icon className={cn('shrink-0', muted ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
@@ -138,30 +139,25 @@ export function Sidebar() {
         aria-label={isMobile ? 'Navigation drawer' : 'Primary navigation'}
         aria-modal={isMobile && mobileSidebarOpen ? 'true' : undefined}
         initial={false}
-        animate={{ width: sidebarCollapsed ? 64 : 240 }}
+        animate={{ width: sidebarCollapsed ? 64 : 204 }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className={cn(
-          'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-sidebar-border bg-sidebar max-md:!w-60 max-md:transition-transform max-md:duration-200',
+          'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-sidebar-border bg-sidebar max-md:!w-[min(82vw,260px)] max-md:transition-transform max-md:duration-200',
           mobileSidebarOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
         )}
       >
-      <div className="flex h-14 items-center justify-between px-3">
-        <Link to="/" className="flex items-center gap-2 overflow-hidden">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Hexagon className="h-4 w-4" />
-          </div>
+      <div className="flex h-16 items-center justify-between gap-2 px-3">
+        <Link to="/" className="flex min-w-0 items-center overflow-hidden">
           <AnimatePresence>
-            {(isMobile || !sidebarCollapsed) && (
-              <motion.span
+            <motion.span
                 initial={{ opacity: 0, width: 0 }}
                 animate={{ opacity: 1, width: 'auto' }}
                 exit={{ opacity: 0, width: 0 }}
                 transition={{ duration: 0.15 }}
-                className="text-sm font-semibold text-sidebar-foreground whitespace-nowrap"
+                className="block overflow-hidden whitespace-nowrap"
               >
-                PARTHA
+                <BrandLogo compact={!isMobile && sidebarCollapsed} />
               </motion.span>
-            )}
           </AnimatePresence>
         </Link>
         <button
@@ -185,7 +181,7 @@ export function Sidebar() {
         </button>
       </div>
 
-      <nav aria-label="Primary navigation" className="flex-1 space-y-1 px-2 py-2 overflow-y-auto scrollbar-thin">
+      <nav aria-label="Primary navigation" className="flex-1 space-y-1 overflow-y-auto px-2 py-3 scrollbar-thin">
         {flagshipNavigationSurfaces.map((item) => (
           <NavLink
             key={item.path}

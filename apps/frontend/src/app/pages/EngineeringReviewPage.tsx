@@ -132,7 +132,7 @@ export function EngineeringReviewPage() {
               No overall score, grade, health percentage, or category score is produced.
             </p>
           </div>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-5 lg:w-auto">
             {SEVERITY_ORDER.map((severity) => (
               <div key={severity} className="rounded-md bg-muted/50 px-2 py-2 text-center">
                 <p className="text-base font-semibold text-foreground">

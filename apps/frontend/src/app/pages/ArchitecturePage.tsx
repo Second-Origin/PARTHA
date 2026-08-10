@@ -90,10 +90,10 @@ export function ArchitecturePage() {
   }
 
   return (
-    <div className="h-[calc(100vh-8rem)] -m-6 flex flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-6">
+    <div className="-m-3 flex h-[calc(100dvh-4rem)] min-h-[560px] min-w-0 flex-col sm:-m-5 lg:-m-6">
+      <div className="flex min-w-0 flex-col items-start justify-between gap-2 border-b border-border px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5 lg:px-6">
         <h1 className="min-w-0 truncate text-sm font-medium text-foreground">Architecture - {architecture.model.repositoryName}</h1>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           <Link
             to="/review"
             className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
@@ -114,7 +114,7 @@ export function ArchitecturePage() {
       </div>
       {/* The manifest names the exact revision every citation below belongs
           to, so it sits with the evidence rather than in a settings page. */}
-      <div className="mb-4">
+      <div className="mb-3 min-w-0">
         <RevisionManifestPanel repositoryId={architecture.model.repositoryId} />
       </div>
       <div className="flex-1 min-h-0">

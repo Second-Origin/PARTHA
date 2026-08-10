@@ -108,8 +108,8 @@ export function RevisionManifestPanel({ repositoryId }: RevisionManifestPanelPro
       data-testid="revision-manifest"
       className="rounded-lg border border-border bg-card p-4"
     >
-      <header className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
+      <header className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
           <ShieldCheck aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
           <h2 className="text-sm font-medium text-foreground">Revision manifest</h2>
           <span
@@ -124,7 +124,7 @@ export function RevisionManifestPanel({ repositoryId }: RevisionManifestPanelPro
             {body.snapshotId}
           </span>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex max-w-full flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={() => setExpanded((open) => !open)}

@@ -310,10 +310,10 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
   );
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full bg-background">
+    <div ref={containerRef} className="flex h-full min-h-0 min-w-0 flex-col bg-background">
       <ArchSummaryBar model={model} source={source} />
 
-      <div className="flex items-center justify-between gap-2 overflow-x-auto border-b border-border px-3 py-2 sm:px-4">
+      <div className="flex min-w-0 items-center justify-between gap-2 overflow-x-auto border-b border-border px-3 py-2 scrollbar-thin sm:px-4">
         <div className="flex shrink-0 items-center gap-1">
           <TabButton active={activeTab === 'graph'} onClick={() => setActiveTab('graph')}>
             Architecture Graph
@@ -339,7 +339,7 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
         )}
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {explorerOpen && (activeTab === 'graph' || activeTab === 'heatmap') && (
           <div className="hidden md:block">
             <ModuleExplorer />
@@ -351,7 +351,7 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
           onKeyDown={handleGraphKeyDown}
           onFocusCapture={handleGraphFocus}
         >
-          <div className="flex-1 relative">
+          <div className="relative min-h-0 min-w-0 flex-1">
             {(activeTab === 'graph' || activeTab === 'heatmap') ? (
               <>
                 <GraphToolbar
