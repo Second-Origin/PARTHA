@@ -17,7 +17,7 @@
 - AI Providers: provider selection, model identifier, masked key field, saved/not-configured state, test action, and save action are visible and functional. No credentials were entered during QA.
 - Upload: source tabs expose real tab/tabpanel state so the selected GitHub or archive input cannot disagree with the visible content.
 - Authentication: the existing supported email/password flow is retained. The reference's Google and GitHub controls were not copied because those authentication methods do not exist in the current backend and would create fake interactions.
-- Responsive and accessibility: keyboard focus styling is visible, mobile navigation remains a labelled modal drawer, page headers wrap, contained tables scroll internally, and no page-level horizontal scrolling was observed in the tested states. White text on the primary burnt-orange action colour measures 5.24:1 contrast.
+- Responsive and accessibility: keyboard focus styling is visible, mobile navigation remains a labelled modal drawer, page headers wrap, contained tables scroll internally, and no page-level horizontal scrolling was observed in the tested states. White text on the primary burnt-orange action colour measures 5.24:1 contrast; status text maintains at least 4.62:1 against its tinted backgrounds.
 
 ## Evidence
 

@@ -202,7 +202,7 @@ test.describe('WCAG 2.2 AA automated baseline (#118)', () => {
     await openSurface(page, 'Repositories');
     await page.getByRole('button', { name: 'Upload New' }).click();
     await expect(page.getByRole('heading', { name: 'Upload Repository' })).toBeVisible();
-    await page.getByRole('button', { name: 'GitHub URL', exact: true }).click();
+    await page.getByRole('tab', { name: 'GitHub URL', exact: true }).click();
     await expect(page.getByText('Import from GitHub')).toBeVisible();
     await expectWcagBaseline(page, 'repository import: empty GitHub URL form', [
       ...SHELL_FINDINGS,
