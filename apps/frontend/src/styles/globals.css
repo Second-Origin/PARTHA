@@ -10,7 +10,7 @@
     --card-foreground: 258 19% 13%;
     --popover: 0 0% 100%;
     --popover-foreground: 258 19% 13%;
-    --primary: 17 91% 50%;
+    --primary: 17 91% 40%;
     --primary-foreground: 0 0% 100%;
     --secondary: 38 28% 92%;
     --secondary-foreground: 260 10% 34%;
@@ -31,7 +31,7 @@
     --sidebar: 40 31% 94%;
     --sidebar-foreground: 258 19% 13%;
     --sidebar-border: 17 70% 72%;
-    --sidebar-accent: 17 91% 50%;
+    --sidebar-accent: 17 91% 40%;
     --sidebar-accent-foreground: 0 0% 100%;
   }
 
