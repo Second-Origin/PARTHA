@@ -92,7 +92,7 @@ function NavSection({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="px-2.5 pb-1 pt-3 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70"
+            className="px-2.5 pb-1 pt-3 text-2xs font-medium uppercase tracking-wide text-muted-foreground"
           >
             {label}
           </motion.p>
