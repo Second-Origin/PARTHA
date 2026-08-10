@@ -13,6 +13,12 @@ import { cn } from '@/shared/utils/cn';
 const AI_WORKSPACE_LIMITATION =
   'Free-form questions require a configured AI provider. They receive sealed-snapshot structural facts, heuristic roles, and observed paths, but no source-file contents; provider answers therefore have no automatic citations.';
 
+// Deliberately not "chat" framing: this states what the surface actually
+// does (answers from an already-computed snapshot) and what it does not do
+// (send source code, remember anything past the current page load).
+const AI_WORKSPACE_SUBTITLE =
+  "Answers come from structural facts your last analysis already computed, not a live conversation. No source-file contents are sent, and nothing is remembered once you leave this page.";
+
 export function AIWorkspacePage() {
   const navigate = useNavigate();
   const aiWorkspace = useAIWorkspace();
@@ -22,12 +28,12 @@ export function AIWorkspacePage() {
   if (aiWorkspace.emptyReason === 'no-completed-repositories') {
     return (
       <div>
-        <PageHeader title="AI Workspace" description="Ask questions about your codebase using AI" />
+        <PageHeader title="AI Workspace" description={AI_WORKSPACE_SUBTITLE} />
         <PreviewBanner limitation={AI_WORKSPACE_LIMITATION} />
         <EmptyState
           icon={Bot}
           title="No analysed repositories"
-          description="Upload and analyse a repository first. AI-powered explanations require a completed analysis pipeline."
+          description="Upload and analyse a repository first. Structural facts for this workspace come from a completed analysis pipeline."
           action={{ label: 'Upload Repository', onClick: () => navigate('/upload') }}
         />
       </div>
@@ -37,12 +43,12 @@ export function AIWorkspacePage() {
   if (aiWorkspace.emptyReason === 'no-active-repository' || !activeRepository) {
     return (
       <div>
-        <PageHeader title="AI Workspace" description="Ask questions about your codebase using AI" />
+        <PageHeader title="AI Workspace" description={AI_WORKSPACE_SUBTITLE} />
         <PreviewBanner limitation={AI_WORKSPACE_LIMITATION} />
         <EmptyState
           icon={Bot}
           title="Select a repository"
-          description="Choose an analysed repository from the top bar to start asking questions."
+          description="Choose an analysed repository from the top bar to see its computed structural facts."
         />
       </div>
     );
@@ -50,7 +56,7 @@ export function AIWorkspacePage() {
 
   return (
     <div className="flex h-[calc(100dvh-7rem)] min-h-[460px] min-w-0 flex-col">
-      <PageHeader title="AI Workspace" description={`AI-powered exploration of ${activeRepository.name}`}>
+      <PageHeader title="AI Workspace" description={AI_WORKSPACE_SUBTITLE}>
         <DataSourceBadge source={aiWorkspace.source} />
       </PageHeader>
       <PreviewBanner limitation={AI_WORKSPACE_LIMITATION} />
@@ -63,9 +69,9 @@ export function AIWorkspacePage() {
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mx-auto mb-4">
                   <Bot className="h-6 w-6 text-muted-foreground" />
                 </div>
-                <p className="text-sm font-medium text-foreground mb-1">Ask about {activeRepository.name}</p>
+                <p className="text-sm font-medium text-foreground mb-1">Structural facts for {activeRepository.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  Questions are sent to your configured provider with structural facts from the sealed snapshot. Source-file contents are not sent.
+                  Each answer is generated from the sealed structural facts your last analysis already computed for this repository. No source-file contents are sent to the provider, and no history is kept between sessions — every question is answered fresh from the same snapshot.
                 </p>
               </div>
             </div>
