@@ -2,7 +2,7 @@
 
 These are the project rules, not a welcome page. If you follow them, your pull request can be reviewed and merged. If you do not, it will be sent back regardless of the quality of the code.
 
-PARTHA is a self-hosted Repository Intelligence Platform. One architectural rule sits above all others:
+PARTHA is a Repository Intelligence Platform. One architectural rule sits above all others:
 
 > **Repository Intelligence is the shared repository-understanding layer. Architecture, dependencies, reviews, documentation, exports, and optional AI features consume it. AI must remain a downstream consumer, never an independent interpreter of the repository.**
 
@@ -42,7 +42,6 @@ maintainer; do not treat roadmap content as something you may revise.
 | Python | 3.12 or 3.13 | Backend |
 | Node.js | 22 | Frontend |
 | Git | any recent | Everything |
-| Docker | any recent | Optional local Compose stack |
 
 ### Backend
 
@@ -353,8 +352,6 @@ Run the checks relevant to your change. These are what CI runs.
 | `npm --prefix apps/frontend run test` | Frontend tests (vitest) |
 | `npm run lint:frontend` | ESLint |
 | `npm run build:frontend` | `tsc -b && vite build` — type errors surface here, not in lint |
-| `npm run docker:config` | `docker compose config` |
-| `npm run docker:validate` | Starts the local Compose stack, waits for `/ready`, tears it down |
 
 `npm run build` runs the frontend build plus the backend tests. It does **not** run frontend lint or frontend tests — run those separately.
 
@@ -364,7 +361,7 @@ Run the checks relevant to your change. These are what CI runs.
 | API request/response shape | `npm run test:backend`, update the frontend client and types, `npm run build:frontend` |
 | Database models | Add an Alembic migration, then `npm run test:backend` (migration up/down is covered) |
 | Frontend code | `npm run lint:frontend`, `npm --prefix apps/frontend run test`, `npm run build:frontend` |
-| Docker, Compose, CI, config, startup, health | `npm run docker:config` and `npm run docker:validate` |
+| Local startup, CI, config, health | Smoke-check the affected backend/frontend start command and run the relevant tests above |
 | Anything user-visible | Update the documentation **in the same pull request** |
 
 Three backend tests are gated on real PostgreSQL and Redis and skip locally; CI provides both services.

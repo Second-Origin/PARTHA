@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 520" width="1600" height="520" role="img" aria-labelledby="partha-title partha-desc">
   <title id="partha-title">PARTHA — Repository Intelligence Platform</title>
-  <desc id="partha-desc">PARTHA is a self-hosted Repository Intelligence Platform for private and evolving codebases. Repository sources are ingested into a shared repository-understanding layer, which architecture, dependency, review, and documentation surfaces consume. AI is an optional downstream consumer.</desc>
+  <desc id="partha-desc">PARTHA is a Repository Intelligence Platform for private and evolving codebases. Repository sources are ingested into a shared repository-understanding layer, which architecture, dependency, review, and documentation surfaces consume. AI is an optional downstream consumer.</desc>
 
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="520" gradientUnits="userSpaceOnUse">

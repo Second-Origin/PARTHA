@@ -7,9 +7,6 @@
     "apps/frontend"
   ],
   "scripts": {
-    "partha": "node scripts/partha.mjs",
-    "partha:up": "node scripts/partha.mjs --no-build",
-    "partha:down": "docker compose down",
     "dev:frontend": "npm --prefix apps/frontend run dev",
     "build:frontend": "npm --prefix apps/frontend run build",
     "generate:api-contract": "npm --prefix apps/frontend run generate:api-contract",
@@ -21,9 +18,6 @@
     "test:accessibility": "node scripts/run-prototype-acceptance.mjs e2e/accessibility.spec.ts",
     "dev:backend": "node scripts/backend-python.mjs -m uvicorn app.main:app --reload --reload-dir app",
     "start:backend": "node scripts/backend-python.mjs -m uvicorn app.main:app --host 0.0.0.0 --port 8000",
-    "build": "npm run build:frontend && npm run test:backend",
-    "docker:config": "docker compose config",
-    "docker:validate": "node scripts/validate-compose.mjs",
-    "docker:up": "docker compose up --build"
+    "build": "npm run build:frontend && npm run test:backend"
   }
 }

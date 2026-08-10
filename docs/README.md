@@ -11,8 +11,7 @@ Every document listed here is maintained and describes the system as it currentl
 | [README](../README.md) | Anyone evaluating or running PARTHA | What PARTHA is, what currently works, how to run it locally, and its limitations. |
 | [CONTRIBUTING](../CONTRIBUTING.md) | Contributors | The contribution rules: fork-first workflow, claiming an issue, branch naming, rebasing, pull requests, Definition of Ready and Done. Read before opening a PR. |
 | [SECURITY](../SECURITY.md) | Anyone reporting a vulnerability | How to disclose privately. Never open a public issue for a vulnerability. |
-| [AI provider egress policy](security/AI_PROVIDER_EGRESS.md) | Operators and backend contributors | Deployment-owned provider destination policy, DNS pinning, redirect handling, safe defaults, Compose boundary, and required production network controls. |
-| [Self-hosted operations runbook](operations/SELF_HOSTED.md) | Operators running the Docker Compose stack | Required environment variables, security boundaries, unsupported deployment modes, and backup/restore expectations for the self-hosted stack. |
+| [AI provider egress policy](security/AI_PROVIDER_EGRESS.md) | Operators and backend contributors | Deployment-owned provider destination policy, DNS pinning, redirect handling, safe defaults, and required production network controls. |
 | [WCAG 2.2 AA accessibility baseline](accessibility/WCAG_2_2_AA_BASELINE.md) | Frontend contributors and accessibility reviewers | Reproducible automated coverage for the Phase 0 journeys, the outstanding human verification checklist, confirmed findings, and linked follow-up issues. |
 | [CODE_OF_CONDUCT](../CODE_OF_CONDUCT.md) | Everyone | Expected conduct and how to report a violation. |
 | [System Overview](architecture/SYSTEM_OVERVIEW.md) | Contributors and maintainers | Current components, ingestion flow, persistence, consumers, trust boundaries, and architectural limitations. |

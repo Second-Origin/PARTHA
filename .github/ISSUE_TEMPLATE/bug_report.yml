@@ -61,4 +61,4 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Browser, OS, Node/Python versions, Docker availability, branch/commit.
+      description: Browser, OS, Node/Python versions, and branch/commit.

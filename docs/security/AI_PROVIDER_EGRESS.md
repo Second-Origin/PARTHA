@@ -97,17 +97,10 @@ Because configurable Ollama destinations are also resolved when saved, a
 transient DNS failure rejects the save without changing the existing record;
 retry after name resolution is healthy.
 
-## Docker Compose and production network controls
+## Production network controls
 
-The Compose file places PostgreSQL and Redis on the explicit internal `data`
-network. Only the API joins the separate `egress` network, in addition to
-`data`, so the API can reach its data dependencies without making the data
-services outbound-capable.
-
-That topology is useful local isolation, but Compose cannot enforce an exact
-provider destination allowlist for the API. A hosted or shared deployment still
-needs a deployment-level firewall, cloud egress rule, service-mesh policy, or
-approved egress proxy that:
+A hosted or shared deployment needs a deployment-level firewall, cloud egress
+rule, service-mesh policy, or approved egress proxy that:
 
 - denies unapproved private, loopback, link-local, and external destinations;
 - permits only the approved provider traffic; and
@@ -132,5 +125,4 @@ Before enabling AI providers in a hosted or shared deployment:
 6. Confirm redirects are reported as provider failures and no policy details
    appear in logs or API responses.
 
-See the root and backend environment examples for the variables wired into
-local Docker Compose.
+See the root and backend environment examples for the supported variables.

@@ -32,7 +32,7 @@ Local development defaults to SQLite at `.local/partha.db` and storage at `.loca
 
 ### SQLite concurrency (development only)
 
-The durable analysis worker (a background thread) and API request handlers read and write the same SQLite file concurrently. Every SQLite connection is opened with `PRAGMA journal_mode=WAL` and a 5-second `PRAGMA busy_timeout` (`app/core/database.py`, a no-op on PostgreSQL): WAL lets a reader always see the last committed snapshot without waiting on an in-progress writer, and the busy timeout bounds the remaining writer-vs-writer wait instead of failing immediately (#162). This does not extend to multiple *processes* sharing one SQLite file — that remains PostgreSQL's job; Compose already runs Postgres for exactly this reason. The analysis worker's own per-stage transaction boundaries (why a stage's facts are flushed but not committed until the stage checkpoint) are documented directly in `app/workers/analysis_worker.py`'s module docstring and were deliberately left unchanged — restructuring them risks the job-recovery guarantees (leases, retries, stale-worker takeover) that same docstring exists to protect, and WAL removes the actual reader-blocking symptom without needing to.
+The durable analysis worker (a background thread) and API request handlers read and write the same SQLite file concurrently. Every SQLite connection is opened with `PRAGMA journal_mode=WAL` and a 5-second `PRAGMA busy_timeout` (`app/core/database.py`, a no-op on PostgreSQL): WAL lets a reader always see the last committed snapshot without waiting on an in-progress writer, and the busy timeout bounds the remaining writer-vs-writer wait instead of failing immediately (#162). This does not extend to multiple *processes* sharing one SQLite file; multi-process deployments should use PostgreSQL. The analysis worker's own per-stage transaction boundaries (why a stage's facts are flushed but not committed until the stage checkpoint) are documented directly in `app/workers/analysis_worker.py`'s module docstring and were deliberately left unchanged — restructuring them risks the job-recovery guarantees (leases, retries, stale-worker takeover) that same docstring exists to protect, and WAL removes the actual reader-blocking symptom without needing to.
 
 `AUTH_SECRET_KEY` falls back to a fixed insecure value when `APP_ENV` is `development` or `test`. Outside those environments the app **refuses to start** without an explicit secret of at least 32 characters:
 
@@ -104,7 +104,7 @@ Production/staging are unaffected: this check is a no-op outside `development`/`
 | `GET /metrics` | Plain-text counters: request volume, status families, routes, cumulative duration, rate-limit counters. |
 | `GET /docs` | OpenAPI / Swagger UI. |
 
-Logs default to human-readable text; set `LOG_FORMAT=json` for structured logs in containers. Structured-log extras are redacted for keys containing `api_key`, `apikey`, `authorization`, `password`, `secret`, or `token`. Every response carries `X-Request-ID`; an inbound `X-Request-ID` is preserved.
+Logs default to human-readable text; set `LOG_FORMAT=json` for structured logs. Structured-log extras are redacted for keys containing `api_key`, `apikey`, `authorization`, `password`, `secret`, or `token`. Every response carries `X-Request-ID`; an inbound `X-Request-ID` is preserved.
 
 ## Authentication
 
@@ -113,15 +113,6 @@ Logs default to human-readable text; set `LOG_FORMAT=json` for structured logs i
 Every non-public API route requires a valid Bearer token. Repository resolution is
 owner-scoped in the service layer across analysis and all product consumers, so
 one account cannot query another account's repository or snapshots.
-
-## Docker
-
-```bash
-cd ../..
-docker compose up --build
-```
-
-Compose runs the API against PostgreSQL and Redis. It does not run the frontend.
 
 ## AI provider egress
 
@@ -135,9 +126,9 @@ and provide both an exact `AI_EGRESS_ALLOWED_BASE_URLS` entry and matching
 
 The sender validates every DNS answer, pins the HTTP connection to a validated
 IP while preserving the original Host/SNI name, ignores ambient proxy settings,
-and rejects redirects. Compose keeps PostgreSQL and Redis on an internal data
-network, but production still needs an independent firewall, egress proxy,
-cloud egress rule, or mesh policy. See [AI provider egress policy](../../docs/security/AI_PROVIDER_EGRESS.md)
+and rejects redirects. A shared or hosted environment still needs an independent
+firewall, egress proxy, cloud egress rule, or mesh policy. See
+[AI provider egress policy](../../docs/security/AI_PROVIDER_EGRESS.md)
 for configuration, rollout, and migration details.
 
 ## First import
