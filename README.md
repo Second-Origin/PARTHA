@@ -130,54 +130,12 @@ Read [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) for
 | Python | 3.12 or 3.13 | Backend |
 | Node.js | 22 | Frontend and workflow scripts |
 | Git | Recent version | Checkout and public GitHub import |
-| Docker Engine with Compose and buildx plugins | Recent version | One-command full stack |
 
-### Preferred: start the full stack
+PARTHA currently uses separate backend and frontend development processes. The
+development configuration uses SQLite, an in-memory rate limiter, and local
+filesystem storage. No container runtime or external database is required.
 
-With Docker Engine running, build and start the frontend, API, PostgreSQL, and
-Redis from this checkout:
-
-```bash
-npm run partha
-```
-
-The command waits for both application services to become healthy, then prints
-the frontend URL. Open `http://localhost:5173`, register a local account, add a
-repository, and start analysis. Press `Ctrl+C` to stop all four services.
-
-On repeat runs the images are reused from cache, so startup is fast. If you have
-already built the images once and only want to restart the existing containers
-without the build step, use:
-
-```bash
-npm run partha:up
-```
-
-To stop the stack without the interactive `Ctrl+C` (for example from another
-terminal), use:
-
-```bash
-npm run partha:down
-```
-
-PostgreSQL data and imported repository storage persist across ordinary stops
-and restarts. To permanently delete that local Compose data and return to a
-clean state, run:
-
-```bash
-docker compose down -v
-```
-
-> **Warning:** The reset command permanently deletes the Compose database and
-> repository-storage volumes.
-
-### Alternative: start services separately
-
-The standalone development configuration uses SQLite, an in-memory rate
-limiter, and local filesystem storage. It requires Python 3.12 or 3.13 and
-Node.js 22, but does not require Docker.
-
-#### 1. Start the backend
+### 1. Start the backend
 
 No `.env` file is required.
 
@@ -196,7 +154,7 @@ npm run dev:backend
 
 The API starts at `http://localhost:8000`; OpenAPI is at `/docs` and readiness is at `/ready`.
 
-#### 2. Start the frontend
+### 2. Start the frontend
 
 In a second terminal:
 
@@ -208,17 +166,6 @@ npm run dev:frontend
 
 Open `http://localhost:5173`, register a local account, add a repository, and
 start analysis.
-
-### Lower-level Compose commands
-
-The launcher wraps these lower-level commands and performs prerequisite and
-readiness checks. The Compose stack is local development guidance, not
-production deployment guidance.
-
-```bash
-npm run docker:config
-npm run docker:up
-```
 
 See the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md) before
 configuring any custom or local provider endpoint.
@@ -240,9 +187,6 @@ npm run build:frontend
 
 # Disposable fixtures and browser journeys
 npm run test:prototype
-
-# Compose configuration and /ready lifecycle
-npm run docker:validate
 ```
 
 The prototype browser suite exercises defined Architecture, Engineering Review, Insights, evidence, and responsive-accessibility journeys. Passing it verifies those journeys; it does not imply complete product maturity.

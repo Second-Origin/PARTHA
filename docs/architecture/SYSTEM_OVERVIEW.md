@@ -28,7 +28,7 @@ flowchart LR
     end
 
     subgraph Persistence
-        DB[("Relational DB<br/>SQLite local · PostgreSQL Compose")]
+        DB[("Relational DB<br/>SQLite local · PostgreSQL configured")]
         Disk[("Filesystem<br/>STORAGE_PATH")]
     end
 
@@ -126,7 +126,7 @@ snapshot, and serves every product consumer from that immutable read model.
 
 | Store | Holds | Notes |
 | --- | --- | --- |
-| Relational DB | `users`, `refresh_tokens`, `repositories`, `analysis_jobs`, `ai_provider_configs`, and normalized `ri_*` snapshot tables | SQLite by default for local development; PostgreSQL under Docker Compose. Analysis jobs and their worker leases are durable database state. |
+| Relational DB | `users`, `refresh_tokens`, `repositories`, `analysis_jobs`, `ai_provider_configs`, and normalized `ri_*` snapshot tables | SQLite by default for local development; PostgreSQL is supported through `DATABASE_URL`. Analysis jobs and their worker leases are durable database state. |
 | `repositories.revision_kind`, `revision_value`, `revision_ref` | Exact imported source identity: Git commit + resolved ref, or upload archive hash. | `revision_value` is indexed and immutable; a moving branch name is metadata, never identity. |
 | `repositories.repo_metadata` (JSON column) | Import/parser metadata; historical rows may also retain a **legacy/unverified** `intelligence` value. | New analysis does not write the legacy value, and executable product consumers ignore it. New imports no longer stash `commitSha` here. |
 | `ri_snapshots`, `ri_nodes`, `ri_edges`, `ri_assertions`, `ri_observations`, `ri_evidence`, `ri_derivations`, `ri_diagnostics` | Revision-addressed normalized `ri.v1` artifacts, provenance, lifecycle state, and canonical hash. | Durable analysis runs the Python/TypeScript/manifest producers and resolver, then seals a snapshot. Architecture, authentication explanation, Dependencies, Engineering Review, Insights, Documentation, exports, and AI context consume it. |
@@ -205,7 +205,7 @@ extracts and what it does not.
 | `git` (system binary) | Shallow-cloning public GitHub repositories. | Import fails with a normalized external-service error; the partial clone is cleaned up. |
 | GitHub (HTTPS) | Source for public repository import. Only `https://github.com/owner/repo` URLs are accepted; no authentication, so no private repositories. | Timeout and size caps abort and clean up. |
 | AI providers | Answering repository questions. Configured per user with an encrypted API key; destinations are centrally policy-checked and DNS-pinned. | A missing, stale, or policy-denied configuration produces a normalized error; the rest of the system is unaffected. |
-| PostgreSQL, Redis | Compose and CI only. Redis backs the rate limiter when `RATE_LIMIT_BACKEND=redis`. | Local development uses SQLite and the in-memory rate limiter; neither service is required. |
+| PostgreSQL, Redis | Optional configured services and CI integration. Redis backs the rate limiter when `RATE_LIMIT_BACKEND=redis`. | Local development uses SQLite and the in-memory rate limiter; neither service is required. |
 
 ---
 

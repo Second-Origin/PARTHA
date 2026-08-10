@@ -1,6 +1,6 @@
 # Pinned backend dependency lockfile for reproducible installs and Dependabot
 # pip tracking. Abstract version ranges live in pyproject.toml; this file pins the
-# concrete resolved set so CI, Docker, and Dependabot all agree.
+# concrete resolved set so CI and Dependabot agree.
 #
 # Regenerate after changing pyproject.toml dependencies:
 #   python -m venv /tmp/lock && /tmp/lock/bin/pip install ./apps/backend
