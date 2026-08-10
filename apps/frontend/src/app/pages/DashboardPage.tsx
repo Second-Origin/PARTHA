@@ -63,9 +63,9 @@ export function DashboardPage() {
                 if (repo.status === 'analysing' || repo.status === 'cancelled') navigate(`/analysis/${repo.id}`);
                 else navigate(`/repositories/${repo.id}`);
               }}
-              className="flex items-center justify-between px-5 py-3.5 hover:bg-accent/30 cursor-pointer transition-colors"
+              className="flex min-w-0 flex-col items-start justify-between gap-3 px-4 py-3.5 hover:bg-accent/30 cursor-pointer transition-colors sm:flex-row sm:items-center sm:px-5"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
                   {repo.source === 'github' ? (
                     <Github className="h-4 w-4 text-muted-foreground" />
@@ -73,9 +73,9 @@ export function DashboardPage() {
                     <FolderGit2 className="h-4 w-4 text-muted-foreground" />
                   )}
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">{repo.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">{repo.name}</p>
+                  <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-2">
                     {repo.meta?.language && (
                       <span className="text-xs text-muted-foreground">{repo.meta.language}</span>
                     )}
@@ -91,7 +91,7 @@ export function DashboardPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex max-w-full flex-wrap items-center gap-3 sm:justify-end">
                 <DataSourceBadge source={repo.source} />
                 {repo.meta && (
                   <span className="text-xs text-muted-foreground hidden sm:inline">

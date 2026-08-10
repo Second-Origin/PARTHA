@@ -126,7 +126,7 @@ export function TopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 min-w-0 items-center justify-between gap-2 border-b border-border bg-background/80 px-2 backdrop-blur-sm sm:px-4">
+    <header className="sticky top-0 z-30 flex h-16 min-w-0 items-center justify-between gap-2 border-b border-border bg-background/95 px-2 backdrop-blur-sm sm:px-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <button
           type="button"
@@ -144,7 +144,7 @@ export function TopBar() {
             aria-expanded={repoDropdownOpen}
             aria-controls="repository-selector-options"
             onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
-            className="flex max-w-[150px] items-center gap-2 rounded-md border border-border px-2 py-1.5 text-sm transition-colors hover:bg-accent sm:max-w-[200px] sm:px-3"
+            className="flex max-w-[140px] items-center gap-2 rounded-md border border-border bg-card px-2 py-2 text-sm transition-colors hover:bg-accent sm:max-w-[210px] sm:px-3"
           >
             <span className="text-muted-foreground truncate">
               {activeRepository ? activeRepository.name : 'No repository'}
@@ -197,7 +197,7 @@ export function TopBar() {
             placeholder="Search... (Ctrl+K)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-md border border-border bg-background pl-9 pr-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring transition-shadow"
+            className="partha-input w-full py-2 pl-9 pr-3 text-sm transition-shadow"
           />
           {searchQuery.trim() && (
             <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-border bg-popover shadow-lg animate-scale-in z-50 p-2">

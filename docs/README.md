@@ -37,3 +37,7 @@ Every document listed here is maintained and describes the system as it currentl
 - State limitations plainly. An honest gap is more useful than an optimistic claim.
 - No placeholder documents.
 - Documentation changes in the same pull request as the behaviour it describes.
+
+## Product testing
+
+- [Iteration 1 engineer feedback](operations/ITERATION_1_ENGINEER_FEEDBACK.md) — workflow checklist, feedback fields, and safe reporting guidance for real-user testing.

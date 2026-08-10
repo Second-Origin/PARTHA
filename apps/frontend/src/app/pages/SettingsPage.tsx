@@ -16,13 +16,16 @@ export function SettingsPage() {
   ] as const;
 
   return (
-    <div className="max-w-3xl">
+    <div className="w-full max-w-4xl">
       <PageHeader title="Settings" description="Manage your account and preferences" />
 
-      <div className="flex items-center gap-1 border-b border-border mb-6">
+      <div role="tablist" aria-label="Settings sections" className="mb-6 flex max-w-full items-center gap-1 overflow-x-auto border-b border-border scrollbar-thin">
         {tabs.map((tab) => (
           <button
             key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
             onClick={() => setActiveTab(tab)}
             className={cn(
               'px-4 py-2.5 text-sm font-medium transition-colors relative',
@@ -80,15 +83,27 @@ export function SettingsPage() {
           </div>
         )}
         {activeTab === 'AI Providers' && (
-          <div className="rounded-xl border border-border bg-card p-6">
-            <h2 className="text-sm font-medium text-foreground mb-2">AI Provider</h2>
+          <div className="partha-surface p-4 sm:p-6">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-medium text-foreground">AI Provider</h2>
+              <span className={cn(
+                'rounded-full px-2.5 py-1 text-xs font-medium',
+                settings.aiConfig?.provider
+                  ? 'bg-success/10 text-success'
+                  : 'bg-muted text-muted-foreground',
+              )}>
+                {settings.aiConfig?.provider ? `Saved: ${settings.aiConfig.provider}` : 'Not configured'}
+              </span>
+            </div>
             <p className="text-xs text-muted-foreground mb-4">
               Keys are stored by the local backend and are never shown again after saving.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-5">
+            <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
               {providers.map(([id, label]) => (
                 <button
                   key={id}
+                  type="button"
+                  aria-pressed={settings.provider === id}
                   onClick={() => settings.setProvider(id)}
                   className={cn(
                     'rounded-md border px-3 py-2 text-xs font-medium transition-colors',
@@ -103,7 +118,7 @@ export function SettingsPage() {
             </div>
             <div className="space-y-4">
               <div>
-                <label htmlFor="settings-model" className="block text-xs font-medium text-muted-foreground mb-1.5">Model</label>
+                <label htmlFor="settings-model" className="block text-xs font-medium text-muted-foreground mb-1.5">Provider model ID</label>
                 <input
                     id="settings-model"
                   value={settings.model}
@@ -145,11 +160,11 @@ export function SettingsPage() {
             </div>
             {settings.error && <p className="mt-4 text-sm text-destructive">{settings.error}</p>}
             {settings.statusMessage && <p className="mt-4 text-sm text-success">{settings.statusMessage}</p>}
-            <div className="mt-5 flex justify-end gap-2">
-              <button onClick={settings.testAiConfig} disabled={settings.testing} className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent disabled:opacity-50 transition-colors">
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={settings.testAiConfig} disabled={settings.testing || settings.loading} className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent disabled:opacity-50 transition-colors">
                 {settings.testing ? 'Testing...' : 'Test Connection'}
               </button>
-              <button onClick={settings.saveAiConfig} disabled={settings.loading} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors">
+              <button type="button" onClick={settings.saveAiConfig} disabled={settings.loading || settings.testing} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors">
                 {settings.loading ? 'Saving...' : 'Save Provider'}
               </button>
             </div>
@@ -159,13 +174,13 @@ export function SettingsPage() {
           <div className="rounded-xl border border-border bg-card p-6">
             <h2 className="text-sm font-medium text-foreground mb-4">Theme</h2>
             <div className="flex items-center gap-3">
-              <button className="flex items-center gap-2 rounded-md border-2 border-primary bg-card px-4 py-3 text-sm font-medium">
-                <div className="h-4 w-4 rounded-full bg-[#0a0e1a]" />
-                Dark
+              <button type="button" aria-pressed="true" className="flex items-center gap-2 rounded-md border-2 border-primary bg-card px-4 py-3 text-sm font-medium">
+                <div className="h-4 w-4 rounded-full border border-border bg-[#f7f3ea]" />
+                Light
               </button>
               <button disabled className="flex items-center gap-2 rounded-md border border-border bg-card px-4 py-3 text-sm font-medium text-muted-foreground cursor-not-allowed">
-                <div className="h-4 w-4 rounded-full bg-white border border-border" />
-                Light (Coming Soon)
+                <div className="h-4 w-4 rounded-full bg-[#19151f]" />
+                Dark (Coming Soon)
               </button>
             </div>
           </div>

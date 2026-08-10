@@ -49,14 +49,14 @@ export function AIWorkspacePage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
+    <div className="flex h-[calc(100dvh-7rem)] min-h-[460px] min-w-0 flex-col">
       <PageHeader title="AI Workspace" description={`AI-powered exploration of ${activeRepository.name}`}>
         <DataSourceBadge source={aiWorkspace.source} />
       </PageHeader>
       <PreviewBanner limitation={AI_WORKSPACE_LIMITATION} />
 
-      <div className="flex-1 flex flex-col rounded-xl border border-border bg-card overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-thin">
+      <div className="partha-surface flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 scrollbar-thin sm:p-5">
           {aiWorkspace.messages.length === 0 ? (
             <div className="flex h-full items-center justify-center text-center">
               <div className="max-w-sm">
@@ -65,7 +65,7 @@ export function AIWorkspacePage() {
                 </div>
                 <p className="text-sm font-medium text-foreground mb-1">Ask about {activeRepository.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  Questions are sent to your configured AI provider with repository context and file citations when available.
+                  Questions are sent to your configured provider with structural facts from the sealed snapshot. Source-file contents are not sent.
                 </p>
               </div>
             </div>
@@ -123,7 +123,7 @@ export function AIWorkspacePage() {
             </div>
           )}
         </div>
-        <div className="border-t border-border p-4">
+        <div className="shrink-0 border-t border-border bg-card p-3 sm:p-4">
           {aiWorkspace.providerConfigured === false && (
             <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-2.5 text-sm text-amber-200">
               <Settings className="h-4 w-4 shrink-0" />
@@ -147,12 +147,14 @@ export function AIWorkspacePage() {
               void aiWorkspace.ask();
             }}
           >
+            <label htmlFor="ai-workspace-query" className="sr-only">Ask about the codebase</label>
             <input
+              id="ai-workspace-query"
               type="text"
               placeholder="Ask about the codebase..."
               value={aiWorkspace.query}
               onChange={(e) => aiWorkspace.setQuery(e.target.value)}
-              className="flex-1 rounded-md border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="partha-input min-w-0 flex-1 px-3 py-2.5 text-sm sm:px-4"
             />
             <button
               disabled={!canSend}

@@ -49,7 +49,7 @@ export function UploadPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="mx-auto w-full max-w-3xl">
       <PageHeader
         title="Upload Repository"
         description="Upload a repository archive or import from GitHub"
@@ -57,11 +57,15 @@ export function UploadPage() {
         <DataSourceBadge source={mode === 'file' ? upload.source : githubImport.source} />
       </PageHeader>
 
-      <div className="flex items-center gap-1 p-1 rounded-lg bg-muted mb-6 w-fit">
+      <div role="tablist" aria-label="Repository source" className="mb-6 grid w-full grid-cols-2 gap-1 rounded-lg border border-border bg-muted p-1 sm:w-fit">
         <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'file'}
+          aria-controls="upload-file-panel"
           onClick={() => { setMode('file'); githubImport.retry(); }}
           className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
+            'flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all',
             mode === 'file'
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
@@ -71,9 +75,13 @@ export function UploadPage() {
           Upload File
         </button>
         <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'github'}
+          aria-controls="upload-github-panel"
           onClick={() => { setMode('github'); upload.retry(); }}
           className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
+            'flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all',
             mode === 'github'
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
@@ -87,6 +95,8 @@ export function UploadPage() {
       <AnimatePresence mode="wait">
         {mode === 'file' ? (
           <motion.div
+            id="upload-file-panel"
+            role="tabpanel"
             key="file"
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
@@ -96,7 +106,7 @@ export function UploadPage() {
             <div
               {...getRootProps()}
               className={cn(
-                'relative rounded-xl border-2 border-dashed p-12 text-center cursor-pointer transition-all duration-200',
+                'relative cursor-pointer rounded-xl border-2 border-dashed p-7 text-center transition-all duration-200 sm:p-12',
                 isDragActive
                   ? 'border-primary bg-primary/5'
                   : 'border-border hover:border-muted-foreground/50 hover:bg-accent/30',
@@ -212,6 +222,8 @@ export function UploadPage() {
           </motion.div>
         ) : (
           <motion.div
+            id="upload-github-panel"
+            role="tabpanel"
             key="github"
             initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
@@ -239,12 +251,14 @@ export function UploadPage() {
               <div className="space-y-4">
                 <div>
                   <label
+                    htmlFor="github-import-url"
                     data-testid="github-import-label"
                     className="block text-xs font-medium text-muted-foreground mb-1.5"
                   >
                     Repository URL
                   </label>
                   <input
+                    id="github-import-url"
                     data-testid="github-import-url"
                     type="url"
                     value={githubImport.githubUrl}

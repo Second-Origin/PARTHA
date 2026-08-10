@@ -74,8 +74,8 @@ export function RepositoriesPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <table className="w-full">
+      <div className="rounded-xl border border-border bg-card overflow-x-auto scrollbar-thin">
+        <table className="w-full min-w-[560px]">
           <thead>
             <tr className="border-b border-border">
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Name</th>

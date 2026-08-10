@@ -273,6 +273,7 @@ Do not expose the development configuration directly to the public internet. Rev
 ## Documentation and contributing
 
 - [Documentation index](docs/README.md) — current public documentation and reading paths.
+- [Iteration 1 engineer feedback](docs/operations/ITERATION_1_ENGINEER_FEEDBACK.md) — test the current end-to-end workflow and report evidence safely.
 - [System Overview](docs/architecture/SYSTEM_OVERVIEW.md) — components, runtime flow, persistence, and trust boundaries.
 - [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) — extraction, snapshot, consumer, and evidence rules.
 - [Accepted `ri.v1` RFC](docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md) — the versioned snapshot contract.
