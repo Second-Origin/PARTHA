@@ -23,8 +23,10 @@ flowchart LR
         MW["Middleware<br/>rate limit · security headers · CORS · request ID"]
         Routes["Routes<br/>app/api/routes/"]
         Services["Services<br/>app/services/"]
-        RI["Repository Intelligence<br/>app/intelligence/"]
-        Consumers["Consumers<br/>analysis · graph · review · ai · reports"]
+        Worker["Analysis worker<br/>app/workers/ · daemon thread"]
+        Extract["Extractors<br/>app/extraction/"]
+        RI["Repository Intelligence<br/>app/intelligence/ · sealed read model"]
+        Consumers["Consumers<br/>analysis · graph · review · insights<br/>documentation · ai · reports"]
     end
 
     subgraph Persistence
@@ -38,10 +40,12 @@ flowchart LR
     end
 
     UI --> MW --> Routes --> Services
-    Services --> RI
     Services --> Consumers
+    Services --> Worker
+    Worker --> Extract --> RI
     Consumers --> RI
     RI --> DB
+    Worker --> DB
     Services --> Disk
     Services --> GH
     Consumers --> LLM
@@ -66,7 +70,8 @@ flowchart LR
 | `api/` | HTTP boundary. Routes stay thin; `deps.py` wires every dependency. | Contain business logic. |
 | `services/` | Application services: repository import, analysis orchestration, documentation, AI. | Parse repository files directly. |
 | `intelligence/` | **The Repository Intelligence engine.** Builds, persists, and reloads reusable repository facts. | Render API response shapes. |
-| `parsers/` | `RepositoryParser` walks the extracted tree and produces the file tree plus basic metadata. Syntax-aware `PythonExtractor` and `TypeScriptExtractor` live under `extraction/`; legacy ingestion still uses the parser's heuristic symbol path. | Produce feature-specific output. |
+| `parsers/` | `RepositoryParser` walks the extracted tree and produces the file tree plus basic metadata. Legacy ingestion still uses the parser's heuristic symbol path. | Produce feature-specific output. |
+| `extraction/` | The producer set behind the engine: syntax-aware `python.py` and `typescript.py`, dependency `manifests.py` and `lockfiles.py`, outbound service interactions (`http.py`), Docker Compose resources (`iac.py`), and the `support_matrix.py` that generates the public capability registry. | Persist snapshots or answer product queries. |
 | `analysis/` | Architecture model — modules, layers, edges, request-flow hints. **Consumer.** | Read the filesystem. |
 | `graph/` | Dependency graph response model. **Consumer.** | Re-read dependency manifests. |
 | `review/` | Deterministic `engineering-review.v2` findings and category assessment over one sealed snapshot. **Consumer.** | Read the legacy JSON model, invent scores/grades, or emit a finding without exact same-snapshot evidence. |
@@ -95,12 +100,13 @@ sequenceDiagram
     participant Store as LocalStorage
     participant Parser as RepositoryParser
     participant Worker as AnalysisWorker
+    participant RI as Extraction + Intelligence
     participant DB as Database
 
     UI->>API: POST /repositories/upload (archive)<br/>or POST /repositories/github (URL)
     API->>Repo: import
     Repo->>Store: save + extract archive, or shallow-clone
-    Note over Store: path traversal and symlink escape rejected on upload;<br/>upload and clone size caps enforced
+    Note over Store: path traversal and symlink escape rejected on upload<br/>upload and clone size caps enforced
     Store-->>Repo: repository root on disk
     Repo->>Parser: parse(root)
     Parser-->>Repo: FileTreeNode[] + RepositoryMeta + size
@@ -126,12 +132,13 @@ snapshot, and serves every product consumer from that immutable read model.
 
 | Store | Holds | Notes |
 | --- | --- | --- |
-| Relational DB | `users`, `refresh_tokens`, `repositories`, `analysis_jobs`, `ai_provider_configs`, and normalized `ri_*` snapshot tables | SQLite by default for local development; PostgreSQL is supported through `DATABASE_URL`. Analysis jobs and their worker leases are durable database state. |
+| Relational DB | `users`, `refresh_tokens`, `repositories`, `analysis_jobs`, `ai_provider_configs`, `ai_conversation_messages`, and normalized `ri_*` snapshot tables | SQLite by default for local development; PostgreSQL is supported through `DATABASE_URL`. Analysis jobs and their worker leases are durable database state. |
 | `repositories.revision_kind`, `revision_value`, `revision_ref` | Exact imported source identity: Git commit + resolved ref, or upload archive hash. | `revision_value` is indexed and immutable; a moving branch name is metadata, never identity. |
 | `repositories.repo_metadata` (JSON column) | Import/parser metadata; historical rows may also retain a **legacy/unverified** `intelligence` value. | New analysis does not write the legacy value, and executable product consumers ignore it. New imports no longer stash `commitSha` here. |
 | `ri_snapshots`, `ri_nodes`, `ri_edges`, `ri_assertions`, `ri_observations`, `ri_evidence`, `ri_derivations`, `ri_diagnostics` | Revision-addressed normalized `ri.v1` artifacts, provenance, lifecycle state, and canonical hash. | Durable analysis runs the Python/TypeScript/manifest producers and resolver, then seals a snapshot. Architecture, authentication explanation, Dependencies, Engineering Review, Insights, Documentation, exports, and AI context consume it. |
 | `repositories.file_tree` (JSON column) | The parsed file tree. | Serves the explorer. |
 | `ai_provider_configs` | One row per user: provider, model, base URL, and the **Fernet-encrypted** API key plus its last four characters. | Owner-scoped; the plaintext key is never stored or returned. A stored endpoint remains unusable unless it satisfies the current deployment egress policy. |
+| `ai_conversation_messages` | One row per AI Workspace turn: role, content, optional citations, and an explicit `sequence`. | **The AI Workspace thread is durable, not ephemeral.** One ordered thread per owner per repository, so history survives navigating away and returning. `UNIQUE(owner_id, repository_id, sequence)` is the concurrency guard; the repository foreign key cascades, so deleting a repository deletes its turns. A cross-owner read resolves to the same 404 as a missing repository. |
 | Filesystem (`STORAGE_PATH`) | Extracted archives and cloned repositories; uploaded archives (deleted after extraction). | Repository source is read from here on demand for file preview. |
 
 AI provider configuration is **per-user and encrypted at rest**. Each user's API key is encrypted with a Fernet key from `AI_ENCRYPTION_KEY` (required outside `development`/`test`), decrypted only in-process at request time, and injected per request — so a query runs against the caller's own key and bill, never a shared one.
@@ -193,7 +200,7 @@ extracts and what it does not.
 | `insights/` | sealed `ri.v1` nodes, edges, diagnostics, evidence and extractor set | Defined counts, ratios and breakdowns; no inferred trends |
 | `graph/` | sealed dependency nodes, declarations, resolved edges, diagnostics, evidence | Direct dependency graph with explicit not-computed assessments |
 | `services/documentation_service.py` | shared sealed structural projection and snapshot/revision identity | Markdown / HTML documentation |
-| `ai/repository_context.py` | shared sealed structural projection, without source bytes | Preview `RepositoryContext` → `PromptBundle` for a configured provider |
+| `ai/repository_context.py` | shared sealed structural projection, without source bytes, plus the recent turns of the stored conversation thread | Preview `RepositoryContext` → `PromptBundle` for a configured provider |
 | `reports/` | snapshot-backed analysis and documentation output | JSON / Markdown / HTML / PDF |
 
 ---
@@ -222,6 +229,7 @@ flowchart TB
     subgraph Backend["Backend process — trusted"]
         Validate["Validation<br/>URL allowlist · branch charset · size caps<br/>path traversal + symlink rejection (upload)"]
         Engine["Parse + Repository Intelligence"]
+        Thread[("Stored conversation<br/>ai_conversation_messages")]
     end
 
     subgraph Out["Egress"]
@@ -234,11 +242,14 @@ flowchart TB
     Validate --> Engine
     Source --> Engine
     Engine -->|"structure + file paths only —<br/>never source content"| Providers
+    Thread -->|"recent user-authored turns"| Providers
+    Providers -.->|"answer persisted as a turn"| Thread
     Engine -->|"redacted; never repository content"| Logs
 ```
 
 - **Uploaded archives and cloned repositories are untrusted input.** Upload extraction rejects path traversal and symlink escape; upload and clone sizes are capped; only allowlisted archive suffixes are accepted. The GitHub clone tree walk currently follows symlinks (filesystem-disclosure + recursion risk) — clone-path symlink hardening is tracked in #182. Repository *content* is never executed — it is only read as text.
 - **Repository source never leaves the process.** The AI context builder passes structure and metadata only: languages, frameworks, modules, dependency names, and file paths. No file contents and no line numbers are sent to any provider, and the system prompt explicitly tells the model not to claim line numbers or quote code it was not given.
+- **Conversation turns do leave the process, and are retained.** Alongside that structural context, the most recent turns of the AI Workspace thread are replayed to the provider so a follow-up question resolves. Those turns are user-authored text, not repository source, but they are egress and they are persisted in `ai_conversation_messages` rather than discarded at the end of a session. Interface copy must describe this accurately: the workspace does not forget, and telling a user otherwise would be a false privacy assurance.
 - **Logs are redacted.** Keys containing `api_key`, `apikey`, `authorization`, `password`, `secret`, or `token` are redacted from structured log extras. Repository contents and credentials must never be logged.
 - **The authenticated-user boundary is enforced.** Every non-public route requires a valid token, and every repository lookup is owner-scoped in the service layer, so a caller sees only their own data. Provider API keys are encrypted at rest and injected per user. Provider destinations are selected by a deployment-owned egress policy, not by a tenant: configured endpoints must match an exact allowlist, DNS answers are checked again immediately before the request and pinned to the connection, redirects are denied, and policy errors omit destination details. Rate-limit budgets are keyed on the validated user id for authenticated requests (falling back to the client IP otherwise), so one user cannot spend another's budget. See [AI provider egress policy](../security/AI_PROVIDER_EGRESS.md).
 
@@ -256,7 +267,7 @@ These are properties of the system as built, not a wish list.
    Missing or stale snapshots return 404 without fallback.
 4. **Analysis is whole-repository.** It runs in a durable, cancellable background job with bounded retry and stale-worker recovery, but incremental re-analysis is not implemented. Import extraction and file-tree parsing remain synchronous.
 5. **The rate limiter trusts only the direct socket peer for unauthenticated requests.** `X-Forwarded-For` is deliberately ignored, so behind a reverse proxy every unauthenticated client shares one IP budget until a trusted-proxy allowlist is designed. Authenticated requests are keyed per user and unaffected.
-6. **Dependency coverage is narrow.** Three manifest formats, no lockfiles, no transitive resolution, and no vulnerability or outdated-version scanning. The API exposes explicit `not_computed` assessment statuses and does not emit a clean result or count without a scanner.
+6. **Dependency coverage is narrow.** Three manifest formats plus two lockfile formats (`package-lock.json`, `poetry.lock`), whose exact pins are recorded as resolutions on the same dependency identity rather than as direct edges. There is no transitive resolution and no vulnerability or outdated-version scanning. The API exposes explicit `not_computed` assessment statuses and does not emit a clean result or count without a scanner.
 7. **Frontend assurance remains focused.** Vitest covers shared and feature
    behavior, and a disposable Playwright acceptance suite exercises the defined
    Architecture, Engineering Review, and Insights prototype journeys. This is
