@@ -4,7 +4,7 @@
 | --- | --- |
 | **RFC number** | RFC-0002 |
 | **Title** | Repository Lineage: Identity and Schema Design |
-| **Tracking issue** | filled in after step 5 |
+| **Tracking issue** | [Second-Origin/PARTHA#298](https://github.com/Second-Origin/PARTHA/issues/298) |
 | **Author** | @parthrohit22 |
 | **Owner sign-off** | Confirmed |
 | **Ratifier** | Pending — independent ratification by [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) is required before implementation begins (see [Q5](#q5-independent-ratification)) |
@@ -28,7 +28,7 @@
 ### 1.1 Status
 
 This RFC is **Accepted** at the owner level: @parthrohit22, the repository owner, has reviewed
-and confirmed the design in [§4](#4-identity-design) through [§7](#7-backfill-approach) below,
+and confirmed the design in [§4](#4-identity-design) through [§7](#7-roadmap-alignment) below,
 including the resolution of all five open questions in [§10](#10-open-questions-and-resolutions).
 
 ### 1.2 What "Accepted" does and does not mean here
@@ -92,7 +92,7 @@ identity, snapshot immutability, or any existing API/frontend contract.
 
 A lineage is identified by the triple:
 
-```
+```text
 (owner_id, canonical_source_key, canonical_branch)
 ```
 
@@ -139,7 +139,7 @@ New table `repository_lineages`:
 
 Constraint:
 
-```
+```sql
 UNIQUE (owner_id, canonical_source_key, canonical_branch)
   WHERE canonical_source_key IS NOT NULL
 ```
@@ -263,7 +263,7 @@ before any implementation begins.
 
 ## 11. Sign-off
 
-```
+```text
 Owner sign-off: confirmed
 Open questions: 5/5 resolved
 Tracking issue: filled in after step 5
