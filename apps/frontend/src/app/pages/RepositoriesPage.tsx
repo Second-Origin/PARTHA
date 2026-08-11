@@ -132,6 +132,7 @@ export function RepositoriesPage() {
                   <div className="flex items-center justify-end gap-1">
                     <button
                       data-testid="repository-open-action"
+                      aria-label={`Open ${repo.name}`}
                       onClick={() => {
                         selectRepository(repo);
                         if (repo.status === 'analysing' || repo.status === 'cancelled') navigate(`/analysis/${repo.id}`);
@@ -139,10 +140,11 @@ export function RepositoriesPage() {
                       }}
                       className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                     >
-                      <ExternalLink className="h-3.5 w-3.5" />
+                      <ExternalLink aria-hidden="true" focusable="false" className="h-3.5 w-3.5" />
                     </button>
                     <button
                       data-testid="repository-delete-action"
+                      aria-label={`Delete ${repo.name}`}
                       onClick={() => {
                         setActionError(null);
                         void removeRepository(repo.id).catch((caught: unknown) => {
@@ -151,7 +153,7 @@ export function RepositoriesPage() {
                       }}
                       className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 aria-hidden="true" focusable="false" className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </td>

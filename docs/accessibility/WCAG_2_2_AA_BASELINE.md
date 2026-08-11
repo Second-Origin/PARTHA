@@ -103,9 +103,11 @@ results here.
 | --- | --- | --- | --- | --- |
 | `/login`, initial form | Registration link relies on colour alone; axe reports `link-in-text-block` and 1.41:1 against surrounding copy. | 1.4.1 Use of Color | Serious; the registration path can be missed by low-vision and colour-vision-deficient users. | [#240](https://github.com/Second-Origin/PARTHA/issues/240) |
 | Authenticated shell | Notification and account icon buttons have no accessible names (`button-name`). | 4.1.2 Name, Role, Value | Critical/high impact; screen-reader and voice-control users cannot identify persistent controls. | [#236](https://github.com/Second-Origin/PARTHA/issues/236) |
-| `/repositories`, success list | Every open/delete icon action lacks a repository-specific accessible name (`button-name`). | 4.1.2 Name, Role, Value | Critical/high impact; actions, including deletion, cannot be distinguished non-visually. | [#235](https://github.com/Second-Origin/PARTHA/issues/235) |
+| ~~`/repositories`, success list~~ | ~~Every open/delete icon action lacks a repository-specific accessible name (`button-name`).~~ | ~~4.1.2 Name, Role, Value~~ | ~~Critical/high impact; actions, including deletion, cannot be distinguished non-visually.~~ | ~~[#235](https://github.com/Second-Origin/PARTHA/issues/235)~~ |
 | Authenticated expanded sidebar | `More` section label is approximately 4.23:1 at 10px (`color-contrast`). | 1.4.3 Contrast (Minimum) | Serious; the navigation grouping can be difficult to perceive. | [#238](https://github.com/Second-Origin/PARTHA/issues/238) |
 | `/upload`, GitHub URL mode | Title, helper copy, field label, and URL placeholder can fall below 4.5:1 (`color-contrast`); the rebased Chromium run measured the title at 2.82:1 and placeholder at 2.87:1. axe 4.12 can omit individual targets across environments despite shared computed colors. The automated baseline therefore permits each exact known target up to its recorded count; a new target or increased count still fails. | 1.4.3 Contrast (Minimum) | Serious; low-vision users can miss the import purpose, field purpose, public-URL constraint, or example format. | [#237](https://github.com/Second-Origin/PARTHA/issues/237) |
+
+**Resolved by #286** — repository open/delete actions now carry repository-specific accessible names (`Open <repository>` / `Delete <repository>`), and their icons are marked decorative.
 
 No confirmed automated violation is left only in this report.
 

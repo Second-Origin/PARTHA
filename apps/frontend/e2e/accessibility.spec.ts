@@ -180,21 +180,11 @@ test.describe('WCAG 2.2 AA automated baseline (#118)', () => {
     await login(page);
     await openSurface(page, 'Repositories');
     await expect(page.getByRole('button', { name: byLabel('small').name, exact: true })).toBeVisible();
-    await expectWcagBaseline(page, 'repositories: seeded success list', [
-      ...SHELL_FINDINGS,
-      {
-        issue: 235,
-        rule: 'button-name',
-        testId: 'repository-open-action',
-        maxCount: FIXTURES.repos.length,
-      },
-      {
-        issue: 235,
-        rule: 'button-name',
-        testId: 'repository-delete-action',
-        maxCount: FIXTURES.repos.length,
-      },
-    ]);
+    for (const repository of FIXTURES.repos) {
+      await expect(page.getByRole('button', { name: `Open ${repository.name}`, exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: `Delete ${repository.name}`, exact: true })).toBeVisible();
+    }
+    await expectWcagBaseline(page, 'repositories: seeded success list', SHELL_FINDINGS);
   });
 
   test('GitHub repository import form', async ({ page }) => {
