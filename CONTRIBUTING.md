@@ -346,14 +346,26 @@ Every dependent pull request must link its issue, its prerequisite pull request,
 
 Run the checks relevant to your change. These are what CI runs.
 
-| Command | Runs |
-| --- | --- |
-| `npm run test:backend` | Backend tests (pytest) |
-| `npm --prefix apps/frontend run test` | Frontend tests (vitest) |
-| `npm run lint:frontend` | ESLint |
-| `npm run build:frontend` | `tsc -b && vite build` — type errors surface here, not in lint |
+| Command | Runs | CI job |
+| --- | --- | --- |
+| `npm run test:backend` | Backend tests (pytest) | Backend |
+| `ruff check app` · `ruff format --check app` · `mypy app` | Backend static analysis. Needs `requirements-dev.txt` — see the [backend README](apps/backend/README.md#static-analysis) | Backend |
+| `python scripts/check-capabilities.py` | Capability registry and its generated README block are current and deterministic | Backend |
+| `npm --prefix apps/frontend run test` | Frontend tests (vitest) | Frontend |
+| `npm run lint:frontend` | ESLint | Frontend |
+| `npm run build:frontend` | `tsc -b && vite build` — type errors surface here, not in lint | Frontend |
+| `node scripts/dependency-audit.mjs` · `node --test scripts/dependency-audit.test.mjs` | Dependency audit policy and its own tests | Frontend |
+| `npm --prefix apps/frontend run generate:api-contract -- --check` | Generated frontend DTOs have not drifted from the FastAPI schema | API Contract Drift |
+| `npm run test:prototype` | Disposable fixtures plus the Playwright browser journeys | Prototype Browser Acceptance |
+| `npm run test:accessibility` | The WCAG 2.2 AA baseline journeys only, on the same stack | Prototype Browser Acceptance |
 
 `npm run build` runs the frontend build plus the backend tests. It does **not** run frontend lint or frontend tests — run those separately.
+
+The table is the full CI gate list, so a change can pass `test:backend` and
+`build:frontend` and still fail on contract drift, the capability registry, the
+dependency audit, or a browser journey. If you touched a backend schema, run the
+contract check; if you touched navigation or a page's structure, run
+`test:accessibility`.
 
 | If you changed… | You must run |
 | --- | --- |
@@ -364,7 +376,7 @@ Run the checks relevant to your change. These are what CI runs.
 | Local startup, CI, config, health | Smoke-check the affected backend/frontend start command and run the relevant tests above |
 | Anything user-visible | Update the documentation **in the same pull request** |
 
-Three backend tests are gated on real PostgreSQL and Redis and skip locally; CI provides both services.
+Four backend tests are gated on real services and skip locally: two need `PARTHA_TEST_PG_URL` (the PostgreSQL analysis-job and refresh-token concurrency cases) and two need `PARTHA_TEST_REDIS_URL` (the Redis rate-limit backend cases). CI provides both services, so a locally green run showing four skips is expected rather than a problem.
 
 If you cannot run a check locally, say so in the pull request and explain why. **Do not claim a check you did not run.**
 
