@@ -17,13 +17,30 @@ src/
 
 Every application route is behind the `RequireAuth` guard; only `/login` and `/register` are public. All backend calls go through the shared API client in `src/shared/services/api/`, which owns access-token attachment and 401 handling — do not call `fetch` directly from a feature.
 
-## Navigation readiness
+## Navigation readiness and grouping
 
 Top-level product routes and primary navigation are defined together in
 `src/app/routes/productSurfaces.tsx`. A deferred surface must remain out of
 primary navigation and record its delivery phase and blocking issues there.
 Its direct route renders the shared unavailable-for-this-phase state; do not
 restore a deferred page until its readiness gate changes.
+
+That registry is also the single source of truth for **where** a surface
+appears. Each entry carries a `navGroup`, and the sidebar renders groups in
+registry order — it never hardcodes a route:
+
+| `navGroup` | Contains | Rendering |
+| --- | --- | --- |
+| `flagship` | Dashboard, Repositories, Upload Repository | Top of the sidebar, unlabelled, full weight. |
+| `analysis` | Architecture, Dependency Graph, Engineering Review, Insights, Documentation | Under a muted **Analysis** heading. Read-only evidence views. |
+| `assist` | AI Workspace | Under a muted **Assist** heading, deliberately separate from `analysis`: an interactive tool over the same facts is not another view of record. |
+| `utility` | Settings | Pinned to the footer above the account row, in its own `nav` landmark. |
+
+Two rules the tests enforce, so changing them means changing a test on purpose:
+reordering a surface in the registry reorders the sidebar, and every group
+member stays a real focusable link — reducing emphasis never means hiding a
+surface. A pinned surface still belongs to a navigation landmark; a link in a
+bare `div` is invisible to landmark-based screen-reader navigation.
 
 ## Commands
 

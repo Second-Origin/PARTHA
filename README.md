@@ -96,7 +96,7 @@ Repository Intelligence is PARTHA's single repository-understanding boundary. Re
 flowchart LR
     Input["Repository input<br/>archive · public GitHub"]
     Import["Import<br/>safe storage · revision identity · file inventory"]
-    Analyse["Durable analysis<br/>Python · TypeScript/JavaScript · manifests"]
+    Analyse["Durable analysis<br/>Python · TypeScript/JavaScript · manifests<br/>lockfiles · service interactions · Docker Compose"]
     RI[("Sealed ri.v1 snapshot<br/>facts · evidence · diagnostics · canonical hash")]
     Product["Architecture · Dependencies · Review<br/>Insights · Documentation · Exports"]
     AI["AI provider<br/>optional · structural context only"]
@@ -107,7 +107,7 @@ flowchart LR
 
 The architectural rule is deliberately strict:
 
-> If a feature needs a repository fact, reusable extraction belongs in `apps/backend/app/intelligence/`. A consumer must never build a second parser. AI is an optional downstream consumer of Repository Intelligence, never an independent interpreter of the repository.
+> If a feature needs a repository fact, it belongs in the shared engine: extractors in `apps/backend/app/extraction/`, resolution and the sealed read model in `apps/backend/app/intelligence/`. A consumer must never build a second parser. AI is an optional downstream consumer of Repository Intelligence, never an independent interpreter of the repository.
 
 ### Evidence, provenance, and integrity
 
@@ -197,7 +197,7 @@ The prototype browser suite exercises defined Architecture, Engineering Review, 
 
 - **Pre-alpha, trusted-environment use.** PARTHA has not been operated or hardened as a public multi-tenant service.
 - **Narrow semantic coverage.** The capability registry declares the Python and TypeScript/JavaScript constructs that receive the deepest extraction. Other languages primarily contribute file inventory. Role, module, layer, framework, and entry-point classifications can be heuristic.
-- **Narrow dependency coverage.** Only direct declarations in three manifest formats are extracted. Lockfiles, transitive dependencies, vulnerability scanning, and outdated-version scanning are not implemented.
+- **Narrow dependency coverage.** Direct declarations are extracted from three manifest formats, and exact pins from two lockfile formats (`package-lock.json`, `poetry.lock`) are recorded as resolutions on the same dependency identity. A pin is never promoted to a direct dependency edge, so transitive resolution is not claimed. Vulnerability scanning and outdated-version scanning are not implemented.
 - **No repository evolution workflow.** Analysis is whole-repository; incremental analysis, revision comparison, and churn/trend analysis are unavailable. The sealed-snapshot impact query does not compare revisions or calculate historical change.
 - **Surface-dependent evidence.** A sealed snapshot does not make every product sentence line-cited. In particular, generated structural documentation and free-form AI have stricter evidence limits.
 - **In-process execution.** A daemon worker thread inside the API process handles one analysis job at a time; there is no separate worker service or external job queue.
