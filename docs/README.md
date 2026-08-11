@@ -41,4 +41,13 @@ Every document listed here is maintained and describes the system as it currentl
 
 ## Product testing
 
-- [Iteration 1 engineer feedback](operations/ITERATION_1_ENGINEER_FEEDBACK.md) — workflow checklist, feedback fields, and safe reporting guidance for real-user testing.
+- [Iteration 1 engineer feedback](operations/ITERATION_1_ENGINEER_FEEDBACK.md) — workflow checklist, feedback fields, safe reporting guidance, and what the AI Workspace retains, for real-user testing.
+
+## Point-in-time records
+
+These are **not** maintained descriptions of current behaviour. Each captures
+what was checked on a given date and is left unedited so it stays usable as
+evidence. Where the product has since changed, the record says so at the top
+rather than being rewritten.
+
+- [Iteration 1 design QA](../design-qa.md) — one QA pass against the Iteration 1 design reference: viewport measurements, contrast readings, and the deliberate decisions not to copy unimplemented reference controls.

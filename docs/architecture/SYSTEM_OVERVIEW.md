@@ -15,35 +15,38 @@ is no external message queue or separate analysis service.
 
 ```mermaid
 flowchart LR
-    subgraph Client
-        UI["Frontend — React 18 · Vite · TypeScript<br/>apps/frontend"]
-    end
+    UI["<b>Frontend</b><br/>React 18 · Vite · TypeScript<br/>apps/frontend"]
 
     subgraph Server["Backend — FastAPI · apps/backend"]
-        MW["Middleware<br/>rate limit · security headers · CORS · request ID"]
-        Routes["Routes<br/>app/api/routes/"]
-        Services["Services<br/>app/services/"]
-        Worker["Analysis worker<br/>app/workers/ · daemon thread"]
-        Extract["Extractors<br/>app/extraction/"]
-        RI["Repository Intelligence<br/>app/intelligence/ · sealed read model"]
-        Consumers["Consumers<br/>analysis · graph · review · insights<br/>documentation · ai · reports"]
+        direction TB
+        MW["<b>Middleware</b><br/>rate limit · security headers<br/>CORS · request ID"]
+        Routes["<b>Routes</b><br/>app/api/routes/"]
+        Services["<b>Services</b><br/>app/services/"]
+        Worker["<b>Analysis worker</b><br/>app/workers/ · daemon thread"]
+        Extract["<b>Extractors</b><br/>app/extraction/"]
+        RI["<b>Repository Intelligence</b><br/>app/intelligence/<br/>sealed read model"]
+        Consumers["<b>Consumers</b><br/>analysis · graph · review · insights<br/>documentation · ai · reports"]
+
+        MW --> Routes --> Services
+        Services -->|"enqueue"| Worker
+        Worker --> Extract --> RI
+        Services --> Consumers
+        Consumers -->|"read only"| RI
     end
 
-    subgraph Persistence
-        DB[("Relational DB<br/>SQLite local · PostgreSQL configured")]
+    subgraph Store["Persistence"]
+        direction TB
+        DB[("Relational DB<br/>SQLite local<br/>PostgreSQL configured")]
         Disk[("Filesystem<br/>STORAGE_PATH")]
     end
 
-    subgraph External
+    subgraph Ext["External"]
+        direction TB
         GH["GitHub<br/>git clone over HTTPS"]
-        LLM["AI providers<br/>OpenAI · Anthropic · Gemini · OpenRouter · Ollama"]
+        LLM["AI providers<br/>OpenAI · Anthropic · Gemini<br/>OpenRouter · Ollama"]
     end
 
-    UI --> MW --> Routes --> Services
-    Services --> Consumers
-    Services --> Worker
-    Worker --> Extract --> RI
-    Consumers --> RI
+    UI --> MW
     RI --> DB
     Worker --> DB
     Services --> Disk
@@ -227,9 +230,9 @@ flowchart TB
     end
 
     subgraph Backend["Backend process — trusted"]
-        Validate["Validation<br/>URL allowlist · branch charset · size caps<br/>path traversal + symlink rejection (upload)"]
-        Engine["Parse + Repository Intelligence"]
-        Thread[("Stored conversation<br/>ai_conversation_messages")]
+        Validate["<b>Validation</b><br/>URL allowlist · branch charset · size caps<br/>path traversal + symlink rejection (upload)"]
+        Engine["<b>Parse + Repository Intelligence</b>"]
+        Thread[("Stored conversation<br/>ai_conversation_messages<br/>both turns of every query")]
     end
 
     subgraph Out["Egress"]
@@ -242,9 +245,9 @@ flowchart TB
     Validate --> Engine
     Source --> Engine
     Engine -->|"structure + file paths only —<br/>never source content"| Providers
-    Thread -->|"recent user-authored turns"| Providers
-    Providers -.->|"answer persisted as a turn"| Thread
     Engine -->|"redacted; never repository content"| Logs
+    Engine --> Thread
+    Thread -->|"recent turns replayed as context"| Providers
 ```
 
 - **Uploaded archives and cloned repositories are untrusted input.** Upload extraction rejects path traversal and symlink escape; upload and clone sizes are capped; only allowlisted archive suffixes are accepted. The GitHub clone tree walk currently follows symlinks (filesystem-disclosure + recursion risk) — clone-path symlink hardening is tracked in #182. Repository *content* is never executed — it is only read as text.

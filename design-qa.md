@@ -1,5 +1,15 @@
 # Iteration 1 design QA
 
+> **Point-in-time record — not current-state documentation.** This captures one
+> QA pass against the Iteration 1 design reference. Its findings and test counts
+> were accurate when recorded and are deliberately left unedited, so it is
+> evidence of what was checked rather than a description of the product today.
+> The interface has since changed — navigation is grouped into Analysis and
+> Assist with Settings pinned (#289), and the AI Workspace copy was corrected to
+> disclose conversation retention. For current behaviour see the
+> [README capability registry](README.md#what-works-today) and
+> [System Overview](docs/architecture/SYSTEM_OVERVIEW.md).
+
 ## Reference
 
 - Figma prototype: Iteration 1, starting at node `285:2987`.

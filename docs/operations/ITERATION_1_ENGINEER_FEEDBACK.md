@@ -15,6 +15,15 @@ Use a repository you are authorised to inspect and complete these tasks:
 
 AI is optional. Provider questions receive structural context from the sealed snapshot; PARTHA does not send repository source-file contents through this workflow, and provider prose has no automatic source citations.
 
+**Before you use the AI Workspace, know what it keeps.** Your questions and the
+provider's answers are stored server-side, one thread per repository, and are
+restored when you come back to the page — the workspace does not forget at the
+end of a session. The most recent turns are also replayed to your configured
+provider as context on each new question. There is currently no way to clear a
+thread from the interface; it is removed only when the repository is deleted.
+Treat anything you type there as retained, and keep secrets and personal data
+out of your questions.
+
 ## What to report
 
 Open a GitHub issue using the appropriate template and include:

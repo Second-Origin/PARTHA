@@ -114,6 +114,26 @@ Every non-public API route requires a valid Bearer token. Repository resolution 
 owner-scoped in the service layer across analysis and all product consumers, so
 one account cannot query another account's repository or snapshots.
 
+## AI Workspace endpoints
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET`/`PUT /ai/config` | Read or replace the caller's provider configuration. The API key is Fernet-encrypted at rest; only its last four characters are ever returned. |
+| `POST /ai/test` | Validate a configuration against the provider without storing an answer. |
+| `POST /ai/query` | Ask a question. Receives sealed-snapshot structural facts and observed paths — never source bytes or line spans — so answers carry no automatic citations. |
+| `GET /ai/conversations?repositoryId=…` | The persisted thread for one repository, oldest turn first. |
+
+**Conversation turns are durable.** Both the question and the answer are written
+to `ai_conversation_messages`, one ordered thread per owner per repository, so
+the workspace restores its history when a user navigates away and returns
+(#231). The most recent turns are replayed to the provider as context, which is
+what makes a follow-up question resolve. Two consequences worth stating plainly:
+this is real egress of user-authored text alongside the structural context, and
+**there is no delete endpoint** — a user cannot yet clear their own thread, and
+history is removed only when the repository itself is deleted, which cascades.
+Any interface built on these routes must describe retention accurately rather
+than implying the workspace forgets.
+
 ## AI provider egress
 
 AI provider traffic is centrally checked at configuration save time and again
@@ -210,3 +230,44 @@ repository revision and snapshot identity.
   sealed-snapshot dependency nodes, declarations (with manifest path and line
   span merged across manifests, #156), and resolved `depends_on` edges. It
   does not provide vulnerability or outdated-package scanning.
+- `GET /analysis/{repository_id}/architecture/authentication` returns the cited
+  authentication subgraph. Coverage is limited to supported Python/FastAPI
+  patterns.
+- `GET /analysis/{repository_id}/evidence` returns the stored evidence for a
+  fact in the current snapshot, which is what lets a UI prove a citation
+  instead of asserting one.
+- `GET /analysis/{repository_id}/revision-manifest` and its `/verify` companion
+  expose the snapshot's revision identity and canonical graph hash. The digest
+  detects content differences inside this deployment; it is **not** a signature
+  or a proof of authorship.
+
+## Repository and job endpoints
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /repositories/upload`, `POST /repositories/github` | Import an archive or a public GitHub URL. Extraction and file-tree parsing complete before the response. |
+| `GET /repositories`, `GET /repositories/{id}` | Owner-scoped listing and detail. The list is not paginated: it returns every repository the caller owns. |
+| `GET /repositories/{id}/file` | Path-checked bounded preview for the explorer. Feeds no analysis. |
+| `DELETE /repositories/{id}` | Deletes the repository and cascades to its snapshots and conversation turns. |
+| `POST /analysis/{id}/start`, `POST /analysis/{id}/cancel`, `GET /analysis/{id}/status` | Durable job lifecycle, described above. |
+| `POST /documentation/generate` | Structural documentation from the sealed snapshot. |
+| `POST /export` | One JSON/Markdown/HTML/PDF pipeline over output that already exists; it never re-analyses. |
+
+## Repository Intelligence query API
+
+`/intelligence/v1/snapshots/{snapshot_id}` is the versioned read API over a
+sealed snapshot, addressed by snapshot rather than by repository, and
+owner-scoped like every other route. It is the interface a consumer should
+build on rather than reaching into `ri_*` tables directly — storage and indexes
+are implementation details, the API is the contract.
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /{snapshot_id}` | Snapshot metadata: revision identity, schema version, producer version set, config hash, canonical graph hash. |
+| `GET /{snapshot_id}/symbols` | Paginated nodes. |
+| `GET /{snapshot_id}/neighbours` | Adjacent nodes across resolved edges. |
+| `GET /{snapshot_id}/references` | Where a node is referenced. |
+| `GET /{snapshot_id}/paths` | Resolved paths between nodes. |
+| `GET /{snapshot_id}/impact` | Directional traversal over resolved import and dependency edges. It does **not** compare revisions or calculate churn — this is reachability within one snapshot, not change impact over time. |
+| `GET /{snapshot_id}/assertions` | Inferred assertions, kept separate from observed facts, each with its derivation chain. |
+| `GET /{snapshot_id}/evidence` | Stored evidence for a fact, with its exact span in the stored revision. |
