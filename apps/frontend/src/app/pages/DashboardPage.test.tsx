@@ -48,9 +48,17 @@ describe('DashboardPage', () => {
       analysedAt: '2026-08-09T15:30:00Z',
       revision: { kind: 'git', ref: 'refs/heads/main', value: 'abcdef1234567890abcdef1234567890abcdef12' },
     });
+    const middle = makeRepository({
+      id: 'repo-middle',
+      name: 'middle-repo',
+      analysedAt: '2026-08-05T09:00:00Z',
+      revision: { kind: 'git', ref: 'refs/heads/main', value: 'fedcba0987654321fedcba0987654321fedcba09' },
+    });
+    // Deliberately unsorted, with the winner neither first nor last: picking
+    // either end of the list must not accidentally pass this test.
     mockDashboard.mockReturnValue({
-      repositories: [older, newer],
-      metrics: { totalRepositories: 2, completedRepositories: 2, totalFiles: 84, totalSize: 2048 },
+      repositories: [older, newer, middle],
+      metrics: { totalRepositories: 3, completedRepositories: 3, totalFiles: 126, totalSize: 3072 },
       selectRepository: vi.fn(),
     });
 
@@ -58,8 +66,28 @@ describe('DashboardPage', () => {
 
     const summary = screen.getByTestId('latest-analysis-summary');
     expect(within(summary).getByText('newest-repo')).toBeInTheDocument();
-    expect(within(summary).getByText('abcdef1')).toBeInTheDocument();
+    expect(within(summary).getByText('git abcdef1')).toBeInTheDocument();
     expect(within(summary).queryByText('older-repo')).not.toBeInTheDocument();
+    expect(within(summary).queryByText('middle-repo')).not.toBeInTheDocument();
+  });
+
+  it('labels a git revision with its kind and keeps the full immutable value available', () => {
+    const repo = makeRepository({
+      analysedAt: '2026-08-09T15:30:00Z',
+      revision: { kind: 'git', ref: 'refs/heads/main', value: 'abcdef1234567890abcdef1234567890abcdef12' },
+    });
+    mockDashboard.mockReturnValue({
+      repositories: [repo],
+      metrics: { totalRepositories: 1, completedRepositories: 1, totalFiles: 42, totalSize: 1024 },
+      selectRepository: vi.fn(),
+    });
+
+    renderDashboard();
+
+    // The abbreviation is display-only -- the exact revision identity stays
+    // recoverable, never replaced by its 7-character prefix.
+    const revision = within(screen.getByTestId('latest-analysis-summary')).getByText('git abcdef1');
+    expect(revision).toHaveAttribute('title', 'abcdef1234567890abcdef1234567890abcdef12');
   });
 
   it('renders an upload revision as a short content hash, not the raw sha256 value', () => {

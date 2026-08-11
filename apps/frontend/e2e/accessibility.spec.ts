@@ -42,7 +42,10 @@ interface KnownFinding {
 const SHELL_FINDINGS: KnownFinding[] = [
   { issue: 236, rule: 'button-name', testId: 'notification-menu-trigger', maxCount: 1 },
   { issue: 236, rule: 'button-name', testId: 'user-menu-trigger', maxCount: 1 },
-  { issue: 238, rule: 'color-contrast', testId: 'secondary-navigation-label', maxCount: 1 },
+  // #238's `secondary-navigation-label` allowance is intentionally gone: the
+  // "More" label it covered was replaced by the AA-contrast "Analysis" and
+  // "Assist" labels (#289), so the allowance matched nothing and would only
+  // have masked a future regression on an element that no longer exists.
 ];
 
 function byLabel(label: string) {

@@ -147,7 +147,13 @@ describe('Sidebar', () => {
     // account-identity row, and sits in its own visually separated block.
     expect(assistLabel.compareDocumentPosition(settingsLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(settingsLink.compareDocumentPosition(accountEmail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(settingsLink.closest('nav')).toBeNull();
+
+    // Pinned out of the scrollable primary list, but still inside a landmark:
+    // a link in a bare <div> is invisible to landmark-based navigation.
+    const settingsNav = settingsLink.closest('nav');
+    expect(settingsNav).not.toBeNull();
+    expect(settingsNav).toHaveAttribute('aria-label', 'Settings');
+    expect(settingsNav).not.toBe(screen.getByRole('navigation', { name: 'Primary navigation' }));
   });
 
   it('marks only the active route with aria-current', () => {

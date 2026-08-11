@@ -13,11 +13,14 @@ import { cn } from '@/shared/utils/cn';
 const AI_WORKSPACE_LIMITATION =
   'Free-form questions require a configured AI provider. They receive sealed-snapshot structural facts, heuristic roles, and observed paths, but no source-file contents; provider answers therefore have no automatic citations.';
 
-// Deliberately not "chat" framing: this states what the surface actually
-// does (answers from an already-computed snapshot) and what it does not do
-// (send source code, remember anything past the current page load).
+// States what the surface actually does rather than generic "chat" framing:
+// answers are grounded in the already-computed sealed snapshot, and no
+// source-file contents leave the instance. It must not claim the thread is
+// forgotten -- conversation turns are persisted per owner and repository and
+// restored on return (#231), and recent turns are replayed as context, so
+// promising otherwise would be a false privacy assurance.
 const AI_WORKSPACE_SUBTITLE =
-  "Answers come from structural facts your last analysis already computed, not a live conversation. No source-file contents are sent, and nothing is remembered once you leave this page.";
+  'Answers are grounded in the structural facts your last analysis already computed — no source-file contents are sent. Your thread is saved for this repository and restored when you return.';
 
 export function AIWorkspacePage() {
   const navigate = useNavigate();
@@ -56,7 +59,7 @@ export function AIWorkspacePage() {
 
   return (
     <div className="flex h-[calc(100dvh-7rem)] min-h-[460px] min-w-0 flex-col">
-      <PageHeader title="AI Workspace" description={AI_WORKSPACE_SUBTITLE}>
+      <PageHeader title="AI Workspace" description={`${activeRepository.name} · ${AI_WORKSPACE_SUBTITLE}`}>
         <DataSourceBadge source={aiWorkspace.source} />
       </PageHeader>
       <PreviewBanner limitation={AI_WORKSPACE_LIMITATION} />
@@ -71,7 +74,7 @@ export function AIWorkspacePage() {
                 </div>
                 <p className="text-sm font-medium text-foreground mb-1">Structural facts for {activeRepository.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  Each answer is generated from the sealed structural facts your last analysis already computed for this repository. No source-file contents are sent to the provider, and no history is kept between sessions — every question is answered fresh from the same snapshot.
+                  Each answer is generated from the sealed structural facts your last analysis already computed for this repository. No source-file contents are sent to the provider. Your conversation is saved for this repository and restored when you come back, and recent turns are sent along as context.
                 </p>
               </div>
             </div>

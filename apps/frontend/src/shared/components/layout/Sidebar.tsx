@@ -11,7 +11,9 @@ import { BrandLogo } from '@/shared/components/ui/BrandLogo';
 const flagshipNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'flagship');
 const analysisNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'analysis');
 const assistNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'assist');
-const settingsSurface = primaryNavigationSurfaces.find((item) => item.navGroup === 'utility') ?? null;
+// `filter`, not `find`: a second utility surface must not silently disappear
+// from navigation just because it was registered after Settings.
+const utilityNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'utility');
 
 /** One sidebar row. `muted` reduces (never removes) a lower-emphasis surface's visual weight (#176). */
 function NavLink({
@@ -267,16 +269,22 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t border-sidebar-border p-2">
-        {settingsSurface && (
-          <div className="border-b border-sidebar-border/60 pb-2 mb-2">
-            <NavLink
-              item={settingsSurface}
-              isActive={location.pathname === settingsSurface.path}
-              isMobile={isMobile}
-              sidebarCollapsed={sidebarCollapsed}
-              onNavigate={() => setMobileSidebarOpen(false)}
-            />
-          </div>
+        {/* Pinned out of the scrollable list, but still inside a navigation
+            landmark of its own: moving Settings into a bare <div> would drop
+            it from landmark-based screen-reader navigation entirely (#289). */}
+        {utilityNavigationSurfaces.length > 0 && (
+          <nav aria-label="Settings" className="border-b border-sidebar-border/60 pb-2 mb-2 space-y-1">
+            {utilityNavigationSurfaces.map((item) => (
+              <NavLink
+                key={item.path}
+                item={item}
+                isActive={location.pathname === item.path}
+                isMobile={isMobile}
+                sidebarCollapsed={sidebarCollapsed}
+                onNavigate={() => setMobileSidebarOpen(false)}
+              />
+            ))}
+          </nav>
         )}
         <div className={cn('flex items-center gap-3 rounded-md px-2.5 py-2', sidebarCollapsed && !isMobile && 'justify-center')}>
           <div className="h-7 w-7 shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
