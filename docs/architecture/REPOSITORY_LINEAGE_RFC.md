@@ -125,7 +125,7 @@ stable identity never gets grouped automatically, regardless of why the identity
 
 ## 5. Schema proposal
 
-New table `repository_lineages`:
+### 5.1 New table `repository_lineages`
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -148,7 +148,7 @@ The partial `WHERE` clause is required precisely because `canonical_source_key` 
 `canonical_branch`) are legitimately `NULL` for standalone rows ([§4.3](#43-uploads-and-unresolved-ref-imports-standalone-no-auto-join));
 without it, every standalone row would collide on a `NULL = NULL` uniqueness check.
 
-`repositories` gains two columns:
+### 5.2 New columns on `repositories`
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -158,6 +158,17 @@ without it, every standalone row would collide on a `NULL = NULL` uniqueness che
 No changes are proposed to `RepositoryRecord`'s existing identity columns
 (`id`, `revision_kind`, `revision_value`, `revision_ref`) or to the existing
 `uq_repositories_id_revision` constraint — revision identity per RFC-0001 is unaffected.
+
+### 5.3 Concurrency: `sequence` assignment
+
+This RFC proposes `sequence` as a monotonically increasing integer per lineage
+([§5.2](#52-new-columns-on-repositories)) but does not specify the locking mechanism that
+guarantees it stays gap-free and race-free under concurrent imports into the same lineage (e.g. two
+`import_github_repository` calls resolving different commits of the same branch at the same time).
+Candidate approaches — a `SELECT ... FOR UPDATE` on the parent `repository_lineages` row, a
+database sequence/serial column, or an application-level advisory lock — are not evaluated here.
+This is left as an implementation detail for the future migration PR, to be resolved when
+`repository_lineages` and the backfill migration ([§6](#6-backfill-approach)) are actually built.
 
 ## 6. Backfill approach
 
@@ -266,8 +277,22 @@ before any implementation begins.
 ```text
 Owner sign-off: confirmed
 Open questions: 5/5 resolved
-Tracking issue: filled in after step 5
+Tracking issue: Second-Origin/PARTHA#298
 ```
+
+## Ratification waiver (owner decision, 2026-08-11)
+
+Independent ratification by @SHAURYAKSHARMA24, as recommended in Q5, is waived by the owner.
+Reasoning stated by the owner: sole-maintainer authority, plus the assessment that a review
+conducted without the full context built up across this design's discussion would not be a
+substantive independent check and risks being reviewed in name only.
+
+This waiver does not resolve or retract Q5's underlying concern — it is a recorded acceptance of
+that risk by the owner, not evidence the risk doesn't exist. The unresolved implementation-level
+gap Q5 was partly meant to catch (the exact concurrency-locking mechanism for `sequence`
+assignment, left as "an implementation detail for the future migration PR" in
+[§5.3](#53-concurrency-sequence-assignment)) still applies and must be handled carefully in the
+implementation PR precisely because no second reviewer will have checked it.
 
 ## 12. References
 
