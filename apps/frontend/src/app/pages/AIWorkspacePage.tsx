@@ -13,6 +13,15 @@ import { cn } from '@/shared/utils/cn';
 const AI_WORKSPACE_LIMITATION =
   'Free-form questions require a configured AI provider. They receive sealed-snapshot structural facts, heuristic roles, and observed paths, but no source-file contents; provider answers therefore have no automatic citations.';
 
+// States what the surface actually does rather than generic "chat" framing:
+// answers are grounded in the already-computed sealed snapshot, and no
+// source-file contents leave the instance. It must not claim the thread is
+// forgotten -- conversation turns are persisted per owner and repository and
+// restored on return (#231), and recent turns are replayed as context, so
+// promising otherwise would be a false privacy assurance.
+const AI_WORKSPACE_SUBTITLE =
+  'Answers are grounded in the structural facts your last analysis already computed — no source-file contents are sent. Your thread is saved for this repository and restored when you return.';
+
 export function AIWorkspacePage() {
   const navigate = useNavigate();
   const aiWorkspace = useAIWorkspace();
@@ -22,12 +31,12 @@ export function AIWorkspacePage() {
   if (aiWorkspace.emptyReason === 'no-completed-repositories') {
     return (
       <div>
-        <PageHeader title="AI Workspace" description="Ask questions about your codebase using AI" />
+        <PageHeader title="AI Workspace" description={AI_WORKSPACE_SUBTITLE} />
         <PreviewBanner limitation={AI_WORKSPACE_LIMITATION} />
         <EmptyState
           icon={Bot}
           title="No analysed repositories"
-          description="Upload and analyse a repository first. AI-powered explanations require a completed analysis pipeline."
+          description="Upload and analyse a repository first. Structural facts for this workspace come from a completed analysis pipeline."
           action={{ label: 'Upload Repository', onClick: () => navigate('/upload') }}
         />
       </div>
@@ -37,12 +46,12 @@ export function AIWorkspacePage() {
   if (aiWorkspace.emptyReason === 'no-active-repository' || !activeRepository) {
     return (
       <div>
-        <PageHeader title="AI Workspace" description="Ask questions about your codebase using AI" />
+        <PageHeader title="AI Workspace" description={AI_WORKSPACE_SUBTITLE} />
         <PreviewBanner limitation={AI_WORKSPACE_LIMITATION} />
         <EmptyState
           icon={Bot}
           title="Select a repository"
-          description="Choose an analysed repository from the top bar to start asking questions."
+          description="Choose an analysed repository from the top bar to see its computed structural facts."
         />
       </div>
     );
@@ -50,7 +59,7 @@ export function AIWorkspacePage() {
 
   return (
     <div className="flex h-[calc(100dvh-7rem)] min-h-[460px] min-w-0 flex-col">
-      <PageHeader title="AI Workspace" description={`AI-powered exploration of ${activeRepository.name}`}>
+      <PageHeader title="AI Workspace" description={`${activeRepository.name} · ${AI_WORKSPACE_SUBTITLE}`}>
         <DataSourceBadge source={aiWorkspace.source} />
       </PageHeader>
       <PreviewBanner limitation={AI_WORKSPACE_LIMITATION} />
@@ -63,9 +72,9 @@ export function AIWorkspacePage() {
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mx-auto mb-4">
                   <Bot className="h-6 w-6 text-muted-foreground" />
                 </div>
-                <p className="text-sm font-medium text-foreground mb-1">Ask about {activeRepository.name}</p>
+                <p className="text-sm font-medium text-foreground mb-1">Structural facts for {activeRepository.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  Questions are sent to your configured provider with structural facts from the sealed snapshot. Source-file contents are not sent.
+                  Each answer is generated from the sealed structural facts your last analysis already computed for this repository. No source-file contents are sent to the provider. Your conversation is saved for this repository and restored when you come back, and recent turns are sent along as context.
                 </p>
               </div>
             </div>

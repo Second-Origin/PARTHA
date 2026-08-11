@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { LayoutDashboard, FolderGit2, Upload, Activity, Clock, Github } from 'lucide-react';
@@ -9,10 +10,37 @@ import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 import { useRepositoryDashboard } from '@/features/repositories/hooks/useRepositoryDashboard';
 import { repositoryStatusVariant } from '@/features/repositories/status';
 import { formatFileSize } from '@/shared/utils/cn';
+import type { Repository, RepositoryRevision } from '@/shared/types';
+
+/**
+ * Abbreviates the real revision identity already on the repository record
+ * (#87, RFC-0001 §3) -- never invented. Both kinds render as `kind value`, the
+ * same shape Insights and Engineering Review use, so a bare hex string is
+ * never shown without saying what it is. The abbreviation is display-only: the
+ * full immutable value is kept in the `title` at the call site, since a
+ * 7-character prefix is not itself an identity.
+ */
+function shortRevisionLabel(revision: RepositoryRevision): string {
+  if (revision.kind === 'git') return `git ${revision.value.slice(0, 7)}`;
+  return `upload ${revision.value.replace(/^sha256:/, '').slice(0, 7)}`;
+}
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const { repositories, metrics, selectRepository } = useRepositoryDashboard();
+
+  // Most useful single fact: which repository's analysis is most current, as
+  // of what revision -- derived only from fields the repository list (this
+  // page's existing data) already carries, never a separate fetch.
+  const mostRecentlyAnalysed = useMemo<(Repository & { analysedAt: string }) | null>(() => {
+    const analysed = repositories.filter(
+      (repo): repo is Repository & { analysedAt: string } => repo.status === 'completed' && Boolean(repo.analysedAt),
+    );
+    if (analysed.length === 0) return null;
+    return analysed.reduce((latest, repo) =>
+      new Date(repo.analysedAt).getTime() > new Date(latest.analysedAt).getTime() ? repo : latest,
+    );
+  }, [repositories]);
 
   if (repositories.length === 0) {
     return (
@@ -39,6 +67,23 @@ export function DashboardPage() {
           Upload
         </button>
       </PageHeader>
+
+      {mostRecentlyAnalysed && (
+        <p data-testid="latest-analysis-summary" className="mb-6 text-sm text-muted-foreground">
+          Most recently analysed:{' '}
+          <span className="font-medium text-foreground">{mostRecentlyAnalysed.name}</span>
+          {' — '}
+          {new Date(mostRecentlyAnalysed.analysedAt).toLocaleString()}
+          {mostRecentlyAnalysed.revision && (
+            <>
+              {' at revision '}
+              <code className="text-xs text-foreground" title={mostRecentlyAnalysed.revision.value}>
+                {shortRevisionLabel(mostRecentlyAnalysed.revision)}
+              </code>
+            </>
+          )}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <MetricCard label="Repositories" value={metrics.totalRepositories} icon={FolderGit2} />

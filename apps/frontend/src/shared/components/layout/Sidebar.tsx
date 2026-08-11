@@ -9,9 +9,13 @@ import { primaryNavigationSurfaces, type NavigableProductSurface } from '@/app/r
 import { BrandLogo } from '@/shared/components/ui/BrandLogo';
 
 const flagshipNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'flagship');
-const secondaryNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'secondary');
+const analysisNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'analysis');
+const assistNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'assist');
+// `filter`, not `find`: a second utility surface must not silently disappear
+// from navigation just because it was registered after Settings.
+const utilityNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'utility');
 
-/** One sidebar row. `muted` reduces (never removes) a secondary surface's visual weight (#176). */
+/** One sidebar row. `muted` reduces (never removes) a lower-emphasis surface's visual weight (#176). */
 function NavLink({
   item,
   isActive,
@@ -58,6 +62,56 @@ function NavLink({
         )}
       </AnimatePresence>
     </Link>
+  );
+}
+
+/** A labelled, muted group of nav rows (e.g. Analysis, Assist) -- header hides accessibly when collapsed, links never do (#289). */
+function NavSection({
+  label,
+  testId,
+  items,
+  isMobile,
+  sidebarCollapsed,
+  location,
+  onNavigate,
+}: {
+  label: string;
+  testId: string;
+  items: readonly NavigableProductSurface[];
+  isMobile: boolean;
+  sidebarCollapsed: boolean;
+  location: ReturnType<typeof useLocation>;
+  onNavigate: () => void;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <>
+      <AnimatePresence>
+        {(isMobile || !sidebarCollapsed) && (
+          <motion.p
+            data-testid={testId}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="px-2.5 pb-1 pt-3 text-2xs font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            {label}
+          </motion.p>
+        )}
+      </AnimatePresence>
+      {items.map((item) => (
+        <NavLink
+          key={item.path}
+          item={item}
+          isActive={location.pathname === item.path}
+          isMobile={isMobile}
+          sidebarCollapsed={sidebarCollapsed}
+          onNavigate={onNavigate}
+          muted
+        />
+      ))}
+    </>
   );
 }
 
@@ -193,23 +247,34 @@ export function Sidebar() {
           />
         ))}
 
-        {secondaryNavigationSurfaces.length > 0 && (
-          <>
-            <AnimatePresence>
-              {(isMobile || !sidebarCollapsed) && (
-                <motion.p
-                  data-testid="secondary-navigation-label"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="px-2.5 pb-1 pt-3 text-2xs font-medium uppercase tracking-wide text-muted-foreground/70"
-                >
-                  More
-                </motion.p>
-              )}
-            </AnimatePresence>
-            {secondaryNavigationSurfaces.map((item) => (
+        <NavSection
+          label="Analysis"
+          testId="analysis-navigation-label"
+          items={analysisNavigationSurfaces}
+          isMobile={isMobile}
+          sidebarCollapsed={sidebarCollapsed}
+          location={location}
+          onNavigate={() => setMobileSidebarOpen(false)}
+        />
+
+        <NavSection
+          label="Assist"
+          testId="assist-navigation-label"
+          items={assistNavigationSurfaces}
+          isMobile={isMobile}
+          sidebarCollapsed={sidebarCollapsed}
+          location={location}
+          onNavigate={() => setMobileSidebarOpen(false)}
+        />
+      </nav>
+
+      <div className="border-t border-sidebar-border p-2">
+        {/* Pinned out of the scrollable list, but still inside a navigation
+            landmark of its own: moving Settings into a bare <div> would drop
+            it from landmark-based screen-reader navigation entirely (#289). */}
+        {utilityNavigationSurfaces.length > 0 && (
+          <nav aria-label="Settings" className="border-b border-sidebar-border/60 pb-2 mb-2 space-y-1">
+            {utilityNavigationSurfaces.map((item) => (
               <NavLink
                 key={item.path}
                 item={item}
@@ -217,14 +282,10 @@ export function Sidebar() {
                 isMobile={isMobile}
                 sidebarCollapsed={sidebarCollapsed}
                 onNavigate={() => setMobileSidebarOpen(false)}
-                muted
               />
             ))}
-          </>
+          </nav>
         )}
-      </nav>
-
-      <div className="border-t border-sidebar-border p-2">
         <div className={cn('flex items-center gap-3 rounded-md px-2.5 py-2', sidebarCollapsed && !isMobile && 'justify-center')}>
           <div className="h-7 w-7 shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
             <span className="text-xs font-medium text-primary">{avatarInitial}</span>

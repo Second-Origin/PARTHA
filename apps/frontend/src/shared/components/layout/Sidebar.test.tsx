@@ -67,6 +67,17 @@ describe('Sidebar', () => {
     expect(screen.queryByText('Planned')).not.toBeInTheDocument();
   });
 
+  it('groups the flagship surfaces first, unlabelled, exactly as Dashboard/Repositories/Upload (#289)', () => {
+    renderSidebar();
+
+    const flagship = primaryNavigationSurfaces.filter((item) => item.navGroup === 'flagship');
+    expect(flagship.map((item) => item.label)).toEqual(['Dashboard', 'Repositories', 'Upload Repository']);
+    for (const item of flagship) {
+      const link = screen.getByRole('link', { name: item.label });
+      expect(link.className).toContain('font-medium');
+    }
+  });
+
   it('keeps navigation links named and keyboard-focusable when collapsed', () => {
     renderSidebar();
 
@@ -80,32 +91,69 @@ describe('Sidebar', () => {
     expect(architecture).toHaveAttribute('href', '/architecture');
   });
 
-  it('groups secondary surfaces under "More" with reduced weight, without removing them (#176)', () => {
+  it('groups Architecture/Dependencies/Engineering Review/Insights/Documentation under a labelled "Analysis" section, in that order (#289)', () => {
     renderSidebar();
 
-    const flagship = primaryNavigationSurfaces.filter((item) => item.navGroup === 'flagship');
-    const secondary = primaryNavigationSurfaces.filter((item) => item.navGroup === 'secondary');
-    expect(flagship.map((item) => item.label)).toEqual(['Dashboard', 'Repositories', 'Upload Repository', 'Architecture']);
-    expect(secondary.length).toBeGreaterThan(0);
+    const analysis = primaryNavigationSurfaces.filter((item) => item.navGroup === 'analysis');
+    expect(analysis.map((item) => item.label)).toEqual([
+      'Architecture',
+      'Dependency Graph',
+      'Engineering Review',
+      'Insights',
+      'Documentation',
+    ]);
 
-    const moreLabel = screen.getByText('More');
-    expect(moreLabel).toBeInTheDocument();
+    const analysisLabel = screen.getByText('Analysis');
+    expect(analysisLabel).toBeInTheDocument();
 
-    // Every secondary surface is still a real, reachable, focusable link --
-    // "reduce emphasis" never means "hide" or "remove".
-    for (const item of secondary) {
+    // Every analysis surface is still a real, reachable, focusable link --
+    // grouping under a label never means "hide" or "remove".
+    for (const item of analysis) {
       const link = screen.getByRole('link', { name: item.label });
       expect(link).toHaveAttribute('href', item.path);
+      expect(link.className).toContain('font-normal');
     }
 
-    // The "More" heading sits after every flagship link and before every
-    // secondary one, and secondary links read with a lighter font weight.
+    // The "Analysis" heading sits after every flagship link and before every
+    // analysis-group link.
     const dashboardLink = screen.getByRole('link', { name: 'Dashboard' });
-    const firstSecondaryLink = screen.getByRole('link', { name: secondary[0].label });
-    expect(dashboardLink.compareDocumentPosition(moreLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(moreLabel.compareDocumentPosition(firstSecondaryLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(firstSecondaryLink.className).toContain('font-normal');
+    const firstAnalysisLink = screen.getByRole('link', { name: analysis[0].label });
+    expect(dashboardLink.compareDocumentPosition(analysisLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(analysisLabel.compareDocumentPosition(firstAnalysisLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(dashboardLink.className).toContain('font-medium');
+  });
+
+  it('keeps AI Workspace reachable under its own "Assist" section, separate from Analysis (#289)', () => {
+    renderSidebar();
+
+    const assist = primaryNavigationSurfaces.filter((item) => item.navGroup === 'assist');
+    expect(assist.map((item) => item.label)).toEqual(['AI Workspace']);
+
+    const assistLabel = screen.getByText('Assist');
+    const analysisLabel = screen.getByText('Analysis');
+    const aiWorkspaceLink = screen.getByRole('link', { name: 'AI Workspace' });
+    expect(aiWorkspaceLink).toHaveAttribute('href', '/ai-workspace');
+    expect(analysisLabel.compareDocumentPosition(assistLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('pins Settings to the bottom, separated from the scrollable nav and above the account identity (#289)', () => {
+    renderSidebar();
+
+    const settingsLink = screen.getByRole('link', { name: 'Settings' });
+    const assistLabel = screen.getByText('Assist');
+    const accountEmail = screen.getByText('hardik@example.com');
+
+    // Settings renders after every scrollable-nav item and before the
+    // account-identity row, and sits in its own visually separated block.
+    expect(assistLabel.compareDocumentPosition(settingsLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(settingsLink.compareDocumentPosition(accountEmail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Pinned out of the scrollable primary list, but still inside a landmark:
+    // a link in a bare <div> is invisible to landmark-based navigation.
+    const settingsNav = settingsLink.closest('nav');
+    expect(settingsNav).not.toBeNull();
+    expect(settingsNav).toHaveAttribute('aria-label', 'Settings');
+    expect(settingsNav).not.toBe(screen.getByRole('navigation', { name: 'Primary navigation' }));
   });
 
   it('marks only the active route with aria-current', () => {
