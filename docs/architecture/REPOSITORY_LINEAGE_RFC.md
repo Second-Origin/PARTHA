@@ -7,8 +7,8 @@
 | **Tracking issue** | [Second-Origin/PARTHA#298](https://github.com/Second-Origin/PARTHA/issues/298) |
 | **Author** | @parthrohit22 |
 | **Owner sign-off** | Confirmed |
-| **Ratifier** | Pending — independent ratification by [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) is required before implementation begins (see [Q5](#q5-independent-ratification)) |
-| **Approval evidence** | Owner sign-off recorded directly against this design; no independent-maintainer ratification evidence exists yet |
+| **Ratifier** | Pending — independent ratification by [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) is required before implementation begins (see [Q5](#q5-independent-ratification)); waived by owner, see [Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11) below |
+| **Approval evidence** | Owner sign-off recorded directly against this design; no independent-maintainer ratification evidence exists yet; that ratification is itself waived by owner, see [Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11) below |
 | **Created** | 2026-08-11 |
 | **Last updated** | 2026-08-11 |
 | **Status** | **Accepted** (owner-level design acceptance; see [§1.2](#12-what-accepted-does-and-does-not-mean-here) for what this does and does not authorize) |
@@ -19,7 +19,8 @@
 > itself create the `repository_lineages` table, add columns to `repositories`, change
 > `RepositoryService`, or alter any API or frontend surface. Implementation is tracked as a
 > separate, explicitly blocked issue gated on [Q5](#q5-independent-ratification) — see
-> [§1.2](#12-what-accepted-does-and-does-not-mean-here).
+> [§1.2](#12-what-accepted-does-and-does-not-mean-here). See also
+> [Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11) below.
 
 ---
 
@@ -41,7 +42,9 @@ explicitly requires @SHAURYAKSHARMA24 to independently ratify this design before
 work starts. "Accepted" in the status table above therefore records that the owner has finished
 shaping and approving the design — it does **not** clear the implementation gate. The companion
 tracking issue for this RFC is documentation/design-only, and the implementation issue filed
-alongside it is explicitly marked `[BLOCKED]` pending Q5.
+alongside it is explicitly marked `[BLOCKED]` pending Q5. See
+[Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11)
+below, where the owner waives this gate.
 
 ## 2. Terminology
 
@@ -191,7 +194,8 @@ migration, run once, forward-only (per the existing
    reproducible from current state.
 
 This backfill is part of the scope gated on [Q5](#q5-independent-ratification) — it is design-only
-in this RFC and is not implemented by this document.
+in this RFC and is not implemented by this document. See
+[Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11) below.
 
 ## 7. Roadmap alignment
 
