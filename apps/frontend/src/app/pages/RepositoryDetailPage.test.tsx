@@ -93,3 +93,50 @@ describe('RepositoryDetailPage', () => {
     expect(explorerProps.initialPath).toBe('src/main.tsx');
   });
 });
+
+describe('RepositoryDetailPage revision identity', () => {
+  it('shows the full commit and its branch for a git import', () => {
+    repositoryState.repositories = [
+      {
+        ...completedRepository,
+        source: 'github',
+        revision: { kind: 'git', ref: 'refs/heads/main', value: 'abcdef1234567890abcdef1234567890abcdef12' },
+      },
+    ];
+
+    renderPage();
+
+    // Shown in full rather than abbreviated: this is the page a user opens to
+    // answer "which code is this?", and a 7-character prefix is not an
+    // identity (RFC-0001 §3).
+    expect(screen.getByText('Commit')).toBeInTheDocument();
+    expect(screen.getByText('abcdef1234567890abcdef1234567890abcdef12')).toBeInTheDocument();
+    expect(screen.getByText('Branch')).toBeInTheDocument();
+    expect(screen.getByText('main')).toBeInTheDocument();
+  });
+
+  it('labels an upload as a content hash and shows no branch', () => {
+    repositoryState.repositories = [
+      {
+        ...completedRepository,
+        revision: { kind: 'upload', ref: null, value: `sha256:${'a'.repeat(64)}` },
+      },
+    ];
+
+    renderPage();
+
+    expect(screen.getByText('Content hash')).toBeInTheDocument();
+    expect(screen.getByText(`sha256:${'a'.repeat(64)}`)).toBeInTheDocument();
+    expect(screen.queryByText('Branch')).not.toBeInTheDocument();
+  });
+
+  it('omits both rows when the repository carries no revision', () => {
+    repositoryState.repositories = [{ ...completedRepository, revision: null }];
+
+    renderPage();
+
+    expect(screen.queryByText('Commit')).not.toBeInTheDocument();
+    expect(screen.queryByText('Content hash')).not.toBeInTheDocument();
+    expect(screen.queryByText('Branch')).not.toBeInTheDocument();
+  });
+});
