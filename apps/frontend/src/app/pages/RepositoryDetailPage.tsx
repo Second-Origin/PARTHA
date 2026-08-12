@@ -15,6 +15,9 @@ import {
   Scale,
   Settings2,
   FolderTree,
+  GitBranch,
+  GitCommitHorizontal,
+  Fingerprint,
   Layers,
 } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
@@ -139,6 +142,25 @@ export function RepositoryDetailPage() {
                     <InfoRow icon={Clock} label="Uploaded" value={new Date(repo.uploadedAt).toLocaleString()} />
                     {repo.analysedAt && (
                       <InfoRow icon={Clock} label="Analysed" value={new Date(repo.analysedAt).toLocaleString()} />
+                    )}
+                    {/* The exact source this repository was analysed at (#87). Shown in
+                        full, not abbreviated: this is the page you open to answer
+                        "which code is this?", and a shortened prefix is not an identity. */}
+                    {repo.revision && (
+                      <InfoRow
+                        icon={repo.revision.kind === 'git' ? GitCommitHorizontal : Fingerprint}
+                        label={repo.revision.kind === 'git' ? 'Commit' : 'Content hash'}
+                        value={repo.revision.value}
+                        mono
+                      />
+                    )}
+                    {repo.revision?.ref && (
+                      <InfoRow
+                        icon={GitBranch}
+                        label="Branch"
+                        value={repo.revision.ref.replace(/^refs\/heads\//, '')}
+                        mono
+                      />
                     )}
                     {repo.size > 0 && (
                       <InfoRow icon={Package} label="Size" value={formatFileSize(repo.size)} />
