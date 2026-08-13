@@ -14,12 +14,15 @@
   <a href="#limitations-and-security">Limitations</a>
   ·
   <a href="docs/README.md">Docs</a>
+  ·
+  <a href="https://discord.gg/qvk9DcxDA">Discord</a>
 </p>
 
 <p align="center">
   <img alt="Apache 2.0 license" src="https://img.shields.io/github/license/Second-Origin/PARTHA">
   <img alt="Python 3.12–3.13" src="https://img.shields.io/badge/Python-3.12--3.13-3776AB?logo=python&logoColor=white">
   <img alt="Node.js 22" src="https://img.shields.io/badge/Node.js-22-5FA04E?logo=nodedotjs&logoColor=white">
+  <a href="https://discord.gg/qvk9DcxDA"><img alt="Discord" src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white"></a>
 </p>
 
 **PARTHA turns a repository revision into one sealed, queryable model and uses it to explain architecture, dependencies, review findings, insights, and documentation without letting each feature invent its own interpretation.**
@@ -224,6 +227,7 @@ Do not expose the development configuration directly to the public internet. Rev
 - [Backend guide](apps/backend/README.md) and [frontend guide](apps/frontend/README.md) — area-specific setup and commands.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — fork-first workflow, issue claiming, branch conventions, validation, and pull-request requirements.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — expected conduct.
+- [Discord](https://discord.gg/qvk9DcxDA) — ask questions, follow progress, and talk with the community and maintainers.
 
 Before changing analysis, parsing, or AI-grounding behaviour, read [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) in full. Current behaviour belongs in documentation; future work belongs in GitHub issues.
 
