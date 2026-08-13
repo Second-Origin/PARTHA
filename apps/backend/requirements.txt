@@ -5,7 +5,7 @@
 # Regenerate after changing pyproject.toml dependencies:
 #   python -m venv /tmp/lock && /tmp/lock/bin/pip install ./apps/backend
 #   /tmp/lock/bin/pip freeze | grep -v partha-backend > apps/backend/requirements.txt
-alembic==1.19.0
+alembic==1.19.1
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.14.2
@@ -23,7 +23,7 @@ cssselect2==0.9.0
 dnspython==2.8.0
 email-validator==2.3.0
 fastapi==0.141.1
-greenlet==3.5.4
+greenlet==3.5.5
 h11==0.16.0
 html5lib==1.1
 httpcore==1.0.9
@@ -56,12 +56,12 @@ reportlab==4.5.1
 requests==2.34.2
 six==1.17.0
 SQLAlchemy==2.0.51
-starlette==1.4.1
+starlette==1.6.0
 svglib==2.1.0
 tinycss2==1.5.1
 tree-sitter==0.26.0
 tree-sitter-typescript==0.23.2
-typing-inspection==0.4.2
+typing-inspection==0.4.3
 typing_extensions==4.16.0
 tzdata==2026.3
 tzlocal==5.4.4
