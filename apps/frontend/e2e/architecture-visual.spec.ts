@@ -20,7 +20,7 @@ interface Fixtures {
 }
 
 const FIXTURES: Fixtures = JSON.parse(
-  readFileSync(process.env.PARTHA_VISUAL_FIXTURES ?? '/tmp/partha-prototype-fixtures.json', 'utf8'),
+  readFileSync(process.env.PARTHA_VISUAL_FIXTURES ?? '/tmp/partha-e2e-fixtures.json', 'utf8'),
 );
 
 const byLabel = (label: string) => {

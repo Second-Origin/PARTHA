@@ -26,14 +26,14 @@ import { createAppRouter } from './router';
 
 const ROUTE_RENDER_TIMEOUT_MS = 3_000;
 
-/** Every surface a prototype user can actually open. */
+/** Every surface a user can actually open today. */
 const activeSurfaces = productSurfaces.filter(
   (surface) => surface.readiness === 'ready' || surface.readiness === 'preview',
 );
 
 let activeRouter: ReturnType<typeof createAppRouter> | null = null;
 
-describe('accessibility smoke checks for active prototype routes', () => {
+describe('accessibility smoke checks for active routes', () => {
   afterEach(() => {
     activeRouter?.dispose();
     activeRouter = null;

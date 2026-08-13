@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const backendRoot = join(repositoryRoot, 'apps', 'backend');
 const frontendRoot = join(repositoryRoot, 'apps', 'frontend');
-const runtimeRoot = await mkdtemp(join(tmpdir(), 'partha-prototype-acceptance-'));
-const fixtureManifest = join(runtimeRoot, 'prototype-fixtures.json');
+const runtimeRoot = await mkdtemp(join(tmpdir(), 'partha-e2e-acceptance-'));
+const fixtureManifest = join(runtimeRoot, 'e2e-fixtures.json');
 
 function availableLoopbackPort() {
   return new Promise((resolvePort, reject) => {
@@ -161,7 +161,7 @@ try {
   });
   await waitForUrl(appUrl, 'frontend');
 
-  const seed = start(process.execPath, [join(repositoryRoot, 'scripts', 'seed-prototype-fixtures.mjs')], {
+  const seed = start(process.execPath, [join(repositoryRoot, 'scripts', 'seed-e2e-fixtures.mjs')], {
     cwd: repositoryRoot,
     env: {
       ...process.env,
@@ -191,12 +191,12 @@ try {
       },
     },
   );
-  await waitForExit(playwright, 'prototype browser acceptance');
+  await waitForExit(playwright, 'browser acceptance');
 } finally {
   await stopChildren();
   if (process.env.PARTHA_E2E_KEEP_TEMP !== '1') {
     await rm(runtimeRoot, { recursive: true, force: true });
   } else {
-    process.stdout.write(`Kept prototype acceptance runtime: ${runtimeRoot}\n`);
+    process.stdout.write(`Kept e2e acceptance runtime: ${runtimeRoot}\n`);
   }
 }

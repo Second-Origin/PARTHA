@@ -12,7 +12,7 @@ that PARTHA conforms to WCAG 2.2 AA.
 | Audit date | 2026-07-29 |
 | Source revision | `5bb63ca4e74882b0a08b5e8c761e1997590a5755` plus the issue #118 audit changes in this report's pull request |
 | Operating system | Microsoft Windows NT 10.0.26200.0 |
-| Revalidation | 2026-08-03 on macOS after rebasing onto the source revision above: 6/6 focused accessibility states and 22/22 full prototype journeys passed |
+| Revalidation | 2026-08-03 on macOS after rebasing onto the source revision above: 6/6 focused accessibility states and 22/22 full browser-acceptance journeys passed |
 | Automated browser | Playwright Chrome for Testing 151.0.7922.34, headless Chromium project |
 | Automated viewport | 1440 x 900 CSS pixels |
 | Automated zoom | 100% browser zoom |
@@ -23,7 +23,7 @@ that PARTHA conforms to WCAG 2.2 AA.
 ## Automated route and state coverage
 
 The checked-in Playwright suite uses the same disposable account, SQLite database, storage
-directory, and seven seeded repositories as the prototype browser acceptance gate. It waits for
+directory, and seven seeded repositories as the browser acceptance gate. It waits for
 finite page animations to settle before running axe, so contrast measurements are not taken from
 transient opacity frames.
 
@@ -63,7 +63,7 @@ Install Chromium once if it is not already present, then run the focused or comp
 ```text
 npm --prefix apps/frontend exec -- playwright install chromium
 npm run test:accessibility
-npm run test:prototype
+npm run test:e2e
 ```
 
 The runner chooses free loopback ports, uses the platform virtual environment when present, creates
@@ -71,11 +71,11 @@ fixture archives with Python's standard library, and removes its temporary datab
 and fixture manifest after the run. Playwright filters can be forwarded for diagnosis, for example:
 
 ```text
-node scripts/run-prototype-acceptance.mjs e2e/accessibility.spec.ts --grep "architecture graph"
+node scripts/run-e2e-acceptance.mjs e2e/accessibility.spec.ts --grep "architecture graph"
 ```
 
 CI runs `npm --prefix apps/frontend run test`, including the jsdom route smoke checks, and then
-`node scripts/run-prototype-acceptance.mjs`, which includes this real-browser baseline.
+`node scripts/run-e2e-acceptance.mjs`, which includes this real-browser baseline.
 
 ## Manual and assistive-technology baseline
 

@@ -356,10 +356,12 @@ Run the checks relevant to your change. These are what CI runs.
 | `npm run build:frontend` | `tsc -b && vite build` — type errors surface here, not in lint | Frontend |
 | `node scripts/dependency-audit.mjs` · `node --test scripts/dependency-audit.test.mjs` | Dependency audit policy and its own tests | Frontend |
 | `npm --prefix apps/frontend run generate:api-contract -- --check` | Generated frontend DTOs have not drifted from the FastAPI schema | API Contract Drift |
-| `npm run test:prototype` | Disposable fixtures plus the Playwright browser journeys | Prototype Browser Acceptance |
+| `npm run test:e2e` | Disposable fixtures plus the Playwright browser journeys | Prototype Browser Acceptance |
 | `npm run test:accessibility` | The WCAG 2.2 AA baseline journeys only, on the same stack | Prototype Browser Acceptance |
 
 `npm run build` runs the frontend build plus the backend tests. It does **not** run frontend lint or frontend tests — run those separately.
+
+The CI job is still named "Prototype Browser Acceptance" even though the local command is `npm run test:e2e` — that job name is a required status check in branch protection, so renaming it needs a matching change to the branch ruleset, not just this file.
 
 The table is the full CI gate list, so a change can pass `test:backend` and
 `build:frontend` and still fail on contract drift, the capability registry, the

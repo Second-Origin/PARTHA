@@ -27,7 +27,7 @@
 
 **PARTHA turns a repository revision into one sealed, queryable model and uses it to explain architecture, dependencies, review findings, insights, and documentation without letting each feature invent its own interpretation.**
 
-> **Current stage: advanced prototype / pre-alpha.** PARTHA runs locally and its flagship workflow is usable, but it is not a beta, a production SaaS, or a hardened public multi-tenant deployment.
+> **PARTHA runs locally today, with its flagship workflow usable end to end.** It is not yet a hardened public multi-tenant service — see [Limitations and security](#limitations-and-security) before any shared deployment.
 
 PARTHA is for technical founders, staff and platform engineers, and engineering leads who need an inspectable starting point for understanding a codebase they did not write—or no longer fully trust their mental model of.
 
@@ -189,16 +189,16 @@ npm run lint:frontend
 npm run build:frontend
 
 # Disposable fixtures and browser journeys
-npm run test:prototype
+npm run test:e2e
 ```
 
-The prototype browser suite exercises defined Architecture, Engineering Review, Insights, evidence, and responsive-accessibility journeys. Passing it verifies those journeys; it does not imply complete product maturity.
+The browser acceptance suite exercises defined Architecture, Engineering Review, Insights, evidence, and responsive-accessibility journeys. Passing it verifies those journeys; it does not imply complete product coverage.
 
 ## Limitations and security
 
 ### Product limitations
 
-- **Pre-alpha, trusted-environment use.** PARTHA has not been operated or hardened as a public multi-tenant service.
+- **Trusted-environment use.** PARTHA has not been operated or hardened as a public multi-tenant service.
 - **Narrow semantic coverage.** The capability registry declares the Python and TypeScript/JavaScript constructs that receive the deepest extraction. Other languages primarily contribute file inventory. Role, module, layer, framework, and entry-point classifications can be heuristic.
 - **Narrow dependency coverage.** Direct declarations are extracted from three manifest formats, and exact pins from two lockfile formats (`package-lock.json`, `poetry.lock`) are recorded as resolutions on the same dependency identity. A pin is never promoted to a direct dependency edge, so transitive resolution is not claimed. Vulnerability scanning and outdated-version scanning are not implemented.
 - **No repository evolution workflow.** Analysis is whole-repository; incremental analysis, revision comparison, and churn/trend analysis are unavailable. The sealed-snapshot impact query does not compare revisions or calculate historical change.

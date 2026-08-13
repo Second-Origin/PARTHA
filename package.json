@@ -13,9 +13,9 @@
     "preview:frontend": "npm --prefix apps/frontend run preview",
     "lint:frontend": "npm --prefix apps/frontend run lint",
     "test:backend": "node scripts/backend-python.mjs -m pytest",
-    "fixtures:prototype": "node scripts/seed-prototype-fixtures.mjs",
-    "test:prototype": "npm --prefix apps/frontend exec -- playwright install chromium && node scripts/run-prototype-acceptance.mjs",
-    "test:accessibility": "node scripts/run-prototype-acceptance.mjs e2e/accessibility.spec.ts",
+    "fixtures:e2e": "node scripts/seed-e2e-fixtures.mjs",
+    "test:e2e": "npm --prefix apps/frontend exec -- playwright install chromium && node scripts/run-e2e-acceptance.mjs",
+    "test:accessibility": "node scripts/run-e2e-acceptance.mjs e2e/accessibility.spec.ts",
     "dev:backend": "node scripts/backend-python.mjs -m uvicorn app.main:app --reload --reload-dir app",
     "start:backend": "node scripts/backend-python.mjs -m uvicorn app.main:app --host 0.0.0.0 --port 8000",
     "build": "npm run build:frontend && npm run test:backend"
