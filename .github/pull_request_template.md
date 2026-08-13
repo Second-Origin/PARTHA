@@ -12,7 +12,7 @@ Closes #
 ## Roadmap alignment
 
 <!-- MERGE GATE. Every PR must advance a workstream in the roadmap
-     (PARTHA_Market_Fit_Product_&_Engineering_Roadmap.html) toward a §28
+     (PARTHA_Market_Fit_Product_Roadmap.html) toward a §28
      market-fit exit criterion, with accepted evidence. If this PR does not
      move a §28 criterion, it is out of scope and should not be merged.
      Breadth additions (new surfaces, new languages) that do not deepen the

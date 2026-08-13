@@ -11,7 +11,7 @@ Throughout this document, **must** and **must not** are requirements, **should**
 ## 0. Strategy alignment (merge gate)
 
 PARTHA's direction is set by a single source of truth: the roadmap document
-`PARTHA_Market_Fit_Product_&_Engineering_Roadmap.html` (the local strategy file;
+`PARTHA_Market_Fit_Product_Roadmap.html` (the local strategy file;
 ask the maintainer if you cannot see it). It defines the capability sequencing,
 gates, rejected paths (§27), and market-fit exit criteria (§28).
 
