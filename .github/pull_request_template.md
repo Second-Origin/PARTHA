@@ -9,17 +9,16 @@
 
 Closes #
 
-## Roadmap alignment
+## Scope
 
-<!-- MERGE GATE. Every PR must advance a workstream in the roadmap
-     (PARTHA_Market_Fit_Product_Roadmap.html) toward a §28
-     market-fit exit criterion, with accepted evidence. If this PR does not
-     move a §28 criterion, it is out of scope and should not be merged.
-     Breadth additions (new surfaces, new languages) that do not deepen the
-     existing moat need explicit owner justification in "Scope changes". -->
+<!-- MERGE GATE. Every PR must advance a tracked GitHub issue or an accepted
+     RFC, with accepted evidence. If this PR does not trace to either, it is
+     out of scope and should not be merged. Breadth additions (new surfaces,
+     new languages) that do not deepen the existing moat need explicit owner
+     justification in "Scope changes". -->
 
-- Roadmap §23 workstream this advances:
-- §28 market-fit criterion this moves toward:
+- Issue or RFC this advances:
+- Why this is in scope (not a "quick useful surface" or breadth addition):
 - Accepted evidence it is real (test/usage/repo state, not intent):
 
 ## What changed
@@ -66,7 +65,7 @@ Closes #
 - [ ] The branch was created from an up-to-date `upstream/dev`
 - [ ] The branch is rebased on the latest `upstream/dev`
 - [ ] This PR addresses one clearly scoped issue
-- [ ] This PR advances a §23 workstream toward a §28 market-fit criterion (Roadmap alignment filled)
+- [ ] This PR is in scope: it advances a tracked issue or an accepted RFC (Scope section filled)
 - [ ] Every acceptance criterion I claim as complete is actually complete
 - [ ] Relevant tests pass
 - [ ] Documentation is updated for any user-visible change

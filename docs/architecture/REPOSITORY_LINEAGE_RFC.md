@@ -10,7 +10,7 @@
 | **Ratifier** | Pending — independent ratification by [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) is required before implementation begins (see [Q5](#q5-independent-ratification)); waived by owner, see [Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11) below |
 | **Approval evidence** | Owner sign-off recorded directly against this design; no independent-maintainer ratification evidence exists yet; that ratification is itself waived by owner, see [Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11) below |
 | **Created** | 2026-08-11 |
-| **Last updated** | 2026-08-11 |
+| **Last updated** | 2026-08-13 |
 | **Status** | **Accepted** (owner-level design acceptance; see [§1.2](#12-what-accepted-does-and-does-not-mean-here) for what this does and does not authorize) |
 | **Supersedes** | — |
 | **Superseded by** | — |
@@ -29,7 +29,7 @@
 ### 1.1 Status
 
 This RFC is **Accepted** at the owner level: @parthrohit22, the repository owner, has reviewed
-and confirmed the design in [§4](#4-identity-design) through [§7](#7-roadmap-alignment) below,
+and confirmed the design in [§4](#4-identity-design) through [§7](#7-product-direction-alignment) below,
 including the resolution of all five open questions in [§10](#10-open-questions-and-resolutions).
 
 ### 1.2 What "Accepted" does and does not mean here
@@ -197,24 +197,23 @@ This backfill is part of the scope gated on [Q5](#q5-independent-ratification) �
 in this RFC and is not implemented by this document. See
 [Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11) below.
 
-## 7. Roadmap alignment
+## 7. Product direction alignment
 
-This design sits in **W3 / Evolution** of the roadmap's workstream table (`§23 // ROADMAP
-WORKSTREAMS`): *"Make history the moat"* — its first named increment is *"Identity mapping"*, which
-is exactly what a lineage is: a stable cross-revision identity for "the same repository over time,"
-sitting below the fact-level identity mapping W3 is ultimately for.
+This design continues the project's stated priority of deepening the existing evidence and history
+capability rather than adding new surfaces or languages: *"make history the moat"* — its first
+increment is identity mapping, which is exactly what a lineage is — a stable cross-revision identity
+for "the same repository over time," sitting below the fact-level identity mapping that priority is
+ultimately for.
 
-It is also a direct instance of **GATE B** in the sequencing section (`§24 // SEQUENCING
-DEPENDENCIES`): *"Reliability before history — Graph evolution requires deterministic snapshots and
-stable cross-revision identity; otherwise drift becomes noise."* Repository-level lineage identity
-is a prerequisite for that stable cross-revision identity, at a level below the node/fact identity
-RFC-0001 §4 already governs.
+It also follows from a standing sequencing rule: *reliability before history* — graph evolution
+requires deterministic snapshots and stable cross-revision identity, otherwise drift becomes noise.
+Repository-level lineage identity is a prerequisite for that stable cross-revision identity, at a
+level below the node/fact identity RFC-0001 §4 already governs.
 
 This RFC explicitly does **not** propose graph diff, drift detection, or any consumer-facing
-history feature — those remain future W3 work, gated separately. It proposes only the identity and
-schema layer those features would eventually sit on top of, consistent with the roadmap's
-instruction (`§28 // MARKET-FIT EXIT CRITERIA`, final directive) not to "finish the platform" ahead
-of demonstrated need.
+history feature — those remain future work, gated separately. It proposes only the identity and
+schema layer those features would eventually sit on top of, consistent with the project's standing
+instruction not to "finish the platform" ahead of demonstrated need.
 
 ## 8. Out of scope
 
@@ -238,9 +237,9 @@ of demonstrated need.
   built on lineage produce misleading comparisons across unrelated branches.
 - **Content-hash-based lineage matching for uploads** (attempt to match uploads into a lineage by
   fuzzy content similarity rather than requiring a stable source key). Rejected: this contradicts
-  the roadmap's rejected-path item *"Mutable 'latest truth'"* (`§27 // REJECTED PATHS`) in spirit —
-  fuzzy matching would make lineage membership a heuristic, non-reproducible judgment rather than a
-  deterministic identity rule. Uploads remain standalone per [§4.3](#43-uploads-and-unresolved-ref-imports-standalone-no-auto-join)
+  the project's standing anti-goal of a mutable "latest truth" in spirit — fuzzy matching would make
+  lineage membership a heuristic, non-reproducible judgment rather than a deterministic identity
+  rule. Uploads remain standalone per [§4.3](#43-uploads-and-unresolved-ref-imports-standalone-no-auto-join)
   until a future, explicit, user-driven linking action exists ([Q3](#q3-upload-linking)).
 - **Automatic lineage-level rename when a revision's name changes.** Rejected by
   [Q4](#q4-display-name): a lineage's `display_name` permanently inherits the first revision's name
@@ -304,4 +303,3 @@ implementation PR precisely because no second reviewer will have checked it.
 - `apps/backend/app/models/repository.py` — `RepositoryRecord`
 - `apps/backend/app/services/repository_service.py` — `RepositoryService.import_github_repository`, `import_uploaded_repository`
 - `apps/frontend/src/app/pages/DashboardPage.tsx` — client-side "most recently analysed repository" computation (`feat/dashboard-latest-analysis-summary`)
-- `PARTHA_Market_Fit_Product_Roadmap.html` — `§23 // ROADMAP WORKSTREAMS` (W3 / Evolution), `§24 // SEQUENCING DEPENDENCIES` (GATE B), `§27 // REJECTED PATHS`, `§28 // MARKET-FIT EXIT CRITERIA`

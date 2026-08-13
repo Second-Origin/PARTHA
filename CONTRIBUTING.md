@@ -8,28 +8,28 @@ PARTHA is a Repository Intelligence Platform. One architectural rule sits above 
 
 Throughout this document, **must** and **must not** are requirements, **should** is a strong expectation, and **may** is permission.
 
-## 0. Strategy alignment (merge gate)
+## 0. Scope discipline (merge gate)
 
-PARTHA's direction is set by a single source of truth: the roadmap document
-`PARTHA_Market_Fit_Product_Roadmap.html` (the local strategy file;
-ask the maintainer if you cannot see it). It defines the capability sequencing,
-gates, rejected paths (§27), and market-fit exit criteria (§28).
+PARTHA's direction is maintainer-directed and tracked in the open: accepted
+RFCs under [`docs/architecture/`](docs/architecture/) and the issue tracker
+are the source of truth for what is in scope, not an unpublished document.
 
-A pull request is **in scope only if it advances one of the §23 workstreams
-toward a §28 market-fit exit criterion, with accepted evidence.** A "quick
-useful surface" or breadth addition that does not move a §28 criterion is
-**out of scope** and should not be proposed or merged. The encouraged default
-is to *deepen the existing moat* (versioned evidence, history and drift,
-governed team memory, workflow outcomes); new surfaces or languages are the
-discouraged direction and need explicit owner justification.
+A pull request is **in scope only if it advances a tracked GitHub issue or an
+accepted RFC, with accepted evidence.** A "quick useful surface" or breadth
+addition that does not trace to either is **out of scope** and should not be
+proposed or merged. The encouraged default is to *deepen the existing moat*
+(versioned evidence, history and drift, governed team memory, workflow
+outcomes); new surfaces or languages are the discouraged direction and need
+explicit owner justification before you start.
 
-You must fill the **Roadmap alignment** section of the pull request template
-on every pull request — naming the §23 workstream, the §28 criterion, and the
-accepted evidence. A pull request that cannot fill it is, by definition, out
-of scope and will be sent back.
+You must fill the **Scope** section of the pull request template on every
+pull request — naming the issue or RFC it advances and the accepted evidence.
+A pull request that cannot fill it is, by definition, out of scope and will be
+sent back. If you are unsure whether a change is in scope, ask on the issue
+before you start work.
 
-Editing the roadmap itself is a strategy-sensitive change reserved to the
-maintainer; do not treat roadmap content as something you may revise.
+Setting product direction is reserved to the maintainer; propose changes to it
+through an issue, not by editing an accepted RFC's conclusions.
 
 ---
 
@@ -459,3 +459,5 @@ Work is complete only when:
 All participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 PARTHA is licensed under the Apache License 2.0. By contributing, you agree your contribution is provided under that same license. Contribute only work you have the right to submit, and do not copy third-party code, images, fonts, datasets, or text into the project unless the license is compatible and the attribution is documented. There is currently no CLA or DCO requirement; if that changes, it will be documented here before being enforced.
+
+Questions about scope, an issue, or a pull request are welcome on [Discord](https://discord.gg/qvk9DcxDA) before you invest time in something that might be out of scope.
