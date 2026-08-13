@@ -30,6 +30,7 @@ EXPECTED_RESPONSES = {
     ("POST", "/auth/refresh"): {200, 401, 422, 429, 500},
     ("POST", "/auth/logout"): {204, 429, 500},
     ("GET", "/auth/me"): {200, 401, 429, 500},
+    ("DELETE", "/auth/me"): {204, 401, 422, 429, 500},
     ("POST", "/repositories/upload"): {201, 401, 409, 422, 429, 500},
     ("POST", "/repositories/github"): {201, 401, 409, 422, 429, 502, 504, 500},
     ("GET", "/repositories"): {200, 401, 429, 500},

@@ -20,7 +20,7 @@ class AiProviderConfigRecord(Base):
     __tablename__ = "ai_provider_configs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), unique=True, index=True)
+    owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
     provider: Mapped[str] = mapped_column(String(32))
     encrypted_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     api_key_last4: Mapped[str | None] = mapped_column(String(4), nullable=True)

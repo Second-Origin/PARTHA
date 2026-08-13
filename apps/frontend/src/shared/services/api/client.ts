@@ -346,6 +346,6 @@ export const api = {
   post: <T>(endpoint: string, body?: unknown, config?: RequestConfig) => request<T>('POST', endpoint, body, config),
   put: <T>(endpoint: string, body?: unknown, config?: RequestConfig) => request<T>('PUT', endpoint, body, config),
   patch: <T>(endpoint: string, body?: unknown, config?: RequestConfig) => request<T>('PATCH', endpoint, body, config),
-  delete: <T>(endpoint: string, config?: RequestConfig) => request<T>('DELETE', endpoint, undefined, config),
+  delete: <T>(endpoint: string, body?: unknown, config?: RequestConfig) => request<T>('DELETE', endpoint, body, config),
   upload: uploadFile,
 };

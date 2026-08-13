@@ -1,6 +1,6 @@
 import { api } from './client';
 import type { RequestConfig } from './client';
-import type { AuthResponse, LoginRequest, RegisterRequest, UserResponse } from './types';
+import type { AccountDeletionRequest, AuthResponse, LoginRequest, RegisterRequest, UserResponse } from './types';
 
 export const authService = {
   register(request: RegisterRequest, config?: RequestConfig): Promise<AuthResponse> {
@@ -21,5 +21,9 @@ export const authService = {
 
   me(config?: RequestConfig): Promise<UserResponse> {
     return api.get('/auth/me', config);
+  },
+
+  deleteAccount(request: AccountDeletionRequest, config?: RequestConfig): Promise<void> {
+    return api.delete('/auth/me', request, config);
   },
 };

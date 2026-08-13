@@ -2,13 +2,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Cookie, Depends, Response, status
 
-from app.api.deps import get_auth_service, get_current_user
+from app.api.deps import get_account_deletion_service, get_auth_service, get_current_user
 from app.api.openapi import documented_responses, error_responses, suppress_automatic_validation_error
 from app.auth.service import AuthService
 from app.core.config import Settings, get_settings
 from app.core.exceptions import UnauthorizedError
 from app.models.user import User
-from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserResponse
+from app.schemas.auth import AccountDeletionRequest, AuthResponse, LoginRequest, RegisterRequest, UserResponse
+from app.services.account_deletion_service import AccountDeletionService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -152,3 +153,26 @@ def logout(
 )
 def me(current_user: User = Depends(get_current_user)) -> UserResponse:
     return UserResponse.model_validate(current_user)
+
+
+@router.delete(
+    "/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=error_responses(401, 422, 429, 500),
+)
+def delete_account(
+    request: AccountDeletionRequest,
+    current_user: User = Depends(get_current_user),
+    service: AccountDeletionService = Depends(get_account_deletion_service),
+) -> Response:
+    """Permanently delete the caller's account and every owner-scoped record.
+
+    Requires the account password and the account email typed back as a
+    deliberate confirmation (schemas.auth.AccountDeletionRequest) — this is a
+    destructive, unrecoverable operation. See AccountDeletionService for the
+    deletion order and AccountDeletionAuditRecord for the audit trail.
+    """
+    service.delete_account(current_user, request.password, request.confirm_email)
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.delete_cookie(REFRESH_COOKIE, path="/auth")
+    return response

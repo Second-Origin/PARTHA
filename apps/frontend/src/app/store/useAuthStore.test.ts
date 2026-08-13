@@ -202,6 +202,23 @@ describe('useAuthStore', () => {
     });
   });
 
+  describe('account deletion', () => {
+    it('accountDeleted clears session and app state without calling the backend', () => {
+      const logoutSpy = vi.spyOn(authService, 'logout');
+      useAppStore.setState({ repositories: [fakeRepository('repo-a')], activeRepositoryId: 'repo-a' });
+      useAuthStore.setState({ status: 'authenticated', accessToken: 'a-token', user: fakeUser('userA', 'a@example.com') });
+
+      useAuthStore.getState().accountDeleted();
+
+      expect(useAuthStore.getState()).toMatchObject({ status: 'unauthenticated', accessToken: null, user: null });
+      expect(useAppStore.getState().repositories).toEqual([]);
+      expect(useAppStore.getState().activeRepositoryId).toBeNull();
+      // DELETE /auth/me already revoked the session server-side; a second
+      // /auth/logout call would be pointless and must not be made.
+      expect(logoutSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('guest-only auth failures must not touch an existing session', () => {
     it('a failed login attempt does not clear an existing authenticated session', async () => {
       useAuthStore.setState({ status: 'authenticated', accessToken: 'a-token', user: fakeUser('userA', 'a@example.com') });

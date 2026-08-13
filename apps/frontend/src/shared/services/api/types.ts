@@ -101,6 +101,7 @@ export type UserResponse = components['schemas']['UserResponse'];
 export type AuthResponse = components['schemas']['AuthResponse'];
 export type LoginRequest = components['schemas']['LoginRequest'];
 export type RegisterRequest = components['schemas']['RegisterRequest'];
+export type AccountDeletionRequest = components['schemas']['AccountDeletionRequest'];
 
 export type ExportFormat = components['schemas']['ExportRequest']['format'];
 export type ExportTarget = components['schemas']['ExportRequest']['target'];

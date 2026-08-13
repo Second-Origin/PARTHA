@@ -33,3 +33,13 @@ class AuthResponse(CamelModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"
     user: UserResponse
+
+
+class AccountDeletionRequest(CamelModel):
+    # No minimum length here for the same reason as LoginRequest: this
+    # verifies against the stored hash, and a short-password rejection would
+    # only leak the registration policy without adding any real protection.
+    password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+    # Deliberate confirmation gate: the caller must type back their own
+    # account email, not just click a button, before an irreversible delete.
+    confirm_email: EmailStr
