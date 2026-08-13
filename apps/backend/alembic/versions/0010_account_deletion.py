@@ -31,9 +31,14 @@ PostgreSQL and SQLite ended up with different anonymous identities for the
   ``ON DELETE CASCADE`` in ``PRAGMA foreign_key_list`` and a parent-row
   delete actually removes the child row.
 
-``repositories.owner_id`` already has an explicit, dialect-independent name
-from migration 0002 (``fk_repositories_owner_id_users``), so it needs no
-dialect branching.
+``repositories.owner_id`` already has an explicit name from migration 0002
+(``fk_repositories_owner_id_users``) on both dialects, but SQLite still needs
+the same anonymous-constraint workaround as the other three: SQLite never
+persists a foreign key's constraint name (``PRAGMA foreign_key_list`` has no
+name column), so reflection reports ``name=None`` regardless of how the
+constraint was originally created, and batch mode can only drop a *named*
+constraint. It is folded into ``_OWNER_FKS`` below rather than handled as a
+one-off so both dialects go through the same branch.
 """
 
 from alembic import op
@@ -66,6 +71,12 @@ _OWNER_FKS = [
         "fk_ai_conversation_messages_owner_id_users",
         "ai_conversation_messages_owner_id_fkey",
     ),
+    (
+        "repositories",
+        "owner_id",
+        "fk_repositories_owner_id_users",
+        "fk_repositories_owner_id_users",
+    ),
 ]
 
 
@@ -81,12 +92,6 @@ def upgrade() -> None:
             with op.batch_alter_table(table) as batch_op:
                 batch_op.drop_constraint(pg_existing_name, type_="foreignkey")
                 batch_op.create_foreign_key(new_name, "users", [column], ["id"], ondelete="CASCADE")
-
-    with op.batch_alter_table("repositories") as batch_op:
-        batch_op.drop_constraint("fk_repositories_owner_id_users", type_="foreignkey")
-        batch_op.create_foreign_key(
-            "fk_repositories_owner_id_users", "users", ["owner_id"], ["id"], ondelete="CASCADE"
-        )
 
     op.create_table(
         "account_deletion_audits",
@@ -112,11 +117,14 @@ def downgrade() -> None:
     op.drop_index("ix_account_deletion_audits_deleted_user_id", table_name="account_deletion_audits")
     op.drop_table("account_deletion_audits")
 
-    with op.batch_alter_table("repositories") as batch_op:
-        batch_op.drop_constraint("fk_repositories_owner_id_users", type_="foreignkey")
-        batch_op.create_foreign_key("fk_repositories_owner_id_users", "users", ["owner_id"], ["id"])
+    is_sqlite = op.get_bind().dialect.name == "sqlite"
 
     for table, column, new_name, _pg_existing_name in reversed(_OWNER_FKS):
-        with op.batch_alter_table(table) as batch_op:
-            batch_op.drop_constraint(new_name, type_="foreignkey")
-            batch_op.create_foreign_key(new_name, "users", [column], ["id"])
+        if is_sqlite:
+            with op.batch_alter_table(table, naming_convention=_SQLITE_ANON_FK_NAMING_CONVENTION) as batch_op:
+                batch_op.drop_constraint(new_name, type_="foreignkey")
+                batch_op.create_foreign_key(new_name, "users", [column], ["id"])
+        else:
+            with op.batch_alter_table(table) as batch_op:
+                batch_op.drop_constraint(new_name, type_="foreignkey")
+                batch_op.create_foreign_key(new_name, "users", [column], ["id"])
