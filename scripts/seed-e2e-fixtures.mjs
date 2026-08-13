@@ -6,9 +6,9 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const apiUrl = (process.env.PARTHA_FIXTURE_API_URL ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
-const outputPath = process.env.PARTHA_VISUAL_FIXTURES ?? join(tmpdir(), 'partha-prototype-fixtures.json');
-const email = 'prototype-fixture@example.com';
-const password = 'Prototype-fixture-2026';
+const outputPath = process.env.PARTHA_VISUAL_FIXTURES ?? join(tmpdir(), 'partha-e2e-fixtures.json');
+const email = 'e2e-fixture@example.com';
+const password = 'E2e-fixture-2026';
 
 const moduleSource = (name, imports = []) => [
   ...imports.map((target) => `import { value as dependency } from '${target}';`),
@@ -215,7 +215,7 @@ async function main() {
     await api(`/repositories/${repository.id}`, { token, method: 'DELETE' });
   }
 
-  const workingRoot = await mkdtemp(join(tmpdir(), 'partha-prototype-fixtures-'));
+  const workingRoot = await mkdtemp(join(tmpdir(), 'partha-e2e-fixtures-'));
   const repositories = [];
   try {
     for (const fixture of FIXTURES) {
@@ -249,7 +249,7 @@ async function main() {
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(
       outputPath,
-      `${JSON.stringify({ schemaVersion: 'prototype-fixtures.v1', apiUrl, email, password, repos: repositories }, null, 2)}\n`,
+      `${JSON.stringify({ schemaVersion: 'e2e-fixtures.v1', apiUrl, email, password, repos: repositories }, null, 2)}\n`,
       { encoding: 'utf8', mode: 0o600 },
     );
     await chmod(outputPath, 0o600);
@@ -257,7 +257,7 @@ async function main() {
     await rm(workingRoot, { recursive: true, force: true });
   }
 
-  process.stdout.write(`Seeded ${repositories.length} disposable prototype repositories. Fixture manifest: ${outputPath}\n`);
+  process.stdout.write(`Seeded ${repositories.length} disposable repositories. Fixture manifest: ${outputPath}\n`);
 }
 
 main().catch((error) => {

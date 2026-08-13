@@ -24,7 +24,7 @@ export const repositoryService = {
   },
 
   delete(id: string, config?: RequestConfig): Promise<void> {
-    return api.delete(`/repositories/${id}`, config);
+    return api.delete(`/repositories/${id}`, undefined, config);
   },
 
   importFromGithub(request: ImportGithubRequest, config?: RequestConfig): Promise<RepositoryResponse> {

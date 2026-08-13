@@ -35,7 +35,7 @@ class AiConversationMessageRecord(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     repository_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("repositories.id", ondelete="CASCADE"),

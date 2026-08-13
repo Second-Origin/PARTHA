@@ -17,6 +17,11 @@ interface AuthState {
   register: (email: string, password: string) => Promise<void>;
   /** Always clears local session state, even if the server call fails. */
   logout: () => Promise<void>;
+  /** Clears local session state after the account itself was deleted
+   * server-side. Unlike logout(), this never calls the backend: DELETE
+   * /auth/me already revoked every session and cleared the refresh cookie
+   * in its own response, so there is nothing left to sign out of. */
+  accountDeleted: () => void;
   /** The refresh primitive. Only ever called through requestSharedRefresh's
    * single-flight mutex (wired below as the client's refreshSession hook) —
    * nothing else may call this directly, so every refresh in the app,
@@ -54,6 +59,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     } finally {
       clearAuthenticatedState();
     }
+  },
+
+  accountDeleted() {
+    clearAuthenticatedState();
   },
 
   async refreshSession() {

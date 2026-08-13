@@ -273,7 +273,7 @@ These are properties of the system as built, not a wish list.
 6. **Dependency coverage is narrow.** Three manifest formats plus two lockfile formats (`package-lock.json`, `poetry.lock`), whose exact pins are recorded as resolutions on the same dependency identity rather than as direct edges. There is no transitive resolution and no vulnerability or outdated-version scanning. The API exposes explicit `not_computed` assessment statuses and does not emit a clean result or count without a scanner.
 7. **Frontend assurance remains focused.** Vitest covers shared and feature
    behavior, and a disposable Playwright acceptance suite exercises the defined
-   Architecture, Engineering Review, and Insights prototype journeys. This is
+   Architecture, Engineering Review, and Insights browser journeys. This is
    not comprehensive end-to-end product coverage.
 
 These are missing guarantees in the system as built. They are not scheduled work, and this document does not commit to when or whether any of them change.

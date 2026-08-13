@@ -1,5 +1,6 @@
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { useSettings } from '@/features/settings/hooks/useSettings';
+import { useAccountDeletion } from '@/features/settings/hooks/useAccountDeletion';
 import { useAuthStore } from '@/app/store/useAuthStore';
 import { cn } from '@/shared/utils/cn';
 
@@ -7,6 +8,7 @@ export function SettingsPage() {
   const settings = useSettings();
   const { tabs, activeTab, setActiveTab } = settings;
   const user = useAuthStore((state) => state.user);
+  const deletion = useAccountDeletion();
   const providers = [
     ['openai', 'OpenAI'],
     ['anthropic', 'Anthropic'],
@@ -75,10 +77,68 @@ export function SettingsPage() {
             </div>
             <div className="rounded-xl border border-destructive/50 bg-card p-6">
               <h2 className="text-sm font-medium text-destructive mb-2">Danger Zone</h2>
-              <p className="text-xs text-muted-foreground mb-4">Permanently delete your account and all data.</p>
-              <button disabled className="rounded-md border border-border px-4 py-2 text-sm font-medium text-muted-foreground cursor-not-allowed">
-                Coming Soon
-              </button>
+              <p className="text-xs text-muted-foreground mb-4">
+                Permanently delete your account, repositories, AI provider configuration, and conversation history.
+                This cannot be undone.
+              </p>
+              {!deletion.expanded && (
+                <button
+                  type="button"
+                  onClick={deletion.open}
+                  className="rounded-md border border-destructive/50 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  Delete Account
+                </button>
+              )}
+              {deletion.expanded && (
+                <div className="space-y-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+                  <div>
+                    <label htmlFor="delete-confirm-email" className="block text-xs font-medium text-muted-foreground mb-1.5">
+                      Type <span className="font-mono text-foreground">{deletion.email}</span> to confirm
+                    </label>
+                    <input
+                      id="delete-confirm-email"
+                      type="email"
+                      value={deletion.confirmEmail}
+                      onChange={(event) => deletion.setConfirmEmail(event.target.value)}
+                      autoComplete="off"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-destructive"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="delete-confirm-password" className="block text-xs font-medium text-muted-foreground mb-1.5">
+                      Password
+                    </label>
+                    <input
+                      id="delete-confirm-password"
+                      type="password"
+                      value={deletion.password}
+                      onChange={(event) => deletion.setPassword(event.target.value)}
+                      autoComplete="current-password"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-destructive"
+                    />
+                  </div>
+                  {deletion.error && <p role="alert" className="text-sm text-destructive">{deletion.error}</p>}
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={deletion.cancel}
+                      disabled={deletion.submitting}
+                      className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={deletion.deleteAccount}
+                      disabled={!deletion.canSubmit}
+                      className="rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 transition-colors"
+                    >
+                      {deletion.submitting ? 'Deleting...' : 'Permanently Delete Account'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

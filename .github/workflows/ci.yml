@@ -268,13 +268,13 @@ jobs:
         run: npm --prefix apps/frontend exec -- playwright install --with-deps chromium
 
       - name: Run disposable-fixture browser journeys
-        run: node scripts/run-prototype-acceptance.mjs
+        run: node scripts/run-e2e-acceptance.mjs
 
       - name: Upload browser report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: prototype-browser-acceptance
+          name: browser-acceptance-report
           path: |
             apps/frontend/e2e-report
             apps/frontend/test-results

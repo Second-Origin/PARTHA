@@ -5,8 +5,8 @@ Local workflow helpers. Prefer the root `package.json` scripts for common tasks 
 | Script | Purpose | Invoked by |
 | --- | --- | --- |
 | `backend-python.mjs` | Runs a backend Python command through `apps/backend/.venv` when present, falling back to `python`. | `npm run dev:backend`, `npm run start:backend`, `npm run test:backend` |
-| `seed-prototype-fixtures.mjs` | Idempotently recreates the disposable Architecture/Review/Insights fixture repositories for one fixture account and writes a mode-0600 temporary manifest. | `npm run fixtures:prototype`, or the acceptance runner |
-| `run-prototype-acceptance.mjs` | Starts isolated backend/frontend processes on free loopback ports, seeds fixtures, forwards optional Playwright CLI filters, runs the selected browser journeys, and removes temporary database/storage state. | `npm run test:prototype`, `npm run test:accessibility` |
+| `seed-e2e-fixtures.mjs` | Idempotently recreates the disposable Architecture/Review/Insights fixture repositories for one fixture account and writes a mode-0600 temporary manifest. | `npm run fixtures:e2e`, or the acceptance runner |
+| `run-e2e-acceptance.mjs` | Starts isolated backend/frontend processes on free loopback ports, seeds fixtures, forwards optional Playwright CLI filters, runs the selected browser journeys, and removes temporary database/storage state. | `npm run test:e2e`, `npm run test:accessibility` |
 | `start-backend.sh` | Starts the backend with uvicorn on `0.0.0.0:8000`. Same venv preference as above; override with `PYTHON=…`. | Directly, or from a process manager |
 | `check-backend.sh` | Runs the backend test suite (`pytest`). Same venv preference; override with `PYTHON=…`. | Directly |
 | `generate-api-contract.mjs` | Regenerates the frontend DTOs from the FastAPI OpenAPI schema using the pinned `openapi-typescript`. `--check` fails on drift instead of writing. | `npm run generate:api-contract`, CI **API Contract Drift** |
@@ -21,7 +21,7 @@ The generated frontend contract at `apps/frontend/src/shared/services/api/genera
 capability block in the root README are both build outputs. Edit their sources — the FastAPI
 schema and `support_matrix.py` — and regenerate; CI fails on hand edits that drift.
 
-`npm run test:prototype` is the one-command browser gate after dependencies are installed. It
+`npm run test:e2e` is the one-command browser gate after dependencies are installed. It
 installs Chromium if needed; CI runs the same acceptance runner and uploads its report.
 `npm run test:accessibility` reuses that stack and runs only the WCAG baseline journeys. The
 runner uses `apps/backend/.venv` on Windows or POSIX when present and the fixture seeder uses

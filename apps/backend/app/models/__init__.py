@@ -1,3 +1,4 @@
+from app.models.account_deletion_audit import AccountDeletionAuditRecord
 from app.models.ai_conversation import AiConversationMessageRecord
 from app.models.ai_provider_config import AiProviderConfigRecord
 from app.models.analysis_job import AnalysisJob
@@ -16,6 +17,7 @@ from app.models.snapshot import (
 from app.models.user import User
 
 __all__ = [
+    "AccountDeletionAuditRecord",
     "AiConversationMessageRecord",
     "AiProviderConfigRecord",
     "AnalysisJob",

@@ -35,6 +35,7 @@ from app.repositories.ai_conversation_repository import AiConversationRepository
 from app.repositories.repository_repository import RepositoryRepository
 from app.reports.export_service import ExportService
 from app.review.review_service import EngineeringReviewBuilder
+from app.services.account_deletion_service import AccountDeletionService
 from app.services.ai_service import AiService
 from app.services.analysis_job_service import AnalysisJobService
 from app.services.analysis_service import AnalysisService
@@ -79,6 +80,14 @@ def get_current_user(
 
 def get_local_storage(settings: Settings = Depends(get_settings)) -> LocalStorage:
     return LocalStorage(settings)
+
+
+def get_account_deletion_service(
+    db: Session = Depends(get_db),
+    repository: RepositoryRepository = Depends(get_repository_repository),
+    storage: LocalStorage = Depends(get_local_storage),
+) -> AccountDeletionService:
+    return AccountDeletionService(db, repository, storage)
 
 
 def get_github_client(settings: Settings = Depends(get_settings)) -> GitHubClient:

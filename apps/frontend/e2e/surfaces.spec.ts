@@ -19,7 +19,7 @@ interface Fixtures {
 }
 
 const FIXTURES: Fixtures = JSON.parse(
-  readFileSync(process.env.PARTHA_VISUAL_FIXTURES ?? '/tmp/partha-prototype-fixtures.json', 'utf8'),
+  readFileSync(process.env.PARTHA_VISUAL_FIXTURES ?? '/tmp/partha-e2e-fixtures.json', 'utf8'),
 );
 
 function byLabel(label: string) {
@@ -173,7 +173,7 @@ test.describe('snapshot-backed Review and Insights journeys', () => {
   });
 
   test('a second owner receives 404 for another owner’s Review and Insights', async ({ request }) => {
-    const email = `prototype-second-owner-${Date.now()}@example.com`;
+    const email = `e2e-second-owner-${Date.now()}@example.com`;
     const password = 'Second-owner-fixture-2026';
     const registration = await request.post(`${FIXTURES.apiUrl}/auth/register`, {
       data: { email, password },

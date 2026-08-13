@@ -56,7 +56,7 @@ npm --prefix apps/frontend run test:watch
 npm --prefix apps/frontend run build     # tsc -b && vite build
 npm run generate:api-contract            # regenerate DTOs from FastAPI OpenAPI
 npm --prefix apps/frontend run generate:api-contract -- --check # fail on drift
-npm run test:prototype                   # disposable fixtures + Playwright journeys
+npm run test:e2e                         # disposable fixtures + Playwright journeys
 ```
 
 The generated contract lives at
@@ -66,7 +66,7 @@ datetime defaults, and runs the pinned `openapi-typescript@7.13.0` tool. The CI
 API Contract Drift job installs both app lockfiles and runs the check command.
 
 From the repository root: `npm run dev:frontend`, `npm run lint:frontend`,
-`npm run build:frontend`, and `npm run test:prototype`. There is no root alias
+`npm run build:frontend`, and `npm run test:e2e`. There is no root alias
 for the Vitest suite — run `npm --prefix apps/frontend run test`.
 
 Type errors surface in `build`, not `lint`. Run the build before opening a PR.
@@ -82,7 +82,7 @@ The app expects the PARTHA backend on `http://localhost:8000` (`npm run dev:back
 ## Test coverage
 
 Vitest covers shared infrastructure plus feature components, hooks, stores,
-routing, repository switching, and architecture layout behavior. The prototype
+routing, repository switching, and architecture layout behavior. The browser
 acceptance runner creates disposable repositories, starts isolated backend and
 frontend processes, and exercises the review-ready Architecture, Engineering
 Review, and Insights journeys in Chromium. This executable acceptance coverage

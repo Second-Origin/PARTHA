@@ -6,7 +6,7 @@ import { defineConfig, devices } from '@playwright/test';
  * Deliberately not part of the default `npm test`: it needs a running backend
  * with seeded fixtures and a downloaded browser, so it is an explicit,
  * reproducible gate rather than something that silently blocks unit runs.
- * Run through the repository-level `npm run test:prototype` script.
+ * Run through the repository-level `npm run test:e2e` script.
  */
 export default defineConfig({
   testDir: './e2e',
