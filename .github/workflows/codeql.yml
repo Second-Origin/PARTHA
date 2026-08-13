@@ -1,7 +1,10 @@
 # CodeQL static analysis for PARTHA.
 #
-# Part of the dependency, secret, and code scanning baseline. Intended to become
-# a required status check on `dev` and `main` once branch protection is enabled.
+# Part of the dependency, secret, and code scanning baseline. Branch protection
+# is enabled on `dev` and `main`; whether these specific check names are in the
+# required-status-checks list is a branch ruleset setting, not something this
+# file controls -- confirm in GitHub's branch protection UI if that matters for
+# a given change.
 name: CodeQL
 
 on:
