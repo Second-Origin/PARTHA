@@ -6,32 +6,34 @@
 | Governing design | [RFC-0002](REPOSITORY_LINEAGE_RFC.md) |
 | Live-code baseline | `origin/dev` at `e4609f3db92de268f3c15f0dadb511d49995dd42` |
 | Baseline verified | 2026-08-18 |
-| Purpose | Separately review the migration and implementation choices required before #299 starts |
+| Purpose | Supply the implementation-grade migration plan and architecture amendment required to authorize #299 |
 | Runtime changes in this document | None |
-| Recommendation status | **Owner decisions required before implementation** |
+| Authorization status | **Architecture amendment pending explicit owner approval in PR #328** |
 
 This document is an implementation-grade plan, not an implementation. It does not create an
 Alembic revision, change an ORM model, change `RepositoryService`, or alter an API/frontend
 contract. It records the current schema, maps RFC-0002 to live code, specifies a safe migration and
-backfill, and isolates the decisions that must be approved before #299 can be built.
+backfill, and implements RFC-0002's migration mechanics. The RFC is the architecture contract; this
+plan does not compete with or silently extend it.
 
 ## 1. Executive verdict
 
-**NOT READY TO IMPLEMENT #299.**
+**#299 NOT AUTHORIZED FOR IMPLEMENTATION.**
 
-The migration can be implemented safely once the owner approves the decisions in §13. Two are
-material:
+The migration can be implemented safely once the owner explicitly approves the architecture
+amendment in RFC-0002 and the decisions summarized in §13. This PR reconciles the two material
+design gaps rather than leaving them as plan-only additions:
 
-1. RFC-0002 calls an upload or unresolved-ref import both a “single-row lineage” and a row with
-   `lineage_id = NULL` for which no lineage is created. This plan recommends following the explicit
-   schema/backfill rule: such rows remain unlineaged and `lineage_id`/`sequence` remain nullable.
-2. A race-free, non-reusing sequence needs durable allocation state. `MAX(sequence) + 1`, even under
-   a parent-row lock, reuses a number after the former highest revision is deleted. This plan adds
-   `repository_lineages.next_sequence`, starts repository sequences at 1, and allocates by a
-   transactional row update. RFC-0002 does not list this column.
+1. Uploads and unresolved legacy GitHub rows are **unlineaged standalone imports**: their lineage
+   fields are null and no synthetic lineage exists.
+2. A race-free, non-reusing sequence needs durable allocation state. RFC-0002 now specifies
+   `repository_lineages.next_sequence`, 1-based ordinals, transactional allocation, valid deletion
+   gaps, and preservation of empty lineages.
 
-Approval of this document should be the separately reviewed migration-plan prerequisite in #299.
-After those choices are approved, there is no known blocker in the current codebase.
+Explicit owner approval of PR #328 changes the authorization state to **#299 AUTHORIZED FOR
+IMPLEMENTATION**. #322 remains required before the eventual #299 implementation PR merges, but it
+does not block writing or testing that implementation after architecture approval. No runtime or
+migration implementation is present here.
 
 ## 2. Live state and governing material
 
@@ -55,15 +57,17 @@ The review covered:
 
 Parth's 2026-08-11 comment on #299 is an explicit gate: the owner waiver removes only the
 independent-ratification condition. #299 remains a placeholder and is not authorized for
-implementation until this Alembic plan is filed and separately reviewed; the waiver does not
-resolve the unreviewed sequence-locking risk. That warning is why §6 specifies the allocator and
-why §13 requires its owner approval rather than treating it as an incidental coding choice.
+implementation until this Alembic plan and its RFC amendment are explicitly reviewed. The waiver
+did not resolve the sequence-locking risk. RFC-0002 now makes the §6 allocator authoritative
+architecture, subject to Parth's approval of PR #328 rather than an incidental choice deferred to
+runtime implementation.
 
 The review also covered the newer cross-references Parth placed on #299:
 
 - [#322](https://github.com/Second-Origin/PARTHA/issues/322) requires a repeatable migration
   rehearsal/rollback procedure before more schema work lands and explicitly requires the planned
-  lineage migration as a review checklist.
+  lineage migration as a review checklist. It is a pre-merge operational gate for the #299 schema
+  implementation, not a blocker to beginning implementation after this architecture is approved.
 - The stated delivery order is #299, then the W2 scale/recovery gate
   [#210](https://github.com/Second-Origin/PARTHA/issues/210), then the held two-revision graph-diff
   spike [#219](https://github.com/Second-Origin/PARTHA/issues/219). #299 supplies logical grouping;
@@ -214,32 +218,31 @@ Jobs remain revision-scoped, not lineage-scoped.
 | Key `(owner_id, canonical_source_key, canonical_branch)` | Absent | Current dedupe uses exact stored `source_url`, commit, owner. No canonical source field exists. |
 | GitHub URL normalization accepts HTTPS/SSH variants | Incompatible/partial | Live imports accept only lowercase-host public HTTPS URLs. RFC examples also include mixed-case host and `git@github.com:` syntax. Backfill can normalize only strictly recognized historical values; live validation must not be broadened implicitly by #299. |
 | Branch-scoped identity | Partial input exists | `revision_ref` is normalized to `refs/heads/...` or `refs/tags/...`; `branch` is only the requested input. The canonical component must be `revision_ref` verbatim, not `branch`. The RFC calls this `canonical_branch` even when it is a tag. |
-| Upload/unresolved-ref imports are standalone | Ambiguous | §4.3/§6 say no lineage row and null repository lineage fields; terminology says each is its own single-row lineage. Live GitHub imports currently reject an unresolved ref, so only legacy GitHub rows can hit that case. |
-| `repository_lineages` fields in §5.1 | Absent | The RFC fields are implementable, but sequence allocation needs one additional counter and latest-pointer integrity needs stronger constraints/transaction ordering. |
-| Partial unique canonical key | Incomplete design | PostgreSQL/SQLite allow multiple `NULL` branch values. Add a check requiring source key and branch to be null together, and predicate uniqueness on the non-null pair. |
+| Upload/unresolved-ref imports are unlineaged standalone imports | Defined by amended RFC | §4.3/§6 require no lineage row and null repository lineage fields. Live GitHub imports reject an unresolved ref, so only legacy GitHub rows can hit that case. |
+| `repository_lineages` fields in §5.1 | Absent from code; defined by amended RFC | The architecture includes the durable counter, canonical-pair check, and same-lineage latest-pointer integrity implemented by this plan. |
+| Partial unique canonical key | Defined by amended RFC | The canonical pair check and non-null partial uniqueness are architecture; this plan supplies exact DDL and migration ordering. |
 | `repositories.lineage_id` and `sequence` | Absent | They must remain nullable permanently if §4.3/§6 is followed, not merely during expansion. |
-| Monotonic sequence | Ambiguous/incomplete | RFC specifies neither start value, uniqueness, deletion reuse, nor a race-free allocator. |
+| Monotonic sequence | Defined by amended RFC | Starts at 1, is allocated transactionally from `next_sequence`, is unique per lineage, and is never reused; deletion gaps are valid. |
 | `latest_repository_id` rolls back on deletion | Incompatible with simple FK alone | `SET NULL` can clear the pointer but cannot choose the next-highest sequence. Service-level deletion must update it before deleting the revision, in the same transaction. |
 | Earliest name and created-at ordering | Partial data exists | Both columns exist, but timestamp ties require `id` as a deterministic secondary sort key. |
 | Idempotent backfill | Partially specified | Grouping inputs are reproducible, but random lineage IDs/inserts are not. Use a documented UUIDv5 namespace for backfill lineage IDs plus upsert/reconciliation logic. |
 | No API/frontend change | Compatible | Lineage fields can remain internal. Existing response schemas need no change. |
 | Snapshot immutability/identity unchanged | Compatible | Snapshots continue pointing to repository rows. |
 
-### Material RFC flaws
+### Discrepancies reconciled by the RFC amendment
 
-1. **Standalone contradiction.** A record cannot both be its own lineage and have no lineage record.
-   This plan follows the explicit §5.2/§6 storage rule and uses “unlineaged standalone import” in
-   implementation language.
-2. **Sequence state is missing.** `MAX(sequence)+1` does not preserve a never-reused ordinal after
-   deletion and is unsafe without serialization. A per-lineage counter is required.
-3. **The latest pointer is under-constrained.** A simple FK proves existence, not that the target is
-   owned by and belongs to the same lineage.
-4. **The partial unique predicate is insufficient alone.** The two canonical fields need an
-   all-null/all-non-null check.
-5. **“Idempotent and re-runnable” is asserted but not fully designed.** Deterministic identifiers,
-   conflict handling, verification, and recovery are needed.
+1. **Standalone semantics.** The RFC now uses “unlineaged standalone import” and states that no
+   synthetic lineage exists.
+2. **Sequence state.** The RFC now requires a durable per-lineage counter, 1-based never-reused
+   ordinals, transactional allocation, and valid deletion gaps.
+3. **Latest-pointer and owner integrity.** The RFC now requires the composite membership and
+   latest-member foreign keys; this plan supplies their exact names and migration order.
+4. **Canonical-pair integrity.** The RFC now requires both canonical fields to be null or non-null
+   together; this plan supplies the check and partial-index mechanics.
+5. **Repeatable backfill.** The RFC requires deterministic identity and reconciliation; this plan
+   owns the UUID construction, verification, interruption recovery, and downgrade mechanics.
 
-## 5. Recommended target schema
+## 5. RFC target schema
 
 ### 5.1 `repository_lineages`
 
@@ -251,7 +254,7 @@ Jobs remain revision-scoped, not lineage-scoped.
 | `canonical_branch` | `Text`, nullable | Exact normalized `revision_ref`, including `refs/heads/` or `refs/tags/`. |
 | `display_name` | `Text`, non-null | Permanently copied from the first repository row. |
 | `latest_repository_id` | `String(36)`, nullable | Current highest surviving sequence; null for an empty lineage. |
-| `next_sequence` | `Integer`, non-null | **Plan addition:** next never-issued ordinal; initial value 1; check `>= 1`. |
+| `next_sequence` | `Integer`, non-null | RFC-required next never-issued ordinal; initial value 1; check `>= 1`. |
 | `created_at` | timezone-aware `DateTime`, non-null | Earliest member's `created_at` for backfill; current UTC for live creation. |
 
 Constraints/indexes:
@@ -288,15 +291,15 @@ not authorize those fields.
   `fk_repository_lineages_latest_member`, deferrable/initially deferred, with no automatic delete
   action. This prevents a latest pointer to another lineage or owner.
 
-The cyclic FKs are intentional and require ordered writes: insert a lineage with a null latest
-pointer, insert/attach the repository, then set latest; on deletion, set latest to the replacement
-or null before deleting the repository. Deferral permits these operations in one transaction.
+These RFC-required cyclic FKs are intentional and require ordered writes: insert a lineage with a
+null latest pointer, insert/attach the repository, then set latest; on deletion, set latest to the
+replacement or null before deleting the repository. Deferral permits these operations in one transaction.
 Both dialects must be tested; if SQLite's batch/reflection path cannot preserve the deferrable
 composite constraints, implementation must stop rather than silently weaken owner integrity.
 
 `lineage_id` and `sequence` remain nullable at final head because RFC §4.3/§6 explicitly keeps
-uploads and unidentified legacy rows standalone. They must not be tightened to `NOT NULL` unless
-Parth resolves the standalone contradiction in favor of synthetic lineages.
+uploads and unidentified legacy rows as unlineaged standalone imports. They must not be tightened
+to `NOT NULL` by #299.
 
 ### 5.3 Sequence semantics
 
@@ -308,8 +311,8 @@ Parth resolves the standalone contradiction in favor of synthetic lineages.
   timestamp and not necessarily an analyzed/completed member.
 - Backfilled sequences are dense only at migration time, ordered by `(created_at ASC, id ASC)`.
 
-The 1-based choice fits the RFC's “third import” language and avoids exposing a zero ordinal in
-future internal tooling. It is an owner decision because RFC-0002 does not specify the base.
+The RFC makes the ordinal 1-based, matching its “third import” language and avoiding a zero ordinal
+in future internal tooling.
 
 ## 6. Concurrency strategy
 
@@ -322,7 +325,7 @@ future internal tooling. It is an owner decision because RFC-0002 does not speci
 | Retry only on `(lineage_id, sequence)` conflict | Correct if bounded and the transaction is fully retried. | Matches the existing AI-turn pattern, but can amplify lock contention. | Correctness comes from unique constraint; repeated conflicts eventually fail. | Viable fallback/defense, not deterministic allocation by itself. |
 | Serializable transactions | Correct with serialization-failure retries. | SQLite semantics differ and writer contention is database-wide. | Every serialization failure requires transaction retry. | Excessive scope/complexity for one counter. |
 | Global database sequence | Race-free but not per-lineage/dense. | SQLite has no equivalent PostgreSQL sequence object. | Creates gaps and non-portable behavior. | Reject. |
-| Per-lineage `next_sequence` updated transactionally | Row update locks exactly one lineage. | The first update obtains SQLite's serialized writer lock; configured busy timeout bounds waiting. | Rollback restores the counter; unique constraint remains defense in depth. | **Recommend.** |
+| Per-lineage `next_sequence` updated transactionally | Row update locks exactly one lineage. | The first update obtains SQLite's serialized writer lock; configured busy timeout bounds waiting. | Rollback restores the counter; unique constraint remains defense in depth. | **Selected by RFC-0002.** |
 
 ### 6.2 Allocation algorithm
 
@@ -621,7 +624,7 @@ but #219 must still define fact/entity matching and its own API/UI contract.
 | SQLite writer contention | Busy timeout bounds waiting; atomic counter update serializes; tests must use separate connections/threads. |
 | PostgreSQL concurrency | Row update provides real row-level serialization; test with separate transactions in CI. |
 
-## 13. Decisions requiring Parth review
+## 13. Architecture decisions presented for Parth approval
 
 ### Ready (supported by RFC + code)
 
@@ -634,28 +637,31 @@ but #219 must still define fact/entity matching and its own API/UI contract.
 - Backfill order requires `(created_at, id)`, not timestamp alone.
 - Owner integrity needs a database constraint in addition to service scoping.
 
-### Needs Parth review
+### Explicit approval requested
 
-1. **Approve null standalone rows** as the authoritative reading of RFC §5.2/§6, and correct the
-   “single-row lineage” terminology later; or require a redesigned synthetic-lineage backfill.
-2. **Approve `next_sequence` and 1-based ordinals.** Without durable counter state the stated
-   monotonic history is not preserved after deletion.
-3. **Approve preserving empty lineages.** This retains canonical identity and prevents sequence
-   reuse; eager deletion would need a different concurrency/recreation rule.
-4. **Approve deferred composite FKs** for owner membership and latest-member integrity, contingent
-   on both-dialect tests.
-5. **Confirm scope treatment for concurrent uploads.** This plan leaves the pre-existing
-   upload-hash race outside #299 rather than adding an unrelated partial unique constraint.
-6. **Confirm #322 merge ordering.** Its wording requires rehearsal before more schema work “lands.”
-   This plan recommends that #322's runbook/rehearsal be complete before the #299 implementation PR
-   merges; Parth should state whether it must also precede implementation starting.
+1. **Unlineaged standalone imports.** Uploads and unresolved legacy GitHub rows keep
+   `lineage_id = NULL` and `sequence = NULL`; no synthetic lineage or heuristic grouping is created.
+2. **1-based, never-reused ordinals.** Sequences describe import order, increase monotonically, and
+   may contain gaps after deletion.
+3. **Durable allocation state.** `repository_lineages.next_sequence` is the transactional,
+   per-lineage allocator; database uniqueness remains defense in depth.
+4. **Persistent empty lineages.** Deleting the last repository leaves the lineage, nulls latest,
+   and preserves `next_sequence`.
+5. **Database-enforced membership.** Deferred composite foreign keys enforce same-owner repository
+   membership and require `latest_repository_id` to name a member of that exact lineage.
+6. **Upload concurrency scope.** The pre-existing concurrent upload-hash dedupe race remains
+   outside #299 rather than adding an unrelated historical-data constraint.
+7. **Operational ordering.** #322 is required before the #299 implementation PR merges; it does
+   not block implementation from being written and tested after architecture approval.
+8. **Authoritative RFC amendment.** The RFC-0002 changes in PR #328 are the architecture contract;
+   this plan owns migration mechanics and does not independently extend that contract.
 
-### Blocker
+### Authorization gate
 
-Implementation must not begin until decisions 1–4 are recorded in review, exactly as Parth's #299
-comment requires. Decision 5 is not a blocker if the owner accepts the explicit out-of-scope
-treatment. Decision 6 controls workflow ordering rather than schema correctness. No missing
-live-code fact or database capability otherwise blocks the plan.
+Before Parth explicitly approves these architecture changes in PR #328: **#299 NOT AUTHORIZED FOR
+IMPLEMENTATION**. After explicit approval: **#299 AUTHORIZED FOR IMPLEMENTATION**, with **#322
+REQUIRED BEFORE #299 IMPLEMENTATION PR MERGES**. No missing live-code fact or database capability
+otherwise blocks the plan.
 
 ## 14. Test matrix for implementation
 
@@ -711,9 +717,10 @@ thread timing or sleeps.
 
 ## 15. Implementation order after approval
 
-1. Record Parth's decisions in this plan/PR review and, if needed, clarify RFC-0002 terminology.
-2. Resolve the #322 ordering decision and use its rehearsal/rollback output as the operational
-   checklist for the implementation migration.
+1. Record Parth's explicit approval of the RFC amendment and decisions in PR #328; that authorizes
+   implementation to begin.
+2. Complete #322 before the #299 implementation PR merges and use its rehearsal/rollback output as
+   that PR's operational checklist. #322 may proceed alongside implementation work.
 3. Add lineage ORM model and head-shape constraints, but no API fields.
 4. Add Revision A and B migrations plus populated SQLite/PostgreSQL migration tests.
 5. Add owner-scoped lineage persistence and the transactional counter allocator.
