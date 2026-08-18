@@ -3,12 +3,12 @@
 # toolchain so CI and local dev can run pytest. The runtime image installs
 # only requirements.txt; pytest must never ship in runtime dependencies (issue #185).
 -r requirements.txt
-ast-serialize==0.7.0
+ast-serialize==0.8.0
 iniconfig==2.3.0
-librt==0.14.0
+librt==0.15.0
 mypy==2.3.0
 mypy_extensions==1.1.0
 pathspec==1.1.1
 pluggy==1.6.0
 pytest==9.1.1
-ruff==0.16.1
+ruff==0.16.3
