@@ -248,11 +248,14 @@ export function TopBar() {
           <button
             onClick={() => setNotifOpen(!notifOpen)}
             data-testid="notification-menu-trigger"
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+            aria-haspopup="true"
+            aria-expanded={notifOpen}
             className="relative flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
-            <Bell className="h-4 w-4" />
+            <Bell aria-hidden="true" focusable="false" className="h-4 w-4" />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary" />
+              <span aria-hidden="true" className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary" />
             )}
           </button>
           {notifOpen && (
@@ -290,9 +293,12 @@ export function TopBar() {
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             data-testid="user-menu-trigger"
+            aria-label="Account menu"
+            aria-haspopup="true"
+            aria-expanded={userMenuOpen}
             className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
           >
-            <User className="h-4 w-4" />
+            <User aria-hidden="true" focusable="false" className="h-4 w-4" />
           </button>
           {userMenuOpen && (
             <div className="absolute top-full right-0 mt-1 w-48 rounded-lg border border-border bg-popover shadow-lg animate-scale-in z-50">

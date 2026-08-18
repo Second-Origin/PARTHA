@@ -11,7 +11,7 @@ export function LoginPage() {
       eyebrow="Welcome back"
       title="Sign in to PARTHA"
       description="Continue to your repository intelligence workspace."
-      footer={<>Don&apos;t have an account?{' '}<Link to="/register" state={redirectState} data-testid="login-register-link" className="font-medium text-primary hover:underline">Create one</Link></>}
+      footer={<>Don&apos;t have an account?{' '}<Link to="/register" state={redirectState} data-testid="login-register-link" className="font-medium text-primary underline underline-offset-2">Create one</Link></>}
     >
         <form onSubmit={submit} className="space-y-4">
           <div>
