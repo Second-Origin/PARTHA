@@ -39,14 +39,14 @@ interface KnownFinding {
   maxCount: number;
 }
 
-const SHELL_FINDINGS: KnownFinding[] = [
-  { issue: 236, rule: 'button-name', testId: 'notification-menu-trigger', maxCount: 1 },
-  { issue: 236, rule: 'button-name', testId: 'user-menu-trigger', maxCount: 1 },
-  // #238's `secondary-navigation-label` allowance is intentionally gone: the
-  // "More" label it covered was replaced by the AA-contrast "Analysis" and
-  // "Assist" labels (#289), so the allowance matched nothing and would only
-  // have masked a future regression on an element that no longer exists.
-];
+// #236's `notification-menu-trigger`/`user-menu-trigger` button-name
+// allowances are intentionally gone: both controls now carry aria-label, so
+// the allowance would only have masked a future regression.
+// #238's `secondary-navigation-label` allowance is intentionally gone: the
+// "More" label it covered was replaced by the AA-contrast "Analysis" and
+// "Assist" labels (#289), so the allowance matched nothing and would only
+// have masked a future regression on an element that no longer exists.
+const SHELL_FINDINGS: KnownFinding[] = [];
 
 function byLabel(label: string) {
   const fixture = FIXTURES.repos.find((repository) => repository.label === label);
@@ -74,18 +74,36 @@ function describeViolations(state: string, violations: Result[]) {
   ].join('\n');
 }
 
+function animationsAreSettled() {
+  return document.getAnimations().every((animation) => {
+    const iterations = animation.effect?.getComputedTiming().iterations;
+    return iterations === Infinity
+      || animation.playState === 'finished'
+      || animation.playState === 'idle';
+  });
+}
+
+async function waitForAnimationsSettled(page: Page) {
+  await page.waitForFunction(animationsAreSettled);
+  // AnimatePresence mode="wait" (e.g. the upload page's file/GitHub tab
+  // switch, #237) runs the exit animation to completion before starting the
+  // paired enter animation. document.getAnimations() can be momentarily
+  // empty in the gap between the two, which satisfies the check above via
+  // vacuous truth even though a new animation is about to start and the
+  // entering content is still at its initial (often zero-opacity) state.
+  // Re-checking after a beat longer than a single transition closes that
+  // sampling window so axe never measures a mid cross-fade frame.
+  await page.waitForTimeout(300);
+  await page.waitForFunction(animationsAreSettled);
+}
+
 async function expectWcagBaseline(
   page: Page,
   state: string,
   knownFindings: KnownFinding[] = [],
 ) {
   await page.evaluate(() => document.fonts.ready);
-  await page.waitForFunction(() => document.getAnimations().every((animation) => {
-    const iterations = animation.effect?.getComputedTiming().iterations;
-    return iterations === Infinity
-      || animation.playState === 'finished'
-      || animation.playState === 'idle';
-  }));
+  await waitForAnimationsSettled(page);
   await page.addScriptTag({ path: AXE_SOURCE_PATH });
   const violations = await page.evaluate(
     async ({ tags }) => {
@@ -163,9 +181,10 @@ test.describe('WCAG 2.2 AA automated baseline (#118)', () => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Sign in to PARTHA' })).toBeVisible();
 
-    await expectWcagBaseline(page, 'login: initial sign-in form', [
-      { issue: 240, rule: 'link-in-text-block', testId: 'login-register-link', maxCount: 1 },
-    ]);
+    // #240's `login-register-link` link-in-text-block allowance is
+    // intentionally gone: the link now carries a persistent underline at
+    // rest, so it no longer relies on colour alone.
+    await expectWcagBaseline(page, 'login: initial sign-in form', []);
   });
 
   test('authenticated application shell and sidebar', async ({ page }) => {
@@ -197,18 +216,12 @@ test.describe('WCAG 2.2 AA automated baseline (#118)', () => {
     await expect(page.getByRole('heading', { name: 'Upload Repository' })).toBeVisible();
     await page.getByRole('tab', { name: 'GitHub URL', exact: true }).click();
     await expect(page.getByText('Import from GitHub')).toBeVisible();
-    await expectWcagBaseline(page, 'repository import: empty GitHub URL form', [
-      ...SHELL_FINDINGS,
-      {
-        issue: 237,
-        rule: 'color-contrast',
-        testId: 'github-import-helper',
-        maxCount: 1,
-      },
-      { issue: 237, rule: 'color-contrast', testId: 'github-import-label', maxCount: 1 },
-      { issue: 237, rule: 'color-contrast', testId: 'github-import-title', maxCount: 1 },
-      { issue: 237, rule: 'color-contrast', testId: 'github-import-url', maxCount: 1 },
-    ]);
+    // #237's title/helper/label/url-placeholder color-contrast allowances are
+    // intentionally gone: they were axe measuring the panel mid cross-fade
+    // (see waitForAnimationsSettled), not an actual failing color pair. The
+    // steady-state colors already clear 4.5:1; the allowances would only have
+    // masked a future regression on this panel.
+    await expectWcagBaseline(page, 'repository import: empty GitHub URL form', SHELL_FINDINGS);
   });
 
   test('architecture graph', async ({ page }) => {

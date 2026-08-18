@@ -11,7 +11,7 @@ export function RegisterPage() {
       eyebrow="Start exploring"
       title="Create your PARTHA account"
       description="Build a private, evidence-backed view of your codebase."
-      footer={<>Already have an account?{' '}<Link to="/login" state={redirectState} className="font-medium text-primary hover:underline">Sign in</Link></>}
+      footer={<>Already have an account?{' '}<Link to="/login" state={redirectState} className="font-medium text-primary underline underline-offset-2">Sign in</Link></>}
     >
         <form onSubmit={submit} className="space-y-4">
           <div>
