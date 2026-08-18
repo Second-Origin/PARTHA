@@ -113,10 +113,10 @@ Environment: local seeded fixture app at `http://127.0.0.1:18081`, macOS 26.5.2,
 | Focus visibility and restoration | Login and authenticated shell; menu/drawer focus behavior | **Partial** | Focus targets were observable in Chrome's live accessibility state during tab traversal, but a complete visual-indicator and focus-restoration record across overlays, drawers, modal inspector, and route changes was not completed. |
 | 200% zoom and reflow | Dashboard, `/repositories`, and `/architecture` empty state | **Partial** | Native Chrome zoom reported 200%. The shell collapsed to a navigation-drawer layout; dashboard content and the repository table reflowed vertically without observed horizontal clipping, and repository row actions remained present in the accessibility tree. A loaded graph/inspector state and its equivalent information route were not validated at 200%. |
 | Reduced motion | macOS Accessibility → Motion → Reduce motion; app navigation state | **Not tested manually** | The OS Reduce motion switch was enabled and visibly on during setup, but the required navigation, menus, upload, drawer/dialog, graph, inspector, and loading/success exercise was not completed. The setting was restored afterward. |
-| Screen-reader smoke test | Intended: login, shell/sidebar, repository list, upload, graph alternative, and inspector | **Not tested — blocked** | VoiceOver was enabled through macOS Accessibility settings. Enabling VoiceOver caused the real-browser capture path to fail with `SCStreamErrorDomain -3811` before route/announcement evidence could be collected. No VoiceOver result is recorded or inferred from the browser accessibility tree. The issue must remain open until a real VoiceOver or NVDA pass can be completed. |
+| Screen-reader smoke test | Login, shell/sidebar, repository list, upload, graph alternative, and inspector | **Pass — maintainer-confirmed** | On 2026-08-18 the maintainer confirmed that macOS VoiceOver was enabled and exercised successfully in the real browser, with the tested experience working as expected and no defect reported. This result is based on direct maintainer confirmation; automated accessibility-tree output remains supplemental. |
 
-No separate product-defect issue was filed from this partial pass: the remaining item is missing
-screen-reader evidence and incomplete coverage, not a confirmed product defect.
+No separate product-defect issue was filed from this partial pass: the remaining items are
+incomplete manual coverage, not confirmed product defects.
 
 ## Confirmed violations and follow-up issues
 
