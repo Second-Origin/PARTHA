@@ -98,6 +98,26 @@ The existing seeded architecture visual suite contains automated keyboard and na
 assertions. Those checks are useful regression evidence, but they are not recorded as manual
 results here.
 
+## Manual validation close-out (2026-08-18)
+
+This is a dated, partial manual close-out. It does not replace the historical **not tested
+manually** entries above and does not establish full WCAG 2.2 AA conformance.
+
+Environment: local seeded fixture app at `http://127.0.0.1:18081`, macOS 26.5.2, Google Chrome
+152.0.7977.42. The browser was used as a normal desktop window; native Chrome zoom was reset to
+100% after the 200% check. No application code was changed for this validation.
+
+| Check | Route/state exercised | Result | Evidence and follow-up |
+| --- | --- | --- | --- |
+| Keyboard-only navigation | `/login`; authenticated dashboard and expanded sidebar; authenticated repository list | **Partial** | Tab/Shift+Tab, Enter, and Space reached the login fields, submit action, registration link, shell navigation, repository list, row actions, upload actions, and account controls. The disabled GitHub action was exposed as disabled. Upload, architecture, and node-inspector keyboard paths were not completed in this pass; no close-out claim is made for those states. |
+| Focus visibility and restoration | Login and authenticated shell; menu/drawer focus behavior | **Partial** | Focus targets were observable in Chrome's live accessibility state during tab traversal, but a complete visual-indicator and focus-restoration record across overlays, drawers, modal inspector, and route changes was not completed. |
+| 200% zoom and reflow | Dashboard, `/repositories`, and `/architecture` empty state | **Partial** | Native Chrome zoom reported 200%. The shell collapsed to a navigation-drawer layout; dashboard content and the repository table reflowed vertically without observed horizontal clipping, and repository row actions remained present in the accessibility tree. A loaded graph/inspector state and its equivalent information route were not validated at 200%. |
+| Reduced motion | macOS Accessibility → Motion → Reduce motion; app navigation state | **Not tested manually** | The OS Reduce motion switch was enabled and visibly on during setup, but the required navigation, menus, upload, drawer/dialog, graph, inspector, and loading/success exercise was not completed. The setting was restored afterward. |
+| Screen-reader smoke test | Intended: login, shell/sidebar, repository list, upload, graph alternative, and inspector | **Not tested — blocked** | VoiceOver was enabled through macOS Accessibility settings. Enabling VoiceOver caused the real-browser capture path to fail with `SCStreamErrorDomain -3811` before route/announcement evidence could be collected. No VoiceOver result is recorded or inferred from the browser accessibility tree. The issue must remain open until a real VoiceOver or NVDA pass can be completed. |
+
+No separate product-defect issue was filed from this partial pass: the remaining item is missing
+screen-reader evidence and incomplete coverage, not a confirmed product defect.
+
 ## Confirmed violations and follow-up issues
 
 | Route/state | Automated finding | WCAG 2.2 | Severity and impact | Follow-up |
