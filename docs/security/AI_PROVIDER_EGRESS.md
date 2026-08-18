@@ -1,9 +1,9 @@
 # AI provider egress policy
 
-PARTHA treats an AI provider destination as a deployment security boundary. A
-tenant may choose from the supported providers and supply their own provider
-credential, but a tenant cannot expand the set of network destinations the API
-is allowed to contact.
+PARTHA treats an AI provider destination as a deployment security boundary. An
+authenticated user may choose from the supported providers and supply their own
+provider credential, but a deployment administrator controls the set of network
+destinations the API is allowed to contact.
 
 This document describes the application control. It does **not** replace a
 production network egress control.
@@ -18,7 +18,7 @@ environment, including when deployment configuration is incomplete.
 | `hosted` | Only their code-owned HTTPS origins are accepted; each DNS answer must be public unicast. | Requires an exact administrator-owned base URL in `AI_EGRESS_ALLOWED_BASE_URLS`; every DNS answer must be public unicast. |
 | `self_hosted` | Only their code-owned HTTPS origins are accepted; each DNS answer must be public unicast. | Requires both an exact administrator-owned base URL and that every current DNS answer is within `AI_EGRESS_ALLOWED_CIDRS`. This is the only mode for a local or internal endpoint. |
 
-There are no wildcard hosts, wildcard paths, tenant-supplied CIDRs, or fallback
+There are no wildcard hosts, wildcard paths, user-supplied CIDRs, or fallback
 local endpoints. Built-in OpenAI, Anthropic, Gemini, and OpenRouter requests do
 not accept a `baseUrl` at all.
 
@@ -43,8 +43,9 @@ host spelling, invalid port, and ambiguous path encoding. A bad policy setting
 prevents startup rather than weakening the policy.
 
 For a local Ollama installation, use `self_hosted`, an exact local base URL, and
-the smallest matching CIDR. Do not expose these values in tenant-facing forms,
-and do not add a wildcard so users can route the API to arbitrary hosts.
+the smallest matching CIDR. Do not expose these values in authenticated-user
+forms, and do not add a wildcard so an authenticated user can route the API to
+arbitrary hosts.
 
 ## Enforcement lifecycle
 
@@ -91,8 +92,9 @@ even when application debug logging is enabled.
 
 No migration deletes or rewrites existing provider configurations. A previously
 stored endpoint that does not comply with the current deployment policy remains
-in the database but cannot be used at request time. An administrator or user
-must replace it with a policy-compliant configuration before it can run.
+in the database but cannot be used at request time. A deployment administrator
+or authenticated user must replace it with a policy-compliant configuration
+before it can run.
 Because configurable Ollama destinations are also resolved when saved, a
 transient DNS failure rejects the save without changing the existing record;
 retry after name resolution is healthy.
@@ -117,7 +119,7 @@ Before enabling AI providers in a hosted or shared deployment:
 1. Keep `AI_EGRESS_MODE=hosted` unless a trusted administrator truly needs a
    self-hosted endpoint.
 2. For self-hosted mode, record the exact base URLs and smallest CIDRs in the
-   deployment secret/configuration system; do not let tenants edit them.
+   deployment secret/configuration system; do not let authenticated users edit them.
 3. Apply and test a network egress control independently of the application.
 4. Run the focused provider egress regression suite and the full backend suite.
 5. Test an approved provider configuration and verify a disallowed or stale

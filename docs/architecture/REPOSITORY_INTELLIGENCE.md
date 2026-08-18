@@ -67,7 +67,7 @@ flowchart LR
 Repository source enters the intelligence pipeline in two bounded phases:
 
 1. **`RepositoryParser`** walks the extracted tree during import and persists a path inventory plus basic import metadata.
-2. **`AnalysisWorker`** reads the persisted inventory's source paths under the shared size/path policy and supplies bytes to `ExtractionPipeline`. The extractor set is registered once in `app/extraction/__init__.py::production_extractors()`, which the worker's pipeline, the planned producer-version set in `AnalysisJobService`, and the golden benchmark all read — a second hand-kept list is how a producer ends up emitting facts a snapshot never declared. No extractor walks the tree itself.
+2. **`AnalysisWorker`** reads the persisted inventory's source paths under the shared size/path policy and supplies bytes to `ExtractionPipeline`. The extractor set is registered once in `app/extraction/__init__.py::production_extractors()`, which the worker's pipeline, the predeclared producer-version set in `AnalysisJobService`, and the golden benchmark all read — a second hand-kept list is how a producer ends up emitting facts a snapshot never declared. No extractor walks the tree itself.
 
 There is one further direct read that is **not** parsing: `RepositoryService.read_file` serves the explorer's file preview. It is a path-checked read for display only and feeds no analysis.
 

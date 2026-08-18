@@ -9,10 +9,11 @@ that PARTHA conforms to WCAG 2.2 AA.
 
 | Field | Value |
 | --- | --- |
-| Audit date | 2026-07-29 |
-| Source revision | `5bb63ca4e74882b0a08b5e8c761e1997590a5755` plus the issue #118 audit changes in this report's pull request |
+| Original audit date | 2026-07-29 |
+| Original source revision | `5bb63ca4e74882b0a08b5e8c761e1997590a5755` plus the issue #118 audit changes in this report's pull request |
 | Operating system | Microsoft Windows NT 10.0.26200.0 |
-| Revalidation | 2026-08-03 on macOS after rebasing onto the source revision above: 6/6 focused accessibility states and 22/22 full browser-acceptance journeys passed |
+| Latest automated revalidation | 2026-08-18 on the current source revision: 6/6 focused accessibility states and 22/22 full browser-acceptance journeys passed |
+| Current source revision | `e4609f3db92de268f3c15f0dadb511d49995dd42` |
 | Automated browser | Playwright Chrome for Testing 151.0.7922.34, headless Chromium project |
 | Automated viewport | 1440 x 900 CSS pixels |
 | Automated zoom | 100% browser zoom |
@@ -91,7 +92,7 @@ are not substituted for human or screen-reader evidence.
 | 200% zoom and reflow | **Not tested manually** | At 1280 x 720 CSS pixels, set browser zoom to 200%. Confirm content reflows without two-dimensional page scrolling, clipping, overlap, or lost controls; pan inside the graph must not conceal an equivalent route to its information. |
 | Contrast | **Not tested manually** | Use a calibrated contrast analyser on text, focus indicators, icons conveying state, controls, and graph/status colours in every selected state and supported theme. Record foreground/background values and ratios. axe automated findings are listed below but are not a complete manual contrast pass. |
 | Reduced motion | **Not tested manually** | Enable the OS/browser `prefers-reduced-motion: reduce` setting before loading the app. Exercise navigation, menus, uploads, graph layout, and inspector transitions. Confirm non-essential motion is removed or reduced and no information depends on animation. |
-| Screen-reader smoke test | **Not tested** | Record screen-reader name/version, browser/version, and OS. Verify page title/heading/landmarks; labelled login fields and errors; sidebar current page; repository table and row actions; upload mode and form; graph alternative; node inspector name, focus containment, sections, relationships, and close/return focus. |
+| Screen-reader smoke test | **Not tested manually** | Record screen-reader name/version, browser/version, and OS. Verify page title/heading/landmarks; labelled login fields and errors; sidebar current page; repository table and row actions; upload mode and form; graph alternative; node inspector name, focus containment, sections, relationships, and close/return focus. |
 
 The existing seeded architecture visual suite contains automated keyboard and narrow-viewport
 assertions. Those checks are useful regression evidence, but they are not recorded as manual
@@ -118,7 +119,7 @@ results here.
 - **#237**: re-investigated rather than restyled. The title/helper/label/placeholder colors already clear 4.5:1 at rest — `text-foreground` and `text-muted-foreground` against `bg-card` compute to roughly 15:1 and 5.6:1 respectively in this theme. The axe failures were an artifact of `expectWcagBaseline`'s animation-settle wait: the GitHub-import panel enters via `AnimatePresence mode="wait"`, and `document.getAnimations()` can be transiently empty in the gap between the outgoing panel's exit finishing and the incoming panel's enter starting, so the old wait resolved before the enter animation began and axe sampled the panel still at its initial (near-zero-opacity) state. `waitForAnimationsSettled` in `e2e/accessibility.spec.ts` now re-checks after a fixed delay to close that window; with the fix, all four `github-import-*` targets measure 0 violations and their allowances have been removed. No application color changed for #237.
 - **#238** was already resolved by the #289 sidebar regrouping (above); this batch only re-confirmed it.
 
-This clears the four Phase 0 follow-up issues #118 opened (#236, #237, #238, #240) at the automated-baseline level described in this report. It does **not** newly establish the manual keyboard/focus/tab-order/zoom/reduced-motion/screen-reader passes in "Manual and assistive-technology baseline" above, which remain **not tested manually**, and it does not address the architecture graph's non-visual equivalent, which stays tracked separately in [#239](https://github.com/Second-Origin/PARTHA/issues/239). "WCAG 2.2 AA baseline established" should be read as: the automated Phase 0 route/state coverage in this report has no outstanding known violation, not as a claim of full WCAG 2.2 AA conformance.
+This clears the four Phase 0 follow-up issues #118 opened (#236, #237, #238, #240) at the automated-baseline level described in this report. Issue [#239](https://github.com/Second-Origin/PARTHA/issues/239) is completed and its non-visual architecture equivalent is implemented, but the manual keyboard/focus/tab-order/zoom/reduced-motion/screen-reader passes in "Manual and assistive-technology baseline" above remain **not tested manually**. "WCAG 2.2 AA baseline established" should be read as: the automated Phase 0 route/state coverage in this report has no outstanding known violation, not as a claim of full WCAG 2.2 AA conformance.
 
 No confirmed automated violation is left only in this report.
 
@@ -129,11 +130,8 @@ keyboard-focusable and have names containing classification, layer, description,
 relationship trust state. Selecting a node opens a named modal inspector with responsibilities,
 files, dependencies, and dependents.
 
-That is not a complete non-visual equivalent for the graph. There is no semantic inventory of all
-nodes and relationships with source, target, predicate/state, and unresolved diagnostics. A user
-must still traverse the spatial canvas node by node. The missing contract and proposed semantic
-list/table scope are tracked in [#239](https://github.com/Second-Origin/PARTHA/issues/239), as
-required by #118; the larger UI is intentionally outside this baseline pull request.
+The semantic list/table equivalent is implemented and [#239](https://github.com/Second-Origin/PARTHA/issues/239)
+is completed. The manual screen-reader experience remains untested, as recorded above.
 
 ## Known limitations
 
@@ -145,5 +143,6 @@ required by #118; the larger UI is intentionally outside this baseline pull requ
 - Selected states prioritize the first-use login, persistent shell, populated repository list,
   empty GitHub import form, successful small graph, and open inspector. Loading/error states and
   other product routes are outside this Phase 0 baseline.
-- The report records the confirmed state on 2026-07-29. Follow-up fixes must update both their
-  issue status and the exact known-finding expectations in the automated baseline.
+- The original audit was on 2026-07-29; the latest automated revalidation is recorded above.
+  Follow-up fixes must update both their issue status and the exact known-finding expectations in
+  the automated baseline.

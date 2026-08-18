@@ -5,16 +5,21 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    # Manual dispatch runs validation only. GitHub Release publication is gated
+    # to tag-triggered runs by the github-release job condition below.
+
+permissions:
+  contents: read
 
 jobs:
   validate:
     name: Validate Release Candidate
     runs-on: ubuntu-latest
+    timeout-minutes: 35
 
-    # A release candidate gets the full matrix, not the reduced local-dev
-    # fallback: both gated backend suites (Postgres migration round trip and
-    # refresh-token concurrency, Redis rate-limit backend) run for real here
-    # instead of skipping.
+    # Release validation runs the release-specific frontend and backend checks,
+    # including Postgres and Redis-backed tests. It is not the complete PR CI
+    # matrix: browser acceptance and the golden benchmark remain in ci.yml.
     services:
       postgres:
         image: postgres:16-alpine
@@ -105,6 +110,7 @@ jobs:
     needs: validate
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:

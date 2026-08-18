@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 520" width="1600" height="520" role="img" aria-labelledby="partha-title partha-desc">
   <title id="partha-title">PARTHA — Repository Intelligence Platform</title>
-  <desc id="partha-desc">PARTHA is a Repository Intelligence Platform for private and evolving codebases. Repository sources are ingested into a shared repository-understanding layer, which architecture, dependency, review, and documentation surfaces consume. AI is an optional downstream consumer.</desc>
+  <desc id="partha-desc">PARTHA is being built toward a private, versioned intelligence layer for software repositories. Today it analyzes supported repository revisions into sealed ri.v1 intelligence snapshots for architecture, dependency, review, insights, documentation, exports, and optional governed AI context.</desc>
 
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="520" gradientUnits="userSpaceOnUse">
@@ -47,8 +47,8 @@
     <rect x="80" y="236" width="520" height="2" fill="url(#brandRule)"/>
 
     <text x="80" y="291" fill="#F5F7FA" font-size="30" font-weight="600" letter-spacing="-0.3">Repository Intelligence Platform</text>
-    <text x="80" y="342" fill="#A6B2C1" font-size="20" font-weight="400">One sealed model of a repository revision, shared across</text>
-    <text x="80" y="374" fill="#A6B2C1" font-size="20" font-weight="400">architecture, dependencies, review, insights, docs, and exports.</text>
+    <text x="80" y="342" fill="#A6B2C1" font-size="20" font-weight="400">Understand unfamiliar code faster with</text>
+    <text x="80" y="374" fill="#A6B2C1" font-size="20" font-weight="400">sealed repository intelligence and governed AI context.</text>
 
     <rect x="80" y="435" width="7" height="7" fill="#FF5A1F"/>
     <text x="102" y="444" fill="#8492A5" font-size="14" font-weight="600" letter-spacing="1.4">ADVANCED PROTOTYPE / PRE-ALPHA</text>

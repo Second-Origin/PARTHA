@@ -87,3 +87,7 @@ acceptance runner creates disposable repositories, starts isolated backend and
 frontend processes, and exercises the review-ready Architecture, Engineering
 Review, and Insights journeys in Chromium. This executable acceptance coverage
 is deliberately focused; it is not a claim of complete product coverage.
+
+Vitest writes coverage reports to the local `apps/frontend/coverage/` directory.
+Coverage is local-only; CI enforces the test exit status but does not upload a
+coverage artifact.

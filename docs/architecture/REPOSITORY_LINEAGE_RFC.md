@@ -7,20 +7,19 @@
 | **Tracking issue** | [Second-Origin/PARTHA#298](https://github.com/Second-Origin/PARTHA/issues/298) |
 | **Author** | @parthrohit22 |
 | **Owner sign-off** | Confirmed |
-| **Ratifier** | Pending — independent ratification by [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) is required before implementation begins (see [Q5](#q5-independent-ratification)); waived by owner, see [Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11) below |
-| **Approval evidence** | Owner sign-off recorded directly against this design; no independent-maintainer ratification evidence exists yet; that ratification is itself waived by owner, see [Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11) below |
+| **Ratifier** | Independent ratification waived by owner decision on 2026-08-11; owner acceptance recorded |
+| **Approval evidence** | RFC-0002 was accepted by owner decision. Independent ratification was waived on 2026-08-11. |
 | **Created** | 2026-08-11 |
-| **Last updated** | 2026-08-13 |
+| **Last updated** | 2026-08-18 |
 | **Status** | **Accepted** (owner-level design acceptance; see [§1.2](#12-what-accepted-does-and-does-not-mean-here) for what this does and does not authorize) |
 | **Supersedes** | — |
 | **Superseded by** | — |
 
 > **This RFC records a design decision; it is not application code.** Acceptance does not by
 > itself create the `repository_lineages` table, add columns to `repositories`, change
-> `RepositoryService`, or alter any API or frontend surface. Implementation is tracked as a
-> separate, explicitly blocked issue gated on [Q5](#q5-independent-ratification) — see
-> [§1.2](#12-what-accepted-does-and-does-not-mean-here). See also
-> [Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11) below.
+> `RepositoryService`, or alter any API or frontend surface. Implementation is authorized in
+> principle after the owner waiver, but has not started: migration, backfill, and concurrency
+> planning are required before implementation begins. The implementation issue is [#299](https://github.com/Second-Origin/PARTHA/issues/299); the design issue is [#298](https://github.com/Second-Origin/PARTHA/issues/298).
 
 ---
 
@@ -35,16 +34,12 @@ including the resolution of all five open questions in [§10](#10-open-questions
 ### 1.2 What "Accepted" does and does not mean here
 
 Following the ratification convention already established by
-[RFC-0001 §1.2](REPOSITORY_INTELLIGENCE_V1_RFC.md#12-approval--ratification-rule), a design is
-only cleared for **implementation** once an independent project maintainer other than the author
-has ratified it. That independent ratification has **not** happened for this RFC: [Q5](#q5-independent-ratification)
-explicitly requires @SHAURYAKSHARMA24 to independently ratify this design before any implementation
-work starts. "Accepted" in the status table above therefore records that the owner has finished
-shaping and approving the design — it does **not** clear the implementation gate. The companion
-tracking issue for this RFC is documentation/design-only, and the implementation issue filed
-alongside it is explicitly marked `[BLOCKED]` pending Q5. See
-[Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11)
-below, where the owner waives this gate.
+[RFC-0001 §1.2](REPOSITORY_INTELLIGENCE_V1_RFC.md#12-approval--ratification-rule), independent
+ratification would ordinarily clear a design for implementation. For RFC-0002, the owner accepted
+the design and waived independent ratification on 2026-08-11. "Accepted" therefore records an
+owner-approved engineering contract and authorizes implementation in principle; it does not mean
+the implementation exists. The implementation issue is #299 and remains preparatory work until
+migration, backfill, and concurrency planning are complete. The design issue is #298.
 
 ## 2. Terminology
 
@@ -193,9 +188,8 @@ migration, run once, forward-only (per the existing
    (`owner_id`, `source_url`, `revision_ref`, `created_at`) and creates no data that isn't
    reproducible from current state.
 
-This backfill is part of the scope gated on [Q5](#q5-independent-ratification) — it is design-only
-in this RFC and is not implemented by this document. See
-[Ratification waiver (owner decision, 2026-08-11)](#ratification-waiver-owner-decision-2026-08-11) below.
+This backfill is design-only in this RFC and is not implemented by this document. It remains
+deferred until the migration, backfill, and concurrency plan is complete.
 
 ## 7. Product direction alignment
 
@@ -272,15 +266,17 @@ Manual-only upload linking, deferred to a future feature.
 
 ### Q5: Independent ratification
 
-Requires independent ratification by [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24)
-before any implementation begins.
+Independent ratification by [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) was recommended
+but waived by the owner on 2026-08-11. Implementation still requires migration, backfill, and
+concurrency planning.
 
 ## 11. Sign-off
 
 ```text
 Owner sign-off: confirmed
 Open questions: 5/5 resolved
-Tracking issue: Second-Origin/PARTHA#298
+Design issue: Second-Origin/PARTHA#298
+Implementation issue: Second-Origin/PARTHA#299
 ```
 
 ## Ratification waiver (owner decision, 2026-08-11)

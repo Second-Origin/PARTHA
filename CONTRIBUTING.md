@@ -397,7 +397,7 @@ If you cannot run a check locally, say so in the pull request and explain why. *
 2. **Consumers must not create separate repository parsers.** No walking the tree, no re-reading dependency manifests, no duplicating language or framework detection inside architecture, dependencies, review, documentation, export, or AI code.
 3. **AI must remain an optional downstream consumer.** It must not read repository files or reinterpret the repository independently.
 4. **Heuristic results must not be presented as guaranteed facts.** Most of what the engine infers — roles, modules, layers, symbols, frameworks — is inferred from paths and filenames. Label it accordingly in the API and the UI. See [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md).
-5. **Evidence must be represented only as precisely as the implementation supports.** PARTHA has file-level evidence and no line spans. Do not emit invented line numbers, placeholder citations, or fabricated success states to make output look grounded.
+5. **Evidence must be represented only as precisely as the implementation supports.** Supported extractors produce validated one-based inclusive line spans. Column-level evidence is not provided. Do not emit invented line numbers, placeholder citations, or fabricated success states to make output look grounded.
 6. **Planned capabilities must not be documented as implemented.** An API field, a model, or a class name is not evidence that a capability exists.
 7. **Backend resources must be owner-scoped wherever authentication applies.** Use the owner-scoped accessors, not the unscoped ones.
 8. **Never expose secrets, credentials, or repository contents in logs.**

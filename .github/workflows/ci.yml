@@ -5,8 +5,14 @@ on:
   push:
     branches:
       - main
-      - master
       - dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   repository-hygiene:
@@ -14,6 +20,7 @@ jobs:
     name: Repository Hygiene
 
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
 
@@ -43,6 +50,7 @@ jobs:
     name: API Contract Drift
     needs: repository-hygiene
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -76,6 +84,7 @@ jobs:
     name: Frontend
     needs: repository-hygiene
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -114,6 +123,7 @@ jobs:
     name: Backend
     needs: repository-hygiene
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     # Postgres validates the full migration round trip against the deployment
     # dialect and lets the gated refresh-token concurrency test exercise its

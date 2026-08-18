@@ -1,6 +1,8 @@
 # PARTHA Documentation
 
-Every document listed here is maintained and describes the system as it currently exists.
+Maintained guides describe the system as it currently exists. RFCs describe accepted engineering
+design contracts and must label what is accepted, implemented, and deferred. Historical QA records
+are point-in-time evidence, not current-state documentation.
 
 **Current behaviour belongs in documentation. Future work belongs in GitHub issues.** If you find a claim the code does not support, that is a bug — please open an issue.
 
@@ -16,9 +18,9 @@ Every document listed here is maintained and describes the system as it currentl
 | [CODE_OF_CONDUCT](../CODE_OF_CONDUCT.md) | Everyone | Expected conduct and how to report a violation. |
 | [System Overview](architecture/SYSTEM_OVERVIEW.md) | Contributors and maintainers | Current components, ingestion flow, persistence, consumers, trust boundaries, and architectural limitations. |
 | [Repository Intelligence](architecture/REPOSITORY_INTELLIGENCE.md) | Anyone changing analysis behaviour | What is extracted, what is deterministic versus heuristic, how facts are persisted, who consumes them, what consumers must not do, and where evidence and provenance stop. **Read this before touching analysis.** |
-| [Repository Intelligence v1 RFC](architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md) | Contributors on the intelligence track | **Accepted** architectural contract (RFC-0001, tracking [#86](https://github.com/Second-Origin/PARTHA/issues/86)) for the snapshot/evidence schema: deterministic entity keys, separate inferred assertions, complete derivation chains, planned producer identity, provenance, immutability, diagnostics, versioning, and total canonical graph hashing. **Status: Accepted** — independently approved by [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) on [Issue #86](https://github.com/Second-Origin/PARTHA/issues/86#issuecomment-4990687780) and [PR #101](https://github.com/Second-Origin/PARTHA/pull/101#pullrequestreview-4712687647) on 2026-07-16. The durable snapshot pipeline and product-consumer migration are implemented; §17 tracks the remaining contract gaps. |
+| [Repository Intelligence v1 RFC](architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md) | Contributors on the intelligence track | **Accepted** architectural contract (RFC-0001, tracking [#86](https://github.com/Second-Origin/PARTHA/issues/86)) for the snapshot/evidence schema: deterministic entity keys, separate inferred assertions, complete derivation chains, producer identity and producer-version tracking, provenance, immutability, diagnostics, versioning, and total canonical graph hashing. **Status: Accepted** — independently approved by [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) on [Issue #86](https://github.com/Second-Origin/PARTHA/issues/86#issuecomment-4990687780) and [PR #101](https://github.com/Second-Origin/PARTHA/pull/101#pullrequestreview-4712687647) on 2026-07-16. The durable snapshot pipeline and product-consumer migration are implemented; §17 tracks the remaining contract gaps. |
 | [Repository Intelligence relationship resolution](architecture/REPOSITORY_INTELLIGENCE_RESOLUTION.md) | Contributors changing extraction or resolution | The deterministic resolver (Issue [#91](https://github.com/Second-Origin/PARTHA/issues/91)): how stored observations become `resolved` edges, the one/zero/many candidate outcomes, and the `RI-RES-UNRESOLVED` / `RI-RES-AMBIGUOUS` diagnostics emitted instead of a guess. |
-| [Repository Lineage RFC](architecture/REPOSITORY_LINEAGE_RFC.md) | Contributors on the intelligence track | **Design only** (RFC-0002, tracking [#298](https://github.com/Second-Origin/PARTHA/issues/298)) for grouping successive imports of the same repository into a durable lineage identity. **Status: Accepted, and cleared for implementation by owner waiver.** The design itself creates no table, column, service, or surface — that is implementation work, not yet started. The independent ratification RFC-0001 §1.2 requires was waived by the owner rather than performed, so the concurrency mechanism for `sequence` assignment (§5.3) enters implementation unreviewed by a second maintainer and must be handled deliberately there. Revision identity itself is unchanged and still governed by RFC-0001 §3. |
+| [Repository Lineage RFC](architecture/REPOSITORY_LINEAGE_RFC.md) | Contributors on the intelligence track | **Design only** (RFC-0002, tracking [#298](https://github.com/Second-Origin/PARTHA/issues/298)) for grouping successive imports of the same repository into a durable lineage identity. **Status: Accepted by owner decision; independent ratification was waived on 2026-08-11.** Implementation is authorized in principle but has not started and requires migration, backfill, and concurrency planning first. The design itself creates no table, column, service, or surface. Revision identity itself is unchanged and still governed by RFC-0001 §3. |
 | [Repository Intelligence golden benchmark](../apps/backend/tests/benchmark/README.md) | Contributors on the intelligence track | The versioned golden fixture corpus, independently authored expected facts, explicit mapping to the production support matrices, real-extractor precision/recall and citation validation, repeated-extraction canonical-hash determinism checks, and CI reports for Issue [#94](https://github.com/Second-Origin/PARTHA/issues/94). |
 | [Backend README](../apps/backend/README.md) | Backend contributors | Running the backend, endpoints, configuration, tests. |
 | [Frontend README](../apps/frontend/README.md) | Frontend contributors | Running the frontend, structure, commands, tests. |
@@ -39,10 +41,6 @@ Every document listed here is maintained and describes the system as it currentl
 - No placeholder documents.
 - Documentation changes in the same pull request as the behaviour it describes.
 
-## Product testing
-
-- [Iteration 1 engineer feedback](operations/ITERATION_1_ENGINEER_FEEDBACK.md) — workflow checklist, feedback fields, safe reporting guidance, and what the AI Workspace retains, for real-user testing.
-
 ## Point-in-time records
 
 These are **not** maintained descriptions of current behaviour. Each captures
@@ -50,4 +48,4 @@ what was checked on a given date and is left unedited so it stays usable as
 evidence. Where the product has since changed, the record says so at the top
 rather than being rewritten.
 
-- [Iteration 1 design QA](../design-qa.md) — one QA pass against the Iteration 1 design reference: viewport measurements, contrast readings, and the deliberate decisions not to copy unimplemented reference controls.
+- Internal point-in-time QA notes are preserved in the repository but are not maintained contributor documentation.

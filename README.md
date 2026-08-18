@@ -5,6 +5,8 @@
 <p align="center">
   <a href="#try-the-core-workflow">Try the workflow</a>
   ·
+  <a href="#what-partha-is-aiming-to-become">Direction</a>
+  ·
   <a href="#what-works-today">What works</a>
   ·
   <a href="#one-repository-model-many-consumers">How it works</a>
@@ -27,9 +29,17 @@
 
 **PARTHA turns a repository revision into one sealed, queryable model and uses it to explain architecture, dependencies, review findings, insights, and documentation without letting each feature invent its own interpretation.**
 
-> **PARTHA runs locally today, with its flagship workflow usable end to end.** It is not yet a hardened public multi-tenant service — see [Limitations and security](#limitations-and-security) before any shared deployment.
+> **PARTHA runs locally today, with its flagship workflow usable end to end.** It is not yet a hardened shared hosted service — see [Limitations and security](#limitations-and-security) before any shared deployment.
 
 PARTHA is for technical founders, staff and platform engineers, and engineering leads who need an inspectable starting point for understanding a codebase they did not write—or no longer fully trust their mental model of.
+
+## What PARTHA is aiming to become
+
+PARTHA is being built toward a private, versioned intelligence layer for software repositories. It should help people understand unfamiliar code faster and give AI a trusted, governed context instead of making it repeatedly reread the entire codebase.
+
+Today, PARTHA analyzes a supported repository revision and produces an immutable `ri.v1` intelligence snapshot. Over time, the project is intended to support refresh, repository lineage, and cross-revision comparison so its understanding can remain current as the codebase evolves.
+
+PARTHA can be self-hosted, and provider-backed AI is optional. AI consumes PARTHA's repository intelligence; it is not the independent source of truth.
 
 ## From scattered code to shared understanding
 
@@ -120,7 +130,7 @@ PARTHA separates three ideas that are often blurred together:
 - **Provenance** records where a supported fact came from: revision, path, line span, extractor, and fact identity.
 - **Integrity** is represented by the snapshot's canonical graph hash and revision manifest. The digest detects content differences inside this deployment; it is **not** a digital signature or proof of authorship.
 
-Coverage is surface-dependent. Supported Python and TypeScript/JavaScript facts can carry exact spans; Dependency declarations, the authentication explanation, and Review findings expose targeted evidence. Documentation uses structural facts, and free-form AI receives no source bytes or line numbers, so its prose has no automatic citations.
+Coverage is surface-dependent. Supported extractors produce validated one-based inclusive line spans for Python and TypeScript/JavaScript facts; column-level evidence is not provided. Dependency declarations, the authentication explanation, and Review findings expose targeted evidence. Documentation uses structural facts, and free-form AI receives no source bytes or line numbers, so its prose has no automatic citations.
 
 Read [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) for the complete extraction boundary and [System Overview](docs/architecture/SYSTEM_OVERVIEW.md) for the runtime architecture.
 
@@ -198,7 +208,7 @@ The browser acceptance suite exercises defined Architecture, Engineering Review,
 
 ### Product limitations
 
-- **Trusted-environment use.** PARTHA has not been operated or hardened as a public multi-tenant service.
+- **Trusted-environment use.** PARTHA has not been operated or hardened for broad shared hosting.
 - **Narrow semantic coverage.** The capability registry declares the Python and TypeScript/JavaScript constructs that receive the deepest extraction. Other languages primarily contribute file inventory. Role, module, layer, framework, and entry-point classifications can be heuristic.
 - **Narrow dependency coverage.** Direct declarations are extracted from three manifest formats, and exact pins from two lockfile formats (`package-lock.json`, `poetry.lock`) are recorded as resolutions on the same dependency identity. A pin is never promoted to a direct dependency edge, so transitive resolution is not claimed. Vulnerability scanning and outdated-version scanning are not implemented.
 - **No repository evolution workflow.** Analysis is whole-repository; incremental analysis, revision comparison, and churn/trend analysis are unavailable. The sealed-snapshot impact query does not compare revisions or calculate historical change.
@@ -220,7 +230,6 @@ Do not expose the development configuration directly to the public internet. Rev
 ## Documentation and contributing
 
 - [Documentation index](docs/README.md) — current public documentation and reading paths.
-- [Iteration 1 engineer feedback](docs/operations/ITERATION_1_ENGINEER_FEEDBACK.md) — test the current end-to-end workflow and report evidence safely.
 - [System Overview](docs/architecture/SYSTEM_OVERVIEW.md) — components, runtime flow, persistence, and trust boundaries.
 - [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) — extraction, snapshot, consumer, and evidence rules.
 - [Accepted `ri.v1` RFC](docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md) — the versioned snapshot contract.
