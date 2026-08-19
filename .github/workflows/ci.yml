@@ -175,9 +175,9 @@ jobs:
       - name: Static analysis
         working-directory: apps/backend
         run: |
-          ruff check app
-          ruff format --check app
-          mypy app
+          ruff check app scripts
+          ruff format --check app scripts
+          mypy app scripts
 
       - name: Validate capability registry and README
         run: python scripts/check-capabilities.py
@@ -192,12 +192,15 @@ jobs:
       # This is intentionally separate from pytest: it executes the maintainer
       # command itself on two fresh, UUID-named PostgreSQL databases, proving
       # both rehearsal paths without ever targeting the service's partha_test
-      # database. The script keeps the connection URL out of its output.
+      # database. The admin connection below points at the server's default
+      # "postgres" maintenance database, not partha_test, so CREATE/DROP
+      # DATABASE never runs against the database pytest uses. The script
+      # keeps the connection URL out of its output.
       - name: Rehearse migrations on isolated PostgreSQL
         working-directory: apps/backend
         env:
           PARTHA_MIGRATION_REHEARSAL_CONFIRM: disposable
-          PARTHA_MIGRATION_REHEARSAL_PG_URL: postgresql+psycopg://partha:partha@localhost:5432/partha_test
+          PARTHA_MIGRATION_REHEARSAL_PG_URL: postgresql+psycopg://partha:partha@localhost:5432/postgres
         run: python scripts/rehearse_migrations.py --postgres
 
       # The pytest step above validates every benchmark invariant (including the

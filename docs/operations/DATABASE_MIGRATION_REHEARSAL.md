@@ -35,8 +35,10 @@ The command removes its own temporary targets. It never opens the local `.local/
 application `DATABASE_URL`, or a production/shared database. Failures name the failed phase and error class
 without printing a database URL or credentials.
 
-To exercise the deployment dialect, use a **dedicated rehearsal PostgreSQL server only**. The server URL
-must be supplied through the environment, and the explicit confirmation prevents accidental use:
+To exercise the deployment dialect, use a **dedicated rehearsal PostgreSQL server only**, running
+PostgreSQL 13 or newer (cleanup issues `DROP DATABASE ... WITH (FORCE)`, added in PostgreSQL 13; on an
+older server the disposable database is left behind and must be dropped manually). The server URL must be
+supplied through the environment, and the explicit confirmation prevents accidental use:
 
 ```bash
 export PARTHA_MIGRATION_REHEARSAL_PG_URL='postgresql+psycopg://…/postgres'
@@ -45,9 +47,12 @@ python scripts/rehearse_migrations.py --postgres
 ```
 
 The command creates only a randomly named `partha_migration_rehearsal_<uuid>` database and removes that
-same database in cleanup. It does not accept a target database name. Do not set these variables to a
-production, staging, or shared server; the confirmation is an operator assertion, not an access-control
-boundary. A CI job can set them only for an isolated service container, as the existing backend job does.
+same database in cleanup, even when the rehearsal itself fails. If cleanup fails independently (for example
+the rehearsal server drops the connection mid-teardown), the command prints a `WARNING` naming the orphaned
+database so an operator can drop it manually; that name is a random identifier and never contains
+connection details. It does not accept a target database name. Do not set these variables to a production,
+staging, or shared server; the confirmation is an operator assertion, not an access-control boundary. A CI
+job can set them only for an isolated service container, as the existing backend job does.
 
 ## Production preflight and recovery decision
 
