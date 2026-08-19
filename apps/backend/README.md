@@ -76,6 +76,14 @@ alembic downgrade -1
 
 `AUTO_CREATE_TABLES` defaults to true in `development`/`test` and false elsewhere, so non-dev environments rely on migrations rather than `create_all`. Every migration must downgrade cleanly — `tests/test_migrations.py` enforces it.
 
+Before a schema release, run the disposable [migration rehearsal](../../docs/operations/DATABASE_MIGRATION_REHEARSAL.md):
+
+```bash
+python scripts/rehearse_migrations.py
+```
+
+This validates the clean chain and the supported `0004_ai_provider_configs` baseline without touching the local or configured application database. It does not make every downgrade a data-preserving production rollback; the runbook defines the backup/restore decision path.
+
 ### Local database schema drift (development/test only)
 
 `create_all` creates any table missing from the database but never alters an existing one and never advances the `alembic_version` stamp, so an existing local database can silently drift from the code after a schema-changing merge — without a check, that surfaces later as an opaque `IntegrityError`/`OperationalError` on whatever request happens to touch the drifted column or table, not as a clear migration error.
