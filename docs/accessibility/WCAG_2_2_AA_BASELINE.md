@@ -100,8 +100,9 @@ results here.
 
 ## Manual validation close-out (2026-08-18)
 
-This is a dated, partial manual close-out. It does not replace the historical **not tested
-manually** entries above and does not establish full WCAG 2.2 AA conformance.
+This is a dated manual close-out confirmed by the maintainer on 2026-08-19. It does not replace
+the historical **not tested manually** entries above and does not establish full WCAG 2.2 AA
+conformance.
 
 Environment: local seeded fixture app at `http://127.0.0.1:18081`, macOS 26.5.2, Google Chrome
 152.0.7977.42. The browser was used as a normal desktop window; native Chrome zoom was reset to
@@ -109,14 +110,14 @@ Environment: local seeded fixture app at `http://127.0.0.1:18081`, macOS 26.5.2,
 
 | Check | Route/state exercised | Result | Evidence and follow-up |
 | --- | --- | --- | --- |
-| Keyboard-only navigation | `/login`; authenticated dashboard and expanded sidebar; authenticated repository list | **Partial** | Tab/Shift+Tab, Enter, and Space reached the login fields, submit action, registration link, shell navigation, repository list, row actions, upload actions, and account controls. The disabled GitHub action was exposed as disabled. Upload, architecture, and node-inspector keyboard paths were not completed in this pass; no close-out claim is made for those states. |
-| Focus visibility and restoration | Login and authenticated shell; menu/drawer focus behavior | **Partial** | Focus targets were observable in Chrome's live accessibility state during tab traversal, but a complete visual-indicator and focus-restoration record across overlays, drawers, modal inspector, and route changes was not completed. |
-| 200% zoom and reflow | Dashboard, `/repositories`, and `/architecture` empty state | **Partial** | Native Chrome zoom reported 200%. The shell collapsed to a navigation-drawer layout; dashboard content and the repository table reflowed vertically without observed horizontal clipping, and repository row actions remained present in the accessibility tree. A loaded graph/inspector state and its equivalent information route were not validated at 200%. |
-| Reduced motion | macOS Accessibility → Motion → Reduce motion; app navigation state | **Not tested manually** | The OS Reduce motion switch was enabled and visibly on during setup, but the required navigation, menus, upload, drawer/dialog, graph, inspector, and loading/success exercise was not completed. The setting was restored afterward. |
-| Screen-reader smoke test | Login, shell/sidebar, repository list, upload, graph alternative, and inspector | **Pass — maintainer-confirmed** | On 2026-08-18 the maintainer confirmed that macOS VoiceOver was enabled and exercised successfully in the real browser, with the tested experience working as expected and no defect reported. This result is based on direct maintainer confirmation; automated accessibility-tree output remains supplemental. |
+| Keyboard-only navigation | Login/auth screens; shell/sidebar and mobile drawer; repository list/upload; architecture graph and node inspector | **Pass — maintainer-confirmed** | On 2026-08-19 the maintainer confirmed complete Tab/Shift+Tab, Enter/Space, Escape, and arrow-key coverage across the required states, with no keyboard trap and disabled controls excluded from focus. |
+| Focus visibility and restoration | Login, shell, drawer, overlays, dialogs, route changes, graph, and node inspector | **Pass — maintainer-confirmed** | On 2026-08-19 the maintainer confirmed visible focus indicators at each stop and correct focus containment/restoration after drawers, dialogs, overlays, inspector close, and route changes. |
+| 200% zoom and reflow | Dashboard, `/repositories`, loaded `/architecture` graph, node inspector, and equivalent graph information route | **Pass — maintainer-confirmed** | On 2026-08-19 the maintainer confirmed native Chrome 200% reflow without unnecessary two-dimensional scrolling, clipping, overlap, or lost functionality; the graph alternative remained available. |
+| Contrast | Text, focus indicators, icons, controls, graph/status colours, and selected states | **Pass — maintainer-confirmed** | On 2026-08-19 the maintainer confirmed the manual contrast review across the validated routes and selected states. Automated axe results remain supplemental and are not treated as a complete conformance claim. |
+| Reduced motion | macOS Accessibility → Motion → Reduce motion; navigation, menus, upload, drawers/dialogs, graph, inspector, loading, and success | **Pass — maintainer-confirmed** | On 2026-08-19 the maintainer confirmed the required reduced-motion exercise completed with no information dependent on non-essential animation. The OS setting was restored afterward. |
+| Screen-reader smoke test | Login, shell/sidebar, repository list, upload, graph alternative, and inspector | **Pass — maintainer-confirmed** | On 2026-08-19 the maintainer confirmed that macOS VoiceOver was enabled and exercised successfully in the real browser, with the tested experience working as expected and no defect reported. This result is based on direct maintainer confirmation; automated accessibility-tree output remains supplemental. |
 
-No separate product-defect issue was filed from this partial pass: the remaining items are
-incomplete manual coverage, not confirmed product defects.
+No separate product-defect issue was filed from this pass: no product defect was confirmed.
 
 ## Confirmed violations and follow-up issues
 
@@ -139,7 +140,7 @@ incomplete manual coverage, not confirmed product defects.
 - **#237**: re-investigated rather than restyled. The title/helper/label/placeholder colors already clear 4.5:1 at rest — `text-foreground` and `text-muted-foreground` against `bg-card` compute to roughly 15:1 and 5.6:1 respectively in this theme. The axe failures were an artifact of `expectWcagBaseline`'s animation-settle wait: the GitHub-import panel enters via `AnimatePresence mode="wait"`, and `document.getAnimations()` can be transiently empty in the gap between the outgoing panel's exit finishing and the incoming panel's enter starting, so the old wait resolved before the enter animation began and axe sampled the panel still at its initial (near-zero-opacity) state. `waitForAnimationsSettled` in `e2e/accessibility.spec.ts` now re-checks after a fixed delay to close that window; with the fix, all four `github-import-*` targets measure 0 violations and their allowances have been removed. No application color changed for #237.
 - **#238** was already resolved by the #289 sidebar regrouping (above); this batch only re-confirmed it.
 
-This clears the four Phase 0 follow-up issues #118 opened (#236, #237, #238, #240) at the automated-baseline level described in this report. Issue [#239](https://github.com/Second-Origin/PARTHA/issues/239) is completed and its non-visual architecture equivalent is implemented, but the manual keyboard/focus/tab-order/zoom/reduced-motion/screen-reader passes in "Manual and assistive-technology baseline" above remain **not tested manually**. "WCAG 2.2 AA baseline established" should be read as: the automated Phase 0 route/state coverage in this report has no outstanding known violation, not as a claim of full WCAG 2.2 AA conformance.
+This clears the four Phase 0 follow-up issues #118 opened (#236, #237, #238, #240) at the automated-baseline level described in this report. Issue [#239](https://github.com/Second-Origin/PARTHA/issues/239) is completed and its non-visual architecture equivalent is implemented. The dated manual close-out above records the maintainer-confirmed human checks; "WCAG 2.2 AA baseline established" still means that this report has no outstanding known violation in the tested scope, not a claim of full WCAG 2.2 AA conformance.
 
 No confirmed automated violation is left only in this report.
 
@@ -151,12 +152,13 @@ relationship trust state. Selecting a node opens a named modal inspector with re
 files, dependencies, and dependents.
 
 The semantic list/table equivalent is implemented and [#239](https://github.com/Second-Origin/PARTHA/issues/239)
-is completed. The manual screen-reader experience remains untested, as recorded above.
+is completed. The manual screen-reader experience is recorded as maintainer-confirmed in the
+dated close-out above.
 
 ## Known limitations
 
-- The human keyboard, focus, tab-order, zoom/reflow, contrast, reduced-motion, and screen-reader
-  passes remain outstanding.
+- Historical manual-baseline rows above remain preserved as historical evidence; the dated
+  close-out above records the maintainer-confirmed checks for this validation cycle.
 - Automated coverage is Chromium-only, desktop-only, dark-theme-only, and 100% zoom.
 - axe cannot determine overall WCAG conformance, usability, reading order, quality of accessible
   names, screen-reader announcements, or whether the graph's non-visual experience is efficient.
