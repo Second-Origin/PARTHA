@@ -14,7 +14,7 @@ import sys
 import tempfile
 import uuid
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -22,7 +22,8 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import MetaData, Table, create_engine, inspect, select
-from sqlalchemy.engine import URL, make_url
+from sqlalchemy.engine import URL, Engine, make_url
+from sqlalchemy.exc import SQLAlchemyError
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -58,7 +59,7 @@ def _alembic_config(database_url: str) -> Config:
     return cfg
 
 
-def _revision(engine) -> str:
+def _revision(engine: Engine) -> str:
     version = Table("alembic_version", MetaData(), autoload_with=engine)
     with engine.connect() as connection:
         value = connection.scalar(select(version.c.version_num))
@@ -67,18 +68,32 @@ def _revision(engine) -> str:
     return value
 
 
-def _assert_head(engine) -> None:
+def _assert_head(engine: Engine) -> None:
     missing_tables = REQUIRED_HEAD_TABLES - set(inspect(engine).get_table_names())
     if missing_tables:
         raise RehearsalError(f"Head is missing required table(s): {', '.join(sorted(missing_tables))}.")
-    if _revision(engine) != HEAD_REVISION:
-        raise RehearsalError("Alembic did not reach the expected current head.")
+    actual_revision = _revision(engine)
+    if actual_revision != HEAD_REVISION:
+        raise RehearsalError(
+            f"Alembic reached revision {actual_revision!r} but this script expects {HEAD_REVISION!r}. "
+            "If a new migration was added, update HEAD_REVISION (and REQUIRED_HEAD_TABLES if the "
+            "schema changed) in rehearse_migrations.py."
+        )
 
 
 def _assert_chain(cfg: Config) -> None:
     heads = ScriptDirectory.from_config(cfg).get_heads()
-    if heads != [HEAD_REVISION]:
-        raise RehearsalError("Expected exactly one Alembic head; inspect the migration graph before rehearsing.")
+    if len(heads) != 1:
+        raise RehearsalError(
+            f"Expected exactly one Alembic head, found {len(heads)}: {', '.join(sorted(heads))}. "
+            "Inspect the migration graph for an unintended branch before rehearsing."
+        )
+    if heads[0] != HEAD_REVISION:
+        raise RehearsalError(
+            f"Alembic head is {heads[0]!r} but this script expects {HEAD_REVISION!r}. "
+            "If a new migration was added, update HEAD_REVISION (and REQUIRED_HEAD_TABLES if the "
+            "schema changed) in rehearse_migrations.py."
+        )
 
 
 def _exercise_clean_chain(database_url: str) -> None:
@@ -102,7 +117,7 @@ def _exercise_clean_chain(database_url: str) -> None:
         engine.dispose()
 
 
-def _insert_representative_0004_row(engine) -> str:
+def _insert_representative_0004_row(engine: Engine) -> str:
     """Insert an old-format repository row before the 0005 backfill."""
 
     repositories = Table("repositories", MetaData(), autoload_with=engine)
@@ -142,6 +157,8 @@ def _exercise_representative_baseline(database_url: str) -> None:
     _assert_chain(cfg)
     engine = create_engine(database_url)
     try:
+        if inspect(engine).get_table_names():
+            raise RehearsalError("A rehearsal target was unexpectedly non-empty; refusing to continue.")
         command.upgrade(cfg, REPRESENTATIVE_BASELINE)
         if _revision(engine) != REPRESENTATIVE_BASELINE:
             raise RehearsalError("Could not prepare the representative supported baseline.")
@@ -203,23 +220,48 @@ def _postgres_target() -> Iterator[str]:
         created = True
         yield admin_url.set(database=database_name).render_as_string(hide_password=False)
     finally:
-        if created:
-            with engine.connect() as connection:
-                connection.exec_driver_sql(f"DROP DATABASE IF EXISTS {quoted_name} WITH (FORCE)")
-        engine.dispose()
+        try:
+            if created:
+                with engine.connect() as connection:
+                    connection.exec_driver_sql(f"DROP DATABASE IF EXISTS {quoted_name} WITH (FORCE)")
+        except Exception as cleanup_error:
+            # Never let a teardown failure replace or hide the original
+            # exception being propagated through this `finally`, and always
+            # still reach `engine.dispose()` below. Print the disposable
+            # database's name (a random UUID, safe to print) so an operator
+            # can find and drop it manually if this warning is seen.
+            print(
+                f"WARNING: failed to drop disposable rehearsal database {database_name} "
+                f"({type(cleanup_error).__name__}); it may require manual cleanup.",
+                file=sys.stderr,
+            )
+        finally:
+            engine.dispose()
 
 
-def _run_phase(name: str, operation: Callable[[str], None], target_factory: Callable[[], Iterator[str]]) -> None:
+def _run_phase(
+    name: str,
+    operation: Callable[[str], None],
+    target_factory: Callable[[], AbstractContextManager[str]],
+) -> None:
     try:
         with target_factory() as database_url:
             operation(database_url)
     except RehearsalError:
         raise
-    except Exception as error:
+    except SQLAlchemyError as error:
+        # Database driver errors can embed the connection URL (and its
+        # credentials) in their message, so only the exception type is
+        # surfaced here. The target was disposable and has been removed.
         raise RehearsalError(
-            f"{name} failed with {type(error).__name__}. The target was disposable; "
+            f"{name} failed with a database error ({type(error).__name__}). The target was disposable; "
             "review the Alembic output above and the migration runbook before retrying."
         ) from error
+    except Exception as error:
+        # Anything other than a database-driver error cannot contain
+        # connection credentials, so its message is safe to surface and is
+        # far more useful for debugging a script or migration bug.
+        raise RehearsalError(f"{name} failed with {type(error).__name__}: {error}") from error
     print(f"PASS {name}")
 
 
