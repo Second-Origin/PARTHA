@@ -4,25 +4,22 @@
 | --- | --- |
 | Planning issue | [#299](https://github.com/Second-Origin/PARTHA/issues/299) |
 | Governing design | [RFC-0002](REPOSITORY_LINEAGE_RFC.md) |
-| Live-code baseline | `origin/dev` at `e4609f3db92de268f3c15f0dadb511d49995dd42` |
-| Baseline verified | 2026-08-18 |
-| Purpose | Supply the implementation-grade migration plan and architecture amendment required to authorize #299 |
+| Live-code baseline | `origin/dev` at `373306d` |
+| Purpose | Specify the proposed migration mechanics, backfill, integrity rules, and validation for #299 |
 | Runtime changes in this document | None |
 | Authorization status | **Architecture amendment pending explicit owner approval in PR #328** |
 
 This document is an implementation-grade plan, not an implementation. It does not create an
 Alembic revision, change an ORM model, change `RepositoryService`, or alter an API/frontend
-contract. It records the current schema, maps RFC-0002 to live code, specifies a safe migration and
-backfill, and implements RFC-0002's migration mechanics. The RFC is the architecture contract; this
-plan does not compete with or silently extend it.
+contract. It records the current schema and specifies a safe migration and backfill. RFC-0002 is the
+architecture contract; this plan defines the migration and test mechanics without extending it.
 
 ## 1. Executive verdict
 
 **#299 NOT AUTHORIZED FOR IMPLEMENTATION.**
 
 The migration can be implemented safely once the owner explicitly approves the architecture
-amendment in RFC-0002 and the decisions summarized in §13. This PR reconciles the two material
-design gaps rather than leaving them as plan-only additions:
+amendment in RFC-0002. Its two implementation-critical decisions are:
 
 1. Uploads and unresolved legacy GitHub rows are **unlineaged standalone imports**: their lineage
    fields are null and no synthetic lineage exists.
@@ -35,56 +32,9 @@ IMPLEMENTATION**. #322 remains required before the eventual #299 implementation 
 does not block writing or testing that implementation after architecture approval. No runtime or
 migration implementation is present here.
 
-## 2. Live state and governing material
+## 2. Current-state data model
 
-The baseline was freshly cloned from `Second-Origin/PARTHA`, `origin/dev` was fetched, and local
-`dev` and `origin/dev` both resolved to
-`e4609f3db92de268f3c15f0dadb511d49995dd42`. At that point GitHub reported no open pull request
-targeting `dev`.
-
-The review covered:
-
-- issues #298 and #299 and all comments present on 2026-08-18;
-- RFC-0002, its owner waiver, RFC-0001's migration policy, the current System Overview,
-  Repository Intelligence documents, `CONTRIBUTING.md`, and the docs index;
-- every Alembic revision from `0001_initial` through `0010_account_deletion`;
-- every ORM table that owns or refers to a repository/revision;
-- `RepositoryService`, `RepositoryRepository`, `GitHubClient`, database/session wiring, schema-sync,
-  account deletion, snapshot persistence, and analysis-job persistence;
-- import, migration, owner-isolation, snapshot, account-deletion, and SQLite-concurrency tests; and
-- recent commits affecting ingestion, revision/snapshot identity, durable analysis, ownership,
-  archive safety, migration portability, and account deletion.
-
-Parth's 2026-08-11 comment on #299 is an explicit gate: the owner waiver removes only the
-independent-ratification condition. #299 remains a placeholder and is not authorized for
-implementation until this Alembic plan and its RFC amendment are explicitly reviewed. The waiver
-did not resolve the sequence-locking risk. RFC-0002 now makes the §6 allocator authoritative
-architecture, subject to Parth's approval of PR #328 rather than an incidental choice deferred to
-runtime implementation.
-
-The review also covered the newer cross-references Parth placed on #299:
-
-- [#322](https://github.com/Second-Origin/PARTHA/issues/322) requires a repeatable migration
-  rehearsal/rollback procedure before more schema work lands and explicitly requires the planned
-  lineage migration as a review checklist. It is a pre-merge operational gate for the #299 schema
-  implementation, not a blocker to beginning implementation after this architecture is approved.
-- The stated delivery order is #299, then the W2 scale/recovery gate
-  [#210](https://github.com/Second-Origin/PARTHA/issues/210), then the held two-revision graph-diff
-  spike [#219](https://github.com/Second-Origin/PARTHA/issues/219). #299 supplies logical grouping;
-  it does not absorb either later issue's incremental analysis, recovery, diff, or UI work.
-
-No live roadmap file is present in the repository. The private/project roadmap references removed
-from the repository are therefore not used as implementation evidence.
-
-Relevant recent changes include `0005_revision_snapshots` (revision identity and normalized
-snapshots), `0006_analysis_jobs` (durable jobs), `0009_ai_conversation_messages` (an existing
-unique-conflict sequence pattern), and `0010_account_deletion` (cross-dialect foreign-key naming and
-cascades). The archive path was hardened in `cf352b6`; repository import/revision identity still
-comes from the July ingestion and RFC-0001 work.
-
-## 3. Current-state data model
-
-### 3.1 What a `RepositoryRecord` means today
+### 2.1 What a `RepositoryRecord` means today
 
 One `repositories` row is primarily **one imported immutable revision**, but it also owns the
 mutable import/analysis workspace for that revision:
@@ -102,7 +52,7 @@ mutable import/analysis workspace for that revision:
 The right description is: **one persisted imported revision plus its revision-local workspace and
 lifecycle state**. RFC-0002 correctly needs a separate logical grouping above it.
 
-### 3.2 Relevant tables
+### 2.2 Relevant tables
 
 #### `users`
 
@@ -209,7 +159,7 @@ Jobs remain revision-scoped, not lineage-scoped.
 - `ai_provider_configs` and `refresh_tokens` are owner-scoped but do not reference repository
   identity.
 
-## 4. RFC-0002 to live-code mapping
+## 3. RFC-0002 to live-code mapping
 
 | RFC requirement | Status at baseline | Mapping / discrepancy |
 | --- | --- | --- |
@@ -229,7 +179,7 @@ Jobs remain revision-scoped, not lineage-scoped.
 | No API/frontend change | Compatible | Lineage fields can remain internal. Existing response schemas need no change. |
 | Snapshot immutability/identity unchanged | Compatible | Snapshots continue pointing to repository rows. |
 
-### Discrepancies reconciled by the RFC amendment
+### Architecture amendments captured in RFC-0002
 
 1. **Standalone semantics.** The RFC now uses “unlineaged standalone import” and states that no
    synthetic lineage exists.
@@ -242,9 +192,9 @@ Jobs remain revision-scoped, not lineage-scoped.
 5. **Repeatable backfill.** The RFC requires deterministic identity and reconciliation; this plan
    owns the UUID construction, verification, interruption recovery, and downgrade mechanics.
 
-## 5. RFC target schema
+## 4. RFC target schema
 
-### 5.1 `repository_lineages`
+### 4.1 `repository_lineages`
 
 | Column | Type/nullability | Rule |
 | --- | --- | --- |
@@ -272,7 +222,7 @@ Do not add provider type, GitHub numeric repository ID, upload hash, mutable sou
 JSON metadata bag. Current code does not provide a reliable provider-stable ID and RFC-0002 does
 not authorize those fields.
 
-### 5.2 New `repositories` columns and constraints
+### 4.2 New `repositories` columns and constraints
 
 - `lineage_id String(36) NULL`.
 - `sequence Integer NULL`.
@@ -301,7 +251,7 @@ composite constraints, implementation must stop rather than silently weaken owne
 uploads and unidentified legacy rows as unlineaged standalone imports. They must not be tightened
 to `NOT NULL` by #299.
 
-### 5.3 Sequence semantics
+### 4.3 Sequence semantics
 
 - First repository in a lineage has `sequence = 1`.
 - A sequence is a never-reused import ordinal within that lineage, not commit time and not Git
@@ -314,11 +264,11 @@ to `NOT NULL` by #299.
 The RFC makes the ordinal 1-based, matching its “third import” language and avoiding a zero ordinal
 in future internal tooling.
 
-## 6. Concurrency strategy
+## 5. Concurrency design
 
-### 6.1 Options evaluated
+### 5.1 Options evaluated
 
-| Strategy | PostgreSQL | SQLite/test | Failure/retry | Assessment |
+| Approach | PostgreSQL | SQLite/test | Failure/retry | Assessment |
 | --- | --- | --- | --- | --- |
 | Unlocked `MAX(sequence)+1` | Two transactions can choose the same value. | Same logical race; writer upgrade can also raise busy errors. | Unique conflict catches damage but requires full retry. | Unsafe as the primary allocator. |
 | `SELECT ... FOR UPDATE` on lineage, then `MAX+1` | Correctly serializes existing-lineage allocation. | SQLite ignores row-level `FOR UPDATE`; database writer locking occurs later. | First-lineage creation still needs unique-conflict reconciliation. Highest-number deletion permits reuse. | Better on PostgreSQL, incomplete cross-dialect. |
@@ -327,7 +277,7 @@ in future internal tooling.
 | Global database sequence | Race-free but not per-lineage/dense. | SQLite has no equivalent PostgreSQL sequence object. | Creates gaps and non-portable behavior. | Reject. |
 | Per-lineage `next_sequence` updated transactionally | Row update locks exactly one lineage. | The first update obtains SQLite's serialized writer lock; configured busy timeout bounds waiting. | Rollback restores the counter; unique constraint remains defense in depth. | **Selected by RFC-0002.** |
 
-### 6.2 Allocation algorithm
+### 5.2 Allocation algorithm
 
 After cloning/upload extraction and parsing succeed, perform all lineage and repository database
 writes in one transaction:
@@ -364,7 +314,7 @@ The current `RepositoryRepository.add()` commits immediately, so #299 must add a
 repository/lineage persistence path rather than composing existing `add()` calls. This is a scoped
 requirement, not a general repository-layer refactor.
 
-### 6.3 Filesystem/database failure boundary
+### 5.3 Filesystem/database failure boundary
 
 Cloning/extraction/parsing remains outside the database transaction to avoid holding a DB lock
 during slow I/O. The final DB phase owns no external side effect. If it fails—including a duplicate
@@ -372,9 +322,9 @@ won by another request—the newly staged repository directory must be removed, 
 current pre-insert cleanup across the commit phase. A database commit that succeeds followed by an
 HTTP serialization failure must not remove the committed repository directory.
 
-## 7. Backfill design
+## 6. Backfill design
 
-### 7.1 Strict GitHub canonicalization
+### 6.1 Strict GitHub canonicalization
 
 Backfill only a row satisfying all of these conditions:
 
@@ -403,7 +353,7 @@ This cannot recognize a renamed/transferred GitHub repository as the same lineag
 stable GitHub repository ID is stored. Different canonical owner/repository paths remain different
 lineages. That limitation is truthful and is not rename/move detection.
 
-### 7.2 Grouping and deterministic ordering
+### 6.2 Grouping and deterministic ordering
 
 Group eligible rows by
 `(owner_id, canonical_source_key, canonical_branch)`. For each group:
@@ -422,7 +372,7 @@ Existing duplicate commit rows in one canonical group are preserved and ordered;
 coalescing them would be data loss. The migration should report their count in test/preflight
 evidence. Future serialized import logic prevents new duplicates within a lineage.
 
-### 7.3 Uploads and unsupported metadata
+### 6.3 Uploads and unsupported metadata
 
 Existing uploads contain an archive-byte hash, filename-derived name, extracted tree, and parser
 metadata. None proves that two archives are revisions of the same logical repository. Uploads
@@ -434,7 +384,7 @@ the safest deterministic behavior and follows RFC §6 literally. It means histor
 rows do not acquire a stable logical lineage under #299; resolving that requires a future manual
 linking feature or a change to RFC-0002.
 
-### 7.4 Backfill verification
+### 6.4 Backfill verification
 
 Before final constraints, abort the migration unless all invariants hold:
 
@@ -449,7 +399,7 @@ Before final constraints, abort the migration unless all invariants hold:
 
 Do not silently skip a failed update or coerce corrupt data to satisfy final constraints.
 
-## 8. Concrete Alembic migration sequence
+## 7. Concrete Alembic migration sequence
 
 Use two new revisions after `0010_account_deletion`, each with an ID under the existing PostgreSQL
 `alembic_version VARCHAR(32)` limit. Suggested IDs are `0011_lineage_expand` and
@@ -469,7 +419,7 @@ read traffic may continue subject to the deployment platform's normal DDL locks.
    table copies.
 3. Run the strict, deterministic backfill in bounded batches using SQLAlchemy Core tables defined
    inside the migration—not application models, which will evolve.
-4. Run all §7.4 verification queries and fail explicitly on any mismatch.
+4. Run all §6.4 verification queries and fail explicitly on any mismatch.
 5. Create the lineage-sequence pair check, unique sequence index, `(id, lineage_id)` unique target,
    and composite repository-to-lineage ownership FK. On SQLite, use batch mode with an explicit
    naming convention, following `0010_account_deletion`; never try to drop an anonymously reflected
@@ -514,9 +464,9 @@ lineage additions. Full `head -> base -> head` remains required by project polic
 - Downgrade from a live lineage-aware application requires stopping that application first. It
   discards lineage records and new columns but preserves all pre-#299 repository/snapshot/job data.
 
-## 9. Future import and deletion rules for #299
+## 8. Future import and deletion rules for #299
 
-### 9.1 GitHub
+### 8.1 GitHub
 
 After the existing clone resolves `revision_value` and `revision_ref`:
 
@@ -524,7 +474,7 @@ After the existing clone resolves `revision_value` and `revision_ref`:
 2. Use `revision_ref` verbatim as canonical branch/ref. Never use requested `branch` as identity.
 3. Lookup only by owner plus both canonical values.
 4. Create or reconcile the lineage, allocate the next sequence, dedupe the commit within that
-   lineage, insert the repository, and update latest in one transaction (§6.2).
+   lineage, insert the repository, and update latest in one transaction (§5.2).
 5. Do not make a network call during matching and do not follow GitHub rename redirects.
 
 Different owners, canonical repositories, branches, or tags produce different lineages. The same
@@ -532,7 +482,7 @@ commit can legitimately occur in different branch-scoped lineages. Case variants
 trailing-slash variants converge only after URL validation; broadening live input to SSH/mixed-case
 host is outside #299 unless separately approved.
 
-### 9.2 Upload and unresolved ref
+### 8.2 Upload and unresolved ref
 
 `import_uploaded_repository` continues exact owner-scoped archive-hash duplicate detection but
 sets both lineage fields null. It does not create or search a lineage. This is why #299 can touch
@@ -547,7 +497,7 @@ partial unique index for uploads would close it, but that is a separate change w
 preflight implications and should not be smuggled into #299. Record it as follow-up if the
 concurrency test proves it matters.
 
-### 9.3 Repository deletion
+### 8.3 Repository deletion
 
 Replace the current delete commit boundary with one transaction:
 
@@ -566,7 +516,7 @@ Account deletion continues to delete the user in one transaction. Both repositor
 owner FKs cascade. The cyclic, deferred member FKs must be exercised on real PostgreSQL and SQLite
 to prove all rows disappear without cross-owner effects.
 
-## 10. Ownership and security invariants
+## 9. Ownership and security invariants
 
 - Every canonical lookup includes `owner_id`; never lookup a lineage by canonical source alone.
 - The repository-to-lineage composite FK makes a cross-owner attachment invalid even if service
@@ -580,7 +530,7 @@ to prove all rows disappear without cross-owner effects.
 - Canonical keys are identifiers, not authorization. They must not be logged with repository
   contents or used to bypass owner scoping.
 
-## 11. Snapshot and future-evolution boundaries
+## 10. Snapshot and future-evolution boundaries
 
 Snapshots continue to point to a `repositories` row and exact revision. No snapshot column,
 constraint, query contract, API route, response schema, or frontend surface changes in #299.
@@ -599,13 +549,7 @@ architecture drift, change-impact analysis, and cross-revision node/fact identit
 graph diff, impact scoring, rename/move detection, historical UI, PR review, architecture drift,
 incremental analysis, new snapshot contracts, or manual upload linking.
 
-In the current issue order, #210 remains the reliability/incremental-analysis gate after lineage,
-and #219 remains held behind both foundations. #219's phrase “two sealed snapshots of the same
-repository” cannot be implemented against today's row identity when the snapshots belong to two
-different imported revisions; lineage gives that future comparison a stable owner-scoped grouping,
-but #219 must still define fact/entity matching and its own API/UI contract.
-
-## 12. Failure modes and required behavior
+## 11. Failure modes and required behavior
 
 | Scenario | Required behavior |
 | --- | --- |
@@ -624,46 +568,15 @@ but #219 must still define fact/entity matching and its own API/UI contract.
 | SQLite writer contention | Busy timeout bounds waiting; atomic counter update serializes; tests must use separate connections/threads. |
 | PostgreSQL concurrency | Row update provides real row-level serialization; test with separate transactions in CI. |
 
-## 13. Architecture decisions presented for Parth approval
+## 12. Authorization gate
 
-### Ready (supported by RFC + code)
+PR #328 does not implement #299. Before the owner explicitly approves PR #328's architecture
+amendment, **#299 is not authorized for implementation**. That approval may authorize writing and
+testing the #299 implementation; it does not remove the separate requirement that
+[#322](https://github.com/Second-Origin/PARTHA/issues/322) be complete before the eventual #299
+implementation PR merges.
 
-- A repository row remains one revision and snapshots remain attached to it.
-- Canonical matching is owner-scoped and branch/ref-scoped.
-- Canonical branch is the stored normalized `revision_ref`, not requested `branch`.
-- Historical URL matching must be strict and offline; uncertain rows remain standalone.
-- Uploads cannot be grouped automatically from current data.
-- No API/frontend/snapshot contract change belongs in #299.
-- Backfill order requires `(created_at, id)`, not timestamp alone.
-- Owner integrity needs a database constraint in addition to service scoping.
-
-### Explicit approval requested
-
-1. **Unlineaged standalone imports.** Uploads and unresolved legacy GitHub rows keep
-   `lineage_id = NULL` and `sequence = NULL`; no synthetic lineage or heuristic grouping is created.
-2. **1-based, never-reused ordinals.** Sequences describe import order, increase monotonically, and
-   may contain gaps after deletion.
-3. **Durable allocation state.** `repository_lineages.next_sequence` is the transactional,
-   per-lineage allocator; database uniqueness remains defense in depth.
-4. **Persistent empty lineages.** Deleting the last repository leaves the lineage, nulls latest,
-   and preserves `next_sequence`.
-5. **Database-enforced membership.** Deferred composite foreign keys enforce same-owner repository
-   membership and require `latest_repository_id` to name a member of that exact lineage.
-6. **Upload concurrency scope.** The pre-existing concurrent upload-hash dedupe race remains
-   outside #299 rather than adding an unrelated historical-data constraint.
-7. **Operational ordering.** #322 is required before the #299 implementation PR merges; it does
-   not block implementation from being written and tested after architecture approval.
-8. **Authoritative RFC amendment.** The RFC-0002 changes in PR #328 are the architecture contract;
-   this plan owns migration mechanics and does not independently extend that contract.
-
-### Authorization gate
-
-Before Parth explicitly approves these architecture changes in PR #328: **#299 NOT AUTHORIZED FOR
-IMPLEMENTATION**. After explicit approval: **#299 AUTHORIZED FOR IMPLEMENTATION**, with **#322
-REQUIRED BEFORE #299 IMPLEMENTATION PR MERGES**. No missing live-code fact or database capability
-otherwise blocks the plan.
-
-## 14. Test matrix for implementation
+## 13. Test matrix for implementation
 
 ### Migration tests
 
@@ -714,20 +627,3 @@ They **cannot prove PostgreSQL row-lock behavior, transaction isolation, partial
 concurrent create reconciliation**. Those concurrency cases and deferred cyclic FK/account-delete
 cases must run against real PostgreSQL using separate connections and synchronization barriers—not
 thread timing or sleeps.
-
-## 15. Implementation order after approval
-
-1. Record Parth's explicit approval of the RFC amendment and decisions in PR #328; that authorizes
-   implementation to begin.
-2. Complete #322 before the #299 implementation PR merges and use its rehearsal/rollback output as
-   that PR's operational checklist. #322 may proceed alongside implementation work.
-3. Add lineage ORM model and head-shape constraints, but no API fields.
-4. Add Revision A and B migrations plus populated SQLite/PostgreSQL migration tests.
-5. Add owner-scoped lineage persistence and the transactional counter allocator.
-6. Integrate GitHub matching and explicit upload standalone behavior into `RepositoryService`.
-7. Make repository deletion update latest transactionally; verify account cascades.
-8. Add service, concurrency, integrity, storage-cleanup, and snapshot non-regression tests.
-9. Run backend static checks, complete backend suite, schema contract checks, and real PostgreSQL CI.
-
-Only after the final constraints and real-PostgreSQL concurrency tests pass should #299 be called
-implemented. Future diff/history/evolution work remains separately scoped.
