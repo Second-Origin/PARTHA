@@ -10,7 +10,7 @@
 | **Ratifier** | Independent ratification was waived by the owner on 2026-08-11; the implementation-critical amendment in [PR #328](https://github.com/Second-Origin/PARTHA/pull/328) requires explicit owner approval before #299 implementation starts |
 | **Approval evidence** | Original owner sign-off is recorded below; the sequence, standalone-import, integrity, and deletion amendments in PR #328 remain proposed until @parthrohit22 explicitly approves them |
 | **Created** | 2026-08-11 |
-| **Last updated** | 2026-08-18 |
+| **Last updated** | 2026-08-19 |
 | **Status** | **Accepted baseline; implementation-critical amendment pending owner approval in PR #328** |
 | **Supersedes** | — |
 | **Superseded by** | — |
@@ -28,7 +28,7 @@
 ### 1.1 Status
 
 The baseline RFC was **Accepted** at the owner level: @parthrohit22 reviewed and confirmed its
-identity design and the five questions in [§10](#10-open-questions-and-resolutions). PR #328 amends
+identity design and the five questions in [§9](#9-open-questions-and-resolutions). PR #328 amends
 that baseline with the implementation-critical sequence, integrity, standalone-import, deletion,
 and migration contracts below. Those amendments remain pending until the owner explicitly approves
 them under [§1.2](#12-implementation-authorization).
@@ -83,14 +83,12 @@ and `import_uploaded_repository` (`apps/backend/app/services/repository_service.
 concept linking repeated imports of the same GitHub repository across different commits, or
 representing "this is the third time this owner imported this repo" as a first-class relationship.
 
-Two symptoms make this a real gap rather than a hypothetical one:
+The gap is material because a flat set of independent imported revisions has no durable,
+owner-scoped identity for the logical repository those revisions came from. A consumer cannot
+deterministically group successive imports or identify a current surviving member without that
+separate identity.
 
-- The recently shipped dashboard "most recently analysed repository" surface
-  (`feat/dashboard-latest-analysis-summary`, `apps/frontend/src/app/pages/DashboardPage.tsx`)
-  computes "most recent" client-side, by reducing the flat repository list on `analysedAt`. It has
-  no server-side concept of "the current head of this repository's history" to build on, and no way
-  to group prior imports of the same repository together for that computation.
-- [RFC-0001 §9 (Schema versioning)](REPOSITORY_INTELLIGENCE_V1_RFC.md#9-schema-versioning) and
+[RFC-0001 §9 (Schema versioning)](REPOSITORY_INTELLIGENCE_V1_RFC.md#9-schema-versioning) and
   [§11 (Snapshot lifecycle)](REPOSITORY_INTELLIGENCE_V1_RFC.md#11-snapshot-lifecycle-and-immutability)
   already treat each revision's snapshot as immutable and independently addressable. Without a
   lineage concept sitting above that, any future cross-revision feature (diff, drift, "has this
@@ -255,25 +253,7 @@ construction, verification queries, interruption recovery, and downgrade mechani
 separately reviewed migration plan. #322 must supply the repeatable rehearsal and rollback evidence
 before the #299 implementation PR merges.
 
-## 7. Product direction alignment
-
-This design continues the project's stated priority of deepening the existing evidence and history
-capability rather than adding new surfaces or languages: *"make history the moat"* — its first
-increment is identity mapping, which is exactly what a lineage is — a stable cross-revision identity
-for "the same repository over time," sitting below the fact-level identity mapping that priority is
-ultimately for.
-
-It also follows from a standing sequencing rule: *reliability before history* — graph evolution
-requires deterministic snapshots and stable cross-revision identity, otherwise drift becomes noise.
-Repository-level lineage identity is a prerequisite for that stable cross-revision identity, at a
-level below the node/fact identity RFC-0001 §4 already governs.
-
-This RFC explicitly does **not** propose graph diff, drift detection, or any consumer-facing
-history feature — those remain future work, gated separately. It proposes only the identity and
-schema layer those features would eventually sit on top of, consistent with the project's standing
-instruction not to "finish the platform" ahead of demonstrated need.
-
-## 8. Out of scope
+## 7. Out of scope
 
 - Any migration code, Alembic revision, or SQLAlchemy model change (see hard boundaries on the
   tracking issue and [§1.2](#12-implementation-authorization)).
@@ -287,7 +267,7 @@ instruction not to "finish the platform" ahead of demonstrated need.
 - Cross-repository or cross-owner lineage matching. Lineage membership is always scoped to a single
   `owner_id`; this RFC does not propose any notion of shared or organization-wide lineage.
 
-## 9. Alternatives rejected
+## 8. Alternatives rejected
 
 - **Repository-scoped lineage key, ignoring branch** (`(owner_id, canonical_source_key)` only,
   branch-agnostic). Rejected by [Q1](#q1-branch-scoped-lineage): it would silently merge imports of
@@ -305,7 +285,7 @@ instruction not to "finish the platform" ahead of demonstrated need.
   [Q4](#q4-display-name): a lineage's `display_name` permanently inherits the first revision's name
   instead, avoiding any implicit rename action with no user confirmation step.
 
-## 10. Open questions and resolutions
+## 9. Open questions and resolutions
 
 All five open questions raised during design review are resolved as follows.
 
@@ -339,7 +319,7 @@ Independent ratification by [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARM
 before implementation and waived by the owner on 2026-08-11. The implementation-critical
 amendment in PR #328 instead requires explicit owner approval under [§1.2](#12-implementation-authorization).
 
-## 11. Sign-off
+## 10. Sign-off
 
 ```text
 Owner sign-off: confirmed
@@ -362,7 +342,7 @@ per-lineage allocation state, transaction semantics, canonical-key race reconcil
 database uniqueness. Those additions do not become authorized architecture until the explicit
 owner approval required by [§1.2](#12-implementation-authorization).
 
-## 12. References
+## 11. References
 
 - [RFC-0001 — Repository Intelligence v1 Schema and Evidence Contract](REPOSITORY_INTELLIGENCE_V1_RFC.md)
 - `apps/backend/app/models/repository.py` — `RepositoryRecord`
