@@ -213,18 +213,25 @@ def _postgres_target() -> Iterator[str]:
     database_name = f"partha_migration_rehearsal_{uuid.uuid4().hex}"
     engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
     created = False
+    operation_failed = False
     quoted_name = engine.dialect.identifier_preparer.quote(database_name)
     try:
         with engine.connect() as connection:
             connection.exec_driver_sql(f"CREATE DATABASE {quoted_name}")
         created = True
-        yield admin_url.set(database=database_name).render_as_string(hide_password=False)
+        try:
+            yield admin_url.set(database=database_name).render_as_string(hide_password=False)
+        except BaseException:
+            operation_failed = True
+            raise
     finally:
+        cleanup_error: Exception | None = None
         try:
             if created:
                 with engine.connect() as connection:
                     connection.exec_driver_sql(f"DROP DATABASE IF EXISTS {quoted_name} WITH (FORCE)")
-        except Exception as cleanup_error:
+        except Exception as error:
+            cleanup_error = error
             # Never let a teardown failure replace or hide the original
             # exception being propagated through this `finally`, and always
             # still reach `engine.dispose()` below. Print the disposable
@@ -237,6 +244,10 @@ def _postgres_target() -> Iterator[str]:
             )
         finally:
             engine.dispose()
+        if cleanup_error is not None and not operation_failed:
+            raise RehearsalError(
+                f"Cleanup failed for disposable rehearsal database {database_name}; remove it manually before retrying."
+            ) from cleanup_error
 
 
 def _run_phase(
@@ -258,10 +269,13 @@ def _run_phase(
             "review the Alembic output above and the migration runbook before retrying."
         ) from error
     except Exception as error:
-        # Anything other than a database-driver error cannot contain
-        # connection credentials, so its message is safe to surface and is
-        # far more useful for debugging a script or migration bug.
-        raise RehearsalError(f"{name} failed with {type(error).__name__}: {error}") from error
+        # Future migration code can raise arbitrary exceptions whose messages
+        # include environment-derived values. Surface the type, never the
+        # untrusted message, so a URL or credential cannot leak into logs.
+        raise RehearsalError(
+            f"{name} failed with {type(error).__name__}. The target was disposable; "
+            "review the Alembic output above and the migration runbook before retrying."
+        ) from error
     print(f"PASS {name}")
 
 

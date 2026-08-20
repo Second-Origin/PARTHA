@@ -84,8 +84,9 @@ the rollback path.
 
 ## Future Repository Lineage (#299) migration review checklist
 
-This is a gate checklist only. It does not authorize or implement Repository Lineage. PR #328 still requires
-Parth's explicit re-review/approval, and #322 must be complete before any future #299 implementation PR merges.
+This is a gate checklist only. It does not authorize or implement Repository Lineage. PR #328 records
+the approved architecture contract, and this rehearsal must be rerun against the eventual #299 migration
+before that implementation PR merges.
 
 - [ ] Re-run this rehearsal on the then-current chain and on a representative disposable copy/fixture of the
   immediately preceding supported baseline.
