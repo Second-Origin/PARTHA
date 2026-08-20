@@ -2,6 +2,7 @@ import importlib.util
 import os
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -136,6 +137,43 @@ def test_postgres_rehearsal_redacts_credentials_on_a_real_connection_failure():
     assert "failed with a database error" in result.stdout
 
 
+def test_generic_rehearsal_failure_does_not_print_exception_message():
+    rehearsal = _load_rehearsal_module()
+    secret = "postgresql+psycopg://user:should-not-appear@private.example.invalid/postgres"
+
+    @contextmanager
+    def target():
+        yield "sqlite:///:memory:"
+
+    def operation(_database_url):
+        raise RuntimeError(secret)
+
+    with pytest.raises(rehearsal.RehearsalError) as captured:
+        rehearsal._run_phase("forced generic failure", operation, target)
+
+    rendered = str(captured.value)
+    assert "RuntimeError" in rendered
+    assert "should-not-appear" not in rendered
+    assert "private.example.invalid" not in rendered
+
+
+def test_main_fails_when_successful_rehearsal_cannot_clean_up(monkeypatch, capsys, tmp_path):
+    rehearsal = _load_rehearsal_module()
+
+    @contextmanager
+    def target():
+        yield f"sqlite:///{(tmp_path / 'cleanup-failure.db').as_posix()}"
+        raise rehearsal.RehearsalError("forced cleanup failure")
+
+    monkeypatch.setattr(rehearsal, "_postgres_target", target)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--postgres"])
+
+    assert rehearsal.main() == 1
+    output = capsys.readouterr()
+    assert "FAIL migration rehearsal: forced cleanup failure" in output.out
+    assert "PASS migration rehearsal completed; disposable targets were removed." not in output.out
+
+
 @pytest.mark.skipif(not PG_URL, reason="set PARTHA_TEST_PG_URL to run the Postgres cleanup test")
 def test_postgres_target_drops_disposable_database_when_the_operation_fails(monkeypatch):
     """The disposable database must not be leaked when rehearsal work fails.
@@ -224,8 +262,9 @@ def test_postgres_target_disposes_engine_even_when_cleanup_fails(monkeypatch):
 
     disposable_database_name = None
     try:
-        with rehearsal._postgres_target() as database_url:
-            disposable_database_name = make_url(database_url).database
+        with pytest.raises(rehearsal.RehearsalError, match="Cleanup failed"):
+            with rehearsal._postgres_target() as database_url:
+                disposable_database_name = make_url(database_url).database
         assert disposed["called"], "engine.dispose() was skipped when DROP DATABASE cleanup failed"
     finally:
         # The forced failure only trips on the first DROP DATABASE call
