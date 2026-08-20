@@ -7,11 +7,11 @@
 | **Tracking issue** | [Second-Origin/PARTHA#298](https://github.com/Second-Origin/PARTHA/issues/298) |
 | **Author** | @parthrohit22 |
 | **Owner sign-off** | Confirmed |
-| **Ratifier** | Independent ratification was waived by the owner on 2026-08-11; the implementation-critical amendment in [PR #328](https://github.com/Second-Origin/PARTHA/pull/328) requires explicit owner approval before #299 implementation starts |
-| **Approval evidence** | Original owner sign-off is recorded below; the sequence, standalone-import, integrity, and deletion amendments in PR #328 remain proposed until @parthrohit22 explicitly approves them |
+| **Ratifier** | Independent ratification was waived by the owner on 2026-08-11; the implementation-critical amendment in [PR #328](https://github.com/Second-Origin/PARTHA/pull/328) was explicitly approved by the owner on 2026-08-19 |
+| **Approval evidence** | Original owner sign-off is recorded below; the sequence, standalone-import, integrity, and deletion amendments were explicitly approved in [PR #328 review](https://github.com/Second-Origin/PARTHA/pull/328#pullrequestreview-4975035985) |
 | **Created** | 2026-08-11 |
-| **Last updated** | 2026-08-19 |
-| **Status** | **Accepted baseline; implementation-critical amendment pending owner approval in PR #328** |
+| **Last updated** | 2026-08-20 |
+| **Status** | **Accepted; PR #328 amendment approved and #299 authorized for implementation** |
 | **Supersedes** | — |
 | **Superseded by** | — |
 
@@ -30,8 +30,8 @@
 The baseline RFC was **Accepted** at the owner level: @parthrohit22 reviewed and confirmed its
 identity design and the five questions in [§9](#9-open-questions-and-resolutions). PR #328 amends
 that baseline with the implementation-critical sequence, integrity, standalone-import, deletion,
-and migration contracts below. Those amendments remain pending until the owner explicitly approves
-them under [§1.2](#12-implementation-authorization).
+and migration contracts below. The owner explicitly approved those amendments on 2026-08-19 under
+[§1.2](#12-implementation-authorization).
 
 ### 1.2 Implementation authorization
 
@@ -40,21 +40,19 @@ was waived by the owner on 2026-08-11. That waiver did not approve the implement
 choices that were still absent from this RFC: durable sequence allocation, never-reused ordinals,
 standalone-import storage semantics, and database-enforced membership integrity. PR #328 adds those
 choices to the architecture contract and supplies the separately reviewed Alembic plan required by
-#299.
+#299. The owner explicitly approved them in
+[PR #328 review](https://github.com/Second-Origin/PARTHA/pull/328#pullrequestreview-4975035985).
 
-The authorization rule is therefore explicit:
+The authorization state is therefore explicit:
 
-- **Before @parthrohit22 explicitly approves the architecture changes in PR #328:**
-  **#299 NOT AUTHORIZED FOR IMPLEMENTATION.**
-- **After that explicit approval:** **#299 AUTHORIZED FOR IMPLEMENTATION.** Implementation may be
-  written and tested against this RFC and the reviewed migration plan.
+- **#299 AUTHORIZED FOR IMPLEMENTATION.** Implementation may be written and tested against this RFC
+  and the reviewed migration plan.
 - [#322](https://github.com/Second-Origin/PARTHA/issues/322) is a separate operational gate:
   repeatable migration rehearsal and rollback evidence are **required before the #299
-  implementation PR merges**, but #322 does not prevent implementation work from starting after
-  the architecture approval above.
+  implementation PR merges**, but that gate does not prevent implementation work from proceeding.
 
-Approval must be evidenced in PR #328 review or an equally explicit owner comment. Filing or
-merging documentation without that explicit decision does not silently authorize #299.
+The approval evidence is the owner review linked above. Approval authorizes writing and testing;
+it does not mean #299 has been implemented or remove its operational pre-merge gate.
 
 ## 2. Terminology
 
@@ -317,7 +315,8 @@ Manual-only upload linking, deferred to a future feature.
 
 Independent ratification by [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) was requested
 before implementation and waived by the owner on 2026-08-11. The implementation-critical
-amendment in PR #328 instead requires explicit owner approval under [§1.2](#12-implementation-authorization).
+amendment in PR #328 instead received explicit owner approval under
+[§1.2](#12-implementation-authorization).
 
 ## 10. Sign-off
 
@@ -325,7 +324,9 @@ amendment in PR #328 instead requires explicit owner approval under [§1.2](#12-
 Owner sign-off: confirmed
 Open questions: 5/5 resolved
 Tracking issue: Second-Origin/PARTHA#298
-PR #328 architecture amendment: pending explicit owner approval
+PR #328 architecture amendment: explicitly approved by owner on 2026-08-19
+#299 implementation: authorized for writing and testing; not yet implemented
+#322 operational evidence: required before the #299 implementation PR merges
 ```
 
 ## Ratification waiver (owner decision, 2026-08-11)
@@ -339,8 +340,8 @@ This waiver did not resolve or retract Q5's underlying concern—it recorded acc
 ratification risk, not evidence that the sequence design was complete. The PR #328 amendment now
 resolves that design gap normatively in [§5.3](#53-concurrency-sequence-assignment) with durable
 per-lineage allocation state, transaction semantics, canonical-key race reconciliation, and
-database uniqueness. Those additions do not become authorized architecture until the explicit
-owner approval required by [§1.2](#12-implementation-authorization).
+database uniqueness. The explicit owner approval recorded under
+[§1.2](#12-implementation-authorization) on 2026-08-19 authorized those additions.
 
 ## 11. References
 

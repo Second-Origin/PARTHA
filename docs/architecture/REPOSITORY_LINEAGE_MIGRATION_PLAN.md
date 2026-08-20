@@ -7,7 +7,7 @@
 | Live-code baseline | `origin/dev` at `373306d` |
 | Purpose | Specify the proposed migration mechanics, backfill, integrity rules, and validation for #299 |
 | Runtime changes in this document | None |
-| Authorization status | **Architecture amendment pending explicit owner approval in PR #328** |
+| Authorization status | **PR #328 amendment approved; #299 authorized for implementation** |
 
 This document is an implementation-grade plan, not an implementation. It does not create an
 Alembic revision, change an ORM model, change `RepositoryService`, or alter an API/frontend
@@ -16,10 +16,11 @@ architecture contract; this plan defines the migration and test mechanics withou
 
 ## 1. Executive verdict
 
-**#299 NOT AUTHORIZED FOR IMPLEMENTATION.**
+**#299 AUTHORIZED FOR IMPLEMENTATION.**
 
-The migration can be implemented safely once the owner explicitly approves the architecture
-amendment in RFC-0002. Its two implementation-critical decisions are:
+The owner explicitly approved the architecture amendment in
+[PR #328 review](https://github.com/Second-Origin/PARTHA/pull/328#pullrequestreview-4975035985).
+The migration can now be written and tested against these two implementation-critical decisions:
 
 1. Uploads and unresolved legacy GitHub rows are **unlineaged standalone imports**: their lineage
    fields are null and no synthetic lineage exists.
@@ -27,10 +28,10 @@ amendment in RFC-0002. Its two implementation-critical decisions are:
    `repository_lineages.next_sequence`, 1-based ordinals, transactional allocation, valid deletion
    gaps, and preservation of empty lineages.
 
-Explicit owner approval of PR #328 changes the authorization state to **#299 AUTHORIZED FOR
-IMPLEMENTATION**. #322 remains required before the eventual #299 implementation PR merges, but it
-does not block writing or testing that implementation after architecture approval. No runtime or
-migration implementation is present here.
+This authorization does not mean #299 has been implemented. The #322 rehearsal and recovery
+process remains required against the eventual migration before the #299 implementation PR merges,
+but it does not block writing or testing that implementation. No runtime or migration
+implementation is present here.
 
 ## 2. Current-state data model
 
@@ -570,11 +571,10 @@ incremental analysis, new snapshot contracts, or manual upload linking.
 
 ## 12. Authorization gate
 
-PR #328 does not implement #299. Before the owner explicitly approves PR #328's architecture
-amendment, **#299 is not authorized for implementation**. That approval may authorize writing and
-testing the #299 implementation; it does not remove the separate requirement that
-[#322](https://github.com/Second-Origin/PARTHA/issues/322) be complete before the eventual #299
-implementation PR merges.
+PR #328 does not implement #299. The owner's explicit approval authorizes writing and testing the
+#299 implementation against this plan. It does not remove the separate requirement to complete the
+[#322](https://github.com/Second-Origin/PARTHA/issues/322) rehearsal and recovery process against
+the eventual migration before the #299 implementation PR merges.
 
 ## 13. Test matrix for implementation
 
