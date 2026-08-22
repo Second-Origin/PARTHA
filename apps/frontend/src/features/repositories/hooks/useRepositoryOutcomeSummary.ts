@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Repository } from '@/shared/types';
-import type { EngineeringReview, ReviewSeverity } from '@/shared/types/review';
+import type { EngineeringReview, ReviewCategory } from '@/shared/types/review';
 import { backendService } from '@/shared/services/backend';
 
 export type OutcomeAssessmentState = 'loading' | 'assessed' | 'not_assessed';
@@ -24,7 +24,10 @@ export interface RepositoryOutcomeSummary {
   headline: {
     state: OutcomeAssessmentState;
     message: string | null;
-    severity: ReviewSeverity | null;
+    /** The category the headline count is drawn from, so callers can link
+     * straight to that filtered Review view. Null only when there is
+     * nothing to point at (no findings at all). */
+    categoryId: ReviewCategory | null;
   };
   coverage: {
     state: OutcomeAssessmentState;
@@ -37,20 +40,33 @@ const LOADING_SUMMARY: RepositoryOutcomeSummary = {
   stack: { state: 'loading', language: null, framework: null, architecturePattern: null },
   structure: { state: 'loading', totalModules: null, totalNodes: null },
   dependencies: { state: 'loading', totalDependencies: null },
-  headline: { state: 'loading', message: null, severity: null },
+  headline: { state: 'loading', message: null, categoryId: null },
   coverage: { state: 'loading', extractorCount: null, languageCount: null },
 };
 
-const SEVERITY_ORDER: ReviewSeverity[] = ['critical', 'high', 'medium', 'low', 'info'];
+/**
+ * Names the diagnostic category behind the count instead of borrowing
+ * engineering-severity language for it (#335). `severity` on a finding comes
+ * from the extractor's own diagnostic level (fatal/error/warning/info), not a
+ * reviewed quality judgment -- a repository dominated by, say, unresolved
+ * relationship diagnostics should not read as "N medium-severity findings",
+ * which a user reasonably interprets as N graded code problems.
+ */
+function headlineFromReview(review: EngineeringReview): { message: string; categoryId: ReviewCategory | null } {
+  const topCategory = [...review.categories]
+    .filter((category) => category.findingCount > 0)
+    .sort((a, b) => b.findingCount - a.findingCount)[0];
 
-function headlineFromReview(review: EngineeringReview): { message: string; severity: ReviewSeverity | null } {
-  for (const severity of SEVERITY_ORDER) {
-    const count = review.summary.findingsBySeverity[severity];
-    if (count > 0) {
-      return { message: `${count} ${severity}-severity finding${count === 1 ? '' : 's'}`, severity };
-    }
+  if (!topCategory) {
+    return { message: 'No evidence-backed findings were surfaced', categoryId: null };
   }
-  return { message: 'No evidence-backed findings were surfaced', severity: null };
+
+  const count = topCategory.findingCount;
+  const label = topCategory.label.charAt(0).toLowerCase() + topCategory.label.slice(1);
+  return {
+    message: `${count} ${label} finding${count === 1 ? '' : 's'} — inspect coverage and filters`,
+    categoryId: topCategory.id,
+  };
 }
 
 /**
@@ -111,8 +127,8 @@ export function useRepositoryOutcomeSummary(repository: Repository | null): Repo
           ? { state: 'assessed', totalDependencies: dependencies.totalDependencies }
           : { state: 'not_assessed', totalDependencies: null },
         headline: headline
-          ? { state: 'assessed', message: headline.message, severity: headline.severity }
-          : { state: 'not_assessed', message: null, severity: null },
+          ? { state: 'assessed', message: headline.message, categoryId: headline.categoryId }
+          : { state: 'not_assessed', message: null, categoryId: null },
         coverage: insights
           ? {
               state: 'assessed',

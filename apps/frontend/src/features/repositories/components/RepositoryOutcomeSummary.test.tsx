@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { backendService } from '@/shared/services/backend';
 import { architectureService } from '@/shared/services/api/architecture';
@@ -79,7 +80,22 @@ const review: EngineeringReview = {
   provenance: baseProvenance,
   generatedAt: '2026-07-25T00:00:00Z',
   assessmentStatus: 'assessed',
-  categories: [],
+  categories: [
+    {
+      id: 'relationship_resolution',
+      label: 'Relationship resolution',
+      state: 'partially_assessed',
+      explanation: 'Some relationships could not be resolved.',
+      findingCount: 2,
+    },
+    {
+      id: 'authentication_evidence',
+      label: 'Authentication evidence',
+      state: 'assessed',
+      explanation: 'Authentication evidence was assessed.',
+      findingCount: 1,
+    },
+  ],
   findings: [],
   summary: {
     message: 'summary',
@@ -172,15 +188,24 @@ describe('RepositoryOutcomeSummary', () => {
     vi.spyOn(backendService, 'fetchDependencyGraph').mockResolvedValue(dependencyGraph);
     vi.spyOn(backendService, 'fetchInsights').mockResolvedValue(insights);
 
-    render(<RepositoryOutcomeSummary repository={repository} />);
+    render(
+      <MemoryRouter>
+        <RepositoryOutcomeSummary repository={repository} />
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByText('TypeScript / React')).toBeInTheDocument();
     expect(screen.getByText('Modular monolith')).toBeInTheDocument();
     expect(screen.getByText('12 modules')).toBeInTheDocument();
     expect(screen.getByText('48 components')).toBeInTheDocument();
     expect(screen.getByText('27 tracked')).toBeInTheDocument();
-    // 2 critical findings outrank the 1 high finding.
-    expect(screen.getByText('2 critical-severity findings')).toBeInTheDocument();
+    // 2 relationship-resolution findings outrank the 1 authentication-evidence
+    // finding, and the headline names the category rather than a severity
+    // grade (#335). It's also a link into the filtered Review view.
+    const headlineLink = screen.getByRole('link', {
+      name: '2 relationship resolution findings — inspect coverage and filters',
+    });
+    expect(headlineLink).toHaveAttribute('href', '/review?category=relationship_resolution');
     expect(screen.getByText(/Assessed via 1 extractor across 1 detected language\./)).toBeInTheDocument();
     // The snapshot/manifest identity is not on the landing strip by default.
     expect(screen.queryByText(revisionManifest.manifestDigest)).not.toBeInTheDocument();
@@ -194,7 +219,11 @@ describe('RepositoryOutcomeSummary', () => {
     vi.spyOn(backendService, 'fetchInsights').mockResolvedValue(insights);
     vi.mocked(architectureService.getRevisionManifest).mockResolvedValue(revisionManifest);
 
-    render(<RepositoryOutcomeSummary repository={repository} />);
+    render(
+      <MemoryRouter>
+        <RepositoryOutcomeSummary repository={repository} />
+      </MemoryRouter>,
+    );
     await screen.findByText('TypeScript / React');
 
     expect(screen.queryByTestId('revision-manifest')).not.toBeInTheDocument();
@@ -215,10 +244,14 @@ describe('RepositoryOutcomeSummary', () => {
     vi.spyOn(backendService, 'fetchDependencyGraph').mockRejectedValue(new ApiError(404, 'Not Found', null, '/x'));
     vi.spyOn(backendService, 'fetchInsights').mockRejectedValue(new ApiError(404, 'Not Found', null, '/x'));
 
-    render(<RepositoryOutcomeSummary repository={repository} />);
+    render(
+      <MemoryRouter>
+        <RepositoryOutcomeSummary repository={repository} />
+      </MemoryRouter>,
+    );
 
     await waitFor(() => expect(screen.getAllByText('Not assessed').length).toBeGreaterThan(0));
     expect(screen.queryByText('TypeScript / React')).not.toBeInTheDocument();
-    expect(screen.queryByText(/critical-severity|high-severity|No evidence-backed findings/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/relationship resolution finding|No evidence-backed findings/)).not.toBeInTheDocument();
   });
 });

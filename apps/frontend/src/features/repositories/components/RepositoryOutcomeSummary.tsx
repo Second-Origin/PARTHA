@@ -1,19 +1,11 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import { AlertCircle, AlertTriangle, Boxes, CheckCircle2, Info, Package, ShieldCheck, Sparkles } from 'lucide-react';
+import { Boxes, CheckCircle2, Info, Package, ShieldCheck, Sparkles } from 'lucide-react';
 import type { Repository } from '@/shared/types';
-import type { ReviewSeverity } from '@/shared/types/review';
 import { RevisionManifestPanel } from '@/features/architecture/components/RevisionManifestPanel';
 import { cn } from '@/shared/utils/cn';
 import { useRepositoryOutcomeSummary, type OutcomeAssessmentState } from '../hooks/useRepositoryOutcomeSummary';
-
-const SEVERITY_STYLE: Record<ReviewSeverity, { icon: LucideIcon; color: string; bg: string }> = {
-  critical: { icon: AlertTriangle, color: 'text-red-400', bg: 'border-red-500/20 bg-red-500/10' },
-  high: { icon: AlertCircle, color: 'text-orange-400', bg: 'border-orange-500/20 bg-orange-500/10' },
-  medium: { icon: AlertTriangle, color: 'text-amber-400', bg: 'border-amber-500/20 bg-amber-500/10' },
-  low: { icon: CheckCircle2, color: 'text-blue-400', bg: 'border-blue-500/20 bg-blue-500/10' },
-  info: { icon: Info, color: 'text-slate-400', bg: 'border-slate-500/20 bg-slate-500/10' },
-};
 
 interface RepositoryOutcomeSummaryProps {
   repository: Repository;
@@ -32,8 +24,11 @@ export function RepositoryOutcomeSummary({ repository }: RepositoryOutcomeSummar
   const summary = useRepositoryOutcomeSummary(repository);
   const [verifyOpen, setVerifyOpen] = useState(false);
 
-  const headlineStyle = summary.headline.severity ? SEVERITY_STYLE[summary.headline.severity] : null;
-  const HeadlineIcon = headlineStyle?.icon ?? CheckCircle2;
+  // No severity-based color-coding here: a diagnostic-category count is not a
+  // graded quality judgment, and styling it like one misrepresents it (#335).
+  // The one exception is the genuinely positive "no findings" result.
+  const hasFindings = summary.headline.state === 'assessed' && summary.headline.categoryId !== null;
+  const HeadlineIcon = hasFindings ? Info : CheckCircle2;
 
   const stackValue =
     summary.stack.state === 'assessed'
@@ -84,23 +79,26 @@ export function RepositoryOutcomeSummary({ repository }: RepositoryOutcomeSummar
       <div
         className={cn(
           'mt-3 flex items-start gap-2 rounded-lg border p-3',
-          summary.headline.state === 'assessed' && headlineStyle ? headlineStyle.bg : 'border-border bg-muted/30',
+          hasFindings ? 'border-border bg-accent/40' : 'border-border bg-muted/30',
         )}
       >
-        <HeadlineIcon
-          className={cn(
-            'mt-0.5 h-4 w-4 shrink-0',
-            summary.headline.state === 'assessed' && headlineStyle ? headlineStyle.color : 'text-muted-foreground',
-          )}
-        />
+        <HeadlineIcon className={cn('mt-0.5 h-4 w-4 shrink-0', hasFindings ? 'text-primary' : 'text-muted-foreground')} />
         <div className="min-w-0">
           <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Headline</p>
           <p className="text-sm text-foreground">
-            {summary.headline.state === 'loading'
-              ? 'Loading...'
-              : summary.headline.state === 'assessed'
-                ? summary.headline.message
-                : 'Not assessed'}
+            {summary.headline.state === 'loading' ? (
+              'Loading...'
+            ) : summary.headline.state === 'assessed' ? (
+              hasFindings ? (
+                <Link to={`/review?category=${summary.headline.categoryId}`} className="underline decoration-dotted underline-offset-2 hover:text-primary">
+                  {summary.headline.message}
+                </Link>
+              ) : (
+                summary.headline.message
+              )
+            ) : (
+              'Not assessed'
+            )}
           </p>
         </div>
       </div>

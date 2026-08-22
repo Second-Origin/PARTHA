@@ -72,7 +72,29 @@ const review: EngineeringReview = {
   },
   generatedAt: '2026-07-25T00:00:00Z',
   assessmentStatus: 'assessed',
-  categories: [],
+  categories: [
+    {
+      id: 'relationship_resolution',
+      label: 'Relationship resolution',
+      state: 'partially_assessed',
+      explanation: 'Some relationships could not be resolved.',
+      findingCount: 2,
+    },
+    {
+      id: 'authentication_evidence',
+      label: 'Authentication evidence',
+      state: 'assessed',
+      explanation: 'Authentication evidence was assessed.',
+      findingCount: 1,
+    },
+    {
+      id: 'security_vulnerability_scanning',
+      label: 'Security vulnerability scanning',
+      state: 'not_assessed',
+      explanation: 'Vulnerability scanning was not performed.',
+      findingCount: 0,
+    },
+  ],
   findings: [],
   summary: {
     message: 'summary',
@@ -168,8 +190,14 @@ describe('useRepositoryOutcomeSummary', () => {
     });
     expect(result.current.structure).toEqual({ state: 'assessed', totalModules: 12, totalNodes: 48 });
     expect(result.current.dependencies).toEqual({ state: 'assessed', totalDependencies: 27 });
-    // The highest-severity non-zero bucket wins -- 2 high findings outrank the 1 info finding.
-    expect(result.current.headline).toEqual({ state: 'assessed', message: '2 high-severity findings', severity: 'high' });
+    // The highest finding-count category wins -- 2 relationship-resolution
+    // findings outrank the 1 authentication-evidence finding. The message
+    // names the diagnostic category, not a severity grade (#335).
+    expect(result.current.headline).toEqual({
+      state: 'assessed',
+      message: '2 relationship resolution findings — inspect coverage and filters',
+      categoryId: 'relationship_resolution',
+    });
     expect(result.current.coverage).toEqual({ state: 'assessed', extractorCount: 2, languageCount: 1 });
   });
 
@@ -177,7 +205,7 @@ describe('useRepositoryOutcomeSummary', () => {
     vi.spyOn(backendService, 'fetchArchitecture').mockResolvedValue(architecture);
     vi.spyOn(backendService, 'fetchReview').mockResolvedValue({
       ...review,
-      summary: { ...review.summary, findingsBySeverity: { info: 0, low: 0, medium: 0, high: 0, critical: 0 } },
+      categories: review.categories.map((category) => ({ ...category, findingCount: 0 })),
     });
     vi.spyOn(backendService, 'fetchDependencyGraph').mockResolvedValue(dependencyGraph);
     vi.spyOn(backendService, 'fetchInsights').mockResolvedValue(insights);
@@ -186,7 +214,7 @@ describe('useRepositoryOutcomeSummary', () => {
 
     await waitFor(() => expect(result.current.headline.state).toBe('assessed'));
     expect(result.current.headline.message).toBe('No evidence-backed findings were surfaced');
-    expect(result.current.headline.severity).toBeNull();
+    expect(result.current.headline.categoryId).toBeNull();
   });
 
   it('marks a section not_assessed, never fabricated, when its snapshot API 404s', async () => {
@@ -198,7 +226,7 @@ describe('useRepositoryOutcomeSummary', () => {
     const { result } = renderHook(() => useRepositoryOutcomeSummary(repository));
 
     await waitFor(() => expect(result.current.stack.state).toBe('assessed'));
-    expect(result.current.headline).toEqual({ state: 'not_assessed', message: null, severity: null });
+    expect(result.current.headline).toEqual({ state: 'not_assessed', message: null, categoryId: null });
     expect(result.current.dependencies).toEqual({ state: 'not_assessed', totalDependencies: null });
     expect(result.current.coverage).toEqual({ state: 'not_assessed', extractorCount: null, languageCount: null });
   });
