@@ -4,11 +4,16 @@
 # the stage boundary.
 
 FROM node:22-slim AS frontend-build
-WORKDIR /repo/apps/frontend
-COPY apps/frontend/package.json apps/frontend/package-lock.json ./
-RUN npm ci
-COPY apps/frontend .
-RUN npm run build
+WORKDIR /repo
+COPY apps/frontend/package.json apps/frontend/package-lock.json apps/frontend/
+RUN npm ci --prefix apps/frontend
+COPY apps/frontend apps/frontend
+# BrandLogo.tsx reaches outside apps/frontend to ../../docs/assets for the
+# product logo -- a real, pre-existing cross-boundary reference in the
+# source, not something this Dockerfile introduced. The build context has to
+# include it at the same relative position or the build fails.
+COPY docs docs
+RUN npm run build --prefix apps/frontend
 
 FROM python:3.13-slim AS backend
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -35,5 +40,6 @@ EXPOSE 8000
 # local-Docker fallback. Migrations run here rather than as a separate,
 # easy-to-forget manual step -- AUTO_CREATE_TABLES defaults to false outside
 # development/test, so without this the app would boot against an unmigrated
-# schema.
-CMD alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# schema. Exec-form CMD wrapping an explicit shell (rather than bare shell
+# form) so signals still reach the process directly.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
