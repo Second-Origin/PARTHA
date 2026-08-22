@@ -88,15 +88,27 @@ class DocumentationService:
             report_sections.append(Section(heading="Folder Structure", bullets=files[:80] or ["No files detected."]))
 
         if "api" in selected:
+            # A benchmark/test fixture that happens to declare a route (e.g.
+            # apps/backend/tests/benchmark/fixtures/.../service.py) is not
+            # part of this repository's actual API -- exclude anything whose
+            # every evidence path is test-classified rather than presenting
+            # it undistinguished from real routes (#337).
+            file_role_by_path = {file.path: file.role for file in projection.files}
+            real_routes = [
+                route
+                for route in projection.routes
+                if not route.evidence_paths
+                or any(file_role_by_path.get(path) != "test" for path in route.evidence_paths)
+            ]
             api_files = sorted(
                 {file.path for file in projection.files if file.role in {"route", "controller"}}
-                | {path for route in projection.routes for path in route.evidence_paths}
+                | {path for route in real_routes for path in route.evidence_paths}
             )
             report_sections.append(
                 Section(
                     heading="API",
                     bullets=[f"File: {path}" for path in api_files[:30]]
-                    + [f"Observed route: {route.path}" for route in projection.routes[:30]]
+                    + [f"Observed route: {route.path}" for route in real_routes[:30]]
                     or ["No routes detected in the supported snapshot facts."],
                 )
             )
