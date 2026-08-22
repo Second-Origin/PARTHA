@@ -65,11 +65,11 @@ export function AIWorkspacePage() {
       <PreviewBanner limitation={AI_WORKSPACE_LIMITATION} />
 
       <div className="partha-surface flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 scrollbar-thin sm:p-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 scrollbar-thin sm:p-6">
           {aiWorkspace.messages.length === 0 ? (
             <div className="flex h-full items-center justify-center text-center">
               <div className="max-w-sm">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mx-auto mb-4">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#fa4d01]/15 bg-[#dcecf2]">
                   <Bot className="h-6 w-6 text-muted-foreground" />
                 </div>
                 <p className="text-sm font-medium text-foreground mb-1">Structural facts for {activeRepository.name}</p>
@@ -81,7 +81,7 @@ export function AIWorkspacePage() {
           ) : (
             aiWorkspace.messages.map((message, index) => (
               <div key={`${message.timestamp}-${index}`} className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
-                <div className={cn('max-w-[78%] rounded-xl px-4 py-3 text-sm', message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
+                <div className={cn('max-w-[78%] rounded-2xl px-4 py-3 text-sm', message.role === 'user' ? 'bg-primary text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.16)]' : 'border border-[#fa4d01]/15 bg-[#fff7f1] text-foreground')}>
                   <p className="whitespace-pre-wrap">{message.content}</p>
                   {message.citations && message.citations.length > 0 && (
                     <div className="mt-3 border-t border-border/60 pt-2 space-y-1">
@@ -125,14 +125,14 @@ export function AIWorkspacePage() {
           {aiWorkspace.suggestions.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {aiWorkspace.suggestions.map((suggestion) => (
-                <button key={suggestion} onClick={() => aiWorkspace.setQuery(suggestion)} className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <button key={suggestion} onClick={() => aiWorkspace.setQuery(suggestion)} className="rounded-xl border border-[#fa4d01]/25 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
                   {suggestion}
                 </button>
               ))}
             </div>
           )}
         </div>
-        <div className="shrink-0 border-t border-border bg-card p-3 sm:p-4">
+        <div className="shrink-0 border-t border-[#fa4d01]/15 bg-card p-3 sm:p-4">
           {aiWorkspace.providerConfigured === false && (
             <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-2.5 text-sm text-amber-200">
               <Settings className="h-4 w-4 shrink-0" />
@@ -168,7 +168,7 @@ export function AIWorkspacePage() {
             <button
               disabled={!canSend}
               className={cn(
-                'flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground transition-colors',
+                'flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-colors',
                 !canSend && 'opacity-50 cursor-not-allowed'
               )}
             >

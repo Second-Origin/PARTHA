@@ -78,7 +78,7 @@ export const productSurfaces: readonly ProductSurface[] = [
   {
     id: 'dashboard',
     label: 'Dashboard',
-    path: '/',
+    path: '/dashboard',
     icon: LayoutDashboard,
     phase: 0,
     navGroup: 'flagship',

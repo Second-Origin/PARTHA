@@ -4,19 +4,19 @@
 
 @layer base {
   :root {
-    --background: 42 31% 96%;
+    --background: 38 27% 94%;
     --foreground: 258 19% 13%;
     --card: 0 0% 100%;
     --card-foreground: 258 19% 13%;
     --popover: 0 0% 100%;
     --popover-foreground: 258 19% 13%;
-    --primary: 17 91% 40%;
+    --primary: 18 99% 49%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 38 28% 92%;
+    --secondary: 198 39% 85%;
     --secondary-foreground: 260 10% 34%;
     --muted: 38 25% 92%;
     --muted-foreground: 263 8% 43%;
-    --accent: 25 72% 92%;
+    --accent: 18 100% 94%;
     --accent-foreground: 258 19% 13%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
@@ -24,14 +24,14 @@
     --success-foreground: 210 40% 98%;
     --warning: 38 92% 29%;
     --warning-foreground: 258 19% 13%;
-    --border: 17 70% 72%;
-    --input: 17 70% 72%;
+    --border: 18 66% 76%;
+    --input: 18 42% 84%;
     --ring: 17 91% 50%;
-    --radius: 0.625rem;
-    --sidebar: 40 31% 94%;
+    --radius: 1rem;
+    --sidebar: 38 27% 94%;
     --sidebar-foreground: 258 19% 13%;
-    --sidebar-border: 17 70% 72%;
-    --sidebar-accent: 17 91% 40%;
+    --sidebar-border: 18 50% 86%;
+    --sidebar-accent: 18 99% 49%;
     --sidebar-accent-foreground: 0 0% 100%;
   }
 
@@ -86,11 +86,11 @@
 
 @layer components {
   .partha-surface {
-    @apply rounded-xl border border-border bg-card shadow-[0_1px_0_hsl(var(--foreground)/0.03)];
+    @apply rounded-2xl border border-border bg-card shadow-[0_12px_24px_hsl(var(--foreground)/0.04)];
   }
 
   .partha-input {
-    @apply rounded-md border border-input bg-card text-foreground placeholder:text-muted-foreground;
+    @apply rounded-xl border border-input bg-card text-foreground placeholder:text-muted-foreground;
   }
 }
 

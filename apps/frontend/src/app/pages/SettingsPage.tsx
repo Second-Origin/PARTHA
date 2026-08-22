@@ -21,7 +21,7 @@ export function SettingsPage() {
     <div className="w-full max-w-4xl">
       <PageHeader title="Settings" description="Manage your account and preferences" />
 
-      <div role="tablist" aria-label="Settings sections" className="mb-6 flex max-w-full items-center gap-1 overflow-x-auto border-b border-border scrollbar-thin">
+      <div role="tablist" aria-label="Settings sections" className="mb-7 flex max-w-full items-center gap-1 overflow-x-auto border-b border-[#fa4d01]/15 scrollbar-thin">
         {tabs.map((tab) => (
           <button
             key={tab}
@@ -30,7 +30,7 @@ export function SettingsPage() {
             aria-selected={activeTab === tab}
             onClick={() => setActiveTab(tab)}
             className={cn(
-              'px-4 py-2.5 text-sm font-medium transition-colors relative',
+              'relative rounded-t-xl px-4 py-3 text-sm font-semibold transition-colors',
               activeTab === tab ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             )}
           >
@@ -45,8 +45,8 @@ export function SettingsPage() {
       <div className="space-y-6">
         {activeTab === 'General' && (
           <div className="space-y-6">
-            <div className="rounded-xl border border-border bg-card p-6">
-              <h2 className="text-sm font-medium text-foreground mb-4">Account</h2>
+            <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+              <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">Account</p><h2 className="mt-1 text-lg font-semibold text-foreground mb-4">Your profile</h2>
               <div className="space-y-4">
                 <div>
                   <label htmlFor="settings-email" className="block text-xs font-medium text-muted-foreground mb-1.5">Email</label>
@@ -55,7 +55,7 @@ export function SettingsPage() {
                     type="email"
                     value={user?.email ?? ''}
                     disabled
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-70"
+                    className="w-full rounded-xl border border-[#fa4d01]/20 bg-background px-3 py-2.5 text-sm text-foreground disabled:opacity-70"
                   />
                 </div>
                 <div>
@@ -65,17 +65,17 @@ export function SettingsPage() {
                     type="text"
                     value={user ? new Date(user.createdAt).toLocaleDateString() : ''}
                     disabled
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-70"
+                    className="w-full rounded-xl border border-[#fa4d01]/20 bg-background px-3 py-2.5 text-sm text-foreground disabled:opacity-70"
                   />
                 </div>
               </div>
               <div className="mt-4 flex justify-end">
-                <button disabled className="rounded-md bg-muted px-4 py-2 text-sm font-medium text-muted-foreground cursor-not-allowed">
+                <button disabled className="rounded-xl bg-muted px-4 py-2.5 text-sm font-semibold text-muted-foreground cursor-not-allowed">
                   Editing Coming Soon
                 </button>
               </div>
             </div>
-            <div className="rounded-xl border border-destructive/50 bg-card p-6">
+            <div className="rounded-3xl border border-destructive/50 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
               <h2 className="text-sm font-medium text-destructive mb-2">Danger Zone</h2>
               <p className="text-xs text-muted-foreground mb-4">
                 Permanently delete your account, repositories, AI provider configuration, and conversation history.
@@ -85,7 +85,7 @@ export function SettingsPage() {
                 <button
                   type="button"
                   onClick={deletion.open}
-                  className="rounded-md border border-destructive/50 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                  className="rounded-xl border border-destructive/50 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/10 transition-colors"
                 >
                   Delete Account
                 </button>
@@ -230,23 +230,8 @@ export function SettingsPage() {
             </div>
           </div>
         )}
-        {activeTab === 'Appearance' && (
-          <div className="rounded-xl border border-border bg-card p-6">
-            <h2 className="text-sm font-medium text-foreground mb-4">Theme</h2>
-            <div className="flex items-center gap-3">
-              <button type="button" aria-pressed="true" className="flex items-center gap-2 rounded-md border-2 border-primary bg-card px-4 py-3 text-sm font-medium">
-                <div className="h-4 w-4 rounded-full border border-border bg-[#f7f3ea]" />
-                Light
-              </button>
-              <button disabled className="flex items-center gap-2 rounded-md border border-border bg-card px-4 py-3 text-sm font-medium text-muted-foreground cursor-not-allowed">
-                <div className="h-4 w-4 rounded-full bg-[#19151f]" />
-                Dark (Coming Soon)
-              </button>
-            </div>
-          </div>
-        )}
         {activeTab === 'Notifications' && (
-          <div className="rounded-xl border border-border bg-card p-6">
+          <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
             <div className="mb-4">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-medium text-foreground">Notification Preferences</h2>
@@ -281,7 +266,7 @@ export function SettingsPage() {
           </div>
         )}
         {activeTab === 'API Keys' && (
-          <div className="rounded-xl border border-border bg-card p-6">
+          <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
             <h2 className="text-sm font-medium text-foreground mb-2">API Keys</h2>
             <p className="text-xs text-muted-foreground mb-4">Manage API keys for programmatic access.</p>
             <div className="flex items-center justify-center py-8">

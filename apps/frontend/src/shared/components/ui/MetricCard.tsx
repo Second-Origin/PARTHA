@@ -11,15 +11,15 @@ interface MetricCardProps {
 
 export function MetricCard({ label, value, icon: Icon, change, className }: MetricCardProps) {
   return (
-    <div className={cn('partha-surface min-w-0 p-4', className)}>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+    <div className={cn('partha-surface min-w-0 border-[#fa4d01]/35 p-5', className)}>
+      <div className="mb-5 flex items-center justify-between">
+        <span className="text-xs font-medium uppercase tracking-[0.14em] text-[#5d5b58]">{label}</span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#fa4d01]/10">
           <Icon className="h-4 w-4 text-primary" />
         </span>
       </div>
       <div className="flex items-end gap-2">
-        <span className="text-2xl font-semibold text-foreground">{value}</span>
+        <span className="text-3xl font-medium tracking-[-0.05em] text-[#392135]">{value}</span>
         {change && <span className="text-xs text-success mb-0.5">{change}</span>}
       </div>
     </div>

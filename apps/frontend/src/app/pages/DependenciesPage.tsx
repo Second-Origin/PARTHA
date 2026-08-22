@@ -63,7 +63,7 @@ export function DependenciesPage() {
         <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
           <DataSourceBadge source={dependencies.source} />
         </PageHeader>
-        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">Loading dependency graph...</div>
+        <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-8 text-sm text-muted-foreground">Loading dependency graph...</div>
       </div>
     );
   }
@@ -138,19 +138,19 @@ export function DependenciesPage() {
           value={assessmentLabel(graph.outdatedAssessment)}
         />
       </div>
-      <p className="mb-6 text-sm text-muted-foreground">
+      <p className="mb-6 rounded-2xl border border-[#fa4d01]/15 bg-[#fff7f1] px-4 py-3 text-sm text-muted-foreground">
         Vulnerability and outdated-version assessments have not been run.
       </p>
 
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border px-4 py-3">
+      <div className="overflow-hidden rounded-3xl border border-[#fa4d01]/20 bg-card shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+        <div className="flex flex-col justify-between gap-3 border-b border-[#fa4d01]/15 px-5 py-4 sm:flex-row sm:items-center">
           <div className="relative max-w-sm flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search dependencies..."
-              className="w-full rounded-md border border-border bg-background pl-8 pr-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full rounded-xl border border-[#fa4d01]/25 bg-background py-2 pl-8 pr-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
           <ExportMenu repositoryId={activeRepository.id} target="dependencies" />
@@ -183,11 +183,11 @@ export function DependenciesPage() {
             <p className="text-sm text-muted-foreground">No dependencies match your search.</p>
           </div>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-[#fa4d01]/10">
             {filteredNodes.map((node) => (
-              <div key={node.id} className="flex items-center justify-between px-4 py-3">
+              <div key={node.id} className="flex items-center justify-between px-5 py-4 hover:bg-[#fff7f1]">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#fa4d01]/15 bg-[#dcecf2]">
                     <Package className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="min-w-0">
@@ -196,13 +196,13 @@ export function DependenciesPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground capitalize">{node.type}</span>
+                  <span className="rounded-lg bg-[#fff1e9] px-2.5 py-1 text-xs text-muted-foreground capitalize">{node.type}</span>
                 </div>
               </div>
             ))}
           </div>
         )}
-        <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+        <div className="border-t border-[#fa4d01]/15 px-5 py-4 text-xs text-muted-foreground">
           {dependencies.packageManager
             ? `Detected package manager: ${dependencies.packageManager}. `
             : 'Package-manager information is unavailable for this repository. '}
@@ -219,8 +219,8 @@ function assessmentLabel(assessment: DependencyAssessment | undefined): string {
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
+    <div className="rounded-2xl border border-[#fa4d01]/20 bg-card p-4 shadow-[0_10px_24px_rgba(48,21,47,0.03)]">
+      <p className="text-2xs font-semibold uppercase tracking-[0.12em] text-primary">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
     </div>
   );

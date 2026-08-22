@@ -41,6 +41,17 @@ describe('deep-linked route reachability (#179)', () => {
     useAppStore.setState({ activeRepositoryId: null });
   });
 
+  it('renders the public landing page at / without mounting the workspace shell', async () => {
+    renderFreshRoute('/');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Reveal the system behind the code.', level: 1 }, { timeout: ROUTE_RENDER_TIMEOUT_MS }),
+    ).toBeInTheDocument();
+    for (const startLink of screen.getAllByRole('link', { name: /analyze a repository/i })) {
+      expect(startLink).toHaveAttribute('href', '/register');
+    }
+  });
+
   it('renders Dashboard directly at /dashboard instead of 404ing', async () => {
     renderFreshRoute('/dashboard');
 

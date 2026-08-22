@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { aiService, getErrorMessage } from '@/shared/services/api';
 import type { AiProvider, AiProviderPublicConfig } from '@/shared/services/api/types';
 
-export const settingsTabs = ['General', 'AI Providers', 'Appearance', 'Notifications', 'API Keys'] as const;
+export const settingsTabs = ['General', 'AI Providers', 'Notifications', 'API Keys'] as const;
 export type SettingsTab = (typeof settingsTabs)[number];
 
 const defaultModels: Record<AiProvider, string> = {

@@ -14,7 +14,7 @@ export function DeferredSurfacePage({ surface }: { surface: DeferredProductSurfa
         icon={CircleDashed}
         title={`${surface.label} isn't available yet.`}
         description={surface.unavailableMessage}
-        action={{ label: 'Back to Dashboard', onClick: () => navigate('/') }}
+        action={{ label: 'Back to Dashboard', onClick: () => navigate('/dashboard') }}
       />
     </div>
   );

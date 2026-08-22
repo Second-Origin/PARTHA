@@ -34,7 +34,7 @@ export function RepositoriesPage() {
           <p className="mt-1 text-sm text-destructive/80">{error}</p>
           <button
             onClick={() => void retry()}
-            className="mt-4 rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
+          className="mt-4 rounded-xl border border-[#fa4d01]/35 px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
           >
             Try again
           </button>
@@ -62,7 +62,7 @@ export function RepositoriesPage() {
       <PageHeader title="Repositories" description="Manage your uploaded repositories">
         <button
           onClick={() => navigate('/upload')}
-          className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)] hover:bg-primary/90 transition-colors"
         >
           Upload New
         </button>
@@ -74,16 +74,16 @@ export function RepositoriesPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-card overflow-x-auto scrollbar-thin">
+      <div className="overflow-x-auto rounded-3xl border border-[#fa4d01]/20 bg-card shadow-[0_14px_34px_rgba(48,21,47,0.05)] scrollbar-thin">
         <table className="w-full min-w-[560px]">
           <thead>
-            <tr className="border-b border-border">
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Source</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell">Language</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider hidden lg:table-cell">Files</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</th>
+            <tr className="border-b border-[#fa4d01]/15 bg-[#fff7f1]">
+              <th className="px-5 py-4 text-left text-2xs font-semibold text-primary uppercase tracking-[0.14em]">Name</th>
+              <th className="px-5 py-4 text-left text-2xs font-semibold text-primary uppercase tracking-[0.14em] hidden sm:table-cell">Source</th>
+              <th className="px-5 py-4 text-left text-2xs font-semibold text-primary uppercase tracking-[0.14em] hidden md:table-cell">Language</th>
+              <th className="px-5 py-4 text-left text-2xs font-semibold text-primary uppercase tracking-[0.14em] hidden lg:table-cell">Files</th>
+              <th className="px-5 py-4 text-left text-2xs font-semibold text-primary uppercase tracking-[0.14em]">Status</th>
+              <th className="px-5 py-4 text-right text-2xs font-semibold text-primary uppercase tracking-[0.14em]">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -93,9 +93,9 @@ export function RepositoriesPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: index * 0.03 }}
-                className="hover:bg-accent/30 transition-colors"
+              className="hover:bg-[#fff7f1] transition-colors"
               >
-                <td className="px-4 py-3">
+                <td className="px-5 py-4">
                   <button
                     onClick={() => {
                       selectRepository(repo);
@@ -107,7 +107,7 @@ export function RepositoriesPage() {
                     {repo.name}
                   </button>
                 </td>
-                <td className="px-4 py-3 hidden sm:table-cell">
+                <td className="px-5 py-4 hidden sm:table-cell">
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     {repo.source === 'github' ? (
                       <><Github className="h-3.5 w-3.5" /> GitHub</>
@@ -116,19 +116,19 @@ export function RepositoriesPage() {
                     )}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-sm text-muted-foreground hidden md:table-cell">
+                <td className="px-5 py-4 text-sm text-muted-foreground hidden md:table-cell">
                   {repo.meta?.language || '-'}
                 </td>
-                <td className="px-4 py-3 text-sm text-muted-foreground hidden lg:table-cell">
+                <td className="px-5 py-4 text-sm text-muted-foreground hidden lg:table-cell">
                   {repo.meta?.totalFiles || '-'}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-5 py-4">
                   <div className="flex items-center gap-2">
                     <Badge variant={repositoryStatusVariant[repo.status]}>{repo.status}</Badge>
                     <DataSourceBadge source={repo.source} />
                   </div>
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-5 py-4 text-right">
                   <div className="flex items-center justify-end gap-1">
                     <button
                       data-testid="repository-open-action"
@@ -138,7 +138,7 @@ export function RepositoriesPage() {
                         if (repo.status === 'analysing' || repo.status === 'cancelled') navigate(`/analysis/${repo.id}`);
                         else navigate(`/repositories/${repo.id}`);
                       }}
-                      className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                      className="rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                     >
                       <ExternalLink aria-hidden="true" focusable="false" className="h-3.5 w-3.5" />
                     </button>
@@ -151,7 +151,7 @@ export function RepositoriesPage() {
                           setActionError(caught instanceof Error ? caught.message : 'Failed to delete repository.');
                         });
                       }}
-                      className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      className="rounded-lg p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                     >
                       <Trash2 aria-hidden="true" focusable="false" className="h-3.5 w-3.5" />
                     </button>

@@ -11,6 +11,6 @@ export interface AuthRedirectState {
 // them away from (path, query string, and hash), not just its pathname.
 export function resolveRedirectTarget(state: unknown): string {
   const from = (state as AuthRedirectState | null)?.from;
-  if (!from?.pathname) return '/';
+  if (!from?.pathname) return '/dashboard';
   return `${from.pathname}${from.search ?? ''}${from.hash ?? ''}`;
 }

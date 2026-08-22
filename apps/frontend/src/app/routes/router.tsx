@@ -1,10 +1,17 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter } from 'react-router-dom';
 import { MainLayout } from '@/shared/components/layout/MainLayout';
 import { RequireAuth } from './RequireAuth';
 import { productSurfaceRoutes } from './productSurfaces';
 
 export function createAppRouter() {
   return createBrowserRouter([
+    {
+      path: '/',
+      lazy: async () => {
+        const { LandingPage } = await import('@/app/pages/LandingPage');
+        return { Component: LandingPage };
+      },
+    },
     {
       path: '/login',
       lazy: async () => {
@@ -25,12 +32,6 @@ export function createAppRouter() {
         {
           element: <MainLayout />,
           children: [
-            {
-              // Dashboard's registered path is `/` (see productSurfaces); this
-              // alias keeps the plainer, commonly-guessed URL from 404ing.
-              path: '/dashboard',
-              element: <Navigate to="/" replace />,
-            },
             {
               path: '/repositories/:id',
               lazy: async () => {

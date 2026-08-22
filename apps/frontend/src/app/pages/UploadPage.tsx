@@ -57,7 +57,7 @@ export function UploadPage() {
         <DataSourceBadge source={mode === 'file' ? upload.source : githubImport.source} />
       </PageHeader>
 
-      <div role="tablist" aria-label="Repository source" className="mb-6 grid w-full grid-cols-2 gap-1 rounded-lg border border-border bg-muted p-1 sm:w-fit">
+      <div role="tablist" aria-label="Repository source" className="mb-8 grid w-full grid-cols-2 gap-1 rounded-2xl border border-[#fa4d01]/20 bg-[#fff1e9] p-1.5 sm:w-fit">
         <button
           type="button"
           role="tab"
@@ -65,9 +65,9 @@ export function UploadPage() {
           aria-controls="upload-file-panel"
           onClick={() => { setMode('file'); githubImport.retry(); }}
           className={cn(
-            'flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all',
+            'flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all',
             mode === 'file'
-              ? 'bg-background text-foreground shadow-sm'
+              ? 'bg-white text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
@@ -81,9 +81,9 @@ export function UploadPage() {
           aria-controls="upload-github-panel"
           onClick={() => { setMode('github'); upload.retry(); }}
           className={cn(
-            'flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all',
+            'flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all',
             mode === 'github'
-              ? 'bg-background text-foreground shadow-sm'
+              ? 'bg-white text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
@@ -106,10 +106,10 @@ export function UploadPage() {
             <div
               {...getRootProps()}
               className={cn(
-                'relative cursor-pointer rounded-xl border-2 border-dashed p-7 text-center transition-all duration-200 sm:p-12',
+                'relative cursor-pointer rounded-3xl border-2 border-dashed p-7 text-center shadow-[0_14px_34px_rgba(48,21,47,0.04)] transition-all duration-200 sm:p-12',
                 isDragActive
                   ? 'border-primary bg-primary/5'
-                  : 'border-border hover:border-muted-foreground/50 hover:bg-accent/30',
+                  : 'border-[#fa4d01]/30 bg-white hover:border-primary hover:bg-[#fff7f1]',
                 upload.uploadFile && 'pointer-events-none opacity-50'
               )}
             >
@@ -120,8 +120,8 @@ export function UploadPage() {
               <div className="flex flex-col items-center">
                 <div
                   className={cn(
-                    'flex h-14 w-14 items-center justify-center rounded-2xl mb-4 transition-colors',
-                    isDragActive ? 'bg-primary/10' : 'bg-muted'
+                    'mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#fa4d01]/15 transition-colors',
+                    isDragActive ? 'bg-primary/10' : 'bg-[#dcecf2]'
                   )}
                 >
                   <Upload
@@ -142,7 +142,7 @@ export function UploadPage() {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); open(); }}
-                  className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+                  className="rounded-xl border border-[#fa4d01]/45 px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-[#fff1e9] transition-colors"
                 >
                   Browse Files
                 </button>
@@ -169,11 +169,11 @@ export function UploadPage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
-                  className="mt-4 rounded-xl border border-border bg-card p-4"
+                  className="mt-4 rounded-2xl border border-[#fa4d01]/20 bg-card p-5 shadow-[0_12px_26px_rgba(48,21,47,0.04)]"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
                         <File className="h-5 w-5 text-primary" />
                       </div>
                       <div>
@@ -212,7 +212,7 @@ export function UploadPage() {
                 <button
                   onClick={handleAnalyseFile}
                   disabled={upload.loading}
-                  className="flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                  className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)] hover:bg-primary/90 transition-colors"
                 >
                   {upload.loading ? 'Starting Analysis...' : 'Analyse Repository'}
                   <ArrowRight className="h-4 w-4" />
@@ -230,7 +230,7 @@ export function UploadPage() {
             exit={{ opacity: 0, x: -10 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="rounded-xl border border-border bg-card p-6">
+            <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
                   <Github className="h-5 w-5 text-muted-foreground" />

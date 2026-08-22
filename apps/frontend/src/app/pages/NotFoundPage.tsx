@@ -13,7 +13,7 @@ export function NotFoundPage() {
         icon={Compass}
         title="This page doesn't exist"
         description="The link may be out of date, or the page may have moved."
-        action={{ label: 'Back to Dashboard', onClick: () => navigate('/') }}
+        action={{ label: 'Back to Dashboard', onClick: () => navigate('/dashboard') }}
       />
     </div>
   );

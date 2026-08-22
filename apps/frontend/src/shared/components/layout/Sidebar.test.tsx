@@ -50,7 +50,7 @@ describe('Sidebar', () => {
         name: /Dashboard|Repositories|Upload Repository|Architecture|Dependency Graph|Settings|AI Workspace|Engineering Review|Documentation|Insights/,
       }),
     ).toHaveLength(10);
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard');
     expect(screen.getByRole('link', { name: 'Repositories' })).toHaveAttribute('href', '/repositories');
     expect(screen.getByRole('link', { name: 'Upload Repository' })).toHaveAttribute('href', '/upload');
     expect(screen.getByRole('link', { name: 'Architecture' })).toHaveAttribute('href', '/architecture');

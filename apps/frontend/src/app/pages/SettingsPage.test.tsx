@@ -8,7 +8,7 @@ import { ApiError } from '@/shared/services/api/errors';
 const mockActiveTab = vi.hoisted(() => vi.fn(() => 'Notifications'));
 vi.mock('@/features/settings/hooks/useSettings', () => ({
   useSettings: () => ({
-    tabs: ['General', 'AI Providers', 'Appearance', 'Notifications', 'API Keys'],
+    tabs: ['General', 'AI Providers', 'Notifications', 'API Keys'],
     activeTab: mockActiveTab(),
     setActiveTab: vi.fn(),
   }),

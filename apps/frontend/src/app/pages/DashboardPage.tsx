@@ -61,7 +61,7 @@ export function DashboardPage() {
       <PageHeader title="Dashboard" description="Your repository intelligence overview">
         <button
           onClick={() => navigate('/upload')}
-          className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)] hover:bg-primary/90 transition-colors"
         >
           <Upload className="h-3.5 w-3.5" />
           Upload
@@ -69,7 +69,7 @@ export function DashboardPage() {
       </PageHeader>
 
       {mostRecentlyAnalysed && (
-        <p data-testid="latest-analysis-summary" className="mb-6 text-sm text-muted-foreground">
+        <p data-testid="latest-analysis-summary" className="mb-7 rounded-2xl border border-[#fa4d01]/15 bg-[#fff7f1] px-4 py-3 text-sm text-muted-foreground">
           Most recently analysed:{' '}
           <span className="font-medium text-foreground">{mostRecentlyAnalysed.name}</span>
           {' — '}
@@ -92,9 +92,10 @@ export function DashboardPage() {
         <MetricCard label="Total Size" value={formatFileSize(metrics.totalSize)} icon={Upload} />
       </div>
 
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-border">
-          <h2 className="text-sm font-medium text-foreground">Repositories</h2>
+      <div className="overflow-hidden rounded-3xl border border-[#fa4d01]/20 bg-card shadow-[0_14px_34px_rgba(48,21,47,0.05)]">
+        <div className="border-b border-[#fa4d01]/15 px-6 py-5">
+          <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">System view</p>
+          <h2 className="mt-1 text-lg font-semibold text-foreground">Repositories</h2>
         </div>
         <div className="divide-y divide-border">
           {repositories.map((repo, index) => (
@@ -108,10 +109,10 @@ export function DashboardPage() {
                 if (repo.status === 'analysing' || repo.status === 'cancelled') navigate(`/analysis/${repo.id}`);
                 else navigate(`/repositories/${repo.id}`);
               }}
-              className="flex min-w-0 flex-col items-start justify-between gap-3 px-4 py-3.5 hover:bg-accent/30 cursor-pointer transition-colors sm:flex-row sm:items-center sm:px-5"
+              className="flex min-w-0 flex-col items-start justify-between gap-3 px-5 py-4 hover:bg-[#fff7f1] cursor-pointer transition-colors sm:flex-row sm:items-center sm:px-6"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#fa4d01]/15 bg-[#dcecf2]">
                   {repo.source === 'github' ? (
                     <Github className="h-4 w-4 text-muted-foreground" />
                   ) : (

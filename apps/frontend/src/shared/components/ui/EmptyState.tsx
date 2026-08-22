@@ -19,9 +19,9 @@ export function EmptyState({ icon: Icon, title, description, action, className }
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className={cn('flex flex-col items-center justify-center py-16 px-4', className)}
+      className={cn('flex flex-col items-center justify-center rounded-3xl border border-[#fa4d01]/15 bg-white/60 px-4 py-16', className)}
     >
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mb-4">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#fa4d01]/15 bg-[#dcecf2]">
         <Icon className="h-7 w-7 text-muted-foreground" />
       </div>
       {/* Sits directly beneath the page's h1, so it must be h2: skipping a
@@ -31,7 +31,7 @@ export function EmptyState({ icon: Icon, title, description, action, className }
       {action && (
         <button
           onClick={action.onClick}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)] hover:bg-primary/90 transition-colors"
         >
           {action.label}
         </button>

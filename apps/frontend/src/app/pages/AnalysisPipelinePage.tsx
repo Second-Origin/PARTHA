@@ -39,16 +39,16 @@ export function AnalysisPipelinePage() {
         <DataSourceBadge source={analysis.source} />
       </PageHeader>
 
-      <div className="rounded-xl border border-border bg-card p-6 mb-6">
+      <div className="mb-6 rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <span className="text-2xs font-semibold text-primary uppercase tracking-[0.14em]">
             Progress
           </span>
           <span className="text-sm font-semibold text-foreground">
             {repo.analysisProgress}%
           </span>
         </div>
-        <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <div className="h-2.5 overflow-hidden rounded-full bg-[#f4e5dc]">
           <motion.div
             className="h-full rounded-full bg-primary"
             initial={{ width: 0 }}
@@ -58,7 +58,7 @@ export function AnalysisPipelinePage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-6">
+      <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
         <div className="space-y-0">
           {analysis.stages.map((stage, index) => {
             const isCompleted = index < analysis.currentStageIndex;
@@ -74,16 +74,16 @@ export function AnalysisPipelinePage() {
                       <motion.div
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
-                        className="flex h-6 w-6 items-center justify-center rounded-full bg-success/20"
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-success/20"
                       >
                         <Check className="h-3.5 w-3.5 text-success" />
                       </motion.div>
                     ) : isCurrent ? (
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/15">
                         <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
                       </div>
                     ) : (
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f4e5dc]">
                         <Circle className="h-3 w-3 text-muted-foreground" />
                       </div>
                     )}
@@ -102,7 +102,7 @@ export function AnalysisPipelinePage() {
                 {!isLast && (
                   <div
                     className={cn(
-                      'absolute left-[11px] top-[34px] w-[2px] h-[14px]',
+                      'absolute left-[13px] top-[37px] w-[2px] h-[14px]',
                       isCompleted ? 'bg-success/30' : 'bg-border'
                     )}
                   />
@@ -253,7 +253,7 @@ export function AnalysisPipelinePage() {
             type="button"
             onClick={() => void analysis.cancel()}
             disabled={analysis.cancelling}
-            className="inline-flex items-center gap-2 rounded-lg border border-destructive/40 px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-xl border border-destructive/40 px-4 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {analysis.cancelling ? (
               <Loader2 className="h-4 w-4 animate-spin" />

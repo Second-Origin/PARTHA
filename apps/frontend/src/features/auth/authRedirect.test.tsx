@@ -9,9 +9,9 @@ import { useAuthStore } from '@/app/store/useAuthStore';
 
 describe('resolveRedirectTarget', () => {
   it('returns / when there is no captured destination', () => {
-    expect(resolveRedirectTarget(null)).toBe('/');
-    expect(resolveRedirectTarget(undefined)).toBe('/');
-    expect(resolveRedirectTarget({})).toBe('/');
+    expect(resolveRedirectTarget(null)).toBe('/dashboard');
+    expect(resolveRedirectTarget(undefined)).toBe('/dashboard');
+    expect(resolveRedirectTarget({})).toBe('/dashboard');
   });
 
   it('reconstructs the full destination from pathname, search, and hash', () => {

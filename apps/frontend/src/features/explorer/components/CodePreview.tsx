@@ -245,7 +245,7 @@ export function CodePreview({ node, repositoryId, citation }: CodePreviewProps) 
             height="100%"
             language={language}
             value={content}
-            theme="vs-dark"
+            theme="vs"
             onMount={handleMount}
             options={{
               readOnly: true,

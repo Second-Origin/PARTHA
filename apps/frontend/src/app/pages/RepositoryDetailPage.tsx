@@ -92,13 +92,13 @@ export function RepositoryDetailPage() {
         <>
           <RepositoryOutcomeSummary repository={repo} />
 
-          <div className="flex items-center gap-1 border-b border-border mb-6">
+          <div className="mb-6 flex items-center gap-1 border-b border-[#fa4d01]/15">
             {tabs.map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={cn(
-                  'px-4 py-2.5 text-sm font-medium transition-colors relative',
+                  'relative rounded-t-xl px-4 py-3 text-sm font-semibold transition-colors',
                   activeTab === tab ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
@@ -127,8 +127,8 @@ export function RepositoryDetailPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-xl border border-border bg-card p-5">
-                  <h2 className="text-sm font-medium text-foreground mb-4">Repository Information</h2>
+                <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+                  <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">Repository</p><h2 className="mt-1 text-lg font-semibold text-foreground mb-4">Repository Information</h2>
                   <div className="space-y-3">
                     <InfoRow icon={FolderGit2} label="Name" value={repo.name} />
                     <InfoRow
@@ -168,8 +168,8 @@ export function RepositoryDetailPage() {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-border bg-card p-5">
-                  <h2 className="text-sm font-medium text-foreground mb-4">Detected Configuration</h2>
+                <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+                  <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">Evidence</p><h2 className="mt-1 text-lg font-semibold text-foreground mb-4">Detected Configuration</h2>
                   <div className="space-y-3">
                     {repo.meta.entryPoint && (
                       <InfoRow icon={FileCode} label="Entry Point" value={repo.meta.entryPoint} mono />
@@ -189,7 +189,7 @@ export function RepositoryDetailPage() {
                     />
                   </div>
                   {repo.meta.configFiles.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-border">
+                    <div className="mt-4 border-t border-[#fa4d01]/15 pt-4">
                       <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                         <Settings2 className="h-3.5 w-3.5" />
                         Configuration Files
@@ -198,7 +198,7 @@ export function RepositoryDetailPage() {
                         {repo.meta.configFiles.map((file) => (
                           <span
                             key={file}
-                            className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground"
+                            className="inline-flex items-center rounded-lg bg-[#fff1e9] px-2.5 py-1 text-xs font-mono text-muted-foreground"
                           >
                             {file}
                           </span>
@@ -229,10 +229,10 @@ export function RepositoryDetailPage() {
 
 function InfoCard({ icon: Icon, label, value }: { icon: typeof Code2; label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="rounded-2xl border border-[#fa4d01]/20 bg-card p-4 shadow-[0_10px_24px_rgba(48,21,47,0.03)]">
       <div className="flex items-center gap-2 mb-2">
         <Icon className="h-4 w-4 text-muted-foreground" />
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+        <span className="text-2xs font-semibold text-primary uppercase tracking-[0.12em]">{label}</span>
       </div>
       <p className="text-lg font-semibold text-foreground">{value}</p>
     </div>

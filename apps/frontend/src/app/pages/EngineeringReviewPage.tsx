@@ -101,20 +101,20 @@ export function EngineeringReviewPage() {
       >
         <Link
           to="/architecture"
-          className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-accent"
+          className="inline-flex items-center gap-1 rounded-xl border border-[#fa4d01]/30 px-3 py-2 text-xs font-semibold hover:bg-[#fff1e9]"
         >
           Architecture <ExternalLink className="h-3 w-3" />
         </Link>
         <Link
           to="/insights"
-          className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-accent"
+          className="inline-flex items-center gap-1 rounded-xl border border-[#fa4d01]/30 px-3 py-2 text-xs font-semibold hover:bg-[#fff1e9]"
         >
           Insights <ExternalLink className="h-3 w-3" />
         </Link>
         <ExportMenu repositoryId={review.repositoryId} target="review" />
       </PageHeader>
 
-      <div className="mb-5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
+      <div className="mb-5 rounded-2xl border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
         PARTHA reports only findings supported by the selected sealed snapshot. Vulnerability scanning and
         categories without sufficient evidence are marked Not assessed.
       </div>
@@ -123,10 +123,10 @@ export function EngineeringReviewPage() {
         <RevisionManifestPanel repositoryId={review.repositoryId} />
       </div>
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="text-sm font-medium text-foreground">Evidence-backed summary</h2>
+            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">Engineering review</p><h2 className="mt-1 text-lg font-semibold text-foreground">Evidence-backed summary</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{review.summary.message}</p>
             <p className="mt-2 text-xs text-muted-foreground">
               No overall score, grade, health percentage, or category score is produced.
@@ -134,7 +134,7 @@ export function EngineeringReviewPage() {
           </div>
           <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-5 lg:w-auto">
             {SEVERITY_ORDER.map((severity) => (
-              <div key={severity} className="rounded-md bg-muted/50 px-2 py-2 text-center">
+              <div key={severity} className="rounded-xl bg-[#fff1e9] px-2 py-2 text-center">
                 <p className="text-base font-semibold text-foreground">
                   {review.summary.findingsBySeverity[severity]}
                 </p>
@@ -149,10 +149,10 @@ export function EngineeringReviewPage() {
         <h2 className="mb-3 text-sm font-medium text-foreground">Assessment matrix</h2>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {review.categories.map((category) => (
-            <article key={category.id} className="rounded-lg border border-border bg-card p-4">
+            <article key={category.id} className="rounded-2xl border border-[#fa4d01]/20 bg-card p-4 shadow-[0_10px_24px_rgba(48,21,47,0.03)]">
               <div className="flex items-start justify-between gap-2">
                 <h3 className="text-sm font-medium text-foreground">{category.label}</h3>
-                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                <span className="shrink-0 rounded-lg bg-[#fff1e9] px-2 py-1 text-[10px] text-muted-foreground">
                   {STATE_LABEL[category.state]}
                 </span>
               </div>
@@ -172,7 +172,7 @@ export function EngineeringReviewPage() {
           <ReviewFilters />
         </div>
         {review.findings.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-8 text-center">
+          <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-8 text-center">
             <CheckCircle2 className="mx-auto mb-2 h-7 w-7 text-emerald-400" />
             <h3 className="text-sm font-medium text-foreground">No evidence-backed findings</h3>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -180,7 +180,7 @@ export function EngineeringReviewPage() {
             </p>
           </div>
         ) : findings.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-8 text-center">
+          <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-8 text-center">
             <Info className="mx-auto mb-2 h-7 w-7 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">No findings match the selected filters.</p>
           </div>
