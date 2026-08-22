@@ -11,7 +11,7 @@ export function PageHeader({ title, description, children, className }: PageHead
   return (
     <div className={cn('mb-8 flex min-w-0 flex-col items-start justify-between gap-4 border-b border-[#fa4d01]/20 pb-6 sm:flex-row sm:items-end', className)}>
       <div className="min-w-0">
-        <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#fa4d01]">Repository intelligence</p>
+        <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-primary">Repository intelligence</p>
         <h1 className="break-words text-3xl font-medium tracking-[-0.055em] text-[#392135] sm:text-4xl">{title}</h1>
         {description && <p className="mt-2 max-w-2xl text-sm leading-6 text-[#5d5b58] sm:text-base">{description}</p>}
       </div>

@@ -10,7 +10,9 @@
     --card-foreground: 258 19% 13%;
     --popover: 0 0% 100%;
     --popover-foreground: 258 19% 13%;
-    --primary: 18 99% 49%;
+    /* The product orange remains recognisable while providing AA contrast
+       against white for normal-size button and link text. */
+    --primary: 18 99% 38%;
     --primary-foreground: 0 0% 100%;
     --secondary: 198 39% 85%;
     --secondary-foreground: 260 10% 34%;
@@ -31,7 +33,7 @@
     --sidebar: 38 27% 94%;
     --sidebar-foreground: 258 19% 13%;
     --sidebar-border: 18 50% 86%;
-    --sidebar-accent: 18 99% 49%;
+    --sidebar-accent: 18 99% 38%;
     --sidebar-accent-foreground: 0 0% 100%;
   }
 
@@ -42,7 +44,7 @@
     --card-foreground: 38 27% 92%;
     --popover: 258 18% 11%;
     --popover-foreground: 38 27% 92%;
-    --primary: 17 91% 53%;
+    --primary: 17 91% 42%;
     --primary-foreground: 0 0% 100%;
     --secondary: 258 13% 17%;
     --secondary-foreground: 38 14% 70%;
@@ -62,7 +64,7 @@
     --sidebar: 258 21% 7%;
     --sidebar-foreground: 38 27% 92%;
     --sidebar-border: 17 42% 35%;
-    --sidebar-accent: 17 91% 53%;
+    --sidebar-accent: 17 91% 42%;
     --sidebar-accent-foreground: 0 0% 100%;
   }
 }

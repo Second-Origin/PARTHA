@@ -22,7 +22,7 @@ export function AuthShell({ eyebrow, title, description, children, footer }: Aut
       <section className="relative z-10 w-full max-w-[500px] rounded-[2rem] border border-[#fa4d01] border-b-4 border-l-4 border-r-4 bg-white/90 p-6 shadow-[0_12px_18px_rgba(57,33,53,0.14)] sm:p-9">
         <div className="mx-auto max-w-[410px] text-center">
           <BrandLogo compact className="mx-auto mb-4 w-12" />
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-[#fa4d01]">{eyebrow}</p>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-primary">{eyebrow}</p>
           <h1 className="mt-3 text-3xl font-medium tracking-[-0.05em] text-[#392135]">{title}</h1>
           <p className="mt-3 text-sm leading-6 text-[#5d5b58]">{description}</p>
         </div>

@@ -43,7 +43,7 @@ function NavLink({
         'flex min-h-10 items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors',
         muted ? 'font-normal' : 'font-medium',
         isActive
-          ? 'bg-[#fa4d01] text-white shadow-[0_8px_18px_rgba(250,77,1,0.18)]'
+          ? 'bg-primary text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)]'
           : 'text-sidebar-foreground/70 hover:bg-[#fa4d01]/10 hover:text-sidebar-foreground'
       )}
     >
@@ -94,7 +94,7 @@ function NavSection({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="px-3 pb-1 pt-5 text-2xs font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/45"
+            className="px-3 pb-1 pt-5 text-2xs font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/65"
           >
             {label}
           </motion.p>
@@ -287,8 +287,8 @@ export function Sidebar() {
           </nav>
         )}
         <div className={cn('flex items-center gap-3 rounded-xl px-3 py-2.5', sidebarCollapsed && !isMobile && 'justify-center')}>
-          <div className="h-8 w-8 shrink-0 rounded-full bg-[#fa4d01] flex items-center justify-center">
-            <span className="text-xs font-semibold text-white">{avatarInitial}</span>
+          <div className="h-8 w-8 shrink-0 rounded-full bg-primary flex items-center justify-center">
+            <span className="text-xs font-semibold text-primary-foreground">{avatarInitial}</span>
           </div>
           <AnimatePresence>
             {(isMobile || !sidebarCollapsed) && (
