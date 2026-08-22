@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import type { EngineeringReview, ReviewCategory, ReviewSeverity, ReviewFinding } from '@/shared/types/review';
 
+/** How many findings render at once. A review can carry 10k+ findings (#336)
+ * -- rendering them all as DOM nodes in one pass is what made the page
+ * unresponsive, not the fetch itself. Revealing more in bounded steps keeps
+ * the page interactive regardless of total count. */
+const FINDINGS_PAGE_SIZE = 50;
+
 interface ReviewState {
   review: EngineeringReview | null;
   setReview: (review: EngineeringReview | null) => void;
@@ -17,7 +23,11 @@ interface ReviewState {
   filterDiagnosticCode: string | null;
   setFilterDiagnosticCode: (code: string | null) => void;
 
+  visibleCount: number;
+  showMoreFindings: () => void;
+
   filteredFindings: () => ReviewFinding[];
+  visibleFindings: () => ReviewFinding[];
   resetForRepository: () => void;
 }
 
@@ -29,13 +39,16 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   setSelectedFindingId: (id) => set({ selectedFindingId: id }),
 
   filterCategory: 'all',
-  setFilterCategory: (category) => set({ filterCategory: category }),
+  setFilterCategory: (category) => set({ filterCategory: category, visibleCount: FINDINGS_PAGE_SIZE }),
 
   filterSeverity: 'all',
-  setFilterSeverity: (severity) => set({ filterSeverity: severity }),
+  setFilterSeverity: (severity) => set({ filterSeverity: severity, visibleCount: FINDINGS_PAGE_SIZE }),
 
   filterDiagnosticCode: null,
-  setFilterDiagnosticCode: (code) => set({ filterDiagnosticCode: code }),
+  setFilterDiagnosticCode: (code) => set({ filterDiagnosticCode: code, visibleCount: FINDINGS_PAGE_SIZE }),
+
+  visibleCount: FINDINGS_PAGE_SIZE,
+  showMoreFindings: () => set((state) => ({ visibleCount: state.visibleCount + FINDINGS_PAGE_SIZE })),
 
   filteredFindings: () => {
     const state = get();
@@ -55,6 +68,8 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     return findings;
   },
 
+  visibleFindings: () => get().filteredFindings().slice(0, get().visibleCount),
+
   resetForRepository: () =>
     set({
       review: null,
@@ -62,5 +77,6 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       filterCategory: 'all',
       filterSeverity: 'all',
       filterDiagnosticCode: null,
+      visibleCount: FINDINGS_PAGE_SIZE,
     }),
 }));

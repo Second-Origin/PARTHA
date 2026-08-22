@@ -31,6 +31,8 @@ export function EngineeringReviewPage() {
     selectedFindingId,
     setSelectedFindingId,
     filteredFindings,
+    visibleFindings,
+    showMoreFindings,
     setFilterDiagnosticCode,
   } = useReviewStore();
 
@@ -38,7 +40,9 @@ export function EngineeringReviewPage() {
     setFilterDiagnosticCode(searchParams.get('diagnosticCode'));
   }, [searchParams, setFilterDiagnosticCode]);
 
-  const findings = filteredFindings();
+  const totalFilteredCount = filteredFindings().length;
+  const findings = visibleFindings();
+  const hasMoreFindings = findings.length < totalFilteredCount;
   const selectedFinding = useMemo(
     () => review?.findings.find((finding) => finding.id === selectedFindingId) ?? null,
     [review, selectedFindingId],
@@ -167,7 +171,10 @@ export function EngineeringReviewPage() {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-medium text-foreground">Findings</h2>
-            <p className="text-xs text-muted-foreground">{findings.length} matching supported findings</p>
+            <p className="text-xs text-muted-foreground">
+              {totalFilteredCount} matching supported finding{totalFilteredCount === 1 ? '' : 's'}
+              {hasMoreFindings ? ` · showing ${findings.length}` : ''}
+            </p>
           </div>
           <ReviewFilters />
         </div>
@@ -194,6 +201,15 @@ export function EngineeringReviewPage() {
                 onClick={() => setSelectedFindingId(finding.id)}
               />
             ))}
+            {hasMoreFindings && (
+              <button
+                type="button"
+                onClick={showMoreFindings}
+                className="w-full rounded-xl border border-primary/30 py-2.5 text-xs font-semibold text-primary hover:bg-accent"
+              >
+                Show {Math.min(50, totalFilteredCount - findings.length)} more
+              </button>
+            )}
           </div>
         )}
       </section>
