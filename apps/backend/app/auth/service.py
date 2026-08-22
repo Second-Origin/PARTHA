@@ -9,13 +9,15 @@ from sqlalchemy.orm import Session
 from app.auth.security import (
     burn_password_check,
     create_access_token,
+    hash_invite_code,
     hash_password,
     hash_refresh_token,
     new_refresh_token,
     verify_password,
 )
 from app.core.config import Settings
-from app.core.exceptions import ConflictServiceError, UnauthorizedError
+from app.core.exceptions import ConflictServiceError, UnauthorizedError, ValidationServiceError
+from app.models.invite_token import InviteToken
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 
@@ -25,6 +27,10 @@ logger = logging.getLogger(__name__)
 # used to tell apart unknown email / wrong password / disabled account.
 INVALID_CREDENTIALS = "Invalid email or password."
 INVALID_REFRESH = "Invalid refresh token."
+# Deliberately the same message whether the code was never issued, was
+# already redeemed, or lost the redemption race below -- distinguishing them
+# would let a caller probe which invite codes exist.
+INVALID_INVITE_CODE = "Invalid or already-used invite code."
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -38,23 +44,57 @@ class AuthService:
         self.db = db
         self.settings = settings
 
-    def register(self, email: str, password: str) -> tuple[User, str, str]:
+    def register(self, email: str, password: str, invite_code: str) -> tuple[User, str, str]:
         normalized = email.strip().lower()
         existing = self.db.scalars(select(User).where(User.email == normalized)).first()
         if existing:
             raise ConflictServiceError("An account with this email already exists.")
 
+        invite = self.db.scalars(
+            select(InviteToken).where(InviteToken.code_hash == hash_invite_code(invite_code))
+        ).first()
+        if invite is None or invite.redeemed_at is not None:
+            raise ValidationServiceError(INVALID_INVITE_CODE)
+
         user = User(id=str(uuid4()), email=normalized, password_hash=hash_password(password))
         self.db.add(user)
         try:
+            # Flushed here, ahead of commit, so the invite update below (which
+            # references user.id via a foreign key) never runs before the
+            # referenced row actually exists -- SQLite enforces foreign keys
+            # per-statement, not deferred to commit. This is also the point
+            # a concurrent registration for the same email can now surface as
+            # an IntegrityError (moved earlier than commit by this same
+            # flush), so it needs the identical handling below that commit
+            # already had.
+            self.db.flush()
+        except IntegrityError:
+            self.db.rollback()
+            if self.db.scalars(select(User).where(User.email == normalized)).first() is not None:
+                raise ConflictServiceError("An account with this email already exists.") from None
+            raise
+
+        # Atomic conditional redemption, not a read-then-write: two concurrent
+        # registrations can both pass the `redeemed_at is not None` check
+        # above for the same code between each other's read and write, the
+        # same race the email-uniqueness check above guards against with a
+        # database constraint. The WHERE clause here is that guard for
+        # invites -- only one concurrent UPDATE can match redeemed_at IS NULL.
+        redemption = self.db.execute(
+            update(InviteToken)
+            .where(InviteToken.id == invite.id, InviteToken.redeemed_at.is_(None))
+            .values(redeemed_at=datetime.now(UTC), redeemed_by_user_id=user.id)
+        )
+        if redemption.rowcount != 1:
+            self.db.rollback()
+            raise ValidationServiceError(INVALID_INVITE_CODE)
+
+        try:
             self.db.commit()
         except IntegrityError:
-            # The existence check above can't see a concurrent registration for
-            # the same email that commits between our check and our insert;
-            # the unique constraint is the real guard. Roll back so the session
-            # is usable again, then confirm this was actually that email
-            # collision before reporting it as one - an unrelated integrity
-            # failure must not be mislabeled as a duplicate-email conflict.
+            # A second, unrelated integrity failure at commit time (the email
+            # collision itself is already handled above, at flush) must still
+            # not surface as a raw 500.
             self.db.rollback()
             if self.db.scalars(select(User).where(User.email == normalized)).first() is not None:
                 raise ConflictServiceError("An account with this email already exists.") from None

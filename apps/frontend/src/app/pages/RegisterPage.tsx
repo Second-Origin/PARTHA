@@ -4,7 +4,18 @@ import { PASSWORD_MIN_LENGTH, useRegisterForm } from '@/features/auth/hooks/useR
 import { AuthShell } from '@/shared/components/layout/AuthShell';
 
 export function RegisterPage() {
-  const { email, setEmail, password, setPassword, submitting, error, submit, redirectState } = useRegisterForm();
+  const {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    inviteCode,
+    setInviteCode,
+    submitting,
+    error,
+    submit,
+    redirectState,
+  } = useRegisterForm();
 
   return (
     <AuthShell
@@ -43,6 +54,32 @@ export function RegisterPage() {
               className="partha-input w-full px-3 py-2.5 text-sm"
             />
             <p className="mt-1.5 text-2xs text-muted-foreground">At least {PASSWORD_MIN_LENGTH} characters.</p>
+          </div>
+          <div>
+            <label htmlFor="register-invite-code" className="block text-xs font-medium text-muted-foreground mb-1.5">
+              Invite code
+            </label>
+            <input
+              id="register-invite-code"
+              type="text"
+              autoComplete="off"
+              required
+              value={inviteCode}
+              onChange={(event) => setInviteCode(event.target.value)}
+              className="partha-input w-full px-3 py-2.5 text-sm"
+            />
+            <p className="mt-1.5 text-2xs text-muted-foreground">
+              PARTHA is invite-only during the beta. No code?{' '}
+              <a
+                href="https://discord.gg/qvk9DcxDA"
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary underline underline-offset-2"
+              >
+                Get in touch
+              </a>
+              .
+            </p>
           </div>
 
           {error && (

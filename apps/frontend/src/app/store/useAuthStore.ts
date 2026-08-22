@@ -14,7 +14,7 @@ interface AuthState {
    * cookie, then confirm identity via /auth/me. Never throws. */
   bootstrap: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, inviteCode: string) => Promise<void>;
   /** Always clears local session state, even if the server call fails. */
   logout: () => Promise<void>;
   /** Clears local session state after the account itself was deleted
@@ -44,8 +44,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ accessToken: auth.accessToken, user: auth.user, status: 'authenticated' });
   },
 
-  async register(email, password) {
-    const auth = await authService.register({ email, password });
+  async register(email, password, inviteCode) {
+    const auth = await authService.register({ email, password, inviteCode });
     clearUserScopedAppState();
     set({ accessToken: auth.accessToken, user: auth.user, status: 'authenticated' });
   },
