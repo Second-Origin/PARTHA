@@ -172,7 +172,7 @@ export function EngineeringReviewPage() {
           <div>
             <h2 className="text-sm font-medium text-foreground">Findings</h2>
             <p className="text-xs text-muted-foreground">
-              {totalFilteredCount} matching supported finding{totalFilteredCount === 1 ? '' : 's'}
+              {totalFilteredCount} matching supported findings
               {hasMoreFindings ? ` · showing ${findings.length}` : ''}
             </p>
           </div>
