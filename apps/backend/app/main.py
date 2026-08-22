@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from os import getpid
+from pathlib import Path
 import logging
 import threading
 from time import perf_counter
@@ -9,7 +10,8 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from sqlalchemy import inspect as sa_inspect
@@ -315,7 +317,40 @@ def create_app() -> FastAPI:
     def metrics() -> str:
         return runtime_metrics.render_prometheus()
 
+    _mount_frontend(app, settings.frontend_dist_path)
+
     return app
+
+
+def _mount_frontend(app: FastAPI, dist_path: Path) -> None:
+    """Serve the built frontend from this same service (#339).
+
+    Registered last, after every API route, so nothing here can shadow an
+    API path: FastAPI matches routes in registration order, and a request
+    for `/auth/login` or `/health` is already resolved by an earlier route
+    before this catch-all is ever considered. A missing `dist_path` (local
+    dev, where the frontend runs on its own Vite dev server instead) is not
+    an error -- there is simply nothing to mount, and every route behaves
+    exactly as it did before this function existed.
+    """
+
+    index_path = dist_path / "index.html"
+    if not index_path.is_file():
+        return
+
+    assets_path = dist_path / "assets"
+    if assets_path.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_path), name="frontend-assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str) -> FileResponse:
+        candidate = dist_path / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        # Anything else -- a client-side route like /dashboard, or a direct
+        # refresh on one -- gets the SPA shell; react-router takes it from
+        # there instead of the browser seeing a bare 404.
+        return FileResponse(index_path)
 
 
 app = create_app()
