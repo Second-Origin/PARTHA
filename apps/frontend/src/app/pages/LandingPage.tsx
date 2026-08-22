@@ -17,7 +17,7 @@ export function LandingPage() {
   const analysisHref = authenticated ? '/upload' : '/register';
 
   return (
-    <main className="min-h-screen bg-[#fdfcf9] text-[#30152f]">
+    <main className="min-h-screen bg-background text-foreground">
       <h1 className="sr-only">Reveal the system behind the code.</h1>
       <div className="relative mx-auto w-full max-w-[1728px]">
         <img
@@ -65,24 +65,24 @@ export function LandingPage() {
         ))}
 
         {faqIndex !== null && (
-          <div role="dialog" aria-modal="true" aria-labelledby="landing-faq-title" className="fixed inset-0 z-50 grid place-items-center bg-[#30152f]/30 p-5">
-            <div className="w-full max-w-xl rounded-3xl border border-[#fa4d01]/35 bg-[#fffdf9] p-6 shadow-2xl sm:p-8">
+          <div role="dialog" aria-modal="true" aria-labelledby="landing-faq-title" className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-5">
+            <div className="w-full max-w-xl rounded-3xl border border-primary/35 bg-card p-6 shadow-2xl sm:p-8">
               <div className="flex items-start justify-between gap-5">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#fa4d01]">FAQ</p>
-                  <h2 id="landing-faq-title" className="mt-2 text-2xl font-semibold text-[#30152f]">{faqQuestions[faqIndex]}</h2>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">FAQ</p>
+                  <h2 id="landing-faq-title" className="mt-2 text-2xl font-semibold text-foreground">{faqQuestions[faqIndex]}</h2>
                 </div>
-                <button type="button" onClick={() => setFaqIndex(null)} className="rounded-xl border border-[#fa4d01]/30 px-3 py-2 text-sm font-semibold text-[#30152f] hover:bg-[#fff1e9]">Close</button>
+                <button type="button" onClick={() => setFaqIndex(null)} className="rounded-xl border border-primary/30 px-3 py-2 text-sm font-semibold text-foreground hover:bg-accent">Close</button>
               </div>
-              <p className="mt-5 text-base leading-relaxed text-[#594555]">{faqAnswers[faqIndex]}</p>
+              <p className="mt-5 text-base leading-relaxed text-muted-foreground">{faqAnswers[faqIndex]}</p>
             </div>
           </div>
         )}
 
         {footerNotice && (
-          <div role="status" className="fixed bottom-5 left-1/2 z-50 w-[min(92vw,34rem)] -translate-x-1/2 rounded-2xl border border-[#fa4d01]/35 bg-[#fffdf9] px-5 py-4 text-center text-sm font-medium text-[#30152f] shadow-xl">
+          <div role="status" className="fixed bottom-5 left-1/2 z-50 w-[min(92vw,34rem)] -translate-x-1/2 rounded-2xl border border-primary/35 bg-card px-5 py-4 text-center text-sm font-medium text-foreground shadow-xl">
             {footerNotice}
-            <button type="button" onClick={() => setFooterNotice(null)} className="ml-3 text-[#fa4d01] underline underline-offset-2">Close</button>
+            <button type="button" onClick={() => setFooterNotice(null)} className="ml-3 text-primary underline underline-offset-2">Close</button>
           </div>
         )}
       </div>

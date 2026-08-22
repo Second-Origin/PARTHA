@@ -69,7 +69,7 @@ export function DashboardPage() {
       </PageHeader>
 
       {mostRecentlyAnalysed && (
-        <p data-testid="latest-analysis-summary" className="mb-7 rounded-2xl border border-[#fa4d01]/15 bg-[#fff7f1] px-4 py-3 text-sm text-muted-foreground">
+        <p data-testid="latest-analysis-summary" className="mb-7 rounded-2xl border border-primary/15 bg-accent px-4 py-3 text-sm text-muted-foreground">
           Most recently analysed:{' '}
           <span className="font-medium text-foreground">{mostRecentlyAnalysed.name}</span>
           {' — '}
@@ -92,8 +92,8 @@ export function DashboardPage() {
         <MetricCard label="Total Size" value={formatFileSize(metrics.totalSize)} icon={Upload} />
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-[#fa4d01]/20 bg-card shadow-[0_14px_34px_rgba(48,21,47,0.05)]">
-        <div className="border-b border-[#fa4d01]/15 px-6 py-5">
+      <div className="overflow-hidden rounded-3xl border border-primary/20 bg-card shadow-[0_14px_34px_hsl(var(--foreground)/0.05)]">
+        <div className="border-b border-primary/15 px-6 py-5">
           <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">System view</p>
           <h2 className="mt-1 text-lg font-semibold text-foreground">Repositories</h2>
         </div>
@@ -109,10 +109,10 @@ export function DashboardPage() {
                 if (repo.status === 'analysing' || repo.status === 'cancelled') navigate(`/analysis/${repo.id}`);
                 else navigate(`/repositories/${repo.id}`);
               }}
-              className="flex min-w-0 flex-col items-start justify-between gap-3 px-5 py-4 hover:bg-[#fff7f1] cursor-pointer transition-colors sm:flex-row sm:items-center sm:px-6"
+              className="flex min-w-0 flex-col items-start justify-between gap-3 px-5 py-4 hover:bg-accent cursor-pointer transition-colors sm:flex-row sm:items-center sm:px-6"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#fa4d01]/15 bg-[#dcecf2]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-secondary">
                   {repo.source === 'github' ? (
                     <Github className="h-4 w-4 text-muted-foreground" />
                   ) : (

@@ -44,7 +44,7 @@ function NavLink({
         muted ? 'font-normal' : 'font-medium',
         isActive
           ? 'bg-primary text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)]'
-          : 'text-sidebar-foreground/70 hover:bg-[#fa4d01]/10 hover:text-sidebar-foreground'
+          : 'text-sidebar-foreground/70 hover:bg-primary/10 hover:text-sidebar-foreground'
       )}
     >
       <item.icon className={cn('shrink-0', muted ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
@@ -196,7 +196,7 @@ export function Sidebar() {
         animate={{ width: sidebarCollapsed ? 72 : 248 }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className={cn(
-          'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-[#fa4d01]/20 bg-[#f3f0e9] max-md:!w-[min(82vw,280px)] max-md:transition-transform max-md:duration-200',
+          'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-primary/20 bg-muted max-md:!w-[min(82vw,280px)] max-md:transition-transform max-md:duration-200',
           mobileSidebarOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
         )}
       >
@@ -227,7 +227,7 @@ export function Sidebar() {
                 ? 'Expand sidebar'
                 : 'Collapse sidebar'
           }
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#fa4d01]/20 text-sidebar-foreground/60 hover:bg-[#fa4d01] hover:text-white transition-colors"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/20 text-sidebar-foreground/60 hover:bg-primary hover:text-primary-foreground transition-colors"
         >
           <ChevronLeft
             className={cn('h-4 w-4 transition-transform duration-200', sidebarCollapsed && 'rotate-180')}
@@ -268,12 +268,12 @@ export function Sidebar() {
         />
       </nav>
 
-      <div className="border-t border-[#fa4d01]/15 p-3">
+      <div className="border-t border-primary/15 p-3">
         {/* Pinned out of the scrollable list, but still inside a navigation
             landmark of its own: moving Settings into a bare <div> would drop
             it from landmark-based screen-reader navigation entirely (#289). */}
         {utilityNavigationSurfaces.length > 0 && (
-          <nav aria-label="Settings" className="border-b border-[#fa4d01]/15 pb-3 mb-3 space-y-1">
+          <nav aria-label="Settings" className="border-b border-primary/15 pb-3 mb-3 space-y-1">
             {utilityNavigationSurfaces.map((item) => (
               <NavLink
                 key={item.path}

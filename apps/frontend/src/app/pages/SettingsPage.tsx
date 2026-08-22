@@ -1,14 +1,23 @@
+import { Moon, Sun, SunMoon } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { useSettings } from '@/features/settings/hooks/useSettings';
 import { useAccountDeletion } from '@/features/settings/hooks/useAccountDeletion';
 import { useAuthStore } from '@/app/store/useAuthStore';
+import { useTheme, type ThemePreference } from '@/shared/hooks/useTheme';
 import { cn } from '@/shared/utils/cn';
+
+const THEME_OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'system', label: 'System', icon: SunMoon },
+];
 
 export function SettingsPage() {
   const settings = useSettings();
   const { tabs, activeTab, setActiveTab } = settings;
   const user = useAuthStore((state) => state.user);
   const deletion = useAccountDeletion();
+  const theme = useTheme();
   const providers = [
     ['openai', 'OpenAI'],
     ['anthropic', 'Anthropic'],
@@ -21,7 +30,7 @@ export function SettingsPage() {
     <div className="w-full max-w-4xl">
       <PageHeader title="Settings" description="Manage your account and preferences" />
 
-      <div role="tablist" aria-label="Settings sections" className="mb-7 flex max-w-full items-center gap-1 overflow-x-auto border-b border-[#fa4d01]/15 scrollbar-thin">
+      <div role="tablist" aria-label="Settings sections" className="mb-7 flex max-w-full items-center gap-1 overflow-x-auto border-b border-primary/15 scrollbar-thin">
         {tabs.map((tab) => (
           <button
             key={tab}
@@ -45,7 +54,7 @@ export function SettingsPage() {
       <div className="space-y-6">
         {activeTab === 'General' && (
           <div className="space-y-6">
-            <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+            <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
               <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">Account</p><h2 className="mt-1 text-lg font-semibold text-foreground mb-4">Your profile</h2>
               <div className="space-y-4">
                 <div>
@@ -55,7 +64,7 @@ export function SettingsPage() {
                     type="email"
                     value={user?.email ?? ''}
                     disabled
-                    className="w-full rounded-xl border border-[#fa4d01]/20 bg-background px-3 py-2.5 text-sm text-foreground disabled:opacity-70"
+                    className="w-full rounded-xl border border-primary/20 bg-background px-3 py-2.5 text-sm text-foreground disabled:opacity-70"
                   />
                 </div>
                 <div>
@@ -65,7 +74,7 @@ export function SettingsPage() {
                     type="text"
                     value={user ? new Date(user.createdAt).toLocaleDateString() : ''}
                     disabled
-                    className="w-full rounded-xl border border-[#fa4d01]/20 bg-background px-3 py-2.5 text-sm text-foreground disabled:opacity-70"
+                    className="w-full rounded-xl border border-primary/20 bg-background px-3 py-2.5 text-sm text-foreground disabled:opacity-70"
                   />
                 </div>
               </div>
@@ -75,7 +84,7 @@ export function SettingsPage() {
                 </button>
               </div>
             </div>
-            <div className="rounded-3xl border border-destructive/50 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+            <div className="rounded-3xl border border-destructive/50 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
               <h2 className="text-sm font-medium text-destructive mb-2">Danger Zone</h2>
               <p className="text-xs text-muted-foreground mb-4">
                 Permanently delete your account, repositories, AI provider configuration, and conversation history.
@@ -139,6 +148,32 @@ export function SettingsPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+        {activeTab === 'Appearance' && (
+          <div className="partha-surface p-4 sm:p-6">
+            <h2 className="text-sm font-medium text-foreground mb-1">Theme</h2>
+            <p className="text-xs text-muted-foreground mb-4">Choose how PARTHA looks on this device.</p>
+            <div role="radiogroup" aria-label="Theme" className="grid grid-cols-3 gap-2 sm:max-w-sm">
+              {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={theme.preference === value}
+                  onClick={() => theme.setPreference(value)}
+                  className={cn(
+                    'flex flex-col items-center gap-1.5 rounded-xl border px-3 py-3 text-xs font-medium transition-colors',
+                    theme.preference === value
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -231,7 +266,7 @@ export function SettingsPage() {
           </div>
         )}
         {activeTab === 'Notifications' && (
-          <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+          <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
             <div className="mb-4">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-medium text-foreground">Notification Preferences</h2>
@@ -266,7 +301,7 @@ export function SettingsPage() {
           </div>
         )}
         {activeTab === 'API Keys' && (
-          <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+          <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
             <h2 className="text-sm font-medium text-foreground mb-2">API Keys</h2>
             <p className="text-xs text-muted-foreground mb-4">Manage API keys for programmatic access.</p>
             <div className="flex items-center justify-center py-8">

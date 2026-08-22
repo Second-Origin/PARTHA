@@ -19,9 +19,9 @@ export function EmptyState({ icon: Icon, title, description, action, className }
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className={cn('flex flex-col items-center justify-center rounded-3xl border border-[#fa4d01]/15 bg-white/60 px-4 py-16', className)}
+      className={cn('flex flex-col items-center justify-center rounded-3xl border border-primary/15 bg-card/60 px-4 py-16', className)}
     >
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#fa4d01]/15 bg-[#dcecf2]">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-primary/15 bg-secondary">
         <Icon className="h-7 w-7 text-muted-foreground" />
       </div>
       {/* Sits directly beneath the page's h1, so it must be h2: skipping a

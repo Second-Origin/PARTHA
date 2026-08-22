@@ -57,7 +57,7 @@ export function UploadPage() {
         <DataSourceBadge source={mode === 'file' ? upload.source : githubImport.source} />
       </PageHeader>
 
-      <div role="tablist" aria-label="Repository source" className="mb-8 grid w-full grid-cols-2 gap-1 rounded-2xl border border-[#fa4d01]/20 bg-[#fff1e9] p-1.5 sm:w-fit">
+      <div role="tablist" aria-label="Repository source" className="mb-8 grid w-full grid-cols-2 gap-1 rounded-2xl border border-primary/20 bg-accent p-1.5 sm:w-fit">
         <button
           type="button"
           role="tab"
@@ -67,7 +67,7 @@ export function UploadPage() {
           className={cn(
             'flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all',
             mode === 'file'
-              ? 'bg-white text-foreground shadow-sm'
+              ? 'bg-card text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
@@ -83,7 +83,7 @@ export function UploadPage() {
           className={cn(
             'flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all',
             mode === 'github'
-              ? 'bg-white text-foreground shadow-sm'
+              ? 'bg-card text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
@@ -106,10 +106,10 @@ export function UploadPage() {
             <div
               {...getRootProps()}
               className={cn(
-                'relative cursor-pointer rounded-3xl border-2 border-dashed p-7 text-center shadow-[0_14px_34px_rgba(48,21,47,0.04)] transition-all duration-200 sm:p-12',
+                'relative cursor-pointer rounded-3xl border-2 border-dashed p-7 text-center shadow-[0_14px_34px_hsl(var(--foreground)/0.04)] transition-all duration-200 sm:p-12',
                 isDragActive
                   ? 'border-primary bg-primary/5'
-                  : 'border-[#fa4d01]/30 bg-white hover:border-primary hover:bg-[#fff7f1]',
+                  : 'border-primary/30 bg-card hover:border-primary hover:bg-accent',
                 upload.uploadFile && 'pointer-events-none opacity-50'
               )}
             >
@@ -120,8 +120,8 @@ export function UploadPage() {
               <div className="flex flex-col items-center">
                 <div
                   className={cn(
-                    'mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#fa4d01]/15 transition-colors',
-                    isDragActive ? 'bg-primary/10' : 'bg-[#dcecf2]'
+                    'mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/15 transition-colors',
+                    isDragActive ? 'bg-primary/10' : 'bg-secondary'
                   )}
                 >
                   <Upload
@@ -142,7 +142,7 @@ export function UploadPage() {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); open(); }}
-                  className="rounded-xl border border-[#fa4d01]/45 px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-[#fff1e9] transition-colors"
+                  className="rounded-xl border border-primary/45 px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-accent transition-colors"
                 >
                   Browse Files
                 </button>
@@ -169,7 +169,7 @@ export function UploadPage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
-                  className="mt-4 rounded-2xl border border-[#fa4d01]/20 bg-card p-5 shadow-[0_12px_26px_rgba(48,21,47,0.04)]"
+                  className="mt-4 rounded-2xl border border-primary/20 bg-card p-5 shadow-[0_12px_26px_hsl(var(--foreground)/0.04)]"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -230,7 +230,7 @@ export function UploadPage() {
             exit={{ opacity: 0, x: -10 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+            <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
                   <Github className="h-5 w-5 text-muted-foreground" />
