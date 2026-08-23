@@ -167,6 +167,11 @@ try {
       ...process.env,
       PARTHA_FIXTURE_API_URL: apiUrl,
       PARTHA_FIXTURE_PYTHON: python,
+      // Registration requires an invite code (#341): the seeder shells out
+      // to apps/backend/scripts/issue_invite.py to mint one, which needs to
+      // resolve to the exact same database the backend above is running
+      // against, not whatever DATABASE_URL defaults to locally.
+      DATABASE_URL: `sqlite:///${join(runtimeRoot, 'partha.db')}`,
       PARTHA_VISUAL_FIXTURES: fixtureManifest,
     },
   });
@@ -185,6 +190,11 @@ try {
         ...process.env,
         PARTHA_E2E_BASE_URL: appUrl,
         PARTHA_VISUAL_FIXTURES: fixtureManifest,
+        // surfaces.spec.ts registers a second owner directly (#341 requires
+        // an invite code for that too) and mints one the same way the
+        // fixture seeder does, against this same runtime database.
+        PARTHA_FIXTURE_PYTHON: python,
+        DATABASE_URL: `sqlite:///${join(runtimeRoot, 'partha.db')}`,
         ...(screenshotDirectory
           ? { PARTHA_VISUAL_SCREENSHOT_DIR: screenshotDirectory }
           : {}),
