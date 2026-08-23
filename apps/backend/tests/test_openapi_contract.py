@@ -18,6 +18,9 @@ PUBLIC_OPERATIONS = {
     ("POST", "/auth/logout"),
     ("GET", "/health"),
     ("GET", "/ready"),
+    # The one public write route besides register/login: reachable from the
+    # landing page before a visitor has an account or an invite (#334).
+    ("POST", "/waitlist"),
 }
 
 # Refresh is unauthenticated in the HTTPBearer sense, but requires a valid
@@ -26,6 +29,7 @@ COOKIE_REQUIRED_OPERATIONS = {("POST", "/auth/refresh")}
 
 EXPECTED_RESPONSES = {
     ("POST", "/auth/register"): {201, 409, 422, 429, 500},
+    ("POST", "/waitlist"): {201, 422, 429, 500},
     ("POST", "/auth/login"): {200, 401, 422, 429, 500},
     ("POST", "/auth/refresh"): {200, 401, 422, 429, 500},
     ("POST", "/auth/logout"): {204, 429, 500},

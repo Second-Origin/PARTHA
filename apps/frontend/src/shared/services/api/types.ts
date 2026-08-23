@@ -103,6 +103,9 @@ export type LoginRequest = components['schemas']['LoginRequest'];
 export type RegisterRequest = components['schemas']['RegisterRequest'];
 export type AccountDeletionRequest = components['schemas']['AccountDeletionRequest'];
 
+export type WaitlistSignupRequest = components['schemas']['WaitlistSignupRequest'];
+export type WaitlistSignupResponse = components['schemas']['WaitlistSignupResponse'];
+
 export type ExportFormat = components['schemas']['ExportRequest']['format'];
 export type ExportTarget = components['schemas']['ExportRequest']['target'];
 export type ExportRequest = components['schemas']['ExportRequest'];

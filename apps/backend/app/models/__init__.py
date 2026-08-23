@@ -16,6 +16,7 @@ from app.models.snapshot import (
     RiSnapshot,
 )
 from app.models.user import User
+from app.models.waitlist_entry import WaitlistEntry
 
 __all__ = [
     "AccountDeletionAuditRecord",
@@ -34,4 +35,5 @@ __all__ = [
     "RiObservation",
     "RiSnapshot",
     "User",
+    "WaitlistEntry",
 ]

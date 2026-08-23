@@ -664,6 +664,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Join Waitlist */
+        post: operations["join_waitlist_waitlist_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2376,6 +2393,24 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** WaitlistSignupRequest */
+        WaitlistSignupRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Name */
+            name?: string | null;
+        };
+        /** WaitlistSignupResponse */
+        WaitlistSignupResponse: {
+            /**
+             * Status
+             * @constant
+             */
+            status: "ok";
         };
     };
     responses: never;
@@ -7238,6 +7273,97 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request could not be validated. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "request_validation_error",
+                     *       "message": "Request validation failed.",
+                     *       "details": {
+                     *         "errors": [
+                     *           {
+                     *             "loc": [
+                     *               "body",
+                     *               "url"
+                     *             ],
+                     *             "msg": "Field required"
+                     *           }
+                     *         ]
+                     *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request-rate limit has been exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "rate_limited",
+                     *       "message": "Too many requests. Try again shortly.",
+                     *       "details": {
+                     *         "retryAfterSeconds": 30
+                     *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description An unexpected server error occurred. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "internal_server_error",
+                     *       "message": "An unexpected error occurred.",
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    join_waitlist_waitlist_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitlistSignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Recorded. The same response is returned whether or not this email had already signed up. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": "ok"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["WaitlistSignupResponse"];
                 };
             };
             /** @description The request could not be validated. */
