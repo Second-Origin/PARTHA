@@ -18,6 +18,18 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+_FORMULA_TRIGGER_CHARS = ("=", "+", "-", "@")
+
+
+def _csv_safe(value: str) -> str:
+    """Neutralize CSV/formula injection (a leading '=', '+', '-' or '@' is
+    interpreted as a formula by Excel/Sheets when this file is opened
+    there). A leading apostrophe forces the cell to be read as text."""
+
+    if value.startswith(_FORMULA_TRIGGER_CHARS):
+        return f"'{value}"
+    return value
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -36,7 +48,9 @@ def main() -> int:
         writer = csv.writer(sys.stdout)
         writer.writerow(["created_at", "email", "name"])
         for entry in entries:
-            writer.writerow([entry.created_at.isoformat(), entry.email, entry.name or ""])
+            writer.writerow(
+                [entry.created_at.isoformat(), _csv_safe(entry.email), _csv_safe(entry.name or "")]
+            )
         return 0
 
     if not entries:
