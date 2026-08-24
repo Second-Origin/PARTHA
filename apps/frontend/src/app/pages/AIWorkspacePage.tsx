@@ -81,7 +81,7 @@ export function AIWorkspacePage() {
           ) : (
             aiWorkspace.messages.map((message, index) => (
               <div key={`${message.timestamp}-${index}`} className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
-                <div className={cn('max-w-[78%] rounded-2xl px-4 py-3 text-sm', message.role === 'user' ? 'bg-primary text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.16)]' : 'border border-primary/15 bg-accent text-foreground')}>
+                <div className={cn('max-w-[78%] rounded-2xl px-4 py-3 text-sm', message.role === 'user' ? 'bg-primary text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.16)]' : 'border border-primary/15 bg-accent text-foreground')}>
                   <p className="whitespace-pre-wrap">{message.content}</p>
                   {message.citations && message.citations.length > 0 && (
                     <div className="mt-3 border-t border-border/60 pt-2 space-y-1">

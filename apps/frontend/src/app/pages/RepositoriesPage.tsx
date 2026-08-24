@@ -62,7 +62,7 @@ export function RepositoriesPage() {
       <PageHeader title="Repositories" description="Manage your uploaded repositories">
         <button
           onClick={() => navigate('/upload')}
-          className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)] hover:bg-primary/90 transition-colors"
+          className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
         >
           Upload New
         </button>

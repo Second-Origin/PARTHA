@@ -229,7 +229,7 @@ export function TopBar() {
       <div className="flex items-center gap-2">
         <button
           onClick={() => navigate('/upload')}
-          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)] hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
         >
           <Upload className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Upload</span>
@@ -296,7 +296,7 @@ export function TopBar() {
             aria-label="Account menu"
             aria-haspopup="true"
             aria-expanded={userMenuOpen}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_14px_rgba(250,77,1,0.18)] hover:bg-primary/90 transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_14px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
           >
             <User aria-hidden="true" focusable="false" className="h-4 w-4" />
           </button>

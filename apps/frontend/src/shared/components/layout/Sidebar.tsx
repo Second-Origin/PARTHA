@@ -43,7 +43,7 @@ function NavLink({
         'flex min-h-10 items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors',
         muted ? 'font-normal' : 'font-medium',
         isActive
-          ? 'bg-primary text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)]'
+          ? 'bg-primary text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)]'
           : 'text-sidebar-foreground/70 hover:bg-primary/10 hover:text-sidebar-foreground'
       )}
     >

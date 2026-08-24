@@ -61,7 +61,7 @@ export function DashboardPage() {
       <PageHeader title="Dashboard" description="Your repository intelligence overview">
         <button
           onClick={() => navigate('/upload')}
-          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)] hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
         >
           <Upload className="h-3.5 w-3.5" />
           Upload

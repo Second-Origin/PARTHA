@@ -212,7 +212,7 @@ export function UploadPage() {
                 <button
                   onClick={handleAnalyseFile}
                   disabled={upload.loading}
-                  className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)] hover:bg-primary/90 transition-colors"
+                  className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
                 >
                   {upload.loading ? 'Starting Analysis...' : 'Analyse Repository'}
                   <ArrowRight className="h-4 w-4" />
