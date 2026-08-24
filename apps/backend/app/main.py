@@ -350,11 +350,7 @@ def _mount_frontend(app: FastAPI, dist_path: Path) -> None:
         # "../../etc/passwd" would pass a naive prefix check but still land
         # outside dist_path once the OS follows the ".." segments.
         candidate = (dist_path / full_path).resolve()
-        if (
-            full_path
-            and candidate.is_relative_to(resolved_dist_path)
-            and candidate.is_file()
-        ):
+        if full_path and candidate.is_relative_to(resolved_dist_path) and candidate.is_file():
             return FileResponse(candidate)
         # Anything else -- a client-side route like /dashboard, or a direct
         # refresh on one -- gets the SPA shell; react-router takes it from
