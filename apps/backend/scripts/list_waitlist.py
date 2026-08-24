@@ -48,9 +48,7 @@ def main() -> int:
         writer = csv.writer(sys.stdout)
         writer.writerow(["created_at", "email", "name"])
         for entry in entries:
-            writer.writerow(
-                [entry.created_at.isoformat(), _csv_safe(entry.email), _csv_safe(entry.name or "")]
-            )
+            writer.writerow([entry.created_at.isoformat(), _csv_safe(entry.email), _csv_safe(entry.name or "")])
         return 0
 
     if not entries:
