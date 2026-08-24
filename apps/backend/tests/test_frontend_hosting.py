@@ -89,3 +89,27 @@ def test_built_asset_is_served_directly(mounted_client: TestClient) -> None:
 
     assert response.status_code == 200
     assert "console.log" in response.text
+
+
+@pytest.mark.parametrize(
+    "traversal_path",
+    [
+        "/../secret.txt",
+        "/assets/../../secret.txt",
+        "/%2e%2e/secret.txt",
+        "/..%2fsecret.txt",
+    ],
+)
+def test_traversal_attempts_cannot_escape_the_dist_directory(
+    mounted_client: TestClient, tmp_path: Path, traversal_path: str
+) -> None:
+    # A file that sits next to (not inside) the mounted dist directory must
+    # never be reachable through the catch-all handler, no matter how the
+    # ".." segments are spelled in the request path.
+    (tmp_path / "secret.txt").write_text("top secret", encoding="utf-8")
+
+    response = mounted_client.get(traversal_path)
+
+    assert response.status_code == 200
+    assert "top secret" not in response.text
+    assert "spa shell" in response.text

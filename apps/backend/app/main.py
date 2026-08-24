@@ -338,14 +338,23 @@ def _mount_frontend(app: FastAPI, dist_path: Path) -> None:
     if not index_path.is_file():
         return
 
+    resolved_dist_path = dist_path.resolve()
+
     assets_path = dist_path / "assets"
     if assets_path.is_dir():
         app.mount("/assets", StaticFiles(directory=assets_path), name="frontend-assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_frontend(full_path: str) -> FileResponse:
-        candidate = dist_path / full_path
-        if full_path and candidate.is_file():
+        # Resolve before checking containment -- otherwise a full_path like
+        # "../../etc/passwd" would pass a naive prefix check but still land
+        # outside dist_path once the OS follows the ".." segments.
+        candidate = (dist_path / full_path).resolve()
+        if (
+            full_path
+            and candidate.is_relative_to(resolved_dist_path)
+            and candidate.is_file()
+        ):
             return FileResponse(candidate)
         # Anything else -- a client-side route like /dashboard, or a direct
         # refresh on one -- gets the SPA shell; react-router takes it from
