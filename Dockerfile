@@ -15,13 +15,16 @@ COPY apps/frontend apps/frontend
 COPY docs docs
 RUN npm run build --prefix apps/frontend
 
-FROM python:3.13-slim AS backend
+FROM python:3.13-slim AS backend-build
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 WORKDIR /app
 
+# build-essential compiles any dependency without a prebuilt wheel; it is
+# only ever needed at install time, so it is confined to this stage and
+# never reaches the runtime image below.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends git build-essential \
+  && apt-get install -y --no-install-recommends build-essential \
   && rm -rf /var/lib/apt/lists/*
 
 COPY apps/backend/pyproject.toml ./
@@ -29,11 +32,37 @@ COPY apps/backend/app ./app
 COPY apps/backend/alembic.ini ./
 COPY apps/backend/alembic ./alembic
 
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip \
   && pip install --no-cache-dir -e .
 
+FROM python:3.13-slim AS backend
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+WORKDIR /app
+
+# git is a genuine runtime dependency -- app/github/client.py shells out to
+# it to clone and inspect repositories being analyzed -- so it stays in the
+# runtime image. The compiler toolchain above does not.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git \
+  && rm -rf /var/lib/apt/lists/* \
+  && useradd --create-home --uid 1000 --shell /usr/sbin/nologin appuser
+
+COPY --from=backend-build /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY apps/backend/pyproject.toml ./
+COPY apps/backend/app ./app
+COPY apps/backend/alembic.ini ./
+COPY apps/backend/alembic ./alembic
+
 COPY --from=frontend-build /repo/apps/frontend/dist /app/frontend-dist
 ENV FRONTEND_DIST_PATH=/app/frontend-dist
+
+RUN chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE 8000
 # $PORT is set by Render (and most PaaS hosts) at runtime; 8000 is only the
