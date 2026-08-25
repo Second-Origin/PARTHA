@@ -18,7 +18,7 @@ export function MainLayout() {
 
   return (
     <RepositoryProvider>
-      <div className="flex h-screen min-w-0 overflow-hidden bg-[#f4f1eb]">
+      <div className="flex h-screen min-w-0 overflow-hidden bg-muted">
         <Sidebar />
         <div
           className={cn(

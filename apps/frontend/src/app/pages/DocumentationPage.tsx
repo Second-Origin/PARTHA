@@ -77,25 +77,25 @@ export function DocumentationPage() {
           <span className="font-mono">{documentation.document.revisionValue}</span>
         </p>
       )}
-      <div className="mt-4 overflow-hidden rounded-3xl border border-[#fa4d01]/20 bg-card shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
-        <div className="flex flex-col gap-3 border-b border-[#fa4d01]/15 px-5 py-4">
+      <div className="mt-4 overflow-hidden rounded-3xl border border-primary/20 bg-card shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+        <div className="flex flex-col gap-3 border-b border-primary/15 px-5 py-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => documentation.setFormat('markdown')}
-                className={`rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${documentation.format === 'markdown' ? 'bg-primary text-primary-foreground' : 'bg-[#fff1e9] text-muted-foreground hover:text-foreground'}`}
+                className={`rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${documentation.format === 'markdown' ? 'bg-primary text-primary-foreground' : 'bg-accent text-muted-foreground hover:text-foreground'}`}
               >
                 Markdown
               </button>
               <button
                 onClick={() => documentation.setFormat('html')}
-                className={`rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${documentation.format === 'html' ? 'bg-primary text-primary-foreground' : 'bg-[#fff1e9] text-muted-foreground hover:text-foreground'}`}
+                className={`rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${documentation.format === 'html' ? 'bg-primary text-primary-foreground' : 'bg-accent text-muted-foreground hover:text-foreground'}`}
               >
                 HTML
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={documentation.refresh} className="flex items-center gap-2 rounded-xl border border-[#fa4d01]/30 px-3 py-2 text-xs font-semibold text-foreground hover:bg-[#fff1e9] transition-colors">
+              <button onClick={documentation.refresh} className="flex items-center gap-2 rounded-xl border border-primary/30 px-3 py-2 text-xs font-semibold text-foreground hover:bg-accent transition-colors">
                 <RefreshCw className="h-3.5 w-3.5" /> Regenerate
               </button>
               <ExportMenu repositoryId={activeRepository.id} target="documentation" disabled={!documentation.document} />
@@ -106,7 +106,7 @@ export function DocumentationPage() {
               <button
                 key={id}
                 onClick={() => documentation.toggleSection(id)}
-                className={`rounded-xl border px-3 py-1.5 text-xs transition-colors ${documentation.sections.includes(id) ? 'border-primary bg-primary/10 text-primary' : 'border-[#fa4d01]/25 text-muted-foreground hover:text-foreground'}`}
+                className={`rounded-xl border px-3 py-1.5 text-xs transition-colors ${documentation.sections.includes(id) ? 'border-primary bg-primary/10 text-primary' : 'border-primary/25 text-muted-foreground hover:text-foreground'}`}
               >
                 {label}
               </button>
