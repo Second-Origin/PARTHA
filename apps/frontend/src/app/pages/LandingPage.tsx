@@ -1,14 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/app/store/useAuthStore';
 import { WaitlistModal } from '@/features/waitlist/components/WaitlistModal';
+import { ThemeSwitcher } from '@/features/landing/components/ThemeSwitcher';
+import { useLandingTheme } from '@/features/landing/hooks/useLandingTheme';
 import landingReference from '@/assets/landing/landing-reference.svg';
+import landingReferenceDark from '@/assets/landing/landing-reference-dark.svg';
 
 /**
- * The marketing page is supplied as a complete, authored 1728 × 5608 design
- * canvas. Rendering the source canvas directly avoids scale, font, and layout
- * drift from the signed-off composition. Transparent controls preserve the
- * primary journeys without altering its artwork.
+ * The marketing page is supplied as a complete, authored 1728-wide design
+ * canvas (light: 5608px tall, dark: 5643px tall -- independently exported,
+ * not the same asset recolored). Rendering the source canvas directly
+ * avoids scale, font, and layout drift from the signed-off composition.
+ * Transparent controls preserve the primary journeys without altering its
+ * artwork.
+ *
+ * The .landing-dark class is applied to this component's own root element
+ * only, never to <html> (see useLandingTheme.ts and globals.css) -- it
+ * cannot leak into /login, /register, or any authenticated route, and
+ * cleans itself up automatically on unmount since it's plain conditional
+ * JSX, not imperative DOM mutation.
  */
 export function LandingPage() {
   const authenticated = useAuthStore((state) => state.status === 'authenticated');
@@ -16,6 +27,14 @@ export function LandingPage() {
   const [footerNotice, setFooterNotice] = useState<string | null>(null);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const workspaceHref = authenticated ? '/dashboard' : '/login';
+  const theme = useLandingTheme();
+  const dark = theme.resolved === 'dark';
+
+  useEffect(() => {
+    // Hand off from the pre-hydration boot flash-guard (index.html) to this
+    // component's own scoped class now that React has mounted.
+    document.documentElement.removeAttribute('data-landing-theme-boot');
+  }, []);
 
   // Registration is invite-only (#341): an unauthenticated visitor's "analyze
   // a repository" intent opens the waitlist instead of navigating to
@@ -30,14 +49,20 @@ export function LandingPage() {
     );
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className={dark ? 'landing-dark min-h-screen bg-background text-foreground' : 'min-h-screen bg-background text-foreground'}>
       <h1 className="sr-only">Reveal the system behind the code.</h1>
       <div className="relative mx-auto w-full max-w-[1728px]">
         <img
-          src={landingReference}
+          src={dark ? landingReferenceDark : landingReference}
           alt="PARTHA repository intelligence system overview, capabilities, frequently asked questions, and call to action."
           className="block h-auto w-full select-none"
           draggable="false"
+        />
+
+        <ThemeSwitcher
+          preference={theme.preference}
+          onChange={theme.setPreference}
+          className="pointer-events-auto absolute right-[6.2%] top-[97.4%] z-20 bg-background/80 backdrop-blur-sm"
         />
 
         <nav aria-label="PARTHA landing navigation" className="pointer-events-none absolute inset-0 z-20">
@@ -92,7 +117,7 @@ export function LandingPage() {
           </div>
         )}
 
-        {waitlistOpen && <WaitlistModal onClose={() => setWaitlistOpen(false)} />}
+        {waitlistOpen && <WaitlistModal dark={dark} onClose={() => setWaitlistOpen(false)} />}
 
         {footerNotice && (
           <div role="status" className="fixed bottom-5 left-1/2 z-50 w-[min(92vw,34rem)] -translate-x-1/2 rounded-2xl border border-primary/35 bg-card px-5 py-4 text-center text-sm font-medium text-foreground shadow-xl">

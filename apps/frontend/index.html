@@ -7,12 +7,22 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <title>PARTHA — Repository Intelligence</title>
+    <style>
+      /* Prevents a white flash behind the landing artwork before React
+         mounts and the LandingPage component takes over via its own
+         scoped .landing-dark class. Never applies outside "/" and never
+         touches any token other than the raw background paint. */
+      html[data-landing-theme-boot='dark'] body {
+        background: #000;
+      }
+    </style>
     <script>
       (function () {
         try {
-          var stored = window.localStorage.getItem('partha-theme');
+          if (window.location.pathname !== '/') return;
+          var stored = window.localStorage.getItem('partha-landing-theme');
           var dark = stored === 'dark' || ((stored === 'system' || !stored) && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          document.documentElement.classList.toggle('dark', dark);
+          if (dark) document.documentElement.setAttribute('data-landing-theme-boot', 'dark');
         } catch (e) {}
       })();
     </script>

@@ -37,35 +37,25 @@
     --sidebar-accent-foreground: 0 0% 100%;
   }
 
-  .dark {
-    --background: 258 22% 8%;
-    --foreground: 38 27% 92%;
-    --card: 258 18% 11%;
-    --card-foreground: 38 27% 92%;
-    --popover: 258 18% 11%;
-    --popover-foreground: 38 27% 92%;
-    --primary: 17 91% 42%;
+  /* Scoped to the landing page's own root element only (never applied to
+     <html> or any authenticated-app ancestor) -- see LandingPage.tsx and
+     useLandingTheme.ts. Values match the Figma dark-landing reference
+     exactly (pure black, not the muted plum the app used to use), so this
+     is intentionally a different palette from a former app-wide .dark
+     block, not a revival of it. */
+  .landing-dark {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 2% 10%;
+    --card-foreground: 0 0% 100%;
+    --primary: 18 99% 49%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 258 13% 17%;
-    --secondary-foreground: 38 14% 70%;
-    --muted: 258 13% 17%;
-    --muted-foreground: 38 10% 65%;
-    --accent: 17 36% 20%;
-    --accent-foreground: 38 27% 92%;
-    --destructive: 0 63% 51%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 142 71% 45%;
-    --success-foreground: 222 47% 7%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 222 47% 7%;
-    --border: 17 42% 35%;
-    --input: 17 42% 35%;
-    --ring: 17 91% 53%;
-    --sidebar: 258 21% 7%;
-    --sidebar-foreground: 38 27% 92%;
-    --sidebar-border: 17 42% 35%;
-    --sidebar-accent: 17 91% 42%;
-    --sidebar-accent-foreground: 0 0% 100%;
+    --muted-foreground: 0 0% 48%;
+    --accent: 0 0% 16%;
+    --accent-foreground: 0 0% 100%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 18 99% 49%;
   }
 }
 
