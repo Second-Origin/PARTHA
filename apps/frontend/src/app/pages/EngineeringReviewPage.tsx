@@ -11,7 +11,7 @@ import { FindingDetail } from '@/features/review/components/FindingDetail';
 import { ReviewFilters } from '@/features/review/components/ReviewFilters';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { RevisionManifestPanel } from '@/features/architecture/components/RevisionManifestPanel';
-import type { ReviewAssessmentState, ReviewSeverity } from '@/shared/types/review';
+import type { ReviewAssessmentState, ReviewCategory, ReviewSeverity } from '@/shared/types/review';
 
 const STATE_LABEL: Record<ReviewAssessmentState, string> = {
   assessed: 'Assessed',
@@ -32,11 +32,17 @@ export function EngineeringReviewPage() {
     setSelectedFindingId,
     filteredFindings,
     setFilterDiagnosticCode,
+    setFilterCategory,
   } = useReviewStore();
 
   useEffect(() => {
     setFilterDiagnosticCode(searchParams.get('diagnosticCode'));
   }, [searchParams, setFilterDiagnosticCode]);
+
+  useEffect(() => {
+    const category = searchParams.get('category');
+    setFilterCategory((category as ReviewCategory | null) ?? 'all');
+  }, [searchParams, setFilterCategory]);
 
   const findings = filteredFindings();
   const selectedFinding = useMemo(
