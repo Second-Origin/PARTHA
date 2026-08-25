@@ -304,3 +304,62 @@ jobs:
             apps/frontend/test-results
           if-no-files-found: warn
           retention-days: 14
+
+  docker-build:
+    name: Docker Build
+    needs: repository-hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Validates the single-service image (#340) actually builds and boots --
+    # the render.yaml Blueprint is only as trustworthy as this Dockerfile,
+    # and neither was exercised through Render itself to write it.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t partha:ci-check .
+
+      - name: Boot the image with a production-shaped config
+        run: |
+          fernet_key=$(python3 -c "import base64,hashlib; print(base64.urlsafe_b64encode(hashlib.sha256(b'ci-check').digest()).decode())")
+          docker run -d --name partha-ci-check \
+            -p 8000:8000 \
+            -e DATABASE_URL=sqlite:////tmp/partha-ci-check.db \
+            -e STORAGE_PATH=/tmp/partha-ci-check-storage \
+            -e AUTH_SECRET_KEY=ci-check-secret-key-at-least-32-characters-long \
+            -e AI_ENCRYPTION_KEY="$fernet_key" \
+            -e APP_ENV=production \
+            -e CORS_ORIGINS=https://ci-check.example.com \
+            -e ANALYSIS_WORKER_AUTOSTART=false \
+            partha:ci-check
+
+      - name: Wait for readiness
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Service never became healthy"
+          docker logs partha-ci-check
+          exit 1
+
+      - name: Verify the API and the mounted frontend both respond
+        run: |
+          curl -sf http://127.0.0.1:8000/health
+          curl -sf http://127.0.0.1:8000/ready
+          # A client-side route (not just "/") must resolve to the SPA shell,
+          # not a 404 -- this is the whole point of the catch-all in app.main.
+          curl -sf http://127.0.0.1:8000/dashboard | grep -qi "<!doctype html" \
+            || (echo "Frontend was not served for a client-side route" && exit 1)
+
+      - name: Container logs
+        if: always()
+        run: docker logs partha-ci-check || true
+
+      - name: Stop container
+        if: always()
+        run: docker rm -f partha-ci-check || true

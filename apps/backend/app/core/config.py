@@ -156,7 +156,17 @@ class Settings(BaseSettings):
         parsed = urlparse(value)
         if not parsed.scheme:
             raise ValueError("DATABASE_URL must include a scheme.")
-        if parsed.scheme not in {"sqlite", "postgresql+psycopg", "postgresql"}:
+        if parsed.scheme in {"postgres", "postgresql"}:
+            # Managed Postgres providers (Render among them) hand back a bare
+            # postgres(ql):// connection string. The only driver this project
+            # installs is psycopg 3 (requirements.txt: psycopg/psycopg-binary,
+            # never psycopg2) -- confirmed empirically that create_engine on a
+            # bare postgresql:// URL raises ModuleNotFoundError for psycopg2,
+            # which is not installed and never will be. Normalize to the
+            # explicit +psycopg driver rather than requiring every deployment
+            # to hand-edit its provisioned connection string.
+            return "postgresql+psycopg://" + value.split("://", 1)[1]
+        if parsed.scheme not in {"sqlite", "postgresql+psycopg"}:
             raise ValueError(f"Unsupported database URL scheme: {parsed.scheme}")
         return value
 
