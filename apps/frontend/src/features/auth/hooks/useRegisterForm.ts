@@ -16,6 +16,7 @@ export function useRegisterForm() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +30,7 @@ export function useRegisterForm() {
     setSubmitting(true);
     setError(null);
     try {
-      await register(email.trim(), password);
+      await register(email.trim(), password, inviteCode.trim());
       navigate(resolveRedirectTarget(location.state), { replace: true });
     } catch (caught) {
       setError(getErrorMessage(caught));
@@ -40,5 +41,16 @@ export function useRegisterForm() {
 
   // Forwarded to the "sign in" link so bouncing between register and login
   // never loses the originally-intended destination.
-  return { email, setEmail, password, setPassword, submitting, error, submit, redirectState: location.state };
+  return {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    inviteCode,
+    setInviteCode,
+    submitting,
+    error,
+    submit,
+    redirectState: location.state,
+  };
 }

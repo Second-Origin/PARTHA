@@ -27,7 +27,11 @@ _AUTH_RESPONSE_EXAMPLE = {
 }
 _REGISTER_EXAMPLE = {
     "summary": "Create an account",
-    "value": {"email": "developer@example.com", "password": "correct-horse-battery-staple"},
+    "value": {
+        "email": "developer@example.com",
+        "password": "correct-horse-battery-staple",
+        "inviteCode": "example-invite-code",
+    },
 }
 _LOGIN_EXAMPLE = {
     "summary": "Sign in to an existing account",
@@ -68,7 +72,7 @@ def register(
     service: AuthService = Depends(get_auth_service),
     settings: Settings = Depends(get_settings),
 ) -> AuthResponse:
-    user, access_token, raw_refresh = service.register(request.email, request.password)
+    user, access_token, raw_refresh = service.register(request.email, request.password, request.invite_code)
     _set_refresh_cookie(response, raw_refresh, settings)
     return AuthResponse(access_token=access_token, user=UserResponse.model_validate(user))
 

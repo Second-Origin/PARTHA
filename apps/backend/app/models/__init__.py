@@ -2,6 +2,7 @@ from app.models.account_deletion_audit import AccountDeletionAuditRecord
 from app.models.ai_conversation import AiConversationMessageRecord
 from app.models.ai_provider_config import AiProviderConfigRecord
 from app.models.analysis_job import AnalysisJob
+from app.models.invite_token import InviteToken
 from app.models.refresh_token import RefreshToken
 from app.models.repository import RepositoryRecord
 from app.models.snapshot import (
@@ -15,12 +16,14 @@ from app.models.snapshot import (
     RiSnapshot,
 )
 from app.models.user import User
+from app.models.waitlist_entry import WaitlistEntry
 
 __all__ = [
     "AccountDeletionAuditRecord",
     "AiConversationMessageRecord",
     "AiProviderConfigRecord",
     "AnalysisJob",
+    "InviteToken",
     "RefreshToken",
     "RepositoryRecord",
     "RiAssertion",
@@ -32,4 +35,5 @@ __all__ = [
     "RiObservation",
     "RiSnapshot",
     "User",
+    "WaitlistEntry",
 ]

@@ -14,6 +14,7 @@ PASSWORD_MAX_LENGTH = 128
 class RegisterRequest(CamelModel):
     email: EmailStr
     password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
+    invite_code: str = Field(min_length=1, max_length=255)
 
 
 class LoginRequest(CamelModel):

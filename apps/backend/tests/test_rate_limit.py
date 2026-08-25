@@ -119,6 +119,7 @@ def limited_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator
 def test_classify_maps_routes_to_budget_classes():
     assert classify("POST", "/auth/login") == "auth"
     assert classify("POST", "/auth/register") == "auth"
+    assert classify("POST", "/waitlist") == "auth"
     assert classify("POST", "/ai/query") == "ai"
     assert classify("GET", "/ai/config") == "ai"
     assert classify("POST", "/repositories/upload") == "heavy"

@@ -33,7 +33,9 @@ def classify(method: str, path: str) -> str | None:
     """
     if method == "OPTIONS" or path in EXEMPT_PATHS or path.startswith(EXEMPT_PREFIXES):
         return None
-    if method == "POST" and path in {"/auth/login", "/auth/register"}:
+    if method == "POST" and path in {"/auth/login", "/auth/register", "/waitlist"}:
+        # Waitlist shares the auth budget: it is the other public,
+        # unauthenticated write route, and needs the same tight abuse guard.
         return "auth"
     if path == "/ai" or path.startswith("/ai/"):
         return "ai"

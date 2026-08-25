@@ -39,7 +39,7 @@ export function AnalysisPipelinePage() {
         <DataSourceBadge source={analysis.source} />
       </PageHeader>
 
-      <div className="mb-6 rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+      <div className="mb-6 rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
         <div className="flex items-center justify-between mb-4">
           <span className="text-2xs font-semibold text-primary uppercase tracking-[0.14em]">
             Progress
@@ -48,7 +48,7 @@ export function AnalysisPipelinePage() {
             {repo.analysisProgress}%
           </span>
         </div>
-        <div className="h-2.5 overflow-hidden rounded-full bg-[#f4e5dc]">
+        <div className="h-2.5 overflow-hidden rounded-full bg-accent">
           <motion.div
             className="h-full rounded-full bg-primary"
             initial={{ width: 0 }}
@@ -58,7 +58,7 @@ export function AnalysisPipelinePage() {
         </div>
       </div>
 
-      <div className="rounded-3xl border border-[#fa4d01]/20 bg-card p-6 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+      <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
         <div className="space-y-0">
           {analysis.stages.map((stage, index) => {
             const isCompleted = index < analysis.currentStageIndex;
@@ -83,7 +83,7 @@ export function AnalysisPipelinePage() {
                         <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
                       </div>
                     ) : (
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f4e5dc]">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent">
                         <Circle className="h-3 w-3 text-muted-foreground" />
                       </div>
                     )}

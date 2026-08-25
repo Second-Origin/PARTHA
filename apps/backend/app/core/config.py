@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./.local/partha.db"
     redis_url: str = "redis://localhost:6379/0"
     storage_path: Path = Path("./.local/storage")
+    # Single-service hosting (#339): when a built frontend exists at this path,
+    # app.main mounts it and serves the SPA for any route the API router
+    # doesn't own. Absent in local dev (frontend runs on its own Vite server
+    # instead), so main.py treats a missing directory as "nothing to mount"
+    # rather than an error.
+    frontend_dist_path: Path = Path("../frontend/dist")
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
     )
@@ -150,7 +156,17 @@ class Settings(BaseSettings):
         parsed = urlparse(value)
         if not parsed.scheme:
             raise ValueError("DATABASE_URL must include a scheme.")
-        if parsed.scheme not in {"sqlite", "postgresql+psycopg", "postgresql"}:
+        if parsed.scheme in {"postgres", "postgresql"}:
+            # Managed Postgres providers (Render among them) hand back a bare
+            # postgres(ql):// connection string. The only driver this project
+            # installs is psycopg 3 (requirements.txt: psycopg/psycopg-binary,
+            # never psycopg2) -- confirmed empirically that create_engine on a
+            # bare postgresql:// URL raises ModuleNotFoundError for psycopg2,
+            # which is not installed and never will be. Normalize to the
+            # explicit +psycopg driver rather than requiring every deployment
+            # to hand-edit its provisioned connection string.
+            return "postgresql+psycopg://" + value.split("://", 1)[1]
+        if parsed.scheme not in {"sqlite", "postgresql+psycopg"}:
             raise ValueError(f"Unsupported database URL scheme: {parsed.scheme}")
         return value
 

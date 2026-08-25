@@ -34,7 +34,7 @@ export function RepositoriesPage() {
           <p className="mt-1 text-sm text-destructive/80">{error}</p>
           <button
             onClick={() => void retry()}
-          className="mt-4 rounded-xl border border-[#fa4d01]/35 px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+          className="mt-4 rounded-xl border border-primary/35 px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
           >
             Try again
           </button>
@@ -62,7 +62,7 @@ export function RepositoriesPage() {
       <PageHeader title="Repositories" description="Manage your uploaded repositories">
         <button
           onClick={() => navigate('/upload')}
-          className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)] hover:bg-primary/90 transition-colors"
+          className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
         >
           Upload New
         </button>
@@ -74,10 +74,10 @@ export function RepositoriesPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-3xl border border-[#fa4d01]/20 bg-card shadow-[0_14px_34px_rgba(48,21,47,0.05)] scrollbar-thin">
+      <div className="overflow-x-auto rounded-3xl border border-primary/20 bg-card shadow-[0_14px_34px_hsl(var(--foreground)/0.05)] scrollbar-thin">
         <table className="w-full min-w-[560px]">
           <thead>
-            <tr className="border-b border-[#fa4d01]/15 bg-[#fff7f1]">
+            <tr className="border-b border-primary/15 bg-accent">
               <th className="px-5 py-4 text-left text-2xs font-semibold text-primary uppercase tracking-[0.14em]">Name</th>
               <th className="px-5 py-4 text-left text-2xs font-semibold text-primary uppercase tracking-[0.14em] hidden sm:table-cell">Source</th>
               <th className="px-5 py-4 text-left text-2xs font-semibold text-primary uppercase tracking-[0.14em] hidden md:table-cell">Language</th>
@@ -93,7 +93,7 @@ export function RepositoriesPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: index * 0.03 }}
-              className="hover:bg-[#fff7f1] transition-colors"
+              className="hover:bg-accent transition-colors"
               >
                 <td className="px-5 py-4">
                   <button

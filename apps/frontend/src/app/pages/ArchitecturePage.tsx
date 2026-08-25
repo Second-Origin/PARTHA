@@ -90,13 +90,13 @@ export function ArchitecturePage() {
   }
 
   return (
-    <div className="-m-3 flex h-[calc(100dvh-5rem)] min-h-[560px] min-w-0 flex-col bg-[#fdfcf9] sm:-m-5 lg:-m-6">
-      <div className="flex min-w-0 flex-col items-start justify-between gap-3 border-b border-[#fa4d01]/15 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:px-6 lg:px-8">
+    <div className="-m-3 flex h-[calc(100dvh-5rem)] min-h-[560px] min-w-0 flex-col bg-background sm:-m-5 lg:-m-6">
+      <div className="flex min-w-0 flex-col items-start justify-between gap-3 border-b border-primary/15 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:px-6 lg:px-8">
         <div className="min-w-0"><p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">System view</p><h1 className="mt-1 min-w-0 truncate text-lg font-semibold text-foreground">Architecture · {architecture.model.repositoryName}</h1></div>
         <div className="flex max-w-full flex-wrap items-center gap-2">
           <Link
             to="/review"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[#fa4d01]/30 px-3 py-2 text-xs font-semibold text-foreground hover:bg-[#fff1e9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-primary/30 px-3 py-2 text-xs font-semibold text-foreground hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           >
             Engineering Review
             <ExternalLink className="h-3 w-3" />
@@ -104,7 +104,7 @@ export function ArchitecturePage() {
           <button
             type="button"
             onClick={() => setAuthPanelOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[#fa4d01]/30 px-3 py-2 text-xs font-semibold text-foreground hover:bg-[#fff1e9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-primary/30 px-3 py-2 text-xs font-semibold text-foreground hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
           >
             <ShieldCheck className="h-3.5 w-3.5" />
             Explain Authentication

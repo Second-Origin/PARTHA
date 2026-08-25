@@ -79,13 +79,13 @@ export function InsightsPage() {
       >
         <Link
           to="/architecture"
-          className="inline-flex items-center gap-1 rounded-xl border border-[#fa4d01]/30 px-3 py-2 text-xs font-semibold hover:bg-[#fff1e9]"
+          className="inline-flex items-center gap-1 rounded-xl border border-primary/30 px-3 py-2 text-xs font-semibold hover:bg-accent"
         >
           Architecture <ExternalLink className="h-3 w-3" />
         </Link>
         <Link
           to="/review"
-          className="inline-flex items-center gap-1 rounded-xl border border-[#fa4d01]/30 px-3 py-2 text-xs font-semibold hover:bg-[#fff1e9]"
+          className="inline-flex items-center gap-1 rounded-xl border border-primary/30 px-3 py-2 text-xs font-semibold hover:bg-accent"
         >
           Engineering Review <ExternalLink className="h-3 w-3" />
         </Link>
@@ -99,7 +99,7 @@ export function InsightsPage() {
         </p>
       </div>
 
-      <section aria-label="Insights identity" className="mb-6 grid gap-3 rounded-3xl border border-[#fa4d01]/20 bg-card p-5 shadow-[0_14px_34px_rgba(48,21,47,0.04)] sm:grid-cols-2 lg:grid-cols-4">
+      <section aria-label="Insights identity" className="mb-6 grid gap-3 rounded-3xl border border-primary/20 bg-card p-5 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)] sm:grid-cols-2 lg:grid-cols-4">
         <Identity label="Snapshot" value={data.snapshotId} />
         <Identity label="Snapshot schema" value={data.snapshotSchemaVersion} />
         <Identity label="Manifest digest" value={data.manifestDigest} />
@@ -117,7 +117,7 @@ export function InsightsPage() {
         <BreakdownCard title="Resolved relationships by predicate" items={data.relationshipsByPredicate} />
         <BreakdownCard title="Diagnostics by severity" items={data.diagnosticsBySeverity} />
         <BreakdownCard title="Language inventory" items={data.languages} />
-        <section className="rounded-3xl border border-[#fa4d01]/20 bg-card p-5 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+        <section className="rounded-3xl border border-primary/20 bg-card p-5 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
           <h2 className="text-sm font-medium text-foreground">Diagnostics by code</h2>
           {data.diagnosticsByCode.length === 0 ? (
             <p className="mt-3 text-xs text-muted-foreground">No diagnostics were stored in this snapshot.</p>
@@ -139,7 +139,7 @@ export function InsightsPage() {
         </section>
       </div>
 
-      <section className="mb-7 rounded-3xl border border-[#fa4d01]/20 bg-card p-5 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+      <section className="mb-7 rounded-3xl border border-primary/20 bg-card p-5 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
         <h2 className="text-sm font-medium text-foreground">Extractor inventory</h2>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[520px] text-left text-xs">
@@ -150,7 +150,7 @@ export function InsightsPage() {
                 <th className="pb-2 text-right font-medium">Evidence records</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#fa4d01]/10">
+            <tbody className="divide-y divide-primary/10">
               {data.extractorSet.map((extractor) => (
                 <tr key={`${extractor.name}@${extractor.version}`}>
                   <td className="py-2 font-mono text-foreground">{extractor.name}</td>
@@ -163,7 +163,7 @@ export function InsightsPage() {
         </div>
       </section>
 
-      <section className="mb-8 flex items-start gap-2 rounded-2xl border border-[#fa4d01]/20 bg-card p-4">
+      <section className="mb-8 flex items-start gap-2 rounded-2xl border border-primary/20 bg-card p-4">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         <div>
           <h2 className="text-sm font-medium text-foreground">Change over time</h2>
@@ -185,10 +185,10 @@ function MetricCard({ metric }: { metric: InsightMetric }) {
           : String(metric.value ?? 'Not available');
 
   return (
-    <article className="rounded-2xl border border-[#fa4d01]/20 bg-card p-4 shadow-[0_10px_24px_rgba(48,21,47,0.03)]">
+    <article className="rounded-2xl border border-primary/20 bg-card p-4 shadow-[0_10px_24px_hsl(var(--foreground)/0.03)]">
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-sm font-medium text-foreground">{metric.label}</h3>
-        <span className="rounded-lg bg-[#fff1e9] px-2 py-1 text-[10px] text-muted-foreground">{metric.unit}</span>
+        <span className="rounded-lg bg-accent px-2 py-1 text-[10px] text-muted-foreground">{metric.unit}</span>
       </div>
       <p className="mt-3 text-2xl font-semibold text-foreground">{value}</p>
       <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{metric.definition}</p>
@@ -199,7 +199,7 @@ function MetricCard({ metric }: { metric: InsightMetric }) {
 
 function BreakdownCard({ title, items }: { title: string; items: InsightBreakdown[] }) {
   return (
-    <section className="rounded-3xl border border-[#fa4d01]/20 bg-card p-5 shadow-[0_14px_34px_rgba(48,21,47,0.04)]">
+    <section className="rounded-3xl border border-primary/20 bg-card p-5 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
       <h2 className="text-sm font-medium text-foreground">{title}</h2>
       {items.length === 0 ? (
         <p className="mt-3 text-xs text-muted-foreground">No records are available for this breakdown.</p>

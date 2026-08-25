@@ -30,7 +30,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-HEAD_REVISION = "0010_account_deletion"
+HEAD_REVISION = "0012_waitlist_entries"
 REPRESENTATIVE_BASELINE = "0004_ai_provider_configs"
 REQUIRED_HEAD_TABLES = {
     "users",
@@ -39,6 +39,8 @@ REQUIRED_HEAD_TABLES = {
     "analysis_jobs",
     "ai_conversation_messages",
     "account_deletion_audits",
+    "invite_tokens",
+    "waitlist_entries",
 }
 
 

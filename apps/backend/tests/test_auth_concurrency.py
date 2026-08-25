@@ -74,9 +74,16 @@ def test_refresh_loser_revokes_family_making_winners_successor_unusable(client):
     from app.core.database import SessionLocal
     from app.models.refresh_token import RefreshToken
 
+    from tests.conftest import issue_invite_code
+
     settings = get_settings()
     register = client.post(
-        "/auth/register", json={"email": "family-revoke@example.com", "password": "correct-horse-battery"}
+        "/auth/register",
+        json={
+            "email": "family-revoke@example.com",
+            "password": "correct-horse-battery",
+            "inviteCode": issue_invite_code("test:family-revoke"),
+        },
     )
     raw = register.cookies.get("partha_refresh")
 

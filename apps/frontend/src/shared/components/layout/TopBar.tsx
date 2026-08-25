@@ -126,13 +126,13 @@ export function TopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-20 min-w-0 items-center justify-between gap-2 border-b border-[#fa4d01]/15 bg-[#fdfcf9]/95 px-3 backdrop-blur-sm sm:h-24 sm:px-7">
+    <header className="sticky top-0 z-30 flex h-20 min-w-0 items-center justify-between gap-2 border-b border-primary/15 bg-background/95 px-3 backdrop-blur-sm sm:h-24 sm:px-7">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <button
           type="button"
           onClick={() => setMobileSidebarOpen(true)}
           aria-label="Open navigation drawer"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#fa4d01]/20 text-muted-foreground hover:bg-accent md:hidden"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/20 text-muted-foreground hover:bg-accent md:hidden"
         >
           <Menu className="h-4 w-4" />
         </button>
@@ -144,7 +144,7 @@ export function TopBar() {
             aria-expanded={repoDropdownOpen}
             aria-controls="repository-selector-options"
             onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
-            className="flex max-w-[140px] items-center gap-2 rounded-xl border border-[#fa4d01]/20 bg-white px-3 py-2.5 text-sm transition-colors hover:bg-[#fff1e9] sm:max-w-[230px]"
+            className="flex max-w-[140px] items-center gap-2 rounded-xl border border-primary/20 bg-card px-3 py-2.5 text-sm transition-colors hover:bg-accent sm:max-w-[230px]"
           >
             <span className="text-muted-foreground truncate">
               {activeRepository ? activeRepository.name : 'No repository'}
@@ -157,7 +157,7 @@ export function TopBar() {
               id="repository-selector-options"
               role="listbox"
               aria-label="Repositories"
-              className="absolute top-full left-0 mt-2 w-64 rounded-2xl border border-[#fa4d01]/20 bg-popover shadow-lg animate-scale-in z-50"
+              className="absolute top-full left-0 mt-2 w-64 rounded-2xl border border-primary/20 bg-popover shadow-lg animate-scale-in z-50"
             >
               <div className="p-2">
                 {repositories.length === 0 ? (
@@ -176,7 +176,7 @@ export function TopBar() {
                       }}
                       className={cn(
                         'w-full flex items-center justify-between rounded-xl px-3 py-2 text-sm text-left hover:bg-accent transition-colors',
-                        activeRepository?.id === repo.id && 'bg-[#fff1e9]'
+                        activeRepository?.id === repo.id && 'bg-accent'
                       )}
                     >
                       <span className="truncate">{repo.name}</span>
@@ -200,7 +200,7 @@ export function TopBar() {
             className="partha-input w-full py-2 pl-9 pr-3 text-sm transition-shadow"
           />
           {searchQuery.trim() && (
-            <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-[#fa4d01]/20 bg-popover shadow-lg animate-scale-in z-50 p-2">
+            <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-primary/20 bg-popover shadow-lg animate-scale-in z-50 p-2">
               {searchResults.length === 0 ? (
                 <p className="px-3 py-2 text-sm text-muted-foreground">No matches found</p>
               ) : (
@@ -229,7 +229,7 @@ export function TopBar() {
       <div className="flex items-center gap-2">
         <button
           onClick={() => navigate('/upload')}
-          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_rgba(250,77,1,0.18)] hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
         >
           <Upload className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Upload</span>
@@ -259,7 +259,7 @@ export function TopBar() {
             )}
           </button>
           {notifOpen && (
-            <div className="absolute top-full right-0 mt-2 w-80 rounded-2xl border border-[#fa4d01]/20 bg-popover shadow-lg animate-scale-in z-50">
+            <div className="absolute top-full right-0 mt-2 w-80 rounded-2xl border border-primary/20 bg-popover shadow-lg animate-scale-in z-50">
               <div className="p-3 border-b border-border flex items-center justify-between">
                 <h3 className="text-sm font-medium">Notifications</h3>
                 {unreadCount > 0 && (
@@ -296,12 +296,12 @@ export function TopBar() {
             aria-label="Account menu"
             aria-haspopup="true"
             aria-expanded={userMenuOpen}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_14px_rgba(250,77,1,0.18)] hover:bg-primary/90 transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_14px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
           >
             <User aria-hidden="true" focusable="false" className="h-4 w-4" />
           </button>
           {userMenuOpen && (
-            <div className="absolute top-full right-0 mt-2 w-48 rounded-2xl border border-[#fa4d01]/20 bg-popover shadow-lg animate-scale-in z-50">
+            <div className="absolute top-full right-0 mt-2 w-48 rounded-2xl border border-primary/20 bg-popover shadow-lg animate-scale-in z-50">
               <div className="p-1">
                 <button
                   onClick={() => {
