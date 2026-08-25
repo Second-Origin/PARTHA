@@ -1,6 +1,20 @@
+import { execFile } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+
+const execFileAsync = promisify(execFile);
+const issueInviteScript = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'backend', 'scripts', 'issue_invite.py');
+
+async function issueInviteCode(): Promise<string> {
+  // Registration requires an invite code (#341); mint one the same way an
+  // operator would, through the real CLI, rather than reaching around it.
+  const python = process.env.PARTHA_FIXTURE_PYTHON ?? (process.platform === 'win32' ? 'python' : 'python3');
+  const { stdout } = await execFileAsync(python, [issueInviteScript, '--note', 'e2e second-owner spec']);
+  return stdout.trim();
+}
 
 interface Fixture {
   label: string;
@@ -176,7 +190,7 @@ test.describe('snapshot-backed Review and Insights journeys', () => {
     const email = `e2e-second-owner-${Date.now()}@example.com`;
     const password = 'Second-owner-fixture-2026';
     const registration = await request.post(`${FIXTURES.apiUrl}/auth/register`, {
-      data: { email, password },
+      data: { email, password, inviteCode: await issueInviteCode() },
     });
     expect(registration.status()).toBe(201);
     const accessToken = (await registration.json()).accessToken;

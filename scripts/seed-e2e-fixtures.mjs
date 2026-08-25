@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { chmod, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -9,6 +10,8 @@ const apiUrl = (process.env.PARTHA_FIXTURE_API_URL ?? 'http://127.0.0.1:8000').r
 const outputPath = process.env.PARTHA_VISUAL_FIXTURES ?? join(tmpdir(), 'partha-e2e-fixtures.json');
 const email = 'e2e-fixture@example.com';
 const password = 'E2e-fixture-2026';
+const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const issueInviteScript = join(repositoryRoot, 'apps', 'backend', 'scripts', 'issue_invite.py');
 
 const moduleSource = (name, imports = []) => [
   ...imports.map((target) => `import { value as dependency } from '${target}';`),
@@ -144,10 +147,18 @@ async function api(path, { token, method = 'GET', body, expected } = {}) {
   return { status: response.status, payload };
 }
 
+async function issueInviteCode() {
+  // Registration requires an invite code (#341); mint one the same way an
+  // operator would, through the real CLI, rather than reaching around it.
+  const python = process.env.PARTHA_FIXTURE_PYTHON ?? (process.platform === 'win32' ? 'python' : 'python3');
+  const { stdout } = await execFileAsync(python, [issueInviteScript, '--note', 'e2e fixture seeder']);
+  return stdout.trim();
+}
+
 async function authenticate() {
   const registration = await api('/auth/register', {
     method: 'POST',
-    body: { email, password },
+    body: { email, password, inviteCode: await issueInviteCode() },
     expected: [201, 409],
   });
   if (registration.status === 201) return registration.payload.accessToken;

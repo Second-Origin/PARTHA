@@ -1,6 +1,8 @@
 import os
+import secrets
 from collections.abc import Callable, Generator
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,15 +10,43 @@ from fastapi.testclient import TestClient
 DEFAULT_TEST_PASSWORD = "correct-horse-battery-staple"
 
 
-def register_user(client: TestClient, email: str, password: str = DEFAULT_TEST_PASSWORD) -> dict:
+def issue_invite_code(note: str | None = None) -> str:
+    """Insert a fresh, unredeemed invite token directly and return its raw
+    code (#341) -- registration requires one, and tests need a real,
+    single-use code the same way production issuance would produce one, not
+    a bypass around the check.
+    """
+    from app.auth.security import hash_invite_code
+    from app.core.database import SessionLocal
+    from app.models.invite_token import InviteToken
+
+    raw_code = secrets.token_urlsafe(24)
+    with SessionLocal() as session:
+        session.add(InviteToken(id=str(uuid4()), code_hash=hash_invite_code(raw_code), note=note))
+        session.commit()
+    return raw_code
+
+
+def register_user(
+    client: TestClient,
+    email: str,
+    password: str = DEFAULT_TEST_PASSWORD,
+    invite_code: str | None = None,
+) -> dict:
     """Register a user through the real endpoint and return an auth bundle.
 
     Returns a dict with ``token`` (access token), ``user`` (the user payload)
     and ``headers`` (a ready-to-use ``Authorization`` header), so tests can
     exercise the owner-scoped routes as a genuine authenticated caller rather
-    than relying on any pre-auth fallback (removed in E1.3 / #63).
+    than relying on any pre-auth fallback (removed in E1.3 / #63). Mints its
+    own invite code by default so every existing call site keeps working
+    unchanged; a test exercising invite behavior itself passes one in.
     """
-    response = client.post("/auth/register", json={"email": email, "password": password})
+    code = invite_code if invite_code is not None else issue_invite_code(f"test:{email}")
+    response = client.post(
+        "/auth/register",
+        json={"email": email, "password": password, "inviteCode": code},
+    )
     assert response.status_code == 201, response.text
     body = response.json()
     token = body["accessToken"]

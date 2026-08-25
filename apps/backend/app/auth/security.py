@@ -77,3 +77,12 @@ def new_refresh_token() -> str:
 
 def hash_refresh_token(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def hash_invite_code(raw: str) -> str:
+    """Same construction as hash_refresh_token, named separately: an invite
+    code and a refresh token are different secrets with different lifetimes,
+    and a shared helper would blur that even though the hash itself is
+    identical (sha256 hex digest -- both are high-entropy random tokens, not
+    passwords, so argon2 would be the wrong tool here)."""
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
