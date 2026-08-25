@@ -1,23 +1,14 @@
-import { Moon, Sun, SunMoon } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { useSettings } from '@/features/settings/hooks/useSettings';
 import { useAccountDeletion } from '@/features/settings/hooks/useAccountDeletion';
 import { useAuthStore } from '@/app/store/useAuthStore';
-import { useTheme, type ThemePreference } from '@/shared/hooks/useTheme';
 import { cn } from '@/shared/utils/cn';
-
-const THEME_OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'system', label: 'System', icon: SunMoon },
-];
 
 export function SettingsPage() {
   const settings = useSettings();
   const { tabs, activeTab, setActiveTab } = settings;
   const user = useAuthStore((state) => state.user);
   const deletion = useAccountDeletion();
-  const theme = useTheme();
   const providers = [
     ['openai', 'OpenAI'],
     ['anthropic', 'Anthropic'],
@@ -148,32 +139,6 @@ export function SettingsPage() {
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        )}
-        {activeTab === 'Appearance' && (
-          <div className="partha-surface p-4 sm:p-6">
-            <h2 className="text-sm font-medium text-foreground mb-1">Theme</h2>
-            <p className="text-xs text-muted-foreground mb-4">Choose how PARTHA looks on this device.</p>
-            <div role="radiogroup" aria-label="Theme" className="grid grid-cols-3 gap-2 sm:max-w-sm">
-              {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={theme.preference === value}
-                  onClick={() => theme.setPreference(value)}
-                  className={cn(
-                    'flex flex-col items-center gap-1.5 rounded-xl border px-3 py-3 text-xs font-medium transition-colors',
-                    theme.preference === value
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                  {label}
-                </button>
-              ))}
             </div>
           </div>
         )}
