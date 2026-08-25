@@ -90,7 +90,7 @@ def response_example(
     return {"description": description, "content": {media_type: media}}
 
 
-def error_responses(*status_codes: int) -> dict[int, dict[str, Any]]:
+def error_responses(*status_codes: int) -> dict[int | str, dict[str, Any]]:
     """Return documented standard-error responses for the supplied statuses."""
     missing = set(status_codes) - _ERROR_DESCRIPTIONS.keys()
     if missing:
@@ -134,9 +134,17 @@ def documented_responses(
     *error_status_codes: int,
     media_type: str = "application/json",
     schema: Mapping[str, Any] | None = None,
-) -> dict[int, dict[str, Any]]:
-    """Combine one success example with route-specific standard errors."""
-    responses = {
+) -> dict[int | str, dict[str, Any]]:
+    """Combine one success example with route-specific standard errors.
+
+    Typed with the ``int | str`` key FastAPI's own ``responses=`` parameter
+    declares (OpenAPI technically allows a "default" string key), not the
+    narrower ``int`` this always actually returns -- a ``dict[int, ...]``
+    return type is not assignable where ``dict[int | str, ...]`` is expected
+    (dict is invariant in its key type), so every caller with no other type
+    debt already covering the file would fail exactly the way this one did.
+    """
+    responses: dict[int | str, dict[str, Any]] = {
         success_status: response_example(
             success_description,
             success_example,

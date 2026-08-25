@@ -47,9 +47,11 @@ describe('deep-linked route reachability (#179)', () => {
     expect(
       await screen.findByRole('heading', { name: 'Reveal the system behind the code.', level: 1 }, { timeout: ROUTE_RENDER_TIMEOUT_MS }),
     ).toBeInTheDocument();
-    for (const startLink of screen.getAllByRole('link', { name: /analyze a repository/i })) {
-      expect(startLink).toHaveAttribute('href', '/register');
-    }
+    // Registration is invite-only (#341): an unauthenticated visitor's
+    // "analyze a repository" intent opens the waitlist rather than linking
+    // to /register, which they cannot usefully complete without an invite.
+    expect(screen.queryAllByRole('link', { name: /analyze a repository/i })).toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: /join the waitlist/i }).length).toBeGreaterThan(0);
   });
 
   it('renders Dashboard directly at /dashboard instead of 404ing', async () => {

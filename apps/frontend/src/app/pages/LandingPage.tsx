@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/app/store/useAuthStore';
+import { WaitlistModal } from '@/features/waitlist/components/WaitlistModal';
 import landingReference from '@/assets/landing/landing-reference.svg';
 
 /**
@@ -13,8 +14,20 @@ export function LandingPage() {
   const authenticated = useAuthStore((state) => state.status === 'authenticated');
   const [faqIndex, setFaqIndex] = useState<number | null>(null);
   const [footerNotice, setFooterNotice] = useState<string | null>(null);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
   const workspaceHref = authenticated ? '/dashboard' : '/login';
-  const analysisHref = authenticated ? '/upload' : '/register';
+
+  // Registration is invite-only (#341): an unauthenticated visitor's "analyze
+  // a repository" intent opens the waitlist instead of navigating to
+  // /register, which they cannot usefully complete without an invite yet.
+  const analysisCta = (className: string) =>
+    authenticated ? (
+      <Link className={className} to="/upload"><span className="sr-only">Analyze a repository</span></Link>
+    ) : (
+      <button type="button" className={`${className} border-0 bg-transparent p-0`} onClick={() => setWaitlistOpen(true)}>
+        <span className="sr-only">Join the waitlist</span>
+      </button>
+    );
 
   return (
     <main className="min-h-screen bg-[#fdfcf9] text-[#30152f]">
@@ -33,7 +46,7 @@ export function LandingPage() {
           <a className="pointer-events-auto absolute left-[46.2%] top-[0.45%] h-[1.15%] w-[9.2%]" href="#capabilities"><span className="sr-only">Capabilities</span></a>
           <a className="pointer-events-auto absolute left-[56.5%] top-[0.45%] h-[1.15%] w-[4.5%]" href="#faq"><span className="sr-only">Frequently asked questions</span></a>
           <Link className="pointer-events-auto absolute left-[76%] top-[0.45%] h-[1.15%] w-[5.8%]" to={workspaceHref}><span className="sr-only">{authenticated ? 'Open workspace' : 'Log in'}</span></Link>
-          <Link className="pointer-events-auto absolute left-[82%] top-[0.35%] h-[1.35%] w-[11%]" to={analysisHref}><span className="sr-only">{authenticated ? 'Analyze a repository' : 'Create account'}</span></Link>
+          {analysisCta('pointer-events-auto absolute left-[82%] top-[0.35%] h-[1.35%] w-[11%]')}
         </nav>
 
         <div id="product" className="absolute left-0 top-[18.5%]" />
@@ -42,7 +55,7 @@ export function LandingPage() {
         <div id="faq" className="absolute left-0 top-[72.5%]" />
 
         <a className="absolute left-[28.2%] top-[13.5%] z-20 h-[1.35%] w-[19.1%]" href="#how-it-works"><span className="sr-only">See how PARTHA works</span></a>
-        <Link className="absolute left-[49.4%] top-[13.5%] z-20 h-[1.35%] w-[22.4%]" to={analysisHref}><span className="sr-only">Analyze a repository</span></Link>
+        {analysisCta('absolute left-[49.4%] top-[13.5%] z-20 h-[1.35%] w-[22.4%]')}
 
         {faqQuestions.map((question, index) => (
           <button
@@ -55,7 +68,7 @@ export function LandingPage() {
           />
         ))}
 
-        <Link className="absolute left-[36.1%] top-[87.55%] z-20 h-[1.3%] w-[14.8%]" to={analysisHref}><span className="sr-only">Analyze a repository</span></Link>
+        {analysisCta('absolute left-[36.1%] top-[87.55%] z-20 h-[1.3%] w-[14.8%]')}
         <a className="absolute left-[51%] top-[87.55%] z-20 h-[1.3%] w-[14.8%]" href="https://discord.gg/qvk9DcxDA" target="_blank" rel="noreferrer"><span className="sr-only">Get in touch with PARTHA</span></a>
 
         <Link className="absolute left-[6.2%] top-[91.9%] z-20 h-[4.3%] w-[22.4%]" to="/" aria-label="PARTHA home" />
@@ -78,6 +91,8 @@ export function LandingPage() {
             </div>
           </div>
         )}
+
+        {waitlistOpen && <WaitlistModal onClose={() => setWaitlistOpen(false)} />}
 
         {footerNotice && (
           <div role="status" className="fixed bottom-5 left-1/2 z-50 w-[min(92vw,34rem)] -translate-x-1/2 rounded-2xl border border-[#fa4d01]/35 bg-[#fffdf9] px-5 py-4 text-center text-sm font-medium text-[#30152f] shadow-xl">
