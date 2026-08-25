@@ -476,3 +476,59 @@ def test_authentication_explanation_evidence_fact_ids_resolve_to_real_facts(auth
         for citation in relationship["evidence"]:
             assert citation["factId"] in edge_ids
             assert citation["path"] in source_paths
+
+
+# A real, connected auth chain in production source alongside a structurally
+# identical one whose every file lives under tests/ -- reproducing the
+# 2026-08-20 audit finding that a benchmark test fixture was picked as "the"
+# authentication flow for PARTHA's own repository (#337).
+_AUTH_SOURCES_WITH_TEST_FIXTURE = {
+    **_AUTH_SOURCES,
+    "tests/fixtures/dependencies.py": (
+        b"from tests.fixtures.services import UserService\n\n\n"
+        b"def get_current_user(token: str) -> dict:\n"
+        b"    return UserService(token)\n"
+    ),
+    "tests/fixtures/services.py": (
+        b"def UserService(token: str) -> dict:\n"
+        b"    return {'token': token}\n"
+    ),
+    "tests/fixtures/routes.py": (
+        b"from fastapi import FastAPI, Depends\n"
+        b"from tests.fixtures.dependencies import get_current_user\n\n"
+        b"app = FastAPI()\n\n\n"
+        b"@app.get(\"/me\")\n"
+        b"def read_me(user=Depends(get_current_user)):\n"
+        b"    return user\n"
+    ),
+}
+
+
+def test_authentication_explanation_excludes_test_fixture_routes(auth_client):
+    """A route defined only in a test/fixture path must never be claimed as
+    this repository's authentication flow, even when it is itself a
+    structurally valid guarded route (#337)."""
+
+    repository = _upload(auth_client, _AUTH_SOURCES_WITH_TEST_FIXTURE)
+    _persist_snapshot(repository["id"], _AUTH_SOURCES_WITH_TEST_FIXTURE)
+
+    response = auth_client.get(f"/analysis/{repository['id']}/architecture/authentication")
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    for claim in body["claims"]:
+        for citation in claim["evidence"]:
+            assert not citation["path"].startswith("tests/"), (
+                f"claim {claim['name']!r} is backed by a test-fixture path {citation['path']!r}"
+            )
+
+    # The real route from src/routes.py is still reported -- this excludes
+    # the fixture, it does not suppress genuine findings. Both "/me" routes
+    # share the same display name, so the count (not just the name set)
+    # is what proves the fixture's duplicate was actually dropped.
+    route_claims = [claim for claim in body["claims"] if claim["kind"] == "route"]
+    assert len(route_claims) == 1
+    assert route_claims[0]["name"] == "/me"
+    assert len(body["chains"]) == 1
+    assert body["chains"][0]["route"] == "/me"
+    assert all(hop["evidence"][0]["path"].startswith("src/") for hop in body["chains"][0]["hops"])

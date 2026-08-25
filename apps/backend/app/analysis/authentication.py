@@ -41,6 +41,7 @@ from app.schemas.authentication import (
 _GUARD_CLASSIFICATION = "auth_dependency"
 _SERVICE_CLASSIFICATION = "service"
 _MODEL_CLASSIFICATION = "model"
+_TEST_FILE_ROLE = "test"
 _DIAGNOSTIC_CODES = frozenset({"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS", "RI-EXT-UNSUPPORTED", "RI-SRC-MALFORMED"})
 _MAX_DIAGNOSTICS = 50
 
@@ -103,12 +104,21 @@ class _AuthenticationSubgraphBuilder:
         self.nodes_by_key: dict[str, RiNode] = {node.stable_key: node for node in facts.nodes}
 
         self.classifications: dict[str, set[str]] = defaultdict(set)
+        # Path -> role classifier's file-level classification (e.g. "test"),
+        # keyed the same way architecture.py's _file_roles reads the same
+        # classified_as assertions -- kept separate from the symbol-level
+        # dict above (subject_kind differs) rather than merged into it.
+        self.file_roles: dict[str, str] = {}
         for assertion in facts.assertions:
-            if assertion.predicate != "classified_as" or assertion.subject_kind != "symbol":
+            if assertion.predicate != "classified_as":
                 continue
             classification = str((assertion.value or {}).get("classification", ""))
-            if classification:
+            if not classification:
+                continue
+            if assertion.subject_kind == "symbol":
                 self.classifications[assertion.subject_key].add(classification)
+            elif assertion.subject_kind == "file":
+                self.file_roles[assertion.subject_key.removeprefix("file:")] = classification
 
         self.injects_by_subject: dict[str, list[RiEdge]] = defaultdict(list)
         self.calls_by_subject: dict[str, list[RiEdge]] = defaultdict(list)
@@ -176,6 +186,13 @@ class _AuthenticationSubgraphBuilder:
         route_node = self.nodes_by_key.get(route_edge.subject_key)
         handler_node = self.nodes_by_key.get(route_edge.object_key)
         if route_node is None or handler_node is None:
+            return
+        if self._defined_in_test_file(route_node) or self._defined_in_test_file(handler_node):
+            # A route only ever exists here because a benchmark/test fixture
+            # happens to define something that structurally looks like a
+            # guarded route -- real repository code, not the fixture, is
+            # what a user asked to understand (#337). The underlying facts
+            # are untouched; this only excludes them from this explanation.
             return
         route_evidence = self._edge_evidence(route_edge)
         if not route_evidence:
@@ -329,6 +346,11 @@ class _AuthenticationSubgraphBuilder:
         self._relationship_by_key[key] = relationship
         self.relationships.append(relationship)
         return relationship
+
+    def _defined_in_test_file(self, node: RiNode) -> bool:
+        return any(
+            self.file_roles.get(item.path) == _TEST_FILE_ROLE for item in self.facts.node_evidence.get(node.id, [])
+        )
 
     def _node_evidence(self, node: RiNode) -> list[AuthEvidenceRef]:
         return [

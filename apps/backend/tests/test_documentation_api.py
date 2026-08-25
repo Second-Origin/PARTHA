@@ -176,6 +176,48 @@ def test_documentation_deployment_section_matches_real_deployment_yaml_only(auth
     assert "config/app.yaml" not in deployment
 
 
+def test_documentation_api_section_excludes_test_fixture_routes(auth_client):
+    """Reproduces the 2026-08-20 audit finding that generated API
+    documentation listed benchmark test-fixture routes (e.g. /config,
+    /test) undistinguished from real API routes (#337)."""
+
+    repository_id = _upload_and_analyse(
+        auth_client,
+        {
+            "src/routes.py": (
+                "from fastapi import FastAPI\n\n"
+                "app = FastAPI()\n\n\n"
+                "@app.get(\"/users\")\n"
+                "def list_users():\n"
+                "    return []\n"
+            ),
+            "tests/fixtures/routes.py": (
+                "from fastapi import FastAPI\n\n"
+                "app = FastAPI()\n\n\n"
+                "@app.get(\"/config\")\n"
+                "def config():\n"
+                "    return {}\n\n\n"
+                "@app.get(\"/test\")\n"
+                "def test_route():\n"
+                "    return {}\n"
+            ),
+        },
+    )
+
+    response = auth_client.post(
+        "/documentation/generate",
+        json={"repositoryId": repository_id, "format": "markdown", "sections": ["api"]},
+    )
+
+    assert response.status_code == 200, response.text
+    api_section = _markdown_section(response.json()["content"], "API")
+    assert "/users" in api_section
+    assert "src/routes.py" in api_section
+    assert "/config" not in api_section
+    assert "/test" not in api_section
+    assert "tests/fixtures/routes.py" not in api_section
+
+
 def test_documentation_is_owner_scoped(auth_client, make_auth_headers):
     repository_id = _import_sample(auth_client)
     other = make_auth_headers("other-docs@example.com")
