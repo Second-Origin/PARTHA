@@ -1,4 +1,4 @@
-import { Monitor, Moon, Sun } from 'lucide-react';
+import { Laptop, Moon, Sun } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import type { LandingThemePreference } from '../hooks/useLandingTheme';
 
@@ -9,15 +9,19 @@ interface ThemeSwitcherProps {
 }
 
 const OPTIONS: { value: LandingThemePreference; label: string; icon: typeof Sun }[] = [
-  { value: 'system', label: 'System', icon: Monitor },
+  { value: 'system', label: 'System', icon: Laptop },
   { value: 'light', label: 'Light', icon: Sun },
   { value: 'dark', label: 'Dark', icon: Moon },
 ];
 
-/** Restyled, icon-only variant of the Settings > Appearance radiogroup
- * pattern -- same interaction model, but matched to the flat black/white/
- * orange landing palette from the Figma dark-mode reference rather than
- * the app's card/border tokens. */
+/** Traced directly from the Figma dark-mode reference's footer artwork
+ * (Container-PARTHA-product.svg): a flat pill with a 1px --primary border
+ * and three uniformly --muted-foreground icons. The reference art has no
+ * active/selected-state treatment at all -- no fill, no highlight -- so
+ * this doesn't add one either. aria-checked is still set correctly on the
+ * selected option: that's a semantic attribute for assistive tech, not a
+ * visual element, and leaving it out would be an accessibility regression
+ * the reference (a static image) has no opinion on either way. */
 export function ThemeSwitcher({ preference, onChange, className }: ThemeSwitcherProps) {
   return (
     <div
@@ -33,10 +37,7 @@ export function ThemeSwitcher({ preference, onChange, className }: ThemeSwitcher
           aria-checked={preference === value}
           aria-label={label}
           onClick={() => onChange(value)}
-          className={cn(
-            'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-            preference === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-          )}
+          className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
         >
           <Icon className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
