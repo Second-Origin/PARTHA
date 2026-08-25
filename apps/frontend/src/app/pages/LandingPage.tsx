@@ -62,7 +62,7 @@ export function LandingPage() {
         <ThemeSwitcher
           preference={theme.preference}
           onChange={theme.setPreference}
-          className="pointer-events-auto absolute right-[6.2%] top-[97.4%] z-20 bg-background/80 backdrop-blur-sm"
+          className="pointer-events-auto absolute right-[6.2%] top-[97.4%] z-20"
         />
 
         <nav aria-label="PARTHA landing navigation" className="pointer-events-none absolute inset-0 z-20">

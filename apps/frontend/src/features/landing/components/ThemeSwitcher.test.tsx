@@ -28,4 +28,13 @@ describe('ThemeSwitcher', () => {
 
     expect(onChange).toHaveBeenCalledWith('dark');
   });
+
+  it('renders every option identically regardless of selection -- the reference art has no active-state indicator', () => {
+    render(<ThemeSwitcher preference="dark" onChange={vi.fn()} />);
+
+    const options = screen.getAllByRole('radio');
+    const classSets = options.map((option) => option.className);
+    expect(new Set(classSets).size).toBe(1);
+    expect(classSets[0]).not.toMatch(/bg-primary|text-primary-foreground/);
+  });
 });
