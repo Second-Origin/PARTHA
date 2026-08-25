@@ -23,6 +23,22 @@ def register_user(client: TestClient, email: str, password: str = DEFAULT_TEST_P
     return {"token": token, "user": body["user"], "headers": {"Authorization": f"Bearer {token}"}}
 
 
+@pytest.fixture(autouse=True)
+def _no_frontend_dist_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test gets a FRONTEND_DIST_PATH guaranteed not to exist (#339),
+    regardless of which fixture (or none) it uses to build the app.
+
+    Without this, the default relative frontend_dist_path resolves against
+    whatever the process's actual cwd is, so a developer who happens to have
+    a real apps/frontend/dist built locally would get different backend
+    test behavior than someone who doesn't -- and CI, which never builds the
+    frontend, than either of them. A test that specifically wants the SPA
+    mount (see test_frontend_hosting.py) overrides this after depending on
+    it, same as any other monkeypatch.setenv call.
+    """
+    monkeypatch.setenv("FRONTEND_DIST_PATH", str(tmp_path / "no-frontend-dist-here"))
+
+
 @pytest.fixture()
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
     database_path = tmp_path / "partha-test.db"

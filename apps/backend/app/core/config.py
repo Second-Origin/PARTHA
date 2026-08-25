@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./.local/partha.db"
     redis_url: str = "redis://localhost:6379/0"
     storage_path: Path = Path("./.local/storage")
+    # Single-service hosting (#339): when a built frontend exists at this path,
+    # app.main mounts it and serves the SPA for any route the API router
+    # doesn't own. Absent in local dev (frontend runs on its own Vite server
+    # instead), so main.py treats a missing directory as "nothing to mount"
+    # rather than an error.
+    frontend_dist_path: Path = Path("../frontend/dist")
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
     )
