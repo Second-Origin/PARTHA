@@ -66,6 +66,11 @@ npm run dev:frontend
 
 Register an account through the UI, then sign in.
 
+For a fuller walkthrough — confirming the backend is actually up, running
+every test/lint/build command, and fixing the local database or API-contract
+failures you're most likely to hit — see
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
 ### Where the code lives
 
 | Path | Contents |
