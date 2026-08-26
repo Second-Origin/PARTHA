@@ -89,6 +89,8 @@ export type AiProviderConfig = components['schemas']['AiProviderConfig'];
 export type AiProviderPublicConfig = components['schemas']['AiProviderPublicConfig'];
 export type AiProviderTestRequest = components['schemas']['AiProviderTestRequest'];
 export type AiProviderTestResponse = components['schemas']['AiProviderTestResponse'];
+export type AiProviderCapability = components['schemas']['AiProviderCapability'];
+export type AiProviderCapabilitiesResponse = components['schemas']['AiProviderCapabilitiesResponse'];
 export interface AiConversationResponse {
   repositoryId: string;
   messages: AiMessage[];

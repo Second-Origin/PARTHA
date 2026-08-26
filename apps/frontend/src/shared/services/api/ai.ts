@@ -4,6 +4,7 @@ import type {
   AiConversationResponse,
   AiQueryRequest,
   AiQueryResponse,
+  AiProviderCapabilitiesResponse,
   AiProviderConfig,
   AiProviderPublicConfig,
   AiProviderTestRequest,
@@ -11,6 +12,10 @@ import type {
 } from './types';
 
 export const aiService = {
+  getProviders(config?: RequestConfig): Promise<AiProviderCapabilitiesResponse> {
+    return api.get('/ai/providers', config);
+  },
+
   getConfig(config?: RequestConfig): Promise<AiProviderPublicConfig> {
     return api.get('/ai/config', config);
   },

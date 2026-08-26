@@ -73,3 +73,25 @@ class AiProviderTestResponse(CamelModel):
     ok: bool
     message: str
     checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class AiProviderCapability(CamelModel):
+    """Safe, non-secret setup metadata for one provider (#291).
+
+    Never carries an API key, provider token, environment value, or private
+    endpoint -- only public facts about what the save/test flow requires and
+    where to go set it up.
+    """
+
+    provider: AiProvider
+    display_name: str
+    requires_api_key: bool
+    requires_base_url: bool
+    default_model: str
+    setup_url: str
+    setup_steps: list[str]
+    support_state: str
+
+
+class AiProviderCapabilitiesResponse(CamelModel):
+    providers: list[AiProviderCapability]

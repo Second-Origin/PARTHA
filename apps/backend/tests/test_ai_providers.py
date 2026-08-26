@@ -12,7 +12,7 @@ from app.ai.providers.openai import OpenAIProvider
 from app.ai.providers.openrouter import OpenRouterProvider
 from app.ai.types import AiProviderConfig, PromptBundle
 from app.api.deps import get_provider_registry
-from app.core.exceptions import ExternalServiceError, ValidationServiceError
+from app.core.exceptions import ExternalServiceError, TimeoutServiceError, ValidationServiceError
 
 
 PROMPT = PromptBundle(system_prompt="System prompt", user_prompt="User prompt")
@@ -108,15 +108,78 @@ def test_cloud_providers_require_a_key_before_sending(provider_class, config):
     assert sender.calls == []
 
 
-def test_provider_network_errors_remain_normalized():
+def test_provider_connect_errors_get_an_honest_unreachable_message():
+    """#291: "unreachable Ollama" and "invalid base URL" surface identically
+    at the connection layer, so one honest message covers both rather than
+    guessing which one it was."""
+
     request = httpx.Request("POST", "https://provider.example")
     sender = RecordingSender({}, httpx.ConnectError("network failed", request=request))
 
     with pytest.raises(ExternalServiceError) as caught:
         asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
 
-    assert caught.value.message == "AI provider request failed."
+    assert "Could not reach the AI provider" in caught.value.message
     assert caught.value.details == {"provider": "openai"}
+
+
+def test_provider_connect_timeout_is_also_reported_as_unreachable():
+    """httpx.ConnectTimeout inherits from both ConnectError and
+    TimeoutException; a timeout during the connect phase itself should read
+    as unreachable, not as "the provider is just slow to answer"."""
+
+    request = httpx.Request("POST", "https://provider.example")
+    sender = RecordingSender({}, httpx.ConnectTimeout("connect timed out", request=request))
+
+    with pytest.raises(ExternalServiceError) as caught:
+        asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
+
+    assert "Could not reach the AI provider" in caught.value.message
+
+
+def test_provider_read_timeout_is_reported_as_a_timeout_not_unreachable():
+    request = httpx.Request("POST", "https://provider.example")
+    sender = RecordingSender({}, httpx.ReadTimeout("read timed out", request=request))
+
+    with pytest.raises(TimeoutServiceError) as caught:
+        asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
+
+    assert "did not respond in time" in caught.value.message
+
+
+@pytest.mark.parametrize("status_code", (401, 403))
+def test_provider_auth_rejection_explains_the_key_is_the_problem(status_code):
+    request = httpx.Request("POST", "https://provider.example")
+    response = httpx.Response(status_code, request=request)
+    sender = RecordingSender({}, httpx.HTTPStatusError("unauthorized", request=request, response=response))
+
+    with pytest.raises(ValidationServiceError) as caught:
+        asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
+
+    assert "rejected the API key" in caught.value.message
+
+
+def test_provider_rate_limit_is_explained_in_plain_language():
+    request = httpx.Request("POST", "https://provider.example")
+    response = httpx.Response(429, request=request)
+    sender = RecordingSender({}, httpx.HTTPStatusError("too many requests", request=request, response=response))
+
+    with pytest.raises(ExternalServiceError) as caught:
+        asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
+
+    assert "rate limit" in caught.value.message.lower()
+
+
+@pytest.mark.parametrize("status_code", (400, 404, 422))
+def test_provider_bad_request_is_explained_as_an_unsupported_model(status_code):
+    request = httpx.Request("POST", "https://provider.example")
+    response = httpx.Response(status_code, request=request)
+    sender = RecordingSender({}, httpx.HTTPStatusError("bad request", request=request, response=response))
+
+    with pytest.raises(ValidationServiceError) as caught:
+        asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
+
+    assert "unsupported model" in caught.value.message.lower()
 
 
 def test_provider_response_parsing_errors_remain_normalized():

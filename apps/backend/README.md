@@ -126,6 +126,7 @@ one account cannot query another account's repository or snapshots.
 
 | Endpoint | Purpose |
 | --- | --- |
+| `GET /ai/providers` | Static, non-secret setup metadata for every supported provider — display name, whether it needs an API key and/or a base URL, its default model, an official setup link, and a short ordered setup checklist. Backs the frontend's provider picker so it never hardcodes provider requirements. |
 | `GET`/`PUT /ai/config` | Read or replace the caller's provider configuration. The API key is Fernet-encrypted at rest; only its last four characters are ever returned. |
 | `POST /ai/test` | Validate a configuration against the provider without storing an answer. |
 | `POST /ai/query` | Ask a question. Receives sealed-snapshot structural facts and observed paths — never source bytes or line spans — so answers carry no automatic citations. |

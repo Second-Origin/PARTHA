@@ -9,7 +9,7 @@ import httpx
 
 from app.core.ai_egress import DestinationPolicyError, ProviderEgressPolicy
 from app.ai.types import AiProviderConfig
-from app.core.exceptions import ExternalServiceError, ValidationServiceError
+from app.core.exceptions import ExternalServiceError, TimeoutServiceError, ValidationServiceError
 
 
 class ProviderHttpSender(Protocol):
@@ -80,6 +80,32 @@ def require_api_key(config: AiProviderConfig) -> None:
         raise ValidationServiceError("API key is required for the selected AI provider.")
 
 
+def _plain_language_status_error(config: AiProviderConfig, exc: httpx.HTTPStatusError) -> Exception:
+    """Translate a provider's HTTP status into one of #291's named plain-
+    language failure modes, using only the status code -- never the response
+    body, whose shape differs per provider and could itself carry sensitive
+    detail worth not repeating verbatim to the client."""
+
+    status = exc.response.status_code
+    if status in (401, 403):
+        return ValidationServiceError(
+            "AI provider rejected the API key. Confirm the key is correct and still active, then save it again.",
+            {"provider": config.provider},
+        )
+    if status == 429:
+        return ExternalServiceError(
+            "AI provider rate limit reached. Wait a moment and try again.",
+            {"provider": config.provider},
+        )
+    if status in (400, 404, 422):
+        return ValidationServiceError(
+            "AI provider rejected the request, most likely because of an unsupported model ID. "
+            "Confirm the model ID and try again.",
+            {"provider": config.provider},
+        )
+    return ExternalServiceError("AI provider request failed.", {"provider": config.provider})
+
+
 async def post(
     config: AiProviderConfig,
     url: str,
@@ -98,5 +124,27 @@ async def post(
         raise ValidationServiceError("AI provider destination is not permitted.") from exc
     except RedirectDeniedError as exc:
         raise ExternalServiceError("AI provider request failed.", {"provider": config.provider}) from exc
+    except httpx.HTTPStatusError as exc:
+        raise _plain_language_status_error(config, exc) from exc
+    except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+        # httpx.ConnectTimeout does NOT inherit from httpx.ConnectError in
+        # this version (both are separate httpx.TransportError subclasses),
+        # so it needs its own explicit clause here, ahead of the broader
+        # httpx.TimeoutException below -- a timeout during the connect phase
+        # itself (as opposed to a slow response after connecting fine) reads
+        # the same as "unreachable" here. The most common cause in practice
+        # is a local/self-hosted provider (Ollama) that isn't running, or a
+        # base URL that's wrong -- both surface identically at this layer,
+        # so the message covers both rather than guessing which one it was.
+        raise ExternalServiceError(
+            "Could not reach the AI provider. If it's self-hosted (e.g. Ollama), confirm it's running and "
+            "the base URL is correct.",
+            {"provider": config.provider},
+        ) from exc
+    except httpx.TimeoutException as exc:
+        raise TimeoutServiceError(
+            "AI provider did not respond in time. Try again in a moment.",
+            {"provider": config.provider},
+        ) from exc
     except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
         raise ExternalServiceError("AI provider request failed.", {"provider": config.provider}) from exc

@@ -140,7 +140,7 @@ export function AIWorkspacePage() {
                 No AI provider is configured. Free-form questions cannot run until you save a provider in{' '}
                 <button
                   type="button"
-                  onClick={() => navigate('/settings')}
+                  onClick={() => navigate('/settings?tab=AI+Providers')}
                   className="underline underline-offset-2 hover:text-amber-100"
                 >
                   Settings

@@ -1,24 +1,56 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { aiService, getErrorMessage } from '@/shared/services/api';
-import type { AiProvider, AiProviderPublicConfig } from '@/shared/services/api/types';
+import type { AiProvider, AiProviderCapability, AiProviderPublicConfig } from '@/shared/services/api/types';
 
 export const settingsTabs = ['General', 'AI Providers', 'Notifications', 'API Keys'] as const;
 export type SettingsTab = (typeof settingsTabs)[number];
 
-const defaultModels: Record<AiProvider, string> = {
-  openai: 'gpt-4o-mini',
-  anthropic: 'claude-3-5-haiku-latest',
-  gemini: 'gemini-1.5-flash',
-  openrouter: 'openai/gpt-4o-mini',
-  ollama: 'llama3.2',
-};
+const TAB_QUERY_PARAM = 'tab';
+
+function isSettingsTab(value: string | null): value is SettingsTab {
+  return settingsTabs.includes(value as SettingsTab);
+}
 
 export function useSettings() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('General');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get(TAB_QUERY_PARAM);
+  const [activeTab, setActiveTabState] = useState<SettingsTab>(
+    isSettingsTab(tabFromUrl) ? tabFromUrl : 'General',
+  );
+
+  useEffect(() => {
+    if (isSettingsTab(tabFromUrl) && tabFromUrl !== activeTab) {
+      setActiveTabState(tabFromUrl);
+    }
+    // Only react to the URL changing out from under us (e.g. a link into
+    // Settings); setActiveTab below is the source of truth for user clicks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabFromUrl]);
+
+  const setActiveTab = useCallback(
+    (tab: SettingsTab) => {
+      setActiveTabState(tab);
+      setSearchParams((previous) => {
+        const next = new URLSearchParams(previous);
+        next.set(TAB_QUERY_PARAM, tab);
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const [capabilities, setCapabilities] = useState<AiProviderCapability[]>([]);
+  const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null);
+  const capabilityByProvider = useMemo(
+    () => new Map(capabilities.map((capability) => [capability.provider, capability])),
+    [capabilities],
+  );
+
   const [aiConfig, setAiConfig] = useState<AiProviderPublicConfig | null>(null);
   const [provider, setProvider] = useState<AiProvider>('openai');
   const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState(defaultModels.openai);
+  const [model, setModel] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -29,16 +61,21 @@ export function useSettings() {
     let cancelled = false;
     async function load() {
       try {
-        const config = await aiService.getConfig();
+        const [providersResponse, config] = await Promise.all([aiService.getProviders(), aiService.getConfig()]);
         if (cancelled) return;
+        setCapabilities(providersResponse.providers);
         setAiConfig(config);
+        const defaultModelFor = (id: AiProvider) =>
+          providersResponse.providers.find((capability) => capability.provider === id)?.defaultModel ?? '';
         if (config.provider) {
           setProvider(config.provider);
-          setModel(config.model || defaultModels[config.provider]);
+          setModel(config.model || defaultModelFor(config.provider));
           setBaseUrl(config.baseUrl || '');
+        } else {
+          setModel(defaultModelFor('openai'));
         }
       } catch (caught) {
-        if (!cancelled) setError(getErrorMessage(caught));
+        if (!cancelled) setCapabilitiesError(getErrorMessage(caught));
       }
     }
     void load();
@@ -47,22 +84,26 @@ export function useSettings() {
     };
   }, []);
 
-  const chooseProvider = useCallback((nextProvider: AiProvider) => {
-    setProvider(nextProvider);
-    setModel(defaultModels[nextProvider]);
-    setStatusMessage(null);
-    setError(null);
-  }, []);
+  const chooseProvider = useCallback(
+    (nextProvider: AiProvider) => {
+      setProvider(nextProvider);
+      setModel(capabilityByProvider.get(nextProvider)?.defaultModel ?? '');
+      setStatusMessage(null);
+      setError(null);
+    },
+    [capabilityByProvider],
+  );
 
   const saveAiConfig = useCallback(async () => {
     setLoading(true);
     setError(null);
     setStatusMessage(null);
     try {
+      const defaultModel = capabilityByProvider.get(provider)?.defaultModel;
       const config = await aiService.saveConfig({
         provider,
         apiKey: apiKey.trim() || undefined,
-        model: model.trim() || defaultModels[provider],
+        model: model.trim() || defaultModel,
         baseUrl: baseUrl.trim() || undefined,
       });
       setAiConfig(config);
@@ -73,17 +114,18 @@ export function useSettings() {
     } finally {
       setLoading(false);
     }
-  }, [apiKey, baseUrl, model, provider]);
+  }, [apiKey, baseUrl, capabilityByProvider, model, provider]);
 
   const testAiConfig = useCallback(async () => {
     setTesting(true);
     setError(null);
     setStatusMessage(null);
     try {
+      const defaultModel = capabilityByProvider.get(provider)?.defaultModel;
       const response = await aiService.testConfig({
         provider,
         apiKey: apiKey.trim() || undefined,
-        model: model.trim() || defaultModels[provider],
+        model: model.trim() || defaultModel,
         baseUrl: baseUrl.trim() || undefined,
       });
       setStatusMessage(response.message);
@@ -92,12 +134,15 @@ export function useSettings() {
     } finally {
       setTesting(false);
     }
-  }, [apiKey, baseUrl, model, provider]);
+  }, [apiKey, baseUrl, capabilityByProvider, model, provider]);
 
   return {
     tabs: settingsTabs,
     activeTab,
     setActiveTab,
+    capabilities,
+    capabilitiesError,
+    activeCapability: capabilityByProvider.get(provider) ?? null,
     aiConfig,
     provider,
     setProvider: chooseProvider,
