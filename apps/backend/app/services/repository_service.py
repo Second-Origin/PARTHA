@@ -12,7 +12,7 @@ from app.core.config import Settings
 from app.core.exceptions import ConflictServiceError, NotFoundError, ServiceError, ValidationServiceError
 from app.github.client import GitHubClient
 from app.models.repository import RepositoryRecord
-from app.parsers.repository_parser import RepositoryFileLimitExceeded, RepositoryParser
+from app.parsers.repository_parser import RepositoryFileLimitExceeded, RepositoryParser, UnsafeRepositoryPath
 from app.repositories.repository_repository import RepositoryRepository
 from app.schemas.repository import (
     FileTreeNode,
@@ -298,6 +298,17 @@ class RepositoryService:
             raise ValidationServiceError(
                 "Repository exceeds the configured maximum file count.",
                 {"maxFileCount": exc.max_file_count, "fileCount": exc.file_count},
+            ) from exc
+        except UnsafeRepositoryPath as exc:
+            # Matches the archive-upload posture (storage/local.py rejects any
+            # symlink/link/device member in a TAR before extraction): a
+            # GitHub-cloned checkout containing a symlink is rejected outright
+            # rather than partially imported, since a symlink here can point
+            # outside the checkout entirely (issue: unguarded symlink follow
+            # in the file-tree walk).
+            raise ValidationServiceError(
+                "Repository contains a symlink, which is not supported.",
+                {"path": exc.relative_path},
             ) from exc
 
     def _repository_name_from_archive(self, filename: str) -> str:

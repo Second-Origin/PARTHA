@@ -400,6 +400,55 @@ def test_github_import_uses_backend_validation_and_duplicate_detection(auth_clie
     assert error.message == "Branch name contains unsupported characters."
 
 
+def test_github_import_rejects_a_repository_containing_a_symlink(
+    auth_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    """A malicious public repository can't use a symlink to read the host.
+
+    git clone faithfully recreates real filesystem symlinks committed to a
+    source repository, including ones that point outside the checkout (e.g.
+    a repo containing ``ln -s /etc some_dir``) -- unlike archive uploads,
+    where TAR extraction already rejects symlink members outright and
+    zipfile.extractall() never creates a real symlink from a zip entry in
+    the first place. Without a guard, RepositoryParser's tree walk
+    (is_dir()/is_file()/stat(), all of which follow symlinks) would recurse
+    into and catalog whatever the symlink points at. This exercises the real
+    HTTP import path end to end, not just the parser unit, to prove the
+    fix actually reaches production: a clean 422 validation_error, not a
+    500, and not a repository record left behind with leaked content in its
+    file tree.
+    """
+
+    outside = tmp_path / "outside-the-checkout"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("host file content that must never be reachable\n", encoding="utf-8")
+
+    def fake_clone(_: GitHubClient, __: str, destination: Path, ___: str | None = None) -> None:
+        destination.mkdir(parents=True, exist_ok=True)
+        (destination / "README.md").write_text("# demo\n", encoding="utf-8")
+        (destination / "evil_link").symlink_to(outside)
+
+    monkeypatch.setattr(GitHubClient, "clone_public_repository", fake_clone)
+    monkeypatch.setattr(GitHubClient, "read_head_commit", lambda *_: "a" * 40)
+    monkeypatch.setattr(GitHubClient, "read_head_ref", lambda *_: "refs/heads/main")
+
+    response = auth_client.post("/repositories/github", json={"url": "https://github.com/example/malicious"})
+
+    error = assert_error_response(response, 422, "validation_error")
+    assert error.message == "Repository contains a symlink, which is not supported."
+
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        # The failed import must not leave a half-imported repository record
+        # behind (the outer except in import_github_repository cleans up on
+        # any exception, including this new one).
+        assert db.query(RepositoryRecord).count() == 0
+    finally:
+        db.close()
+
+
 def test_github_clone_timeout_is_reported(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     def fake_run(*args, **kwargs):
         raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs["timeout"])
