@@ -2,7 +2,7 @@
 
 Vite + React + TypeScript frontend for PARTHA.
 
-This app lives at `apps/frontend` in the PARTHA monorepo. For contributor workflow and engineering rules, see the root [CONTRIBUTING.md](../../CONTRIBUTING.md).
+This app lives at `apps/frontend` in the PARTHA monorepo. For contributor workflow and engineering rules, see the root [CONTRIBUTING.md](../../CONTRIBUTING.md). For a full local-setup walkthrough and troubleshooting, see [docs/DEVELOPMENT.md](../../docs/DEVELOPMENT.md).
 
 ## Structure
 

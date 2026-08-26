@@ -12,6 +12,7 @@ are point-in-time evidence, not current-state documentation.
 | --- | --- | --- |
 | [README](../README.md) | Anyone evaluating or running PARTHA | What PARTHA is, what currently works, how to run it locally, and its limitations. |
 | [CONTRIBUTING](../CONTRIBUTING.md) | Contributors | The contribution rules: fork-first workflow, claiming an issue, branch naming, rebasing, pull requests, Definition of Ready and Done. Read before opening a PR. |
+| [Local development and troubleshooting](DEVELOPMENT.md) | New contributors | A single walkthrough for starting the backend and frontend, running every test/lint/build command, the local database and API-contract failures you're most likely to hit and how to fix them, and how to report a reproducible issue. |
 | [SECURITY](../SECURITY.md) | Anyone reporting a vulnerability | How to disclose privately. Never open a public issue for a vulnerability. |
 | [AI provider egress policy](security/AI_PROVIDER_EGRESS.md) | Operators and backend contributors | Deployment-owned provider destination policy, DNS pinning, redirect handling, safe defaults, and required production network controls. |
 | [Database migration rehearsal and recovery](operations/DATABASE_MIGRATION_REHEARSAL.md) | Operators and backend contributors | Disposable Alembic rehearsal command, supported baseline evidence, production preflight, and truthful restore-based recovery decisions. |
@@ -30,7 +31,7 @@ are point-in-time evidence, not current-state documentation.
 
 ## Reading paths
 
-**New contributor** — [README](../README.md) → [CONTRIBUTING](../CONTRIBUTING.md) → [System Overview](architecture/SYSTEM_OVERVIEW.md) → the README for your area.
+**New contributor** — [README](../README.md) → [CONTRIBUTING](../CONTRIBUTING.md) → [Local development and troubleshooting](DEVELOPMENT.md) → [System Overview](architecture/SYSTEM_OVERVIEW.md) → the README for your area.
 
 **Changing analysis, parsing, or AI grounding** — [Repository Intelligence](architecture/REPOSITORY_INTELLIGENCE.md), first and in full.
 

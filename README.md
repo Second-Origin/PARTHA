@@ -183,6 +183,10 @@ start analysis.
 See the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md) before
 configuring any custom or local provider endpoint.
 
+For running every test/lint/build command and fixing the local database or
+API-contract failures you're most likely to hit, see
+[Local development and troubleshooting](docs/DEVELOPMENT.md).
+
 ## Verification
 
 Run checks relevant to your change:
@@ -230,6 +234,7 @@ Do not expose the development configuration directly to the public internet. Rev
 ## Documentation and contributing
 
 - [Documentation index](docs/README.md) — current public documentation and reading paths.
+- [Local development and troubleshooting](docs/DEVELOPMENT.md) — start the stack, run every test/lint/build command, and fix the failures a new contributor is most likely to hit.
 - [System Overview](docs/architecture/SYSTEM_OVERVIEW.md) — components, runtime flow, persistence, and trust boundaries.
 - [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) — extraction, snapshot, consumer, and evidence rules.
 - [Accepted `ri.v1` RFC](docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md) — the versioned snapshot contract.

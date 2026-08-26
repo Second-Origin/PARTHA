@@ -10,7 +10,7 @@ Historical `repo_metadata["intelligence"]` values may remain stored but are
 ignored. Free-form AI additionally requires a configured provider and receives
 no source-file contents.
 
-This app lives at `apps/backend` in the PARTHA monorepo. For contributor workflow and engineering rules, see the root [CONTRIBUTING.md](../../CONTRIBUTING.md). For what the engine actually extracts, see [Repository Intelligence](../../docs/architecture/REPOSITORY_INTELLIGENCE.md).
+This app lives at `apps/backend` in the PARTHA monorepo. For contributor workflow and engineering rules, see the root [CONTRIBUTING.md](../../CONTRIBUTING.md). For what the engine actually extracts, see [Repository Intelligence](../../docs/architecture/REPOSITORY_INTELLIGENCE.md). For a full local-setup walkthrough and troubleshooting, see [docs/DEVELOPMENT.md](../../docs/DEVELOPMENT.md).
 
 ## Local development
 
