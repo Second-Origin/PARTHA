@@ -462,6 +462,66 @@ def test_github_clone_timeout_is_reported(monkeypatch: pytest.MonkeyPatch, tmp_p
         auth_client.clone_public_repository("https://github.com/example/demo", tmp_path / "demo")
 
 
+def test_github_clone_failure_for_private_or_nonexistent_repository_is_reported(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    """`git clone` fails identically for a private repo, a nonexistent repo,
+    and a nonexistent branch/revision -- there is no separate signal to
+    distinguish them from the client's perspective, so the client's own
+    honest, non-leaking message covers all three (#319: "invalid revisions
+    and honest error responses", "non-public GitHub URLs")."""
+
+    def fake_run(*args, **kwargs):
+        raise subprocess.CalledProcessError(
+            returncode=128,
+            cmd=args[0],
+            output="",
+            stderr="fatal: repository 'https://github.com/example/private-or-missing/' not found",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    from app.core.config import Settings
+    from app.core.exceptions import ExternalServiceError
+
+    destination = tmp_path / "demo"
+    github_client = GitHubClient(Settings())
+    with pytest.raises(ExternalServiceError) as caught:
+        github_client.clone_public_repository("https://github.com/example/private-or-missing", destination)
+
+    assert (
+        caught.value.message
+        == "Failed to clone GitHub repository. Confirm the repository is public and the branch exists."
+    )
+    # The failed clone attempt must not leave a partial checkout on disk.
+    assert not destination.exists()
+
+
+def test_github_import_reports_a_private_or_nonexistent_repository_honestly(
+    auth_client, monkeypatch: pytest.MonkeyPatch
+):
+    """The same failure through the real HTTP import path: a clean 502, not
+    a 500, and no repository record left behind."""
+
+    def fake_run(*args, **kwargs):
+        raise subprocess.CalledProcessError(returncode=128, cmd=args[0], output="", stderr="fatal: not found")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    response = auth_client.post("/repositories/github", json={"url": "https://github.com/example/private-or-missing"})
+
+    error = assert_error_response(response, 502, "external_service_error")
+    assert error.message == "Failed to clone GitHub repository. Confirm the repository is public and the branch exists."
+
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        assert db.query(RepositoryRecord).count() == 0
+    finally:
+        db.close()
+
+
 def test_git_head_ref_resolves_branches_and_detached_tags(tmp_path: Path):
     from app.core.config import Settings
 
