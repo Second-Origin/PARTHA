@@ -1,10 +1,31 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useAppStore } from '@/app/store/useAppStore';
 import { useAuthStore } from '@/app/store/useAuthStore';
 import { primaryNavigationSurfaces } from '@/app/routes/productSurfaces';
 import { Sidebar } from './Sidebar';
+
+/** Sidebar reads isMobile from a real matchMedia('(max-width: 767px)') query
+ * in a mount-time effect; the global test-setup stub always reports
+ * `matches: false`, so mobile-drawer tests need their own stub reporting
+ * true for that specific query. */
+function stubMobileViewport() {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: query === '(max-width: 767px)',
+    media: query,
+    onchange: null,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia;
+  return () => {
+    window.matchMedia = original;
+  };
+}
 
 const initialAppState = useAppStore.getState();
 const initialAuthState = useAuthStore.getState();
@@ -167,5 +188,111 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current');
     expect(screen.getByRole('link', { name: 'Repositories' })).not.toHaveAttribute('aria-current');
     expect(screen.getByRole('link', { name: 'Settings' })).not.toHaveAttribute('aria-current');
+  });
+});
+
+describe('Sidebar mobile drawer (#317)', () => {
+  let restoreMatchMedia: () => void;
+
+  beforeEach(() => {
+    restoreMatchMedia = stubMobileViewport();
+    useAuthStore.setState({
+      ...initialAuthState,
+      status: 'authenticated',
+      accessToken: 'test-token',
+      user: { id: 'user-1', email: 'hardik@example.com', createdAt: '2026-07-20T00:00:00Z' },
+    });
+  });
+
+  afterEach(() => {
+    restoreMatchMedia();
+    useAppStore.setState(initialAppState);
+    useAuthStore.setState(initialAuthState);
+  });
+
+  it('is a labelled, non-modal, inert drawer while closed on a mobile viewport', () => {
+    useAppStore.setState({ ...initialAppState, mobileSidebarOpen: false });
+
+    renderSidebar();
+
+    const drawer = screen.getByRole('dialog', { hidden: true });
+    expect(drawer).toHaveAttribute('aria-label', 'Navigation drawer');
+    expect(drawer).not.toHaveAttribute('aria-modal', 'true');
+    expect(drawer).toHaveProperty('inert', true);
+  });
+
+  it('opens as a labelled modal dialog and moves focus to its close control', () => {
+    useAppStore.setState({ ...initialAppState, mobileSidebarOpen: true });
+
+    renderSidebar();
+
+    const drawer = screen.getByRole('dialog');
+    expect(drawer).toHaveAttribute('aria-label', 'Navigation drawer');
+    expect(drawer).toHaveAttribute('aria-modal', 'true');
+    expect(drawer).toHaveProperty('inert', false);
+    // Scoped to the drawer itself: the backdrop button outside it shares the
+    // same accessible name ("Close navigation drawer") by design.
+    expect(within(drawer).getByRole('button', { name: 'Close navigation drawer' })).toHaveFocus();
+  });
+
+  it('closes on Escape', () => {
+    useAppStore.setState({ ...initialAppState, mobileSidebarOpen: true });
+    renderSidebar();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(useAppStore.getState().mobileSidebarOpen).toBe(false);
+  });
+
+  it('closes when the backdrop is activated', () => {
+    useAppStore.setState({ ...initialAppState, mobileSidebarOpen: true });
+    renderSidebar();
+
+    // The backdrop button and the drawer's own close button share the exact
+    // same accessible name ("Close navigation drawer") by design -- both
+    // close the drawer, so both should announce that. Scope to outside the
+    // dialog to get the backdrop specifically.
+    const drawer = screen.getByRole('dialog');
+    const backdrop = screen
+      .getAllByRole('button', { name: 'Close navigation drawer' })
+      .find((button) => !drawer.contains(button));
+    fireEvent.click(backdrop!);
+
+    expect(useAppStore.getState().mobileSidebarOpen).toBe(false);
+  });
+
+  it('closes after activating a navigation link, the same way the close button does', () => {
+    useAppStore.setState({ ...initialAppState, mobileSidebarOpen: true });
+    renderSidebar();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Dashboard' }));
+
+    expect(useAppStore.getState().mobileSidebarOpen).toBe(false);
+  });
+
+  it('returns focus to the control that opened it once the drawer closes', () => {
+    useAppStore.setState({ ...initialAppState, mobileSidebarOpen: false });
+    renderSidebar();
+
+    const opener = document.createElement('button');
+    opener.textContent = 'Open navigation drawer';
+    document.body.appendChild(opener);
+    opener.focus();
+    expect(opener).toHaveFocus();
+
+    act(() => {
+      useAppStore.setState({ mobileSidebarOpen: true });
+    });
+    // Same shared accessible name as the backdrop-close test above; scope to
+    // the dialog to get the drawer's own close button specifically.
+    const drawer = screen.getByRole('dialog');
+    expect(within(drawer).getByRole('button', { name: 'Close navigation drawer' })).toHaveFocus();
+
+    act(() => {
+      useAppStore.setState({ mobileSidebarOpen: false });
+    });
+    expect(opener).toHaveFocus();
+
+    opener.remove();
   });
 });
