@@ -8,11 +8,18 @@ export default mergeConfig(
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
       include: ['src/**/*.test.{ts,tsx}'],
+      // JUnit output is CI-only (#320): a watch-mode local run rewriting this
+      // file on every keystroke would be noise, not a report.
+      reporters: process.env.CI ? ['default', 'junit'] : ['default'],
+      outputFile: { junit: './test-results/junit.xml' },
       coverage: {
         provider: 'v8',
         all: true,
         include: ['src/**'],
         exclude: ['src/test/**', 'src/**/*.test.{ts,tsx}', 'src/vite-env.d.ts'],
+        // lcov and json-summary are what CI publishes as artifacts (#320);
+        // text/html stay for local `npm test` runs.
+        reporter: ['text', 'html', 'lcov', 'json-summary'],
         // Ratchet baseline, not an aspiration: pinned just under what the
         // suite measures today (60.29% stmts / 55.95% branches / 57.21% funcs
         // / 62.77% lines over the whole src tree, after #338 raised coverage
