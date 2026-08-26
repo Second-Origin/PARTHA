@@ -14,18 +14,20 @@ export default mergeConfig(
         include: ['src/**'],
         exclude: ['src/test/**', 'src/**/*.test.{ts,tsx}', 'src/vite-env.d.ts'],
         // Ratchet baseline, not an aspiration: pinned just under what the
-        // suite measures today (45.94% stmts / 38.25% branches / 39.68% funcs
-        // / 47.88% lines over the whole src tree). Raise it as coverage grows;
-        // never lower it.
+        // suite measures today (60.29% stmts / 55.95% branches / 57.21% funcs
+        // / 62.77% lines over the whole src tree, after #338 raised coverage
+        // on the API client/service layer and core layout). Raise it as
+        // coverage grows; never lower it.
         //
         // These were left at their original seed values (1.5 / 0.25 / 2 / 1.5)
         // long after real coverage had overtaken them, so a large regression
-        // could not fail the build (#154).
+        // could not fail the build (#154). The previous ratchet (45/37/39/47)
+        // had the same problem: real coverage had climbed well past it.
         thresholds: {
-          statements: 45,
-          branches: 37,
-          functions: 39,
-          lines: 47,
+          statements: 58,
+          branches: 53,
+          functions: 55,
+          lines: 60,
         },
       },
     },
