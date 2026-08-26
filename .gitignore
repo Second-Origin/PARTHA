@@ -21,6 +21,8 @@ env/
 .coverage
 .coverage.*
 htmlcov/
+apps/backend/coverage.xml
+apps/backend/junit.xml
 
 # Databases
 *.db

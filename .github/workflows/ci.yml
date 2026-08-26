@@ -116,6 +116,22 @@ jobs:
       - name: Test
         run: npm --prefix apps/frontend run test
 
+      # Additive reporting only (#320): the Test step above is what fails the
+      # job. This just publishes what it already produced (junit.xml from the
+      # vitest.config.ts CI-only reporter, lcov/json-summary from the
+      # existing coverage config) so a maintainer can inspect results and
+      # coverage without re-running the suite locally.
+      - name: Upload frontend test results and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: |
+            apps/frontend/test-results/junit.xml
+            apps/frontend/coverage
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Build
         run: npm --prefix apps/frontend run build
 
@@ -187,7 +203,25 @@ jobs:
         env:
           PARTHA_TEST_PG_URL: postgresql+psycopg://partha:partha@localhost:5432/partha_test
           PARTHA_TEST_REDIS_URL: redis://localhost:6379/0
-        run: python -m pytest
+        run: >-
+          python -m pytest
+          --cov=app --cov-report=xml:coverage.xml --cov-report=html:htmlcov
+          --junitxml=junit.xml
+
+      # Additive reporting only (#320): the Test step above is what fails the
+      # job; this just publishes what it already produced so a maintainer can
+      # inspect results and coverage without re-running the suite locally.
+      - name: Upload backend test results and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            apps/backend/junit.xml
+            apps/backend/coverage.xml
+            apps/backend/htmlcov
+          if-no-files-found: warn
+          retention-days: 14
 
       # This is intentionally separate from pytest: it executes the maintainer
       # command itself on two fresh, UUID-named PostgreSQL databases, proving

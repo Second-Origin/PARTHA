@@ -382,6 +382,8 @@ Four backend tests are gated on real services and skip locally: two need `PARTHA
 
 If you cannot run a check locally, say so in the pull request and explain why. **Do not claim a check you did not run.**
 
+Every CI run publishes JUnit test results and coverage reports as downloadable artifacts on the workflow run page (GitHub Actions run → Summary → Artifacts): `frontend-test-results` (junit.xml plus the vitest HTML/lcov coverage report) from the Frontend job, and `backend-test-results` (junit.xml plus the pytest-cov XML/HTML coverage report) from the Backend job. Artifacts are kept for 14 days and still upload on a failing run, so a failure's exact JUnit output is inspectable without reproducing it locally.
+
 ### Migrations and breaking changes
 
 - Every schema change ships an Alembic migration, and it **must downgrade cleanly** — the migration test enforces this.
