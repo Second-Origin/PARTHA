@@ -21,7 +21,7 @@ from app.schemas.manifest import (
     RevisionManifestVerificationRequest,
     RevisionManifestVerificationResponse,
 )
-from app.schemas.review import EngineeringReviewResponse
+from app.schemas.review import EngineeringReviewResponse, ReviewCategoryId, ReviewSeverity
 from app.services.analysis_job_service import AnalysisJobService
 from app.services.analysis_service import AnalysisService
 from app.services.evidence_service import EvidenceSourceService
@@ -35,6 +35,8 @@ _JOB_ID = "22222222-2222-2222-2222-222222222222"
 _COMMON_ERRORS = (401, 404, 429, 500)
 _CANCEL_ERRORS = (401, 404, 409, 429, 500)
 _REVIEW_ERRORS = (401, 404, 422, 429, 500)
+_REVIEW_DEFAULT_LIMIT = 50
+_REVIEW_MAX_LIMIT = 200
 
 
 def _status_response(repository_id: str, job: AnalysisJob | None) -> AnalysisStatusResponse:
@@ -432,6 +434,7 @@ def get_dependencies(
             "assessmentStatus": "partially_assessed",
             "categories": [],
             "findings": [],
+            "pagination": {"offset": 0, "limit": 50, "total": 0},
             "summary": {
                 "message": (
                     "0 evidence-backed findings were identified in this revision. "
@@ -459,9 +462,25 @@ def get_dependencies(
 )
 def get_review(
     repository_id: str,
+    category: ReviewCategoryId | None = Query(None, description="Return only findings in this category."),
+    severity: ReviewSeverity | None = Query(None, description="Return only findings at this severity."),
+    diagnostic_code: str | None = Query(
+        None, alias="diagnosticCode", description="Return only findings for this diagnostic code."
+    ),
+    offset: int = Query(0, ge=0, description="Zero-based offset into the matched findings."),
+    limit: int = Query(
+        _REVIEW_DEFAULT_LIMIT, ge=1, le=_REVIEW_MAX_LIMIT, description=f"Maximum {_REVIEW_MAX_LIMIT} findings per page."
+    ),
     service: AnalysisService = Depends(get_analysis_service),
 ) -> EngineeringReviewResponse:
-    return service.engineering_review(repository_id)
+    return service.engineering_review(
+        repository_id,
+        category=category,
+        severity=severity,
+        diagnostic_code=diagnostic_code,
+        offset=offset,
+        limit=limit,
+    )
 
 
 @router.get(

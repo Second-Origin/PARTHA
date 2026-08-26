@@ -10,6 +10,7 @@ export type ReviewFinding = components['schemas']['ReviewFinding'];
 export type ReviewCategoryAssessment = components['schemas']['ReviewCategoryAssessment'];
 export type ReviewSeverityCounts = components['schemas']['ReviewSeverityCounts'];
 export type ReviewSummary = components['schemas']['ReviewSummary'];
+export type ReviewPagination = components['schemas']['ReviewPagination'];
 
 export type EngineeringReview = components['schemas']['EngineeringReviewResponse'] &
   Required<Pick<components['schemas']['EngineeringReviewResponse'], 'categories' | 'findings'>>;

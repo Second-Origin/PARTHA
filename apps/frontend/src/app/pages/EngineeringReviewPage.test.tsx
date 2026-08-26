@@ -36,6 +36,7 @@ const review: EngineeringReview = {
   assessmentStatus: 'assessed',
   categories: [],
   findings: [],
+  pagination: { offset: 0, limit: 50, total: 0 },
   summary: {
     message: 'No findings were surfaced for this snapshot.',
     findingsBySeverity: { info: 0, low: 0, medium: 0, high: 0, critical: 0 },
@@ -94,6 +95,8 @@ describe('EngineeringReviewPage', () => {
       success: true,
       retry: vi.fn(),
       refresh: vi.fn(),
+      loadMore: vi.fn(),
+      loadingMore: false,
       activeRepository: null,
       completedRepositories: [],
       emptyReason: null,
@@ -133,6 +136,78 @@ describe('EngineeringReviewPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('requests the next server page when "Show more" is clicked, rather than slicing an in-memory array', () => {
+    const provenance = review.provenance;
+    const finding = {
+      id: 'finding-0',
+      category: 'relationship_resolution' as const,
+      severity: 'medium' as const,
+      title: 'Unresolved relationship',
+      explanation: 'explanation',
+      path: 'src/file.ts',
+      startLine: 1,
+      endLine: 1,
+      snapshotId: 'snap_example',
+      factId: 'fact-0',
+      evidenceId: 'evidence-0',
+      extractorName: 'typescript-extractor',
+      extractorVersion: '1.0.0',
+      diagnosticCode: 'RI-RES-UNRESOLVED',
+      ruleId: 'engineering-review.v2/RI-RES-UNRESOLVED',
+      remediationGuidance: 'remediation',
+      supportStatus: 'supported' as const,
+      provenance,
+      evidence: {
+        evidenceId: 'evidence-0',
+        snapshotId: 'snap_example',
+        factId: 'fact-0',
+        path: 'src/file.ts',
+        startLine: 1,
+        endLine: 1,
+        extractorName: 'typescript-extractor',
+        extractorVersion: '1.0.0',
+      },
+    };
+    const partialReview: EngineeringReview = {
+      ...review,
+      findings: [finding],
+      pagination: { offset: 0, limit: 1, total: 5 },
+      summary: { ...review.summary, evidenceBackedFindingCount: 5 },
+    };
+    const loadMore = vi.fn();
+    vi.mocked(useReview).mockReturnValue({
+      review: partialReview,
+      data: partialReview,
+      source: 'upload',
+      status: 'success',
+      loading: false,
+      error: null,
+      noSnapshot: false,
+      empty: false,
+      success: true,
+      retry: vi.fn(),
+      refresh: vi.fn(),
+      loadMore,
+      loadingMore: false,
+      activeRepository: null,
+      completedRepositories: [],
+      emptyReason: null,
+    });
+    useReviewStore.setState({
+      review: partialReview,
+      selectedFindingId: null,
+      filterCategory: 'all',
+      filterSeverity: 'all',
+      filterDiagnosticCode: null,
+    });
+
+    renderPage();
+
+    expect(screen.getByText('5 matching supported findings · showing 1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /show 4 more/i }));
+    expect(loadMore).toHaveBeenCalledTimes(1);
+  });
+
   it('guides the user to run analysis again instead of showing a generic error when no sealed snapshot exists (#178)', () => {
     vi.mocked(useReview).mockReturnValue({
       review: null,
@@ -146,6 +221,8 @@ describe('EngineeringReviewPage', () => {
       success: false,
       retry: vi.fn(),
       refresh: vi.fn(),
+      loadMore: vi.fn(),
+      loadingMore: false,
       activeRepository: null,
       completedRepositories: [],
       emptyReason: null,

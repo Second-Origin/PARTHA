@@ -26,16 +26,8 @@ export function EngineeringReviewPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const reviewState = useReview();
-  const {
-    review,
-    selectedFindingId,
-    setSelectedFindingId,
-    filteredFindings,
-    visibleFindings,
-    showMoreFindings,
-    setFilterDiagnosticCode,
-    setFilterCategory,
-  } = useReviewStore();
+  const { review, selectedFindingId, setSelectedFindingId, setFilterDiagnosticCode, setFilterCategory } =
+    useReviewStore();
 
   useEffect(() => {
     setFilterDiagnosticCode(searchParams.get('diagnosticCode'));
@@ -46,8 +38,8 @@ export function EngineeringReviewPage() {
     setFilterCategory((category as ReviewCategory | null) ?? 'all');
   }, [searchParams, setFilterCategory]);
 
-  const totalFilteredCount = filteredFindings().length;
-  const findings = visibleFindings();
+  const totalFilteredCount = review?.pagination.total ?? 0;
+  const findings = review?.findings ?? [];
   const hasMoreFindings = findings.length < totalFilteredCount;
   const selectedFinding = useMemo(
     () => review?.findings.find((finding) => finding.id === selectedFindingId) ?? null,
@@ -184,7 +176,7 @@ export function EngineeringReviewPage() {
           </div>
           <ReviewFilters />
         </div>
-        {review.findings.length === 0 ? (
+        {review.summary.evidenceBackedFindingCount === 0 ? (
           <div className="rounded-3xl border border-primary/20 bg-card p-8 text-center">
             <CheckCircle2 className="mx-auto mb-2 h-7 w-7 text-emerald-400" />
             <h3 className="text-sm font-medium text-foreground">No evidence-backed findings</h3>
@@ -210,10 +202,13 @@ export function EngineeringReviewPage() {
             {hasMoreFindings && (
               <button
                 type="button"
-                onClick={showMoreFindings}
-                className="w-full rounded-xl border border-primary/30 py-2.5 text-xs font-semibold text-primary hover:bg-accent"
+                onClick={() => void reviewState.loadMore()}
+                disabled={reviewState.loadingMore}
+                className="w-full rounded-xl border border-primary/30 py-2.5 text-xs font-semibold text-primary hover:bg-accent disabled:opacity-60"
               >
-                Show {Math.min(50, totalFilteredCount - findings.length)} more
+                {reviewState.loadingMore
+                  ? 'Loading more…'
+                  : `Show ${Math.min(50, totalFilteredCount - findings.length)} more`}
               </button>
             )}
           </div>

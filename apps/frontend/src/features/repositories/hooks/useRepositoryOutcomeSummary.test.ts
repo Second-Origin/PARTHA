@@ -96,6 +96,7 @@ const review: EngineeringReview = {
     },
   ],
   findings: [],
+  pagination: { offset: 0, limit: 50, total: 0 },
   summary: {
     message: 'summary',
     findingsBySeverity: { info: 1, low: 0, medium: 0, high: 2, critical: 0 },

@@ -96,6 +96,12 @@ class ReviewSeverityCounts(CamelModel):
     critical: int = 0
 
 
+class ReviewPagination(CamelModel):
+    offset: int
+    limit: int
+    total: int
+
+
 class ReviewSummary(CamelModel):
     message: str
     findings_by_severity: ReviewSeverityCounts
@@ -128,5 +134,10 @@ class EngineeringReviewResponse(CamelModel):
     generated_at: datetime
     assessment_status: AssessmentState
     categories: list[ReviewCategoryAssessment] = Field(default_factory=list)
+    #: This page of findings. Bounded by ``pagination.limit``, not the full
+    #: matched count -- see ``pagination.total`` for the complete count and
+    #: ``summary``/``categories`` for whole-snapshot assessment stats, which
+    #: are never affected by pagination or filtering.
     findings: list[ReviewFinding] = Field(default_factory=list)
+    pagination: ReviewPagination
     summary: ReviewSummary

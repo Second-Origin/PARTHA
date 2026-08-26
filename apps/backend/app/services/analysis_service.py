@@ -8,7 +8,7 @@ from app.schemas.architecture import ArchitectureResponse
 from app.schemas.authentication import AuthenticationExplanationResponse
 from app.schemas.dependencies import DependencyGraphResponse
 from app.schemas.insights import RepositoryInsightsResponse
-from app.schemas.review import EngineeringReviewResponse
+from app.schemas.review import EngineeringReviewResponse, ReviewCategoryId, ReviewSeverity
 from app.core.exceptions import NotFoundError
 
 
@@ -45,8 +45,24 @@ class AnalysisService:
     def dependency_graph(self, repository_id: str) -> DependencyGraphResponse:
         return self.dependencies.build(self._get_record(repository_id))
 
-    def engineering_review(self, repository_id: str) -> EngineeringReviewResponse:
-        return self.review.build(self._get_record(repository_id))
+    def engineering_review(
+        self,
+        repository_id: str,
+        *,
+        category: ReviewCategoryId | None = None,
+        severity: ReviewSeverity | None = None,
+        diagnostic_code: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+    ) -> EngineeringReviewResponse:
+        return self.review.build(
+            self._get_record(repository_id),
+            category=category,
+            severity=severity,
+            diagnostic_code=diagnostic_code,
+            offset=offset,
+            limit=limit,
+        )
 
     def repository_insights(self, repository_id: str) -> RepositoryInsightsResponse:
         return self.insights.build(self._get_record(repository_id))

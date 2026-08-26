@@ -1344,6 +1344,7 @@ export interface components {
             generatedAt: string;
             /** Manifestdigest */
             manifestDigest: string;
+            pagination: components["schemas"]["ReviewPagination"];
             provenance: components["schemas"]["ReviewProvenance"];
             /** Repositoryid */
             repositoryId: string;
@@ -1922,6 +1923,15 @@ export interface components {
             supportStatus: "supported" | "file_scoped";
             /** Title */
             title: string;
+        };
+        /** ReviewPagination */
+        ReviewPagination: {
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
         };
         /** ReviewProvenance */
         ReviewProvenance: {
@@ -3855,7 +3865,18 @@ export interface operations {
     };
     get_review_analysis__repository_id__review_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Return only findings in this category. */
+                category?: ("architecture_boundaries" | "relationship_resolution" | "source_extraction" | "dependency_declarations" | "security_vulnerability_scanning" | "authentication_evidence" | "repository_structure" | "analysis_integrity") | null;
+                /** @description Return only findings for this diagnostic code. */
+                diagnosticCode?: string | null;
+                /** @description Maximum 200 findings per page. */
+                limit?: number;
+                /** @description Zero-based offset into the matched findings. */
+                offset?: number;
+                /** @description Return only findings at this severity. */
+                severity?: ("info" | "low" | "medium" | "high" | "critical") | null;
+            };
             header?: never;
             path: {
                 repository_id: string;
@@ -3891,6 +3912,11 @@ export interface operations {
                      *       "assessmentStatus": "partially_assessed",
                      *       "categories": [],
                      *       "findings": [],
+                     *       "pagination": {
+                     *         "offset": 0,
+                     *         "limit": 50,
+                     *         "total": 0
+                     *       },
                      *       "summary": {
                      *         "message": "0 evidence-backed findings were identified in this revision. Security vulnerability scanning was not performed.",
                      *         "findingsBySeverity": {

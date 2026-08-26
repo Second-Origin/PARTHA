@@ -43,70 +43,85 @@ function makeFinding(index: number, overrides: Partial<ReviewFinding> = {}): Rev
   };
 }
 
-const findings: ReviewFinding[] = Array.from({ length: 120 }, (_, index) => makeFinding(index));
+function makeReview(findings: ReviewFinding[], total: number): EngineeringReview {
+  return {
+    schemaVersion: 'engineering-review.v2',
+    repositoryId: 'repo-1',
+    repositoryName: 'sample',
+    revisionKind: 'upload',
+    revisionValue: `sha256:${'0'.repeat(64)}`,
+    snapshotId: 'snap_example',
+    snapshotSchemaVersion: 'ri.v1',
+    canonicalGraphHash: provenance.canonicalGraphHash,
+    manifestDigest: `sha256:${'2'.repeat(64)}`,
+    provenance,
+    generatedAt: '2026-07-25T00:00:00Z',
+    assessmentStatus: 'assessed',
+    categories: [],
+    findings,
+    pagination: { offset: 0, limit: findings.length, total },
+    summary: {
+      message: 'summary',
+      findingsBySeverity: { info: 0, low: 0, medium: total, high: 0, critical: 0 },
+      assessedCategories: 1,
+      partiallyAssessedCategories: 0,
+      notAssessedCategories: 0,
+      insufficientEvidenceCategories: 0,
+      evidenceBackedFindingCount: total,
+      fileScopedFindingCount: 0,
+      omittedUnsupportedDiagnosticCount: 0,
+      vulnerabilityScanning: 'not_assessed',
+    },
+  };
+}
 
-const review: EngineeringReview = {
-  schemaVersion: 'engineering-review.v2',
-  repositoryId: 'repo-1',
-  repositoryName: 'sample',
-  revisionKind: 'upload',
-  revisionValue: `sha256:${'0'.repeat(64)}`,
-  snapshotId: 'snap_example',
-  snapshotSchemaVersion: 'ri.v1',
-  canonicalGraphHash: provenance.canonicalGraphHash,
-  manifestDigest: `sha256:${'2'.repeat(64)}`,
-  provenance,
-  generatedAt: '2026-07-25T00:00:00Z',
-  assessmentStatus: 'assessed',
-  categories: [],
-  findings,
-  summary: {
-    message: 'summary',
-    findingsBySeverity: { info: 0, low: 0, medium: 120, high: 0, critical: 0 },
-    assessedCategories: 1,
-    partiallyAssessedCategories: 0,
-    notAssessedCategories: 0,
-    insufficientEvidenceCategories: 0,
-    evidenceBackedFindingCount: 120,
-    fileScopedFindingCount: 0,
-    omittedUnsupportedDiagnosticCount: 0,
-    vulnerabilityScanning: 'not_assessed',
-  },
-};
-
-describe('useReviewStore findings pagination', () => {
+describe('useReviewStore', () => {
   beforeEach(() => {
     useReviewStore.getState().resetForRepository();
-    useReviewStore.getState().setReview(review);
   });
 
-  it('renders only the first page of a large findings list', () => {
-    expect(useReviewStore.getState().filteredFindings()).toHaveLength(120);
-    expect(useReviewStore.getState().visibleFindings()).toHaveLength(50);
+  it('replaces the review wholesale on setReview', () => {
+    const firstPage = Array.from({ length: 50 }, (_, index) => makeFinding(index));
+    useReviewStore.getState().setReview(makeReview(firstPage, 120));
+
+    expect(useReviewStore.getState().review?.findings).toHaveLength(50);
+    expect(useReviewStore.getState().review?.pagination.total).toBe(120);
   });
 
-  it('reveals more findings in bounded steps', () => {
-    useReviewStore.getState().showMoreFindings();
-    expect(useReviewStore.getState().visibleFindings()).toHaveLength(100);
+  it('appends the next page onto the already-loaded findings', () => {
+    const firstPage = Array.from({ length: 50 }, (_, index) => makeFinding(index));
+    useReviewStore.getState().setReview(makeReview(firstPage, 120));
 
-    useReviewStore.getState().showMoreFindings();
-    // Caps at the actual total rather than overshooting.
-    expect(useReviewStore.getState().visibleFindings()).toHaveLength(120);
+    const secondPage = Array.from({ length: 50 }, (_, index) => makeFinding(50 + index));
+    useReviewStore.getState().appendFindings(secondPage, { offset: 50, limit: 50, total: 120 });
+
+    const { review } = useReviewStore.getState();
+    expect(review?.findings).toHaveLength(100);
+    expect(review?.findings[0].id).toBe('finding-0');
+    expect(review?.findings[99].id).toBe('finding-99');
+    expect(review?.pagination).toEqual({ offset: 50, limit: 50, total: 120 });
   });
 
-  it('resets the visible page whenever a filter changes', () => {
-    useReviewStore.getState().showMoreFindings();
-    expect(useReviewStore.getState().visibleFindings()).toHaveLength(100);
+  it('appendFindings is a no-op when there is no review loaded yet', () => {
+    useReviewStore.getState().appendFindings([makeFinding(0)], { offset: 0, limit: 50, total: 1 });
 
-    useReviewStore.getState().setFilterSeverity('medium');
-    expect(useReviewStore.getState().visibleFindings()).toHaveLength(50);
+    expect(useReviewStore.getState().review).toBeNull();
+  });
 
-    useReviewStore.getState().showMoreFindings();
+  it('resetForRepository clears the review, selection, and filters', () => {
+    useReviewStore.getState().setReview(makeReview([makeFinding(0)], 1));
+    useReviewStore.getState().setSelectedFindingId('finding-0');
     useReviewStore.getState().setFilterCategory('relationship_resolution');
-    expect(useReviewStore.getState().visibleFindings()).toHaveLength(50);
-
-    useReviewStore.getState().showMoreFindings();
+    useReviewStore.getState().setFilterSeverity('medium');
     useReviewStore.getState().setFilterDiagnosticCode('RI-RES-UNRESOLVED');
-    expect(useReviewStore.getState().visibleFindings()).toHaveLength(50);
+
+    useReviewStore.getState().resetForRepository();
+
+    const state = useReviewStore.getState();
+    expect(state.review).toBeNull();
+    expect(state.selectedFindingId).toBeNull();
+    expect(state.filterCategory).toBe('all');
+    expect(state.filterSeverity).toBe('all');
+    expect(state.filterDiagnosticCode).toBeNull();
   });
 });
