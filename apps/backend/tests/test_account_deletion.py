@@ -99,10 +99,16 @@ def test_delete_account_removes_owner_scoped_database_rows(client, tmp_path: Pat
     (repo_dir / "marker.txt").write_text("hello")
 
     from app.core.database import SessionLocal
+    from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
     from app.models.ai_conversation import AiConversationMessageRecord
     from app.models.ai_provider_config import AiProviderConfigRecord
+    from app.models.analysis_job import AnalysisJob
     from app.models.refresh_token import RefreshToken
     from app.models.repository import RepositoryRecord
+    from app.models.snapshot import RiSnapshot
+
+    revision_kind = "upload"
+    revision_value = f"sha256:{'0' * 64}"
 
     db = SessionLocal()
     try:
@@ -114,6 +120,8 @@ def test_delete_account_removes_owner_scoped_database_rows(client, tmp_path: Pat
                 source="upload",
                 local_path=str(repo_dir),
                 status="completed",
+                revision_kind=revision_kind,
+                revision_value=revision_value,
             )
         )
         db.commit()
@@ -137,7 +145,50 @@ def test_delete_account_removes_owner_scoped_database_rows(client, tmp_path: Pat
                 content="hello",
             )
         )
+        db.add(
+            AnalysisJob(
+                id="job-1",
+                repository_id="repo-1",
+                owner_id=user_id,
+                revision_kind=revision_kind,
+                revision_value=revision_value,
+                config_hash="sha256:config",
+                status="completed",
+            )
+        )
         db.commit()
+
+        # A sealed ri.v1 snapshot is keyed by (repository_id, revision_kind,
+        # revision_value), not directly by owner -- it cascades from the
+        # repository row, which itself cascades from the user. Sealing one
+        # here is what actually exercises that second hop, rather than
+        # asserting a fact this test can't observe.
+        store = SnapshotStore(db)
+        snapshot = store.begin(
+            repository_id="repo-1",
+            revision=Revision(revision_kind, revision_value, None),
+            schema_version="ri.v1",
+            producer_version_set=["repository-inventory@1.1.0"],
+        )
+        store.add_node(
+            snapshot,
+            node_kind="repository",
+            stable_key="repo:root",
+            name="repository",
+            language=None,
+            evidence=[
+                Evidence(
+                    path="README.md",
+                    start_line=1,
+                    end_line=1,
+                    logical_line_count=1,
+                    extractor="repository-inventory",
+                    extractor_version="1.1.0",
+                )
+            ],
+        )
+        store.seal(snapshot)
+        snapshot_id = snapshot.snapshot_id
     finally:
         db.close()
 
@@ -156,6 +207,8 @@ def test_delete_account_removes_owner_scoped_database_rows(client, tmp_path: Pat
         assert db.query(AiProviderConfigRecord).filter_by(owner_id=user_id).count() == 0
         assert db.query(AiConversationMessageRecord).filter_by(owner_id=user_id).count() == 0
         assert db.query(RefreshToken).filter_by(user_id=user_id).count() == 0
+        assert db.query(AnalysisJob).filter_by(owner_id=user_id).count() == 0
+        assert db.get(RiSnapshot, snapshot_id) is None
 
         audits = db.query(AccountDeletionAuditRecord).filter_by(deleted_user_id=user_id).all()
         assert len(audits) == 1
