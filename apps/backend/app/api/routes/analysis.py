@@ -464,9 +464,13 @@ def get_review(
     repository_id: str,
     category: ReviewCategoryId | None = Query(None, description="Return only findings in this category."),
     severity: ReviewSeverity | None = Query(None, description="Return only findings at this severity."),
-    diagnostic_code: str | None = Query(None, alias="diagnosticCode", description="Return only findings for this diagnostic code."),
+    diagnostic_code: str | None = Query(
+        None, alias="diagnosticCode", description="Return only findings for this diagnostic code."
+    ),
     offset: int = Query(0, ge=0, description="Zero-based offset into the matched findings."),
-    limit: int = Query(_REVIEW_DEFAULT_LIMIT, ge=1, le=_REVIEW_MAX_LIMIT, description=f"Maximum {_REVIEW_MAX_LIMIT} findings per page."),
+    limit: int = Query(
+        _REVIEW_DEFAULT_LIMIT, ge=1, le=_REVIEW_MAX_LIMIT, description=f"Maximum {_REVIEW_MAX_LIMIT} findings per page."
+    ),
     service: AnalysisService = Depends(get_analysis_service),
 ) -> EngineeringReviewResponse:
     return service.engineering_review(
