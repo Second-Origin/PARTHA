@@ -14,6 +14,7 @@ import { uploadService } from './api/upload';
 import { analysisService } from './api/analysis';
 import { architectureService } from './api/architecture';
 import { reviewService } from './api/review';
+import type { ReviewQuery } from './api/review';
 import { dependencyService } from './api/dependencies';
 import { insightsService } from './api/insights';
 
@@ -81,11 +82,11 @@ export const backendService = {
     return architectureService.getAuthenticationExplanation(repository.id);
   },
 
-  async fetchReview(repository: Repository): Promise<EngineeringReview> {
+  async fetchReview(repository: Repository, query?: ReviewQuery): Promise<EngineeringReview> {
     if (!USE_BACKEND) {
       throw new Error('Backend API is not configured.');
     }
-    return reviewService.getReview(repository.id);
+    return reviewService.getReview(repository.id, query);
   },
 
   async fetchInsights(repository: Repository): Promise<RepositoryInsights> {

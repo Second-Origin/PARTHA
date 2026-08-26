@@ -74,6 +74,7 @@ function review(repositoryId: string): EngineeringReview {
     assessmentStatus: 'partially_assessed',
     categories: [],
     findings: [],
+    pagination: { offset: 0, limit: 50, total: 0 },
     summary: {
       message: 'No findings.',
       findingsBySeverity: { info: 0, low: 0, medium: 0, high: 0, critical: 0 },

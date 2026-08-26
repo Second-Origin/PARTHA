@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 from collections import Counter
 from dataclasses import dataclass
@@ -386,6 +387,129 @@ def test_overall_assessment_status_never_overstates_coverage():
         _overall_assessment_status(Counter({"insufficient_evidence": 2, "not_assessed": 6}))
         == "insufficient_evidence"
     )
+
+
+def _multi_finding_sources(finding_count: int) -> dict[str, bytes]:
+    """Build a fixture producing exactly ``finding_count`` findings.
+
+    Each module below contributes two ``RI-RES-UNRESOLVED`` findings (the
+    unresolved import specifier and the unresolved call reference), verified
+    against the same source pattern as ``_FINDING_SOURCES``. ``finding_count``
+    must be even.
+    """
+
+    assert finding_count % 2 == 0, "finding_count must be even (2 findings per module)"
+    sources: dict[str, bytes] = {"README.md": b"# review pagination fixture\n"}
+    for index in range(finding_count // 2):
+        sources[f"src/module-{index:03d}.ts"] = (
+            f"import {{ missing_{index} }} from './missing-{index}';\n"
+            f"export const value_{index} = missing_{index}();\n"
+        ).encode()
+    return sources
+
+
+def test_review_default_page_is_bounded_and_reports_total(auth_client):
+    repository = _upload(auth_client, _multi_finding_sources(60))
+
+    body = auth_client.get(f"/analysis/{repository['id']}/review").json()
+
+    assert body["pagination"]["offset"] == 0
+    assert body["pagination"]["limit"] == 50
+    assert body["pagination"]["total"] == 60
+    assert len(body["findings"]) == 50
+    # The matrix and severity summary always describe the whole snapshot,
+    # never just the returned page.
+    assert body["summary"]["evidenceBackedFindingCount"] == 60
+
+
+def test_review_pagination_offset_and_limit_are_respected(auth_client):
+    repository = _upload(auth_client, _multi_finding_sources(60))
+
+    first_page = auth_client.get(
+        f"/analysis/{repository['id']}/review", params={"limit": 20}
+    ).json()
+    second_page = auth_client.get(
+        f"/analysis/{repository['id']}/review", params={"offset": 20, "limit": 20}
+    ).json()
+    last_page = auth_client.get(
+        f"/analysis/{repository['id']}/review", params={"offset": 40, "limit": 20}
+    ).json()
+    past_the_end = auth_client.get(
+        f"/analysis/{repository['id']}/review", params={"offset": 60, "limit": 20}
+    ).json()
+
+    assert len(first_page["findings"]) == 20
+    assert len(second_page["findings"]) == 20
+    assert len(last_page["findings"]) == 20
+    assert past_the_end["findings"] == []
+    assert past_the_end["pagination"] == {"offset": 60, "limit": 20, "total": 60}
+
+    # Pages are disjoint and, concatenated, reconstruct the full sorted set.
+    first_ids = [item["id"] for item in first_page["findings"]]
+    second_ids = [item["id"] for item in second_page["findings"]]
+    last_ids = [item["id"] for item in last_page["findings"]]
+    assert len(set(first_ids) & set(second_ids) & set(last_ids)) == 0
+    full = auth_client.get(
+        f"/analysis/{repository['id']}/review", params={"limit": 200}
+    ).json()
+    assert first_ids + second_ids + last_ids == [item["id"] for item in full["findings"]]
+
+
+def test_review_limit_is_capped_and_offset_cannot_be_negative(auth_client):
+    repository = _upload(auth_client, _FINDING_SOURCES)
+
+    too_large = auth_client.get(f"/analysis/{repository['id']}/review", params={"limit": 500})
+    negative_offset = auth_client.get(f"/analysis/{repository['id']}/review", params={"offset": -1})
+
+    assert too_large.status_code == 422
+    assert negative_offset.status_code == 422
+
+
+def test_review_diagnostic_code_filter_narrows_findings_without_changing_the_matrix(auth_client):
+    repository = _upload(auth_client, _FINDING_SOURCES)
+    unfiltered = auth_client.get(f"/analysis/{repository['id']}/review").json()
+    code = unfiltered["findings"][0]["diagnosticCode"]
+
+    filtered = auth_client.get(
+        f"/analysis/{repository['id']}/review", params={"diagnosticCode": "RI-NO-SUCH-CODE"}
+    ).json()
+    matched = auth_client.get(
+        f"/analysis/{repository['id']}/review", params={"diagnosticCode": code}
+    ).json()
+
+    assert filtered["findings"] == []
+    assert filtered["pagination"]["total"] == 0
+    assert all(item["diagnosticCode"] == code for item in matched["findings"])
+    assert matched["pagination"]["total"] == len(
+        [item for item in unfiltered["findings"] if item["diagnosticCode"] == code]
+    )
+    # Filtering the findings page never changes the whole-snapshot matrix or
+    # severity summary -- those stay a complete, honest description of the
+    # sealed snapshot regardless of what the caller is currently viewing.
+    assert filtered["categories"] == unfiltered["categories"]
+    assert filtered["summary"] == unfiltered["summary"]
+
+
+def test_review_export_is_never_truncated_by_pagination(auth_client):
+    """The PDF/JSON export path must keep receiving every finding.
+
+    Only the interactive `/review` route paginates; `AnalysisService.
+    engineering_review` defaults `offset`/`limit` to ``None`` for every other
+    caller (export, AI context), so a review with more findings than the
+    default page size must still export in full.
+    """
+
+    repository = _upload(auth_client, _multi_finding_sources(60))
+
+    exported = auth_client.post(
+        "/export",
+        json={"repositoryId": repository["id"], "target": "review", "format": "json"},
+    )
+
+    assert exported.status_code == 200, exported.text
+    payload = json.loads(exported.json()["content"])
+    assert len(payload["findings"]) == 60
+    assert payload["pagination"] == {"offset": 0, "limit": 60, "total": 60}
 
 
 def test_review_rejects_an_unsupported_snapshot_schema(auth_client):

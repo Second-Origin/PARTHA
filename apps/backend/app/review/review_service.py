@@ -27,6 +27,7 @@ from app.schemas.review import (
     ReviewCategoryId,
     ReviewEvidenceReference,
     ReviewFinding,
+    ReviewPagination,
     ReviewProvenance,
     ReviewSeverity,
     ReviewSeverityCounts,
@@ -126,7 +127,16 @@ class EngineeringReviewBuilder:
     def __init__(self, snapshots: SnapshotQueryService) -> None:
         self.snapshots = snapshots
 
-    def build(self, record: RepositoryRecord) -> EngineeringReviewResponse:
+    def build(
+        self,
+        record: RepositoryRecord,
+        *,
+        category: ReviewCategoryId | None = None,
+        severity: ReviewSeverity | None = None,
+        diagnostic_code: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+    ) -> EngineeringReviewResponse:
         snapshot = self.snapshots.require_sealed_snapshot_for_current_revision(record.id)
 
         # Only diagnostics with a rule can become findings, so only those are
@@ -245,6 +255,10 @@ class EngineeringReviewBuilder:
             )
         )
 
+        # Assessment matrix, severity chips, and the summary message always
+        # describe the whole sealed snapshot -- filtering/pagination below
+        # narrows only which findings are returned in this response page, the
+        # same split the frontend's own client-side filters already made.
         categories = self._categories(snapshot.snapshot_id, findings, diagnostics)
         states = Counter(category.state for category in categories)
         severities = Counter(finding.severity for finding in findings)
@@ -255,6 +269,25 @@ class EngineeringReviewBuilder:
             "Security vulnerability scanning was not performed."
         )
         manifest = build_manifest(snapshot)
+
+        matched = [
+            finding
+            for finding in findings
+            if (category is None or finding.category == category)
+            and (severity is None or finding.severity == severity)
+            and (diagnostic_code is None or finding.diagnostic_code == diagnostic_code)
+        ]
+        total_matched = len(matched)
+        # offset/limit are None only for the internal (non-API) callers that
+        # need the complete matched set in one call -- the PDF/JSON export
+        # path (#154), and the SQL-batching test that calls _evidence_by_fact
+        # directly. Every HTTP request supplies both explicitly (see the
+        # /analysis/{repository_id}/review route), so a real client always
+        # gets a bounded page.
+        page_offset = 0 if offset is None else offset
+        page_limit = total_matched if limit is None else limit
+        page_findings = matched[page_offset : page_offset + page_limit]
+        pagination = ReviewPagination(offset=page_offset, limit=page_limit, total=total_matched)
         return EngineeringReviewResponse(
             repository_id=record.id,
             repository_name=record.name,
@@ -268,7 +301,8 @@ class EngineeringReviewBuilder:
             generated_at=snapshot.sealed_at,
             assessment_status=_overall_assessment_status(states),
             categories=categories,
-            findings=findings,
+            findings=page_findings,
+            pagination=pagination,
             summary=ReviewSummary(
                 message=message,
                 findings_by_severity=ReviewSeverityCounts(
