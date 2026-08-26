@@ -9,13 +9,6 @@ export function SettingsPage() {
   const { tabs, activeTab, setActiveTab } = settings;
   const user = useAuthStore((state) => state.user);
   const deletion = useAccountDeletion();
-  const providers = [
-    ['openai', 'OpenAI'],
-    ['anthropic', 'Anthropic'],
-    ['gemini', 'Google Gemini'],
-    ['openrouter', 'OpenRouter'],
-    ['ollama', 'Ollama'],
-  ] as const;
 
   return (
     <div className="w-full max-w-4xl">
@@ -156,26 +149,49 @@ export function SettingsPage() {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mb-4">
-              Keys are stored by the local backend and are never shown again after saving.
+              Keys are stored by the local backend, encrypted at rest, and are never shown again after saving.
             </p>
+            {settings.capabilitiesError && (
+              <p role="alert" className="mb-4 text-sm text-destructive">{settings.capabilitiesError}</p>
+            )}
             <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-              {providers.map(([id, label]) => (
+              {settings.capabilities.map((capability) => (
                 <button
-                  key={id}
+                  key={capability.provider}
                   type="button"
-                  aria-pressed={settings.provider === id}
-                  onClick={() => settings.setProvider(id)}
+                  aria-pressed={settings.provider === capability.provider}
+                  onClick={() => settings.setProvider(capability.provider)}
                   className={cn(
                     'rounded-md border px-3 py-2 text-xs font-medium transition-colors',
-                    settings.provider === id
+                    settings.provider === capability.provider
                       ? 'border-primary bg-primary/10 text-primary'
                       : 'border-border text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  {label}
+                  {capability.displayName}
                 </button>
               ))}
             </div>
+            {settings.activeCapability && (
+              <div className="mb-5 rounded-md border border-border bg-muted/40 p-3">
+                <p className="text-xs font-medium text-foreground mb-1.5">
+                  Getting started with {settings.activeCapability.displayName}
+                </p>
+                <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
+                  {settings.activeCapability.setupSteps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+                <a
+                  href={settings.activeCapability.setupUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="mt-2 inline-block text-xs font-medium text-primary hover:underline"
+                >
+                  Open {settings.activeCapability.displayName} setup page
+                </a>
+              </div>
+            )}
             <div className="space-y-4">
               <div>
                 <label htmlFor="settings-model" className="block text-xs font-medium text-muted-foreground mb-1.5">Provider model ID</label>
@@ -186,11 +202,13 @@ export function SettingsPage() {
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
-              {settings.provider === 'ollama' && (
+              {settings.activeCapability?.requiresBaseUrl && (
                 <div>
-                  <label htmlFor="settings-ollama-base-url" className="block text-xs font-medium text-muted-foreground mb-1.5">Ollama Base URL</label>
+                  <label htmlFor="settings-base-url" className="block text-xs font-medium text-muted-foreground mb-1.5">
+                    {settings.activeCapability.displayName} Base URL
+                  </label>
                   <input
-                    id="settings-ollama-base-url"
+                    id="settings-base-url"
                     value={settings.baseUrl}
                     onChange={(event) => settings.setBaseUrl(event.target.value)}
                     placeholder="http://localhost:11434"
@@ -198,7 +216,7 @@ export function SettingsPage() {
                   />
                 </div>
               )}
-              {settings.provider !== 'ollama' && (
+              {settings.activeCapability?.requiresApiKey && (
                 <div>
                   <label htmlFor="settings-api-key" className="block text-xs font-medium text-muted-foreground mb-1.5">API Key</label>
                   <input

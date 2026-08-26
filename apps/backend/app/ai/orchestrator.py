@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from app.ai.prompt_builder import PromptBuilder
+from app.ai.providers.capabilities import capability_for
 from app.ai.providers.config_store import ProviderConfigStore
 from app.ai.providers.factory import ProviderFactory
 from app.ai.repository_context import RepositoryContextBuilder
@@ -77,7 +78,7 @@ class AiOrchestrator:
         config = self.config_store.read_config()
         if config is None:
             raise ValidationServiceError("AI provider is not configured. Open Settings and save a provider first.")
-        if config.provider != "ollama" and not config.api_key:
+        if capability_for(config.provider).requires_api_key and not config.api_key:
             raise ValidationServiceError(
                 "AI provider API key is missing. Open Settings and save your provider API key."
             )

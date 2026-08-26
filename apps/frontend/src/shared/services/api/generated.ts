@@ -42,6 +42,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ai/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ai Providers */
+        get: operations["list_ai_providers_ai_providers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ai/query": {
         parameters: {
             query?: never;
@@ -735,6 +752,40 @@ export interface components {
              * Format: date-time
              */
             timestamp: string;
+        };
+        /** AiProviderCapabilitiesResponse */
+        AiProviderCapabilitiesResponse: {
+            /** Providers */
+            providers: components["schemas"]["AiProviderCapability"][];
+        };
+        /**
+         * AiProviderCapability
+         * @description Safe, non-secret setup metadata for one provider (#291).
+         *
+         *     Never carries an API key, provider token, environment value, or private
+         *     endpoint -- only public facts about what the save/test flow requires and
+         *     where to go set it up.
+         */
+        AiProviderCapability: {
+            /** Defaultmodel */
+            defaultModel: string;
+            /** Displayname */
+            displayName: string;
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "openai" | "anthropic" | "gemini" | "openrouter" | "ollama";
+            /** Requiresapikey */
+            requiresApiKey: boolean;
+            /** Requiresbaseurl */
+            requiresBaseUrl: boolean;
+            /** Setupsteps */
+            setupSteps: string[];
+            /** Setupurl */
+            setupUrl: string;
+            /** Supportstate */
+            supportState: string;
         };
         /** AiProviderConfig */
         AiProviderConfig: {
@@ -2713,6 +2764,113 @@ export interface operations {
                      *           }
                      *         ]
                      *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request-rate limit has been exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "rate_limited",
+                     *       "message": "Too many requests. Try again shortly.",
+                     *       "details": {
+                     *         "retryAfterSeconds": 30
+                     *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description An unexpected server error occurred. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "internal_server_error",
+                     *       "message": "An unexpected error occurred.",
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_ai_providers_ai_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Safe, non-secret setup metadata for every supported provider. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "providers": [
+                     *         {
+                     *           "provider": "openai",
+                     *           "displayName": "OpenAI",
+                     *           "requiresApiKey": true,
+                     *           "requiresBaseUrl": false,
+                     *           "defaultModel": "gpt-4o-mini",
+                     *           "setupUrl": "https://platform.openai.com/api-keys",
+                     *           "setupSteps": [
+                     *             "Create an OpenAI account and generate an API key.",
+                     *             "Paste in the API key.",
+                     *             "Confirm the model ID (default: gpt-4o-mini).",
+                     *             "Test the connection, then save."
+                     *           ],
+                     *           "supportState": "supported"
+                     *         },
+                     *         {
+                     *           "provider": "ollama",
+                     *           "displayName": "Ollama",
+                     *           "requiresApiKey": false,
+                     *           "requiresBaseUrl": true,
+                     *           "defaultModel": "llama3.2",
+                     *           "setupUrl": "https://ollama.com/download",
+                     *           "setupSteps": [
+                     *             "Install and start Ollama, either locally or on a server you control.",
+                     *             "Enter the base URL where it's running.",
+                     *             "Confirm the model ID (default: llama3.2).",
+                     *             "Test the connection, then save."
+                     *           ],
+                     *           "supportState": "supported"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AiProviderCapabilitiesResponse"];
+                };
+            };
+            /** @description Authentication is required or the access token is invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "unauthorized",
+                     *       "message": "Not authenticated.",
                      *       "request_id": "req_01HXYZEXAMPLE"
                      *     }
                      */

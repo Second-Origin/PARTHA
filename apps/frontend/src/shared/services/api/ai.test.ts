@@ -7,6 +7,16 @@ vi.mock('./client', () => ({
 }));
 
 describe('aiService', () => {
+  it('getProviders gets /ai/providers', async () => {
+    const capabilities = { providers: [{ provider: 'openai', displayName: 'OpenAI' }] };
+    vi.mocked(api.get).mockResolvedValue(capabilities);
+
+    const result = await aiService.getProviders();
+
+    expect(api.get).toHaveBeenCalledWith('/ai/providers', undefined);
+    expect(result).toBe(capabilities);
+  });
+
   it('getConfig gets /ai/config', async () => {
     const config = { provider: 'openai', configured: true };
     vi.mocked(api.get).mockResolvedValue(config);

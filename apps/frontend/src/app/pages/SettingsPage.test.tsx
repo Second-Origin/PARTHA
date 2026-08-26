@@ -5,6 +5,7 @@ import { useSettings, settingsTabs } from '@/features/settings/hooks/useSettings
 import { useAuthStore } from '@/app/store/useAuthStore';
 import { authService } from '@/shared/services/api';
 import { ApiError } from '@/shared/services/api/errors';
+import type { AiProvider, AiProviderCapability } from '@/shared/services/api/types';
 
 vi.mock('@/features/settings/hooks/useSettings', async () => {
   const actual = await vi.importActual<typeof import('@/features/settings/hooks/useSettings')>(
@@ -13,13 +14,101 @@ vi.mock('@/features/settings/hooks/useSettings', async () => {
   return { ...actual, useSettings: vi.fn() };
 });
 
+const CAPABILITIES: AiProviderCapability[] = [
+  {
+    provider: 'openai',
+    displayName: 'OpenAI',
+    requiresApiKey: true,
+    requiresBaseUrl: false,
+    defaultModel: 'gpt-4o-mini',
+    setupUrl: 'https://platform.openai.com/api-keys',
+    setupSteps: [
+      'Create an OpenAI account and generate an API key.',
+      'Paste in the API key.',
+      'Confirm the model ID (default: gpt-4o-mini).',
+      'Test the connection, then save.',
+    ],
+    supportState: 'supported',
+  },
+  {
+    provider: 'anthropic',
+    displayName: 'Anthropic',
+    requiresApiKey: true,
+    requiresBaseUrl: false,
+    defaultModel: 'claude-3-5-haiku-latest',
+    setupUrl: 'https://console.anthropic.com/settings/keys',
+    setupSteps: [
+      'Create an Anthropic account and generate an API key.',
+      'Paste in the API key.',
+      'Confirm the model ID (default: claude-3-5-haiku-latest).',
+      'Test the connection, then save.',
+    ],
+    supportState: 'supported',
+  },
+  {
+    provider: 'gemini',
+    displayName: 'Google Gemini',
+    requiresApiKey: true,
+    requiresBaseUrl: false,
+    defaultModel: 'gemini-1.5-flash',
+    setupUrl: 'https://aistudio.google.com/apikey',
+    setupSteps: [
+      'Create a Google AI Studio API key.',
+      'Paste in the API key.',
+      'Confirm the model ID (default: gemini-1.5-flash).',
+      'Test the connection, then save.',
+    ],
+    supportState: 'supported',
+  },
+  {
+    provider: 'openrouter',
+    displayName: 'OpenRouter',
+    requiresApiKey: true,
+    requiresBaseUrl: false,
+    defaultModel: 'openai/gpt-4o-mini',
+    setupUrl: 'https://openrouter.ai/keys',
+    setupSteps: [
+      'Create an OpenRouter account and generate an API key.',
+      'Paste in the API key.',
+      'Confirm the model ID (default: openai/gpt-4o-mini).',
+      'Test the connection, then save.',
+    ],
+    supportState: 'supported',
+  },
+  {
+    provider: 'ollama',
+    displayName: 'Ollama',
+    requiresApiKey: false,
+    requiresBaseUrl: true,
+    defaultModel: 'llama3.2',
+    setupUrl: 'https://ollama.com/download',
+    setupSteps: [
+      'Install and start Ollama, either locally or on a server you control.',
+      "Enter the base URL where it's running.",
+      'Confirm the model ID (default: llama3.2).',
+      'Test the connection, then save.',
+    ],
+    supportState: 'supported',
+  },
+];
+
+function capabilityFor(provider: AiProvider): AiProviderCapability {
+  const capability = CAPABILITIES.find((entry) => entry.provider === provider);
+  if (!capability) throw new Error(`no test fixture capability for provider ${provider}`);
+  return capability;
+}
+
 function baseSettings(overrides: Partial<ReturnType<typeof useSettings>> = {}): ReturnType<typeof useSettings> {
+  const provider = overrides.provider ?? 'openai';
   return {
     tabs: settingsTabs,
     activeTab: 'General',
     setActiveTab: vi.fn(),
+    capabilities: CAPABILITIES,
+    capabilitiesError: null,
+    activeCapability: capabilityFor(provider),
     aiConfig: null,
-    provider: 'openai',
+    provider,
     setProvider: vi.fn(),
     apiKey: '',
     setApiKey: vi.fn(),
@@ -171,6 +260,40 @@ describe('SettingsPage AI provider configuration', () => {
 
     expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Test Connection' })).toBeDisabled();
+  });
+
+  it('shows at most 4 setup steps and an official setup link for the selected provider', () => {
+    vi.mocked(useSettings).mockReturnValue(baseSettings({ activeTab: 'AI Providers', provider: 'anthropic' }));
+
+    render(<SettingsPage />);
+
+    expect(screen.getByText('Getting started with Anthropic')).toBeVisible();
+    const capability = capabilityFor('anthropic');
+    for (const step of capability.setupSteps) {
+      expect(screen.getByText(step)).toBeVisible();
+    }
+    expect(capability.setupSteps.length).toBeLessThanOrEqual(4);
+
+    const link = screen.getByRole('link', { name: 'Open Anthropic setup page' });
+    expect(link).toHaveAttribute('href', capability.setupUrl);
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noreferrer'));
+  });
+
+  it('surfaces a capability-fetch failure honestly, without hiding the rest of the tab', () => {
+    vi.mocked(useSettings).mockReturnValue(
+      baseSettings({
+        activeTab: 'AI Providers',
+        capabilities: [],
+        activeCapability: null,
+        capabilitiesError: 'Could not load AI provider setup information.',
+      }),
+    );
+
+    render(<SettingsPage />);
+
+    expect(screen.getByText('Could not load AI provider setup information.')).toBeVisible();
+    expect(screen.queryByText(/Getting started with/)).not.toBeInTheDocument();
   });
 });
 

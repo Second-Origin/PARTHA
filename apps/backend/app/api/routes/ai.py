@@ -6,6 +6,7 @@ from app.api.deps import get_ai_service, get_current_user
 from app.api.openapi import documented_responses
 from app.schemas.ai import (
     AiConversationResponse,
+    AiProviderCapabilitiesResponse,
     AiProviderConfig,
     AiProviderPublicConfig,
     AiProviderTestRequest,
@@ -35,6 +36,40 @@ _CONFIG_REQUEST_EXAMPLE = {
 _TEST_REQUEST_EXAMPLE = {
     "summary": "Test the saved provider configuration",
     "value": {"provider": "openai", "model": "gpt-4.1-mini"},
+}
+_CAPABILITIES_EXAMPLE = {
+    "providers": [
+        {
+            "provider": "openai",
+            "displayName": "OpenAI",
+            "requiresApiKey": True,
+            "requiresBaseUrl": False,
+            "defaultModel": "gpt-4o-mini",
+            "setupUrl": "https://platform.openai.com/api-keys",
+            "setupSteps": [
+                "Create an OpenAI account and generate an API key.",
+                "Paste in the API key.",
+                "Confirm the model ID (default: gpt-4o-mini).",
+                "Test the connection, then save.",
+            ],
+            "supportState": "supported",
+        },
+        {
+            "provider": "ollama",
+            "displayName": "Ollama",
+            "requiresApiKey": False,
+            "requiresBaseUrl": True,
+            "defaultModel": "llama3.2",
+            "setupUrl": "https://ollama.com/download",
+            "setupSteps": [
+                "Install and start Ollama, either locally or on a server you control.",
+                "Enter the base URL where it's running.",
+                "Confirm the model ID (default: llama3.2).",
+                "Test the connection, then save.",
+            ],
+            "supportState": "supported",
+        },
+    ]
 }
 _QUERY_REQUEST_EXAMPLE = {
     "summary": "Ask about an imported repository",
@@ -66,6 +101,22 @@ _CONVERSATION_RESPONSE_EXAMPLE = {
         },
     ],
 }
+
+
+@router.get(
+    "/providers",
+    response_model=AiProviderCapabilitiesResponse,
+    responses=documented_responses(
+        200,
+        "Safe, non-secret setup metadata for every supported provider.",
+        _CAPABILITIES_EXAMPLE,
+        401,
+        429,
+        500,
+    ),
+)
+def list_ai_providers(service: AiService = Depends(get_ai_service)) -> AiProviderCapabilitiesResponse:
+    return service.list_provider_capabilities()
 
 
 @router.get(

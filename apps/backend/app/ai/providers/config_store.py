@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.ai_egress import DestinationPolicyError, ProviderEgressPolicy
+from app.ai.providers.capabilities import capability_for
 from app.ai.types import DEFAULT_MODELS, AiProviderConfig
 from app.core.crypto import InvalidToken, ProviderKeyCipher
 from app.core.exceptions import ValidationServiceError
@@ -141,18 +142,16 @@ class EncryptedProviderConfigStore:
 
         A new key is encrypted fresh. An omitted key carries the previously
         stored ciphertext forward (so re-saving model/base_url does not require
-        re-entering the key), and only ollama may be saved with no key at all.
+        re-entering the key), and only a provider whose capability entry says
+        it doesn't require one (currently just ollama) may be saved with no
+        key at all.
         """
+        requires_api_key = capability_for(config.provider).requires_api_key
         if config.api_key:
             return self.cipher.encrypt(config.api_key), config.api_key[-4:]
-        if (
-            config.provider != "ollama"
-            and record is not None
-            and record.provider == config.provider
-            and record.encrypted_api_key
-        ):
+        if requires_api_key and record is not None and record.provider == config.provider and record.encrypted_api_key:
             return record.encrypted_api_key, record.api_key_last4
-        if config.provider == "ollama":
+        if not requires_api_key:
             return None, None
         raise ValidationServiceError("API key is required for this provider.")
 
