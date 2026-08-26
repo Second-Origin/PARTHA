@@ -59,10 +59,17 @@ export function LandingPage() {
           draggable="false"
         />
 
+        {/* right-[9.75%] top-[98.42%] is not a guess: it's the exact
+            position of the footer switcher pill in the raw Figma source
+            (rect x="1429.5" y="5519.5"/"y within the dark footer at 394.5",
+            width=130, on a 1728-wide canvas) converted to a percentage, so
+            it lands in the same spot -- below the footer divider, next to
+            the copyright line -- in both light and dark, matching the
+            reference exactly rather than an estimated position. */}
         <ThemeSwitcher
           preference={theme.preference}
           onChange={theme.setPreference}
-          className="pointer-events-auto absolute right-[6.2%] top-[97.4%] z-20"
+          className="pointer-events-auto absolute right-[9.75%] top-[98.42%] z-20"
         />
 
         <nav aria-label="PARTHA landing navigation" className="pointer-events-none absolute inset-0 z-20">
