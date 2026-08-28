@@ -5,6 +5,7 @@ from app.models.analysis_job import AnalysisJob
 from app.models.invite_token import InviteToken
 from app.models.refresh_token import RefreshToken
 from app.models.repository import RepositoryRecord
+from app.models.repository_lineage import RepositoryLineage
 from app.models.snapshot import (
     RiAssertion,
     RiDerivation,
@@ -26,6 +27,7 @@ __all__ = [
     "InviteToken",
     "RefreshToken",
     "RepositoryRecord",
+    "RepositoryLineage",
     "RiAssertion",
     "RiDerivation",
     "RiDiagnostic",

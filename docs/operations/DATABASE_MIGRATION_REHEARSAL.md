@@ -7,7 +7,7 @@ It documents a reproducible rehearsal, not a promise that all historical data ca
 ## Current support and evidence
 
 PARTHA uses one linear Alembic chain, from `0001_initial` through current head
-`0010_account_deletion`. SQLite is the local-development default and is the local
+`0014_lineage_constraints`. SQLite is the local-development default and is the local
 maintainer rehearsal target. PostgreSQL is the supported deployment and CI dialect: the Backend CI job runs
 this rehearsal command against its isolated PostgreSQL 16 service after the backend tests. Repository files
 are outside the database, under `STORAGE_PATH`; a database restore does not recreate missing repository

@@ -5,6 +5,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     JSON,
@@ -44,6 +45,12 @@ class RepositoryRecord(Base):
     revision_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
     revision_value: Mapped[str | None] = mapped_column(String(80), nullable=True)
     revision_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Durable logical grouping above revisions (#299, RFC-0002). Both remain
+    # permanently nullable: an upload or an unresolved-ref legacy GitHub row
+    # is a standalone import with no lineage, by design (RFC §4.3/§6), not a
+    # transitional state to be tightened later.
+    lineage_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     local_path: Mapped[str] = mapped_column(Text)
     size: Mapped[int] = mapped_column(BigInteger, default=0)
     file_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -94,6 +101,36 @@ class RepositoryRecord(Base):
             name="ck_repositories_git_revision",
         ),
         Index("ix_repositories_revision_value", "revision_value"),
+        CheckConstraint(
+            "(lineage_id IS NULL AND sequence IS NULL) OR "
+            "(lineage_id IS NOT NULL AND sequence IS NOT NULL AND sequence >= 1)",
+            name="ck_repositories_lineage_sequence_pair",
+        ),
+        # Standalone rows (both null) never collide under a unique constraint:
+        # SQL uniqueness treats every NULL as distinct. Also serves ordered
+        # lineage reads.
+        UniqueConstraint("lineage_id", "sequence", name="uq_repositories_lineage_sequence"),
+        # Composite target proving a lineage's latest-member pointer names a
+        # repository that actually belongs to that exact lineage.
+        UniqueConstraint("id", "lineage_id", name="uq_repositories_id_lineage"),
+        # Cross-owner attachment is invalid at the database layer even if
+        # service code is wrong (#299 §9). Deferred: a lineage and its first
+        # repository are written in one transaction (RFC §5.2), so this must
+        # not be checked until commit. No automatic delete action -- deletion
+        # updates or clears the lineage's latest pointer explicitly first
+        # (RFC §8.3), it is never left to a database cascade/set-null here.
+        # This is one half of a cyclic FK pair with `repository_lineages`;
+        # see the known `create_all()`-on-SQLite enforcement limitation
+        # documented on `RepositoryLineage.fk_repository_lineages_latest_member`
+        # (app/models/repository_lineage.py) -- it applies equally to
+        # whichever of the two constraints ends up as the forward reference.
+        ForeignKeyConstraint(
+            ["lineage_id", "owner_id"],
+            ["repository_lineages.id", "repository_lineages.owner_id"],
+            name="fk_repositories_lineage_owner",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
     )
 
     @validates("revision_kind", "revision_value")
