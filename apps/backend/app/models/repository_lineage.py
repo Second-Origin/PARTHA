@@ -77,7 +77,32 @@ class RepositoryLineage(Base):
         # §4.2): a latest-pointer can never name a repository outside this
         # exact lineage, even if service code is wrong. Declared here (rather
         # than only in the migration) so `create_all()` in development/test
-        # produces the identical final shape a migrated database reaches.
+        # produces the identical *declared* shape a migrated database
+        # reaches (`PRAGMA foreign_key_list`/`inspector.get_foreign_keys()`
+        # show it either way, on both dialects).
+        #
+        # Known SQLite limitation (confirmed in CI, #299): `create_all()`
+        # cannot avoid embedding one of these two cyclic FKs (this one, or
+        # `repositories.fk_repositories_lineage_owner`) as an inline forward
+        # reference to a table that doesn't exist yet -- SQLite must create
+        # one of `repositories`/`repository_lineages` before the other, and
+        # there is no `ALTER TABLE ADD CONSTRAINT` to add the missing half
+        # afterward the way the migration does. Which of the two ends up as
+        # the forward reference depends on `create_all()`'s internal
+        # cyclic-dependency tie-break, not something this code controls. At
+        # least one real SQLite build does not enforce a deferred FK
+        # declared that way -- it still reports the constraint correctly,
+        # but a genuine violation neither raises at COMMIT nor shows up in
+        # `PRAGMA foreign_key_check`. The
+        # Alembic migration (0013/0014) never creates this forward
+        # reference -- it adds each cyclic FK in its own revision, after
+        # both tables already exist -- so a database built by migrating,
+        # including every real deployment and this repo's own CI rehearsal,
+        # is unaffected. This is a `create_all()`-only (development/test
+        # bootstrap) gap, not a production one; see
+        # tests/test_repository_lineage_migration.py's
+        # test_cross_owner_lineage_attachment_is_rejected_by_the_database_even_if_forced
+        # for the migration-backed, reliable version of this proof.
         ForeignKeyConstraint(
             ["latest_repository_id", "id"],
             ["repositories.id", "repositories.lineage_id"],

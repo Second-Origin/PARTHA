@@ -352,72 +352,19 @@ def test_cross_owner_lineage_lookup_never_matches_another_owners_row(auth_client
         assert persisted.sequence == 1
 
 
-def test_cross_owner_lineage_attachment_is_rejected_by_the_database_even_if_forced(auth_client, make_auth_headers):
-    """The composite deferred FK enforces ownership even if application code
-    is wrong (#299 §9) -- proven here by deliberately bypassing the service
-    layer and trying to attach a repository to another owner's lineage
-    directly."""
-    other = make_auth_headers("owner-c@example.com")
-    with SessionLocal() as db:
-        lineage = RepositoryLineage(
-            id=str(uuid.uuid4()),
-            owner_id=other["user"]["id"],
-            canonical_source_key="github.com/other/repo2",
-            canonical_branch="refs/heads/main",
-            display_name="repo2",
-            latest_repository_id=None,
-            next_sequence=1,
-            created_at=datetime.now(UTC),
-        )
-        db.add(lineage)
-        db.commit()
-        lineage_id = lineage.id
-
-    from sqlalchemy import text
-
-    with SessionLocal() as db:
-        # Force enforcement on this exact connection rather than relying on
-        # app.core.database's process-wide connect-event listener having
-        # already fired -- must be the very first statement on the
-        # connection, before SQLite's autobegin opens a transaction, since
-        # the pragma is a no-op once one is open. Confirmed (#299 follow-up):
-        # explicitly forcing this pragma was NOT sufficient to make SQLite
-        # actually enforce the deferred composite FK on the Linux CI runner,
-        # even though it reads back as ON and the identical scenario raises
-        # reliably on macOS -- a genuine platform/SQLite-build difference in
-        # deferred FK support, not a test-setup ordering issue. This
-        # assertion therefore uses `PRAGMA foreign_key_check`, which is
-        # documented to detect a violation regardless of the connection's
-        # `foreign_keys`/deferred state, instead of depending on COMMIT-time
-        # deferred enforcement to raise `IntegrityError` -- it verifies the
-        # exact same underlying fact (this row genuinely violates the
-        # ownership FK) without depending on the platform-specific behavior
-        # that made the original assertion unreliable in CI.
-        db.execute(text("PRAGMA foreign_keys=ON"))
-        assert db.execute(text("PRAGMA foreign_keys")).scalar() == 1, (
-            "PRAGMA foreign_keys did not read back as enabled after setting it"
-        )
-        record = RepositoryRecord(
-            id=str(uuid.uuid4()),
-            owner_id=auth_client.default_user["id"],  # type: ignore[attr-defined]
-            name="cross-owner-attempt",
-            source="github",
-            source_url="https://github.com/other/repo2",
-            branch="main",
-            revision_kind="git",
-            revision_value="d" * 40,
-            revision_ref="refs/heads/main",
-            local_path="/tmp/x",
-            status="analysing",
-            lineage_id=lineage_id,
-            sequence=1,
-        )
-        db.add(record)
-        db.flush()
-        violations = db.execute(text("PRAGMA foreign_key_check")).fetchall()
-        db.rollback()
-        assert violations, (
-            "PRAGMA foreign_key_check found no violation for a repository row "
-            "attached to another owner's lineage -- the composite ownership FK "
-            "is not protecting this data on this SQLite build."
-        )
+# Direct proof that the composite ownership FK rejects a forced cross-owner
+# attachment lives in tests/test_repository_lineage_migration.py (SQLite, via
+# a real Alembic-migrated database) and
+# tests/test_repository_lineage_concurrency.py (real PostgreSQL). See the
+# commit history on this file for why: the same assertion built on top of
+# this file's `auth_client` fixture (which bootstraps its schema via
+# `Base.metadata.create_all()`, not migrations) was not reliable across
+# SQLite builds -- `create_all()` must resolve this table pair's genuine
+# foreign-key cycle by emitting one table with an inline FK referencing the
+# other table before it exists, and at least one SQLite build encountered in
+# CI does not enforce a deferred FK declared that way, even though it stores
+# and reports the declaration correctly. The Alembic migration never does
+# this -- it adds the constraint in a second revision after both tables
+# already exist -- which is why the migration-backed version of this
+# assertion is reliable and this file's version was removed rather than
+# patched a third time.

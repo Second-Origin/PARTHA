@@ -453,3 +453,69 @@ def test_backfill_rerun_is_idempotent(lineage_migration_db):
 
     command.upgrade(cfg, "head")
     command.downgrade(cfg, "base")
+
+
+def test_cross_owner_lineage_attachment_is_rejected_by_the_database_even_if_forced(lineage_migration_db):
+    """The composite deferred ownership FK (`fk_repositories_lineage_owner`)
+    rejects a forced cross-owner attachment even if application code is
+    wrong (#299 §9) -- proven against a database built the same way a real
+    deployment's is, via the actual Alembic migrations, not
+    `Base.metadata.create_all()`.
+
+    This deliberately does not use the `client`/`auth_client` fixtures
+    (which bootstrap their schema via `create_all()`): resolving this
+    table pair's genuine foreign-key cycle there requires emitting one
+    table with an inline FK referencing the other before it exists, and at
+    least one SQLite build encountered in CI does not enforce a deferred FK
+    declared that way -- confirmed directly: the identical scenario built
+    on `create_all()` failed `PRAGMA foreign_key_check` outright on that
+    build, while raising `IntegrityError` reliably every time on other
+    platforms. The migration never creates that inline forward reference --
+    0014 adds this exact constraint in a second revision, after both tables
+    already exist -- which is what makes this version of the assertion
+    reliable everywhere instead of platform-dependent.
+    """
+    database_url, engine = lineage_migration_db
+    cfg = _alembic_config()
+    command.upgrade(cfg, "head")
+
+    owner_a, owner_b = _seed_users_and_repositories(engine, [])
+
+    meta = MetaData()
+    lineages = Table("repository_lineages", meta, autoload_with=engine)
+    repositories = Table("repositories", meta, autoload_with=engine)
+
+    now = datetime.now(UTC)
+    lineage_id = str(uuid.uuid4())
+    with engine.begin() as connection:
+        connection.execute(
+            lineages.insert().values(
+                id=lineage_id,
+                owner_id=owner_b,
+                canonical_source_key="github.com/other/repo2",
+                canonical_branch="refs/heads/main",
+                display_name="repo2",
+                latest_repository_id=None,
+                next_sequence=1,
+                created_at=now,
+            )
+        )
+
+    from sqlalchemy.exc import IntegrityError
+
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        connection.execute(
+            repositories.insert().values(
+                **_repo_row(
+                    owner_a,
+                    id=str(uuid.uuid4()),
+                    name="cross-owner-attempt",
+                    lineage_id=lineage_id,
+                    sequence=1,
+                )
+            )
+        )
+        with pytest.raises(IntegrityError):
+            transaction.commit()
+        transaction.rollback()

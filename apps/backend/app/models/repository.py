@@ -119,6 +119,11 @@ class RepositoryRecord(Base):
         # not be checked until commit. No automatic delete action -- deletion
         # updates or clears the lineage's latest pointer explicitly first
         # (RFC §8.3), it is never left to a database cascade/set-null here.
+        # This is one half of a cyclic FK pair with `repository_lineages`;
+        # see the known `create_all()`-on-SQLite enforcement limitation
+        # documented on `RepositoryLineage.fk_repository_lineages_latest_member`
+        # (app/models/repository_lineage.py) -- it applies equally to
+        # whichever of the two constraints ends up as the forward reference.
         ForeignKeyConstraint(
             ["lineage_id", "owner_id"],
             ["repository_lineages.id", "repository_lineages.owner_id"],
