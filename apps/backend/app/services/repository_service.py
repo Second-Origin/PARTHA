@@ -13,7 +13,7 @@ from app.core.exceptions import ConflictServiceError, NotFoundError, ServiceErro
 from app.github.client import GitHubClient
 from app.models.repository import RepositoryRecord
 from app.parsers.repository_parser import RepositoryFileLimitExceeded, RepositoryParser, UnsafeRepositoryPath
-from app.repositories.repository_repository import RepositoryRepository
+from app.repositories.repository_repository import LineageDuplicateRevision, RepositoryRepository
 from app.schemas.repository import (
     FileTreeNode,
     GitHubImportRequest,
@@ -69,8 +69,13 @@ class RepositoryService:
 
     def delete_repository(self, repository_id: str) -> None:
         record = self._get_record(repository_id)
-        self.storage.delete_repository(record.local_path)
-        self.repository.delete(record)
+        local_path = record.local_path
+        # DB transaction (including any lineage latest-pointer rollback, #299
+        # §8.3) commits before the filesystem path is removed, so a DB
+        # failure can never leave a database row whose source directory has
+        # already vanished.
+        self.repository.delete_with_lineage_update(record)
+        self.storage.delete_repository(local_path)
 
     def import_github_repository(self, request: GitHubImportRequest) -> RepositoryResponse:
         repository_id = str(uuid4())
@@ -80,19 +85,18 @@ class RepositoryService:
         # A new commit is a new revision, so duplicate detection is keyed on the
         # resolved commit SHA rather than URL+branch (#87). That requires cloning
         # first: URL+branch is only a fallback when git identity is unavailable,
-        # and it must never block importing a genuinely new revision.
+        # and it must never block importing a genuinely new revision. Duplicate
+        # detection itself happens later, transactionally, scoped to the
+        # resolved ref's lineage (#299 §5.2) -- not here, and deliberately not
+        # by (source_url, revision_value, owner) alone, since that would also
+        # reject the same commit legitimately re-imported under a different
+        # branch (#299 §8.1), which must succeed.
         destination = self.storage.reset_repository_path(repository_id)
         try:
             self.github.clone_public_repository(url, destination, branch)
             root = self._resolve_repository_root(destination)
             commit_sha = self.github.read_head_commit(destination)
             revision_kind, revision_value, revision_ref = self._git_revision(destination, commit_sha, branch)
-            existing = self.repository.find_by_source_revision_for_owner(url, revision_value, self.owner_id)
-            if existing:
-                raise ConflictServiceError(
-                    "Repository has already been imported.",
-                    {"repositoryId": existing.id, "name": existing.name},
-                )
             tree, meta, total_size = self._parse_repository(root)
             self._validate_parsed_repository(meta.total_files)
         except Exception:
@@ -100,10 +104,11 @@ class RepositoryService:
             raise
 
         now = datetime.now(UTC)
+        name = self.github.repository_name(url)
         record = RepositoryRecord(
             id=repository_id,
             owner_id=self.owner_id,
-            name=self.github.repository_name(url),
+            name=name,
             description=None,
             source="github",
             source_url=url,
@@ -122,7 +127,42 @@ class RepositoryService:
             repo_metadata=meta.model_dump(mode="json", by_alias=True),
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
-        return self.to_response(self.repository.add(record))
+        # A resolved ref is guaranteed here (`_git_revision` above raises
+        # otherwise), so every live GitHub import always gets a canonical
+        # pair and therefore a lineage (#299 §8.1) -- unlineaged standalone
+        # GitHub rows are only a backfill-time legacy case, never live.
+        try:
+            persisted = self.repository.add_with_lineage(
+                record,
+                owner_id=self.owner_id,
+                canonical_source_key=self._canonical_github_source(url),
+                canonical_branch=revision_ref,
+                display_name=name,
+            )
+        except LineageDuplicateRevision as exc:
+            self.storage.delete_repository_id(repository_id)
+            raise ConflictServiceError(
+                "Repository has already been imported.",
+                {"repositoryId": exc.existing.id, "name": exc.existing.name},
+            ) from exc
+        except Exception:
+            self.storage.delete_repository_id(repository_id)
+            raise
+        return self.to_response(persisted)
+
+    def _canonical_github_source(self, url: str) -> str:
+        """Owner-scoped lineage grouping key for an already-validated live URL.
+
+        `url` is already normalized by `GitHubClient.validate_public_url` to
+        exactly ``https://github.com/<owner>/<repo>`` (no trailing slash or
+        ``.git``); only case-folding the owner/repo remains (#299 §8.1). This
+        is deliberately simpler than the migration's own backfill parser,
+        which must additionally accept looser historical forms -- the two are
+        intentionally not shared code, so a future change to this live parser
+        can never silently change what the frozen backfill migration does.
+        """
+        owner, repo = url.removeprefix("https://github.com/").split("/", 1)
+        return f"github.com/{owner.lower()}/{repo.lower()}"
 
     async def import_uploaded_repository(self, file: UploadFile) -> RepositoryResponse:
         repository_id = str(uuid4())
@@ -151,6 +191,10 @@ class RepositoryService:
         self.storage.delete_upload(archive_path)
 
         now = datetime.now(UTC)
+        # No lineage_id/sequence set (both stay null): uploads are always
+        # unlineaged standalone imports (#299 §8.2/§4.3) -- nothing here
+        # proves two archives are revisions of the same logical repository,
+        # so this never creates or searches a lineage.
         record = RepositoryRecord(
             id=repository_id,
             owner_id=self.owner_id,

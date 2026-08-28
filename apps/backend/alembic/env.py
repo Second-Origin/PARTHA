@@ -41,6 +41,27 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        if connection.dialect.name == "sqlite":
+            # SQLite refuses to toggle `PRAGMA foreign_keys` mid-transaction
+            # (a documented no-op once a transaction is open), and Alembic's
+            # own per-migration transaction is already open by the time a
+            # revision's upgrade() runs. A migration that uses batch mode to
+            # add a constraint to a table that another table already has a
+            # deferred foreign key pointing at (e.g. #299's cyclic
+            # repository_lineages <-> repositories relationship) drops and
+            # recreates that table; SQLite's deferred-FK bookkeeping does not
+            # correctly reconcile that recreation against the still-open
+            # transaction, and a fully self-consistent final state still
+            # fails at COMMIT with a generic "FOREIGN KEY constraint failed"
+            # (verified: `PRAGMA foreign_key_check` reports no violation
+            # immediately beforehand). Disabling enforcement here, before any
+            # transaction opens, avoids this without weakening runtime
+            # enforcement: every real application connection still gets
+            # `PRAGMA foreign_keys=ON` via app.core.database's own
+            # connect-event listener; this affects only the connection
+            # Alembic itself uses while migrating.
+            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            connection.commit()
         context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():

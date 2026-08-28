@@ -402,9 +402,11 @@ Do not silently skip a failed update or coerce corrupt data to satisfy final con
 
 ## 7. Concrete Alembic migration sequence
 
-Use two new revisions after `0010_account_deletion`, each with an ID under the existing PostgreSQL
-`alembic_version VARCHAR(32)` limit. Suggested IDs are `0011_lineage_expand` and
-`0012_lineage_constraints`.
+Use two new revisions after the current head, each with an ID under the existing PostgreSQL
+`alembic_version VARCHAR(32)` limit. Suggested IDs were `0011_lineage_expand` and
+`0012_lineage_constraints`; two unrelated migrations (`0011_invite_tokens`, `0012_waitlist_entries`)
+landed on `dev` ahead of this one, so the implementation uses `0013_lineage_expand` and
+`0014_lineage_constraints` instead. The mechanics below are unaffected by the renumbering.
 
 Imports must be quiesced while the migrations run. The application currently has no dual-write
 compatibility for lineage and a concurrent repository insert could escape the backfill. Existing
