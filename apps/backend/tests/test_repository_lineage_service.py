@@ -373,9 +373,19 @@ def test_cross_owner_lineage_attachment_is_rejected_by_the_database_even_if_forc
         db.commit()
         lineage_id = lineage.id
 
+    from sqlalchemy import text
     from sqlalchemy.exc import IntegrityError
 
     with SessionLocal() as db:
+        # Force enforcement on this exact connection rather than relying on
+        # app.core.database's process-wide connect-event listener having
+        # already fired (it normally has, by this point in a real app or a
+        # full test run, but that's an accident of import order/platform,
+        # not something this specific assertion should depend on -- must be
+        # the very first statement on the connection, before SQLite's
+        # autobegin opens a transaction, since the pragma is a no-op once
+        # one is open).
+        db.execute(text("PRAGMA foreign_keys=ON"))
         record = RepositoryRecord(
             id=str(uuid.uuid4()),
             owner_id=auth_client.default_user["id"],  # type: ignore[attr-defined]
