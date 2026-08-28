@@ -1,14 +1,19 @@
+import { Loader2 } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { useSettings } from '@/features/settings/hooks/useSettings';
 import { useAccountDeletion } from '@/features/settings/hooks/useAccountDeletion';
+import { useOAuthAccounts } from '@/features/settings/hooks/useOAuthAccounts';
 import { useAuthStore } from '@/app/store/useAuthStore';
 import { cn } from '@/shared/utils/cn';
+
+const OAUTH_PROVIDER_LABEL: Record<string, string> = { google: 'Google', github: 'GitHub' };
 
 export function SettingsPage() {
   const settings = useSettings();
   const { tabs, activeTab, setActiveTab } = settings;
   const user = useAuthStore((state) => state.user);
   const deletion = useAccountDeletion();
+  const oauthAccounts = useOAuthAccounts();
 
   return (
     <div className="w-full max-w-4xl">
@@ -68,6 +73,67 @@ export function SettingsPage() {
                 </button>
               </div>
             </div>
+            {(oauthAccounts.identities === null ? [] : oauthAccounts.identities).length > 0 ||
+            oauthAccounts.linkableProviders.length > 0 ? (
+              <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+                <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">Sign-in</p>
+                <h2 className="mt-1 text-lg font-semibold text-foreground mb-4">Connected accounts</h2>
+                <div className="space-y-3">
+                  {(oauthAccounts.identities ?? []).map((identity) => (
+                    <div
+                      key={identity.provider}
+                      className="flex items-center justify-between rounded-xl border border-primary/15 bg-background px-4 py-3"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {OAUTH_PROVIDER_LABEL[identity.provider] ?? identity.provider}
+                        </p>
+                        {identity.email && <p className="text-xs text-muted-foreground">{identity.email}</p>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => oauthAccounts.unlink(identity.provider as 'google' | 'github')}
+                        disabled={oauthAccounts.pendingAction !== null}
+                        className="rounded-xl border border-primary/20 px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
+                      >
+                        {oauthAccounts.pendingAction === identity.provider ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          'Unlink'
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                  {oauthAccounts.linkableProviders.map((provider) => (
+                    <div
+                      key={provider}
+                      className="flex items-center justify-between rounded-xl border border-dashed border-primary/20 bg-background px-4 py-3"
+                    >
+                      <p className="text-sm font-medium text-muted-foreground">
+                        {OAUTH_PROVIDER_LABEL[provider] ?? provider}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => oauthAccounts.link(provider)}
+                        disabled={oauthAccounts.pendingAction !== null}
+                        className="rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                      >
+                        {oauthAccounts.pendingAction === provider ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          'Link'
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {oauthAccounts.actionError && (
+                  <p role="alert" className="mt-3 text-sm text-destructive">
+                    {oauthAccounts.actionError}
+                  </p>
+                )}
+              </div>
+            ) : null}
             <div className="rounded-3xl border border-destructive/50 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
               <h2 className="text-sm font-medium text-destructive mb-2">Danger Zone</h2>
               <p className="text-xs text-muted-foreground mb-4">

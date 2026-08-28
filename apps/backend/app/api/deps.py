@@ -17,6 +17,7 @@ from app.ai.providers.registry import ProviderRegistry
 from app.ai.repository_context import RepositoryContextBuilder
 from app.analysis.architecture import ArchitectureAnalyzer
 from app.analysis.authentication import AuthenticationExplanationService
+from app.auth.oauth_providers import GitHubOAuthClient, GoogleOAuthClient
 from app.auth.security import decode_access_token
 from app.auth.service import AuthService
 from app.core.config import Settings, get_settings
@@ -41,6 +42,7 @@ from app.services.analysis_job_service import AnalysisJobService
 from app.services.analysis_service import AnalysisService
 from app.services.documentation_service import DocumentationService
 from app.services.evidence_service import EvidenceSourceService
+from app.services.oauth_service import OAuthService
 from app.services.repository_service import RepositoryService
 from app.storage.local import LocalStorage
 
@@ -76,6 +78,24 @@ def get_current_user(
     if credentials is None:
         raise UnauthorizedError("Not authenticated.")
     return _user_from_bearer(credentials.credentials, db, settings)
+
+
+def get_google_oauth_client(settings: Settings = Depends(get_settings)) -> GoogleOAuthClient:
+    return GoogleOAuthClient(settings)
+
+
+def get_github_oauth_client(settings: Settings = Depends(get_settings)) -> GitHubOAuthClient:
+    return GitHubOAuthClient(settings)
+
+
+def get_oauth_service(
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    auth_service: AuthService = Depends(get_auth_service),
+    google_client: GoogleOAuthClient = Depends(get_google_oauth_client),
+    github_client: GitHubOAuthClient = Depends(get_github_oauth_client),
+) -> OAuthService:
+    return OAuthService(db, settings, auth_service, {"google": google_client, "github": github_client})
 
 
 def get_local_storage(settings: Settings = Depends(get_settings)) -> LocalStorage:
