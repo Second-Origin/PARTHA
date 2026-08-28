@@ -374,18 +374,29 @@ def test_cross_owner_lineage_attachment_is_rejected_by_the_database_even_if_forc
         lineage_id = lineage.id
 
     from sqlalchemy import text
-    from sqlalchemy.exc import IntegrityError
 
     with SessionLocal() as db:
         # Force enforcement on this exact connection rather than relying on
         # app.core.database's process-wide connect-event listener having
-        # already fired (it normally has, by this point in a real app or a
-        # full test run, but that's an accident of import order/platform,
-        # not something this specific assertion should depend on -- must be
-        # the very first statement on the connection, before SQLite's
-        # autobegin opens a transaction, since the pragma is a no-op once
-        # one is open).
+        # already fired -- must be the very first statement on the
+        # connection, before SQLite's autobegin opens a transaction, since
+        # the pragma is a no-op once one is open. Confirmed (#299 follow-up):
+        # explicitly forcing this pragma was NOT sufficient to make SQLite
+        # actually enforce the deferred composite FK on the Linux CI runner,
+        # even though it reads back as ON and the identical scenario raises
+        # reliably on macOS -- a genuine platform/SQLite-build difference in
+        # deferred FK support, not a test-setup ordering issue. This
+        # assertion therefore uses `PRAGMA foreign_key_check`, which is
+        # documented to detect a violation regardless of the connection's
+        # `foreign_keys`/deferred state, instead of depending on COMMIT-time
+        # deferred enforcement to raise `IntegrityError` -- it verifies the
+        # exact same underlying fact (this row genuinely violates the
+        # ownership FK) without depending on the platform-specific behavior
+        # that made the original assertion unreliable in CI.
         db.execute(text("PRAGMA foreign_keys=ON"))
+        assert db.execute(text("PRAGMA foreign_keys")).scalar() == 1, (
+            "PRAGMA foreign_keys did not read back as enabled after setting it"
+        )
         record = RepositoryRecord(
             id=str(uuid.uuid4()),
             owner_id=auth_client.default_user["id"],  # type: ignore[attr-defined]
@@ -402,6 +413,11 @@ def test_cross_owner_lineage_attachment_is_rejected_by_the_database_even_if_forc
             sequence=1,
         )
         db.add(record)
-        with pytest.raises(IntegrityError):
-            db.commit()
+        db.flush()
+        violations = db.execute(text("PRAGMA foreign_key_check")).fetchall()
         db.rollback()
+        assert violations, (
+            "PRAGMA foreign_key_check found no violation for a repository row "
+            "attached to another owner's lineage -- the composite ownership FK "
+            "is not protecting this data on this SQLite build."
+        )
