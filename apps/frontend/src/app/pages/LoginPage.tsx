@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useLoginForm } from '@/features/auth/hooks/useLoginForm';
+import { OAuthButtons } from '@/features/auth/components/OAuthButtons';
 import { AuthShell } from '@/shared/components/layout/AuthShell';
 
 export function LoginPage() {
@@ -13,6 +14,7 @@ export function LoginPage() {
       description="Continue to your repository intelligence workspace."
       footer={<>Don&apos;t have an account?{' '}<Link to="/register" state={redirectState} data-testid="login-register-link" className="font-medium text-primary underline underline-offset-2">Create one</Link></>}
     >
+        <OAuthButtons />
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label htmlFor="login-email" className="block text-xs font-medium text-muted-foreground mb-1.5">

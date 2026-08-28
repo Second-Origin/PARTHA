@@ -105,6 +105,13 @@ export type LoginRequest = components['schemas']['LoginRequest'];
 export type RegisterRequest = components['schemas']['RegisterRequest'];
 export type AccountDeletionRequest = components['schemas']['AccountDeletionRequest'];
 
+export type OAuthProvider = 'google' | 'github';
+export type OAuthProvidersResponse = components['schemas']['OAuthProvidersResponse'];
+export type OAuthStartResponse = components['schemas']['OAuthStartResponse'];
+export type OAuthLinkedIdentity = components['schemas']['OAuthLinkedIdentity'];
+export type OAuthLinkedIdentitiesResponse = components['schemas']['OAuthLinkedIdentitiesResponse'];
+export type OAuthLinkConfirmRequest = components['schemas']['OAuthLinkConfirmRequest'];
+
 export type WaitlistSignupRequest = components['schemas']['WaitlistSignupRequest'];
 export type WaitlistSignupResponse = components['schemas']['WaitlistSignupResponse'];
 

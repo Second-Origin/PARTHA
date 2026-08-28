@@ -27,6 +27,16 @@ export function createAppRouter() {
       },
     },
     {
+      // Landing point for every OAuth provider redirect (#288). Public and
+      // outside RequireAuth: the browser lands here straight from Google/
+      // GitHub, before this tab has any access token in memory.
+      path: '/oauth/complete',
+      lazy: async () => {
+        const { OAuthCompletePage } = await import('@/app/pages/OAuthCompletePage');
+        return { Component: OAuthCompletePage };
+      },
+    },
+    {
       element: <RequireAuth />,
       children: [
         {

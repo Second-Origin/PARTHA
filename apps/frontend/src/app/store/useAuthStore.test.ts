@@ -219,6 +219,23 @@ describe('useAuthStore', () => {
     });
   });
 
+  describe('setSession (#288: adopting an AuthResponse the caller already has)', () => {
+    it('adopts the given AuthResponse and clears stale app state, the same as login()', () => {
+      useAppStore.setState({ repositories: [fakeRepository('repo-a')], activeRepositoryId: 'repo-a' });
+
+      useAuthStore.getState().setSession({
+        accessToken: 'linked-token',
+        tokenType: 'bearer',
+        user: fakeUser('userC', 'c@example.com'),
+      });
+
+      expect(useAuthStore.getState()).toMatchObject({ status: 'authenticated', accessToken: 'linked-token' });
+      expect(useAuthStore.getState().user?.id).toBe('userC');
+      expect(useAppStore.getState().repositories).toEqual([]);
+      expect(useAppStore.getState().activeRepositoryId).toBeNull();
+    });
+  });
+
   describe('guest-only auth failures must not touch an existing session', () => {
     it('a failed login attempt does not clear an existing authenticated session', async () => {
       useAuthStore.setState({ status: 'authenticated', accessToken: 'a-token', user: fakeUser('userA', 'a@example.com') });

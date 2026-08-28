@@ -103,6 +103,19 @@ class Settings(BaseSettings):
     ai_egress_mode: str = "hosted"
     ai_egress_allowed_base_urls: Annotated[list[str], NoDecode] = Field(default_factory=list)
     ai_egress_allowed_cidrs: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    # Google/GitHub sign-in (#288), credentials deferred: empty client
+    # id/secret is the normal, supported state -- OAuthService.configured_providers()
+    # and each provider client's is_configured() gate every live OAuth code
+    # path on both being set, so leaving these blank simply means neither
+    # provider's routes do anything but report themselves unavailable.
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    github_oauth_client_id: str = ""
+    github_oauth_client_secret: str = ""
+    # The public origin this backend is reachable at, used to build the fixed
+    # OAuth redirect URIs registered with each provider's console (must match
+    # exactly there). Irrelevant until a provider is actually configured.
+    oauth_public_base_url: str = "http://localhost:8000"
 
     model_config = SettingsConfigDict(
         env_file=".env",

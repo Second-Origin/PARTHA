@@ -21,6 +21,15 @@ PUBLIC_OPERATIONS = {
     # The one public write route besides register/login: reachable from the
     # landing page before a visitor has an account or an invite (#334).
     ("POST", "/waitlist"),
+    # OAuth sign-in (#288): all four are reachable before any session exists
+    # -- providers/start begin an anonymous flow, callback is a provider
+    # redirect target with no Authorization header of its own, and
+    # link/confirm authenticates via a one-time pending-link id + password,
+    # the same posture as login.
+    ("GET", "/auth/oauth/providers"),
+    ("GET", "/auth/oauth/{provider}/start"),
+    ("GET", "/auth/oauth/{provider}/callback"),
+    ("POST", "/auth/oauth/link/confirm"),
 }
 
 # Refresh is unauthenticated in the HTTPBearer sense, but requires a valid
@@ -35,6 +44,13 @@ EXPECTED_RESPONSES = {
     ("POST", "/auth/logout"): {204, 429, 500},
     ("GET", "/auth/me"): {200, 401, 429, 500},
     ("DELETE", "/auth/me"): {204, 401, 422, 429, 500},
+    ("GET", "/auth/oauth/providers"): {200, 429, 500},
+    ("GET", "/auth/oauth/{provider}/start"): {200, 422, 429, 500},
+    ("POST", "/auth/oauth/{provider}/link"): {200, 401, 422, 429, 500},
+    ("GET", "/auth/oauth/{provider}/callback"): {200, 422, 429, 500},
+    ("POST", "/auth/oauth/link/confirm"): {200, 401, 409, 422, 429, 500},
+    ("GET", "/auth/oauth/linked"): {200, 401, 429, 500},
+    ("DELETE", "/auth/oauth/{provider}"): {204, 401, 404, 422, 429, 500},
     ("POST", "/repositories/upload"): {201, 401, 409, 422, 429, 500},
     ("POST", "/repositories/github"): {201, 401, 409, 422, 429, 502, 504, 500},
     ("GET", "/repositories"): {200, 401, 429, 500},
@@ -76,6 +92,7 @@ EXPECTED_RESPONSES = {
 BODY_MEDIA_TYPES = {
     ("POST", "/auth/register"): "application/json",
     ("POST", "/auth/login"): "application/json",
+    ("POST", "/auth/oauth/link/confirm"): "application/json",
     ("POST", "/repositories/upload"): "multipart/form-data",
     ("POST", "/repositories/github"): "application/json",
     ("PUT", "/ai/config"): "application/json",

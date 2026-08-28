@@ -100,7 +100,7 @@ class AuthService:
                 raise ConflictServiceError("An account with this email already exists.") from None
             raise
         self.db.refresh(user)
-        return self._open_session(user)
+        return self.open_session(user)
 
     def login(self, email: str, password: str) -> tuple[User, str, str]:
         normalized = email.strip().lower()
@@ -114,7 +114,7 @@ class AuthService:
             raise UnauthorizedError(INVALID_CREDENTIALS)
         if not user.is_active:
             raise UnauthorizedError(INVALID_CREDENTIALS)
-        return self._open_session(user)
+        return self.open_session(user)
 
     def refresh(self, raw_token: str) -> tuple[User, str, str]:
         now = datetime.now(UTC)
@@ -183,7 +183,13 @@ class AuthService:
         self._revoke_family(record.family_id, datetime.now(UTC))
         self.db.commit()
 
-    def _open_session(self, user: User) -> tuple[User, str, str]:
+    def open_session(self, user: User) -> tuple[User, str, str]:
+        """Issue a fresh refresh-token family and access token for `user`.
+
+        Public so callers that authenticate a user by some means other than
+        password login (OAuthService, #288) can reuse the exact same session
+        primitive as register()/login() rather than duplicating it.
+        """
         raw_refresh = self._issue_refresh(user.id, family_id=None)
         self.db.commit()
         return user, create_access_token(user.id, self.settings), raw_refresh

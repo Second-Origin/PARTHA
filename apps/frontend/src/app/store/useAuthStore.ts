@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { authService, configureApiClient, requestSharedRefresh } from '@/shared/services/api';
-import type { UserResponse } from '@/shared/services/api/types';
+import type { AuthResponse, UserResponse } from '@/shared/services/api/types';
 import { useAppStore } from './useAppStore';
 
 export type AuthStatus = 'initialising' | 'authenticated' | 'unauthenticated';
@@ -15,6 +15,11 @@ interface AuthState {
   bootstrap: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, inviteCode: string) => Promise<void>;
+  /** Adopts an AuthResponse this component already has in hand (e.g. from
+   * confirming a pending OAuth link, #288) without making its own network
+   * call -- the same local-state transition login()/register() make after
+   * theirs. */
+  setSession: (auth: AuthResponse) => void;
   /** Always clears local session state, even if the server call fails. */
   logout: () => Promise<void>;
   /** Clears local session state after the account itself was deleted
@@ -46,6 +51,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   async register(email, password, inviteCode) {
     const auth = await authService.register({ email, password, inviteCode });
+    clearUserScopedAppState();
+    set({ accessToken: auth.accessToken, user: auth.user, status: 'authenticated' });
+  },
+
+  setSession(auth) {
     clearUserScopedAppState();
     set({ accessToken: auth.accessToken, user: auth.user, status: 'authenticated' });
   },

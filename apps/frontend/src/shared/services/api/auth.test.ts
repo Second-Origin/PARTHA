@@ -68,4 +68,60 @@ describe('authService', () => {
 
     await expect(authService.login({ email: 'a@b.com', password: 'wrong' })).rejects.toBe(error);
   });
+
+  it('getOAuthProviders gets /auth/oauth/providers', async () => {
+    const response = { providers: ['google'] };
+    vi.mocked(api.get).mockResolvedValue(response);
+
+    const result = await authService.getOAuthProviders();
+
+    expect(api.get).toHaveBeenCalledWith('/auth/oauth/providers', undefined);
+    expect(result).toBe(response);
+  });
+
+  it('startOAuthLogin gets /auth/oauth/{provider}/start', async () => {
+    const response = { authorizeUrl: 'https://example.test/authorize' };
+    vi.mocked(api.get).mockResolvedValue(response);
+
+    const result = await authService.startOAuthLogin('google');
+
+    expect(api.get).toHaveBeenCalledWith('/auth/oauth/google/start', undefined);
+    expect(result).toBe(response);
+  });
+
+  it('startOAuthLink posts to /auth/oauth/{provider}/link with no body', async () => {
+    const response = { authorizeUrl: 'https://example.test/authorize' };
+    vi.mocked(api.post).mockResolvedValue(response);
+
+    await authService.startOAuthLink('github');
+
+    expect(api.post).toHaveBeenCalledWith('/auth/oauth/github/link', undefined, undefined);
+  });
+
+  it('confirmOAuthLink posts the request body to /auth/oauth/link/confirm', async () => {
+    const request = { pendingLinkId: 'p1', password: 'x' };
+    vi.mocked(api.post).mockResolvedValue({ accessToken: 'tok' });
+
+    await authService.confirmOAuthLink(request);
+
+    expect(api.post).toHaveBeenCalledWith('/auth/oauth/link/confirm', request, undefined);
+  });
+
+  it('listLinkedOAuthIdentities gets /auth/oauth/linked', async () => {
+    const response = { identities: [] };
+    vi.mocked(api.get).mockResolvedValue(response);
+
+    const result = await authService.listLinkedOAuthIdentities();
+
+    expect(api.get).toHaveBeenCalledWith('/auth/oauth/linked', undefined);
+    expect(result).toBe(response);
+  });
+
+  it('unlinkOAuthProvider deletes /auth/oauth/{provider} with no body', async () => {
+    vi.mocked(api.delete).mockResolvedValue(undefined);
+
+    await authService.unlinkOAuthProvider('google');
+
+    expect(api.delete).toHaveBeenCalledWith('/auth/oauth/google', undefined, undefined);
+  });
 });
