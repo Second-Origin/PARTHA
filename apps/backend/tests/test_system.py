@@ -178,13 +178,18 @@ def test_settings_rejects_invalid_log_format():
         Settings(log_format="pretty")
 
 
-def test_production_analysis_worker_ids_are_unique_with_the_same_pid(monkeypatch):
-    import app.main as main_module
+def test_production_analysis_worker_ids_are_unique_with_the_same_pid():
+    """Two workers in one process must be two distinct queue owners (#324).
 
-    monkeypatch.setattr(main_module, "getpid", lambda: 42)
+    Every control-plane ownership guard is ``worker_id`` equality, so a token
+    that collided between two workers in the same process would let each mutate
+    the other's job.
+    """
 
-    first = main_module._analysis_worker_id()
-    second = main_module._analysis_worker_id()
+    from app.workers.runner import new_worker_id
+
+    first = new_worker_id(pid=42)
+    second = new_worker_id(pid=42)
 
     assert first != second
     assert first.startswith("analysis-worker-42-")
