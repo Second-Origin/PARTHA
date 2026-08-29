@@ -12,8 +12,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   provider_unavailable: 'This sign-in method is not available right now.',
   account_unavailable: 'This account is not able to sign in right now.',
   already_linked: 'That account is already linked to a different sign-in method.',
-  signup_requires_invite:
-    "There's no PARTHA account for that yet. PARTHA is invite-only during the beta — create an account with your invite code, then link this provider from Settings.",
+  email_not_approved:
+    "This email hasn't been approved for access yet. PARTHA is invite-only during the beta — join the waitlist and we'll be in touch.",
+  email_already_registered: 'An account with this email already exists. Sign in with your password instead.',
 };
 
 function messageFor(reason: string | null): string {

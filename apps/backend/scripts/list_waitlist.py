@@ -1,7 +1,7 @@
 """List waitlist signups, newest first (#334).
 
-No admin UI for v1, matching issue_invite.py's own scope -- this is the
-owner's review step before deciding who to issue an invite to next.
+No admin UI for v1, matching approve_email.py's own scope -- this is the
+owner's review step before deciding who to approve next.
 
     python scripts/list_waitlist.py
     python scripts/list_waitlist.py --csv > waitlist.csv

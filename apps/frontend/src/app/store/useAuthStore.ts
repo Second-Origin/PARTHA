@@ -14,7 +14,7 @@ interface AuthState {
    * cookie, then confirm identity via /auth/me. Never throws. */
   bootstrap: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, inviteCode: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
   /** Adopts an AuthResponse this component already has in hand (e.g. from
    * confirming a pending OAuth link, #288) without making its own network
    * call -- the same local-state transition login()/register() make after
@@ -49,8 +49,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ accessToken: auth.accessToken, user: auth.user, status: 'authenticated' });
   },
 
-  async register(email, password, inviteCode) {
-    const auth = await authService.register({ email, password, inviteCode });
+  async register(email, password) {
+    const auth = await authService.register({ email, password });
     clearUserScopedAppState();
     set({ accessToken: auth.accessToken, user: auth.user, status: 'authenticated' });
   },

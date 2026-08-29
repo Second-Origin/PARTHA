@@ -105,7 +105,7 @@ describe('OAuthCompletePage', () => {
   });
 
   it('status=error with a known reason shows the mapped, friendly message', async () => {
-    renderAt('/oauth/complete?status=error&reason=signup_requires_invite');
+    renderAt('/oauth/complete?status=error&reason=email_not_approved');
 
     expect(await screen.findByText(/invite-only during the beta/)).toBeInTheDocument();
   });

@@ -60,8 +60,8 @@ def _as_utc(value: datetime) -> datetime:
 
 
 def _hash_state(raw: str) -> str:
-    # Same sha256-hex construction as refresh tokens/invite codes: `state` is
-    # a bearer secret (the CSRF protection), so only its hash is stored.
+    # Same sha256-hex construction as refresh tokens: `state` is a bearer
+    # secret (the CSRF protection), so only its hash is stored.
     return hash_refresh_token(raw)
 
 
@@ -221,15 +221,42 @@ class OAuthService:
                 self.db.commit()
                 return OAuthLoginResult(kind="pending_link", pending_link_id=pending.id)
 
-        # No existing account to sign into or link -- and, deliberately, no
-        # brand-new account is created here either. Registration is
-        # invite-gated everywhere else in the product (AuthService.register
-        # requires a redeemed invite code); silently creating an account over
-        # OAuth with no invite check at all would be a real, unintended
-        # bypass of that gate, not a feature. Until there's a real decision
-        # on how an invite code fits into the OAuth flow, a new visitor is
-        # sent back to the invite-gated registration form instead.
-        return OAuthLoginResult(kind="error", error_code="signup_requires_invite")
+        # No existing account to sign into or link. A brand-new account is
+        # only ever created here if the verified provider email is itself on
+        # the same admin-managed allowlist that gates password registration
+        # (#374) -- AuthService.register_oauth_user() is the exact same
+        # approval-gate-and-audit-trail code path as AuthService.register(),
+        # just without a password. Anything else (unapproved, or no
+        # verified email at all) is refused; OAuth is never a second, looser
+        # door into the product than password registration is.
+        if not identity.email or not identity.email_verified:
+            return OAuthLoginResult(kind="error", error_code="email_not_approved")
+        try:
+            db_user, access_token, refresh_token = self.auth_service.register_oauth_user(identity.email)
+        except ValidationServiceError:
+            return OAuthLoginResult(kind="error", error_code="email_not_approved")
+        except ConflictServiceError:
+            # Lost a concurrent-registration race for this exact email
+            # (vanishingly rare, same class of race AuthService.register()
+            # itself guards against) -- nothing left to do but report it.
+            return OAuthLoginResult(kind="error", error_code="email_already_registered")
+
+        # The account now exists; record the identity that created it so a
+        # later sign-in with this same provider account reuses it instead of
+        # re-running the approval check (the "existing identity" branch at
+        # the top of this method).
+        self.db.add(
+            OAuthIdentity(
+                id=str(uuid4()),
+                user_id=db_user.id,
+                provider=provider,
+                provider_subject=identity.subject,
+                email=identity.email,
+                created_at=datetime.now(UTC),
+            )
+        )
+        self.db.commit()
+        return OAuthLoginResult(kind="session", user=db_user, access_token=access_token, refresh_token=refresh_token)
 
     def _complete_link(self, provider: str, identity: OAuthIdentityInfo, link_user_id: str | None) -> OAuthLoginResult:
         if not link_user_id:

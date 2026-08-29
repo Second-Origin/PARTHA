@@ -30,7 +30,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-HEAD_REVISION = "0015_oauth_identities"
+HEAD_REVISION = "0016_approved_emails"
 REPRESENTATIVE_BASELINE = "0004_ai_provider_configs"
 REQUIRED_HEAD_TABLES = {
     "users",
@@ -45,6 +45,7 @@ REQUIRED_HEAD_TABLES = {
     "oauth_identities",
     "oauth_flow_states",
     "oauth_pending_links",
+    "approved_emails",
 }
 
 

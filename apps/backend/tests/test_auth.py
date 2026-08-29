@@ -3,15 +3,16 @@ import uuid
 import pytest
 
 from tests.api_assertions import assert_error_response
-from tests.conftest import issue_invite_code
+from tests.conftest import approve_email
 
 REGISTER = {"email": "alice@example.com", "password": "correct-horse-battery"}
 COOKIE = "partha_refresh"
 
 
-def _register(client, email="alice@example.com", password="correct-horse-battery", invite_code=None):
-    code = invite_code if invite_code is not None else issue_invite_code(f"test:{email}")
-    return client.post("/auth/register", json={"email": email, "password": password, "inviteCode": code})
+def _register(client, email="alice@example.com", password="correct-horse-battery", skip_approval=False):
+    if not skip_approval:
+        approve_email(email, f"test:{email}")
+    return client.post("/auth/register", json={"email": email, "password": password})
 
 
 def _current_refresh_cookie(client) -> str | None:
@@ -61,45 +62,49 @@ def test_register_rejects_short_password(client):
     assert "errors" in error.details
 
 
-def test_register_with_a_valid_invite_code_succeeds(client):
-    """Baseline: a freshly issued, unredeemed code lets registration through
-    exactly as before invite-gating existed (#341)."""
-    code = issue_invite_code()
+def test_register_with_an_approved_email_succeeds(client):
+    """Baseline: a pre-approved email lets registration through (#374)."""
+    approve_email("alice@example.com")
 
-    response = _register(client, invite_code=code)
+    response = _register(client, skip_approval=True)
 
     assert response.status_code == 201
     assert response.json()["user"]["email"] == "alice@example.com"
 
 
-def test_register_rejects_a_missing_invite_code(client):
-    response = client.post("/auth/register", json={"email": "alice@example.com", "password": "correct-horse-battery"})
+def test_register_rejects_an_email_that_was_never_approved(client):
+    response = _register(client, skip_approval=True)
 
-    error = assert_error_response(response, 422, "request_validation_error")
-    assert error.details is not None
-
-
-def test_register_rejects_an_unknown_invite_code(client):
-    response = _register(client, invite_code="this-code-was-never-issued")
-
-    assert_error_response(response, 422, "validation_error")
+    error = assert_error_response(response, 422, "validation_error")
+    assert "hasn't been approved" in error.message
+    assert "waitlist" in error.message.lower()
 
 
-def test_register_rejects_an_already_redeemed_invite_code(client):
-    code = issue_invite_code()
-    assert _register(client, email="first@example.com", invite_code=code).status_code == 201
+def test_register_still_succeeds_after_the_approved_email_is_used_once(client):
+    """Approval is not single-use (#374): re-registering the SAME email a
+    second time is rejected by the ordinary email-uniqueness conflict, not
+    by the allowlist itself -- and a genuinely different, still-unused
+    approval for a different email is completely unaffected by the first
+    registration."""
+    approve_email("shared-approval@example.com")
+    first = client.post(
+        "/auth/register", json={"email": "shared-approval@example.com", "password": "correct-horse-battery"}
+    )
+    assert first.status_code == 201
 
-    reused = _register(client, email="second@example.com", invite_code=code)
+    duplicate = client.post(
+        "/auth/register", json={"email": "shared-approval@example.com", "password": "another-password-entirely"}
+    )
+    assert_error_response(duplicate, 409, "conflict_error")
 
-    assert_error_response(reused, 422, "validation_error")
-    # The first registration is unaffected by the second, rejected attempt.
     from app.core.database import SessionLocal
-    from app.models.user import User
+    from app.models.approved_email import ApprovedEmail
     from sqlalchemy import select
 
     with SessionLocal() as db:
-        assert db.scalars(select(User).where(User.email == "second@example.com")).first() is None
-        assert db.scalars(select(User).where(User.email == "first@example.com")).first() is not None
+        approval = db.scalars(select(ApprovedEmail).where(ApprovedEmail.email == "shared-approval@example.com")).one()
+        assert approval.used_at is not None
+        assert approval.used_by_user_id == first.json()["user"]["id"]
 
 
 def test_register_commit_time_collision_is_reported_as_conflict(client, monkeypatch):
@@ -114,13 +119,13 @@ def test_register_commit_time_collision_is_reported_as_conflict(client, monkeypa
     completely independent session's successful registration first - the
     exact database-level interleaving a real race produces - before the
     original flush proceeds and collides on the unique email constraint.
-    Intercepting flush rather than commit: register() now flushes the new
-    user row before commit (to satisfy the invite-redemption foreign key),
-    so that flush is where the loser's write lock is actually acquired and
-    where the collision actually surfaces -- intercepting commit instead
-    would have the loser already holding that lock when the "concurrent"
-    winner tries to write, deadlocking the single test process against
-    itself rather than reproducing the race.
+    Intercepting flush rather than commit: register() flushes the new user
+    row before commit (so `user.id` exists to stamp onto the approval's
+    `used_by_user_id`), so that flush is where the loser's write lock is
+    actually acquired and where the collision actually surfaces --
+    intercepting commit instead would have the loser already holding that
+    lock when the "concurrent" winner tries to write, deadlocking the single
+    test process against itself rather than reproducing the race.
     """
     from sqlalchemy import select
 
@@ -135,6 +140,11 @@ def test_register_commit_time_collision_is_reported_as_conflict(client, monkeypa
     normalized = "racer@example.com"
     settings = get_settings()
 
+    # One approval covers both attempts: it's the same normalized address,
+    # and approval isn't consumed by use (#374) -- only the email-uniqueness
+    # constraint this test is actually about does that job.
+    approve_email(normalized)
+
     loser_session = SessionLocal()
     try:
         loser_service = AuthService(loser_session, settings)
@@ -145,13 +155,10 @@ def test_register_commit_time_collision_is_reported_as_conflict(client, monkeypa
 
         original_flush = loser_session.flush
 
-        winner_invite = issue_invite_code("test:winner")
-        loser_invite = issue_invite_code("test:loser")
-
         def flush_after_concurrent_winner_lands(*args, **kwargs):
             winner_session = SessionLocal()
             try:
-                AuthService(winner_session, settings).register(winner_email, "correct-horse-battery", winner_invite)
+                AuthService(winner_session, settings).register(winner_email, "correct-horse-battery")
             finally:
                 winner_session.close()
             return original_flush(*args, **kwargs)
@@ -159,7 +166,7 @@ def test_register_commit_time_collision_is_reported_as_conflict(client, monkeypa
         monkeypatch.setattr(loser_session, "flush", flush_after_concurrent_winner_lands)
 
         with pytest.raises(ConflictServiceError) as exc_info:
-            loser_service.register(loser_email, "another-password-entirely", loser_invite)
+            loser_service.register(loser_email, "another-password-entirely")
         assert exc_info.value.message == "An account with this email already exists."
         assert exc_info.value.status_code == 409
 

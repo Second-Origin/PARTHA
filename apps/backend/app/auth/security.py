@@ -84,5 +84,9 @@ def hash_invite_code(raw: str) -> str:
     code and a refresh token are different secrets with different lifetimes,
     and a shared helper would blur that even though the hash itself is
     identical (sha256 hex digest -- both are high-entropy random tokens, not
-    passwords, so argon2 would be the wrong tool here)."""
+    passwords, so argon2 would be the wrong tool here).
+
+    Retained only for historical continuity with the `invite_tokens` table
+    (#341, retired by #374's admin-managed email allowlist) -- nothing in
+    the live registration path calls this anymore."""
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
