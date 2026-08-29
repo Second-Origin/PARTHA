@@ -6,14 +6,14 @@ import { promisify } from 'node:util';
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 const execFileAsync = promisify(execFile);
-const issueInviteScript = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'backend', 'scripts', 'issue_invite.py');
+const approveEmailScript = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'backend', 'scripts', 'approve_email.py');
 
-async function issueInviteCode(): Promise<string> {
-  // Registration requires an invite code (#341); mint one the same way an
-  // operator would, through the real CLI, rather than reaching around it.
+async function approveEmail(email: string): Promise<void> {
+  // Registration requires an admin-approved email (#374); approve it the
+  // same way an operator would, through the real CLI, rather than reaching
+  // around it.
   const python = process.env.PARTHA_FIXTURE_PYTHON ?? (process.platform === 'win32' ? 'python' : 'python3');
-  const { stdout } = await execFileAsync(python, [issueInviteScript, '--note', 'e2e second-owner spec']);
-  return stdout.trim();
+  await execFileAsync(python, [approveEmailScript, '--email', email, '--note', 'e2e second-owner spec']);
 }
 
 interface Fixture {
@@ -189,8 +189,9 @@ test.describe('snapshot-backed Review and Insights journeys', () => {
   test('a second owner receives 404 for another owner’s Review and Insights', async ({ request }) => {
     const email = `e2e-second-owner-${Date.now()}@example.com`;
     const password = 'Second-owner-fixture-2026';
+    await approveEmail(email);
     const registration = await request.post(`${FIXTURES.apiUrl}/auth/register`, {
-      data: { email, password, inviteCode: await issueInviteCode() },
+      data: { email, password },
     });
     expect(registration.status()).toBe(201);
     const accessToken = (await registration.json()).accessToken;

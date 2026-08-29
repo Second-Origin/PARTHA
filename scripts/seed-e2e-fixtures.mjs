@@ -11,7 +11,7 @@ const outputPath = process.env.PARTHA_VISUAL_FIXTURES ?? join(tmpdir(), 'partha-
 const email = 'e2e-fixture@example.com';
 const password = 'E2e-fixture-2026';
 const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const issueInviteScript = join(repositoryRoot, 'apps', 'backend', 'scripts', 'issue_invite.py');
+const approveEmailScript = join(repositoryRoot, 'apps', 'backend', 'scripts', 'approve_email.py');
 
 const moduleSource = (name, imports = []) => [
   ...imports.map((target) => `import { value as dependency } from '${target}';`),
@@ -147,18 +147,20 @@ async function api(path, { token, method = 'GET', body, expected } = {}) {
   return { status: response.status, payload };
 }
 
-async function issueInviteCode() {
-  // Registration requires an invite code (#341); mint one the same way an
-  // operator would, through the real CLI, rather than reaching around it.
+async function approveEmail() {
+  // Registration requires an admin-approved email (#374); approve it the
+  // same way an operator would, through the real CLI, rather than reaching
+  // around it. Idempotent -- a rerun against the same fixture email is a
+  // harmless no-op, same as the script's own behavior.
   const python = process.env.PARTHA_FIXTURE_PYTHON ?? (process.platform === 'win32' ? 'python' : 'python3');
-  const { stdout } = await execFileAsync(python, [issueInviteScript, '--note', 'e2e fixture seeder']);
-  return stdout.trim();
+  await execFileAsync(python, [approveEmailScript, '--email', email, '--note', 'e2e fixture seeder']);
 }
 
 async function authenticate() {
+  await approveEmail();
   const registration = await api('/auth/register', {
     method: 'POST',
-    body: { email, password, inviteCode: await issueInviteCode() },
+    body: { email, password },
     expected: [201, 409],
   });
   if (registration.status === 201) return registration.payload.accessToken;
