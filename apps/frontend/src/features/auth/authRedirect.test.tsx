@@ -54,7 +54,6 @@ describe('login/register redirect-destination consistency', () => {
 
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new@example.com' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'longenoughpassword' } });
-    fireEvent.change(screen.getByLabelText('Invite code'), { target: { value: 'test-invite-code' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/repositories/abc'));

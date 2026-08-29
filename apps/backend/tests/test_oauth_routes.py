@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 from app.api.deps import get_github_oauth_client, get_google_oauth_client
 from app.api.routes.auth import REFRESH_COOKIE
 from app.auth.oauth_providers import OAuthIdentityInfo, OAuthProviderError
-from tests.conftest import DEFAULT_TEST_PASSWORD, register_user
+from tests.conftest import DEFAULT_TEST_PASSWORD, approve_email, register_user
 
 
 class FakeProviderClient:
@@ -129,12 +129,10 @@ class TestCallbackEndpoint:
             _clear_overrides(client)
 
     def test_successful_login_for_an_already_linked_identity_sets_refresh_cookie(self, auth_client):
-        """Login-over-OAuth only ever succeeds for an identity that's already
-        linked to a real account (#288 comment: a brand-new account is never
-        created over OAuth, since that would bypass the invite-code gate) --
-        so this links first (as the authenticated user would from Settings),
-        then proves an unauthenticated /start + /callback with that same
-        identity is a real, cookie-issuing login."""
+        """Login-over-OAuth succeeds for an identity that's already linked to
+        a real account -- this links first (as the authenticated user would
+        from Settings), then proves an unauthenticated /start + /callback
+        with that same identity is a real, cookie-issuing login."""
         from app.auth.oauth_providers import OAuthIdentityInfo as _Identity
 
         identity = _Identity(
@@ -169,7 +167,7 @@ class TestCallbackEndpoint:
         finally:
             _clear_overrides(anonymous)
 
-    def test_brand_new_identity_redirects_to_signup_required(self, client):
+    def test_brand_new_unapproved_identity_redirects_to_signup_required(self, client):
         identity = OAuthIdentityInfo(
             subject="never-seen-sub", email="brandnew@example.com", email_verified=True, display_name="Brand New"
         )
@@ -184,8 +182,37 @@ class TestCallbackEndpoint:
             assert response.status_code == 302
             location = response.headers["location"]
             assert "status=error" in location
-            assert "reason=signup_requires_invite" in location
+            assert "reason=email_not_approved" in location
             assert REFRESH_COOKIE not in response.cookies
+        finally:
+            _clear_overrides(client)
+
+    def test_brand_new_approved_identity_signs_up_and_signs_in_via_oauth(self, client):
+        """The allowlist (#374) is checked by identity, not by door: an
+        email approved for password registration may also complete
+        first-time sign-in via OAuth with no separate code needed."""
+        approve_email("oauth-newcomer@example.com")
+        identity = OAuthIdentityInfo(
+            subject="approved-newcomer-sub",
+            email="oauth-newcomer@example.com",
+            email_verified=True,
+            display_name="Newcomer",
+        )
+        fake = FakeProviderClient(identity=identity)
+        _override(client, google=fake)
+        try:
+            start = client.get("/auth/oauth/google/start", headers={"Origin": "http://testserver"})
+            state = _state_from(start.json()["authorizeUrl"])
+            response = client.get(
+                "/auth/oauth/google/callback", params={"state": state, "code": "fake-code"}, follow_redirects=False
+            )
+            assert response.status_code == 302
+            assert response.headers["location"] == "http://testserver/oauth/complete?status=success"
+            assert REFRESH_COOKIE in response.cookies
+
+            refresh_response = client.post("/auth/refresh")
+            assert refresh_response.status_code == 200
+            assert refresh_response.json()["user"]["email"] == "oauth-newcomer@example.com"
         finally:
             _clear_overrides(client)
 

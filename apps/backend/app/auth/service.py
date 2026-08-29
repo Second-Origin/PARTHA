@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.auth.security import (
     burn_password_check,
     create_access_token,
-    hash_invite_code,
     hash_password,
     hash_refresh_token,
     new_refresh_token,
@@ -17,7 +16,7 @@ from app.auth.security import (
 )
 from app.core.config import Settings
 from app.core.exceptions import ConflictServiceError, UnauthorizedError, ValidationServiceError
-from app.models.invite_token import InviteToken
+from app.models.approved_email import ApprovedEmail
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 
@@ -27,10 +26,10 @@ logger = logging.getLogger(__name__)
 # used to tell apart unknown email / wrong password / disabled account.
 INVALID_CREDENTIALS = "Invalid email or password."
 INVALID_REFRESH = "Invalid refresh token."
-# Deliberately the same message whether the code was never issued, was
-# already redeemed, or lost the redemption race below -- distinguishing them
-# would let a caller probe which invite codes exist.
-INVALID_INVITE_CODE = "Invalid or already-used invite code."
+# #374: registration is gated by an admin-managed allowlist, not a secret --
+# unlike the retired invite-code message, this can say exactly what's wrong,
+# the same way the waitlist's own "we'll be in touch" framing does.
+EMAIL_NOT_APPROVED = "This email hasn't been approved for access yet. Join the waitlist and we'll be in touch."
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -44,50 +43,60 @@ class AuthService:
         self.db = db
         self.settings = settings
 
-    def register(self, email: str, password: str, invite_code: str) -> tuple[User, str, str]:
+    def register(self, email: str, password: str) -> tuple[User, str, str]:
         normalized = email.strip().lower()
-        existing = self.db.scalars(select(User).where(User.email == normalized)).first()
+        self._ensure_email_available(normalized)
+        approval = self._require_approval(normalized)
+        user = User(id=str(uuid4()), email=normalized, password_hash=hash_password(password))
+        return self._create_approved_user(user, approval)
+
+    def register_oauth_user(self, email: str) -> tuple[User, str, str]:
+        """Create a brand-new, password-less account for a verified OAuth
+        identity (OAuthService, #288/#374).
+
+        Identical approval gate and audit trail as ``register()`` -- the
+        allowlist is the single source of truth for who may ever get a new
+        PARTHA account, regardless of which door (password or OAuth) they
+        come through. The only difference from ``register()`` is that there
+        is no password to hash.
+        """
+        normalized = email.strip().lower()
+        self._ensure_email_available(normalized)
+        approval = self._require_approval(normalized)
+        user = User(id=str(uuid4()), email=normalized, password_hash=None)
+        return self._create_approved_user(user, approval)
+
+    def _ensure_email_available(self, normalized_email: str) -> None:
+        existing = self.db.scalars(select(User).where(User.email == normalized_email)).first()
         if existing:
             raise ConflictServiceError("An account with this email already exists.")
 
-        invite = self.db.scalars(
-            select(InviteToken).where(InviteToken.code_hash == hash_invite_code(invite_code))
-        ).first()
-        if invite is None or invite.redeemed_at is not None:
-            raise ValidationServiceError(INVALID_INVITE_CODE)
+    def _require_approval(self, normalized_email: str) -> ApprovedEmail:
+        approval = self.db.scalars(select(ApprovedEmail).where(ApprovedEmail.email == normalized_email)).first()
+        if approval is None:
+            raise ValidationServiceError(EMAIL_NOT_APPROVED)
+        return approval
 
-        user = User(id=str(uuid4()), email=normalized, password_hash=hash_password(password))
+    def _create_approved_user(self, user: User, approval: ApprovedEmail) -> tuple[User, str, str]:
         self.db.add(user)
         try:
-            # Flushed here, ahead of commit, so the invite update below (which
-            # references user.id via a foreign key) never runs before the
-            # referenced row actually exists -- SQLite enforces foreign keys
-            # per-statement, not deferred to commit. This is also the point
-            # a concurrent registration for the same email can now surface as
-            # an IntegrityError (moved earlier than commit by this same
-            # flush), so it needs the identical handling below that commit
-            # already had.
+            # Flushed here, ahead of commit, so a concurrent registration for
+            # the same email surfaces here as an IntegrityError rather than
+            # only at commit -- the identical handling is needed at both
+            # points, since either can be where the race actually lands.
             self.db.flush()
         except IntegrityError:
             self.db.rollback()
-            if self.db.scalars(select(User).where(User.email == normalized)).first() is not None:
+            if self.db.scalars(select(User).where(User.email == user.email)).first() is not None:
                 raise ConflictServiceError("An account with this email already exists.") from None
             raise
 
-        # Atomic conditional redemption, not a read-then-write: two concurrent
-        # registrations can both pass the `redeemed_at is not None` check
-        # above for the same code between each other's read and write, the
-        # same race the email-uniqueness check above guards against with a
-        # database constraint. The WHERE clause here is that guard for
-        # invites -- only one concurrent UPDATE can match redeemed_at IS NULL.
-        redemption = self.db.execute(
-            update(InviteToken)
-            .where(InviteToken.id == invite.id, InviteToken.redeemed_at.is_(None))
-            .values(redeemed_at=datetime.now(UTC), redeemed_by_user_id=user.id)
-        )
-        if redemption.rowcount != 1:
-            self.db.rollback()
-            raise ValidationServiceError(INVALID_INVITE_CODE)
+        # Purely informational (see ApprovedEmail's docstring) -- unlike the
+        # retired invite-code redemption, this never gates anything and so
+        # needs no atomic conditional UPDATE: the email-uniqueness check
+        # above is what actually prevents two accounts for one email.
+        approval.used_at = datetime.now(UTC)
+        approval.used_by_user_id = user.id
 
         try:
             self.db.commit()
@@ -96,7 +105,7 @@ class AuthService:
             # collision itself is already handled above, at flush) must still
             # not surface as a raw 500.
             self.db.rollback()
-            if self.db.scalars(select(User).where(User.email == normalized)).first() is not None:
+            if self.db.scalars(select(User).where(User.email == user.email)).first() is not None:
                 raise ConflictServiceError("An account with this email already exists.") from None
             raise
         self.db.refresh(user)

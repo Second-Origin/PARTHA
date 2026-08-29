@@ -8,7 +8,7 @@ vi.mock('./client', () => ({
 
 describe('authService', () => {
   it('register posts the request body to /auth/register', async () => {
-    const request = { email: 'a@b.com', password: 'x', inviteCode: 'code-1' };
+    const request = { email: 'a@b.com', password: 'x' };
     const response = { accessToken: 'tok', tokenType: 'bearer', user: { id: 'u1' } };
     vi.mocked(api.post).mockResolvedValue(response);
 

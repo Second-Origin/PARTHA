@@ -1851,8 +1851,6 @@ export interface components {
              * Format: email
              */
             email: string;
-            /** Invitecode */
-            inviteCode: string;
             /** Password */
             password: string;
         };

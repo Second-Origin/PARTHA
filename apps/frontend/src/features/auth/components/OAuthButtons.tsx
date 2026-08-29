@@ -20,15 +20,16 @@ function GoogleGlyph() {
   );
 }
 
-/** "Continue with Google/GitHub" buttons for the Login page (#288).
+/** "Continue with Google/GitHub" buttons for the Login page (#288, #374).
  *
- * Login-page only, deliberately not on Register: the backend does not yet
- * create a brand-new account over OAuth (that would bypass the invite-code
- * gate registration otherwise enforces -- see the comment on issue #288).
- * These buttons cover signing in to an existing account and the
- * password-confirmed linking flow for one whose email matches; a visitor
- * with no PARTHA account yet still needs an invite code and the password
- * form.
+ * Login-page only, deliberately not duplicated on Register: these buttons
+ * already cover every legitimate outcome an OAuth click can produce --
+ * signing in to an already-linked account, the password-confirmed linking
+ * flow for one whose email matches, and (since #374) first-time signup
+ * itself when the provider's verified email is on the same admin-approved
+ * allowlist password registration checks. An unapproved email is rejected
+ * with a clear message either way; OAuth is never a looser door into the
+ * product than the password form is.
  *
  * Renders nothing (not even a placeholder) until the capability check
  * resolves, and nothing at all if neither provider is configured -- password

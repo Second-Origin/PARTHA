@@ -1,5 +1,4 @@
 import os
-import secrets
 from collections.abc import Callable, Generator
 from pathlib import Path
 from uuid import uuid4
@@ -10,42 +9,45 @@ from fastapi.testclient import TestClient
 DEFAULT_TEST_PASSWORD = "correct-horse-battery-staple"
 
 
-def issue_invite_code(note: str | None = None) -> str:
-    """Insert a fresh, unredeemed invite token directly and return its raw
-    code (#341) -- registration requires one, and tests need a real,
-    single-use code the same way production issuance would produce one, not
-    a bypass around the check.
+def approve_email(email: str, note: str | None = None) -> None:
+    """Insert an ApprovedEmail row directly (#374) -- registration requires
+    the address to be on the allowlist, and tests need a real approval the
+    same way an operator running scripts/approve_email.py would produce one,
+    not a bypass around the check. A no-op if already approved, mirroring
+    the script's own idempotence.
     """
-    from app.auth.security import hash_invite_code
-    from app.core.database import SessionLocal
-    from app.models.invite_token import InviteToken
+    from sqlalchemy import select
 
-    raw_code = secrets.token_urlsafe(24)
+    from app.core.database import SessionLocal
+    from app.models.approved_email import ApprovedEmail
+
+    normalized = email.strip().lower()
     with SessionLocal() as session:
-        session.add(InviteToken(id=str(uuid4()), code_hash=hash_invite_code(raw_code), note=note))
+        existing = session.scalars(select(ApprovedEmail).where(ApprovedEmail.email == normalized)).first()
+        if existing is not None:
+            return
+        session.add(ApprovedEmail(id=str(uuid4()), email=normalized, note=note))
         session.commit()
-    return raw_code
 
 
 def register_user(
     client: TestClient,
     email: str,
     password: str = DEFAULT_TEST_PASSWORD,
-    invite_code: str | None = None,
 ) -> dict:
     """Register a user through the real endpoint and return an auth bundle.
 
     Returns a dict with ``token`` (access token), ``user`` (the user payload)
     and ``headers`` (a ready-to-use ``Authorization`` header), so tests can
     exercise the owner-scoped routes as a genuine authenticated caller rather
-    than relying on any pre-auth fallback (removed in E1.3 / #63). Mints its
-    own invite code by default so every existing call site keeps working
-    unchanged; a test exercising invite behavior itself passes one in.
+    than relying on any pre-auth fallback (removed in E1.3 / #63). Approves
+    the email first so every call site keeps working unchanged; a test
+    exercising allowlist behavior itself calls the real endpoint directly.
     """
-    code = invite_code if invite_code is not None else issue_invite_code(f"test:{email}")
+    approve_email(email, note=f"test:{email}")
     response = client.post(
         "/auth/register",
-        json={"email": email, "password": password, "inviteCode": code},
+        json={"email": email, "password": password},
     )
     assert response.status_code == 201, response.text
     body = response.json()
@@ -91,7 +93,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestCli
     database.settings = settings
     database.engine.dispose()
     database.connect_args = {"check_same_thread": False}
-    database.engine = database.create_engine(settings.database_url, pool_pre_ping=True, connect_args=database.connect_args)
+    database.engine = database.create_engine(
+        settings.database_url, pool_pre_ping=True, connect_args=database.connect_args
+    )
     database.SessionLocal.configure(bind=database.engine)
 
     from app.core.schema_sync import stamp_head

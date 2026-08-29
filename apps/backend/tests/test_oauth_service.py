@@ -17,6 +17,7 @@ from app.auth.service import AuthService
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core.exceptions import NotFoundError, UnauthorizedError, ValidationServiceError
+from app.models.approved_email import ApprovedEmail
 from app.models.oauth_flow_state import OAuthFlowState
 from app.models.oauth_identity import OAuthIdentity
 from app.models.oauth_pending_link import OAuthPendingLink
@@ -62,6 +63,16 @@ def _create_user(db, email: str, password: str | None = "correct-horse-battery-s
     db.commit()
     db.refresh(user)
     return user
+
+
+def approve_email(db, email: str, note: str | None = None) -> ApprovedEmail:
+    import uuid
+
+    approval = ApprovedEmail(id=str(uuid.uuid4()), email=email, note=note)
+    db.add(approval)
+    db.commit()
+    db.refresh(approval)
+    return approval
 
 
 @pytest.fixture()
@@ -188,13 +199,14 @@ class TestCompleteCallbackLogin:
         assert result.kind == "error"
         assert result.error_code == "exchange_failed"
 
-    def test_brand_new_identity_is_rejected_never_bypassing_the_invite_gate(self, db):
-        """OAuth login never creates an account on its own (#288 comment):
-        password registration requires a redeemed invite code
+    def test_brand_new_unapproved_identity_is_rejected_never_bypassing_the_allowlist(self, db):
+        """OAuth login never creates an account for an email that isn't on
+        the allowlist (#374, superseding #288's original invite-code
+        comment): password registration requires an approved email
         (AuthService.register), and an OAuth-created account with no
         equivalent check would be a silent bypass of that gate, not a
-        feature. A visitor with no existing PARTHA account is sent back to
-        the invite-gated registration form instead."""
+        feature. An unapproved visitor is sent back to the allowlist-gated
+        registration form instead."""
         import asyncio
 
         identity = OAuthIdentityInfo(
@@ -206,9 +218,40 @@ class TestCompleteCallbackLogin:
 
         base, result = asyncio.run(service.complete_callback("google", state=state, code="c", provider_error=None))
         assert result.kind == "error"
-        assert result.error_code == "signup_requires_invite"
+        assert result.error_code == "email_not_approved"
         assert db.query(User).filter(User.email == "newperson@example.com").count() == 0
         assert db.query(OAuthIdentity).count() == 0
+
+    def test_brand_new_approved_identity_creates_an_account_via_oauth(self, db):
+        """The one exception to 'OAuth never creates an account': a verified
+        provider email that's already on the SAME allowlist password
+        registration uses may complete first-time sign-in with no separate
+        code needed (#374)."""
+        import asyncio
+
+        approve_email(db, "approved-newcomer@example.com")
+        identity = OAuthIdentityInfo(
+            subject="sub-approved-1",
+            email="approved-newcomer@example.com",
+            email_verified=True,
+            display_name="Newcomer",
+        )
+        service = _make_service(db, {"google": FakeProviderClient(identity=identity)})
+        url = service.start("google", intent="login", frontend_redirect_base="http://localhost:5173")
+        state = url.split("state=")[1].split("&")[0]
+
+        base, result = asyncio.run(service.complete_callback("google", state=state, code="c", provider_error=None))
+        assert result.kind == "session"
+        assert result.user.email == "approved-newcomer@example.com"
+        assert result.user.password_hash is None
+
+        stored_identity = db.query(OAuthIdentity).one()
+        assert stored_identity.provider_subject == "sub-approved-1"
+        assert stored_identity.user_id == result.user.id
+
+        approval = db.query(ApprovedEmail).filter(ApprovedEmail.email == "approved-newcomer@example.com").one()
+        assert approval.used_at is not None
+        assert approval.used_by_user_id == result.user.id
 
     def test_existing_identity_reuses_the_same_account_without_duplicating_it(self, db):
         import asyncio
@@ -279,7 +322,7 @@ class TestCompleteCallbackLogin:
 
         base, result = asyncio.run(service.complete_callback("github", state=state, code="c", provider_error=None))
         assert result.kind == "error"
-        assert result.error_code == "signup_requires_invite"
+        assert result.error_code == "email_not_approved"
         assert db.query(User).filter(User.email == "unverified@example.com").count() == 0
 
     def test_missing_email_entirely_is_rejected(self, db):
@@ -291,7 +334,7 @@ class TestCompleteCallbackLogin:
         state = url.split("state=")[1].split("&")[0]
         base, result = asyncio.run(service.complete_callback("github", state=state, code="c", provider_error=None))
         assert result.kind == "error"
-        assert result.error_code == "signup_requires_invite"
+        assert result.error_code == "email_not_approved"
 
     def test_seed_user_cannot_authenticate_via_oauth(self, db):
         import asyncio
