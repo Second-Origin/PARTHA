@@ -4,11 +4,19 @@
 full analysis off the request path through the evidence-backed extraction
 pipeline that seals the repository's authoritative ``ri.v1`` snapshot.
 
-``run_once`` is the primary unit both the background loop in ``app.main`` and the
-test-suite drive; it is synchronous and deterministic. It claims at most one job
-with a portable compare-and-swap (no ``SELECT ... FOR UPDATE SKIP LOCKED``), runs
-the stages with cooperative cancellation checks within and between them, and applies a
-bounded exponential backoff on failure before finally marking the job ``failed``.
+``run_once`` is the primary unit both ``AnalysisWorkerRunner`` and the test suite
+drive; it is synchronous and deterministic. It claims at most one job *through
+the control plane* (``app.workers.control_plane``), runs the stages with
+cooperative cancellation checks within and between them, and applies a bounded
+exponential backoff on failure before finally marking the job ``failed``.
+
+Boundary note (#324): this class no longer decides **who owns a job**. Claiming,
+lease renewal, expiry, reclaim and every ownership guard are
+``AnalysisControlPlane`` calls, and the loop that drives ``run_once`` lives in
+``app.workers.runner``. What remains here is execution: turning a job this
+worker *already owns* into a sealed ``ri.v1`` snapshot, and deciding its
+terminal transition. Keep it that way -- queue policy belongs on the other side
+of the boundary, and repository analysis belongs on this side of it.
 
 Transactional note (deliberate design, not a gap to "fix"): ``SnapshotStore.seal``
 owns its own commit boundary (``snapshot_store.py`` ``_commit_transition``) and
@@ -33,7 +41,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.analysis.resource_budget import (
@@ -66,6 +73,12 @@ from app.services.analysis_job_service import (
     ANALYSIS_CONFIG_HASH,
     ANALYSIS_PRODUCER_VERSION_SET,
     ANALYSIS_SCHEMA_VERSION,
+)
+from app.workers.control_plane import (
+    AnalysisControlPlane,
+    DatabaseAnalysisControlPlane,
+    JobLease,
+    lease_expired,
 )
 
 _MAX_ERROR_MESSAGE = 1024
@@ -103,6 +116,7 @@ class _StageContext:
     session: Session
     job: AnalysisJob
     record: RepositoryRecord | None
+    lease: JobLease | None = None
     store: SnapshotStore | None = None
     snapshot: RiSnapshot | None = None
     reused: bool = False
@@ -127,10 +141,18 @@ class AnalysisWorker:
         monotonic: Callable[[], float] | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         heartbeat_interval_seconds: float | None = None,
+        control_plane: AnalysisControlPlane | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.worker_id = worker_id
         self.lease_seconds = lease_seconds
+        # The queue this worker draws from. Defaulting to the durable
+        # ``analysis_jobs`` table keeps every existing caller unchanged while
+        # making the boundary an argument rather than an assumption.
+        self.control_plane: AnalysisControlPlane = control_plane or DatabaseAnalysisControlPlane(
+            lease_seconds=lease_seconds,
+            clock=clock,
+        )
         self.max_source_bytes = max_source_bytes
         self.max_repository_source_bytes = max_repository_source_bytes
         self.max_process_rss_bytes = max_process_rss_bytes
@@ -152,12 +174,15 @@ class AnalysisWorker:
 
         session = self.session_factory()
         try:
-            job = self._claim(session)
+            lease = self.control_plane.claim(session, worker_id=self.worker_id)
+            if lease is None:
+                return False
+            job = session.get(AnalysisJob, lease.job_id)
             if job is None:
                 return False
             # Draining the stage generator runs the whole job to a terminal
             # state; tests can instead step the generator to interleave a cancel.
-            for _ in self._execute_stages(session, job):
+            for _ in self._execute_stages(session, job, lease=lease):
                 pass
             return True
         finally:
@@ -181,17 +206,7 @@ class AnalysisWorker:
         session = self.session_factory()
         try:
             now = self._clock()
-            stale_ids = tuple(
-                session.scalars(
-                    select(AnalysisJob.id)
-                    .where(
-                        AnalysisJob.status == "running",
-                        AnalysisJob.lease_expires_at.is_not(None),
-                        AnalysisJob.lease_expires_at < now,
-                    )
-                    .order_by(AnalysisJob.lease_expires_at, AnalysisJob.created_at)
-                )
-            )
+            stale_ids = self.control_plane.expired_job_ids(session, now=now)
             reclaimed = 0
             for job_id in stale_ids:
                 # Re-read each row so another sweeper that already reconciled it
@@ -202,7 +217,7 @@ class AnalysisWorker:
                     job is None
                     or job.status != "running"
                     or job.lease_expires_at is None
-                    or not self._lease_expired(job.lease_expires_at, now)
+                    or not lease_expired(job.lease_expires_at, now)
                 ):
                     continue
                 if self._reconcile_stale(session, job, now):
@@ -214,61 +229,40 @@ class AnalysisWorker:
     # -- claim ---------------------------------------------------------------
 
     def _claim(self, session: Session) -> AnalysisJob | None:
-        """Atomically claim the oldest eligible queued job, or return None.
+        """Claim one job through the control plane, as a row.
 
-        The claim is a portable compare-and-swap rather than
-        ``SELECT ... FOR UPDATE SKIP LOCKED``: pick the oldest eligible id, then
-        ``UPDATE ... WHERE id = :id AND status='queued'``. The ``status='queued'``
-        predicate is the atomic guard — two workers racing for the same row see
-        exactly one non-zero ``rowcount``; the loser gets ``None`` and retries.
+        The claim/lease contract itself lives in
+        ``app.workers.control_plane``; this is the row-shaped convenience the
+        execution paths and tests use.
         """
 
-        now = self._clock()
-        candidate_id = session.scalar(
-            select(AnalysisJob.id)
-            .where(
-                AnalysisJob.status == "queued",
-                or_(AnalysisJob.next_attempt_at.is_(None), AnalysisJob.next_attempt_at <= now),
-            )
-            .order_by(AnalysisJob.created_at)
-            .limit(1)
-        )
-        if candidate_id is None:
+        lease = self.control_plane.claim(session, worker_id=self.worker_id)
+        if lease is None:
             return None
-        result = session.execute(
-            update(AnalysisJob)
-            .where(AnalysisJob.id == candidate_id, AnalysisJob.status == "queued")
-            .values(
-                status="running",
-                worker_id=self.worker_id,
-                lease_expires_at=now + timedelta(seconds=self.lease_seconds),
-                started_at=func.coalesce(AnalysisJob.started_at, now),
-                attempt=AnalysisJob.attempt + 1,
-                next_attempt_at=None,
-                updated_at=now,
-            )
-        )
-        session.commit()
-        if result.rowcount == 0:
-            # Another worker won the compare-and-swap for this row.
-            return None
-        return session.get(AnalysisJob, candidate_id)
+        return session.get(AnalysisJob, lease.job_id)
 
     # -- stage pipeline ------------------------------------------------------
 
-    def _execute_stages(self, session: Session, job: AnalysisJob) -> Iterator[_StageContext]:
+    def _execute_stages(
+        self,
+        session: Session,
+        job: AnalysisJob,
+        *,
+        lease: JobLease | None = None,
+    ) -> Iterator[_StageContext]:
         """Run the job's stages, yielding at each boundary.
 
-        Yielding after every stage gives the background loop a plain drain and
-        gives tests a seam to set ``cancel_requested`` between two stages. The
-        cancel flag is re-read from the row before each stage so a concurrent
-        ``AnalysisJobService.cancel`` is observed cooperatively.
+        Yielding after every stage gives the runner loop a plain drain and gives
+        tests a seam to set ``cancel_requested`` between two stages. The cancel
+        flag is re-read from the row through the control plane before each stage
+        so a concurrent ``AnalysisJobService.cancel`` is observed cooperatively.
         """
 
         ctx = _StageContext(
             session=session,
             job=job,
             record=session.get(RepositoryRecord, job.repository_id),
+            lease=lease,
         )
         stages = (
             ("extracting-modules", 35, self._stage_open_snapshot),
@@ -612,31 +606,13 @@ class AnalysisWorker:
     def _reconcile_stale(self, session: Session, job: AnalysisJob, now: datetime) -> bool:
         """Atomically claim and reconcile one expired running job."""
 
-        stale_worker_id = job.worker_id
-        stale_lease_expires_at = job.lease_expires_at
-        result = session.execute(
-            update(AnalysisJob)
-            .where(
-                AnalysisJob.id == job.id,
-                AnalysisJob.status == "running",
-                AnalysisJob.worker_id == stale_worker_id,
-                AnalysisJob.lease_expires_at == stale_lease_expires_at,
-                AnalysisJob.lease_expires_at < now,
-            )
-            .values(
-                worker_id=self.worker_id,
-                lease_expires_at=now + timedelta(seconds=self.lease_seconds),
-                updated_at=now,
-            )
-            .execution_options(synchronize_session="fetch")
-        )
-        if result.rowcount == 0:
-            session.rollback()
+        lease = self.control_plane.reclaim(session, job, worker_id=self.worker_id)
+        if lease is None:
             return False
 
         record = session.get(RepositoryRecord, job.repository_id)
         snapshot = session.get(RiSnapshot, job.snapshot_id) if job.snapshot_id else None
-        ctx = _StageContext(session=session, job=job, record=record)
+        ctx = _StageContext(session=session, job=job, record=record, lease=lease)
 
         if job.cancel_requested:
             self._cancel(ctx)
@@ -732,18 +708,14 @@ class AnalysisWorker:
         """Update a running job only while this worker still owns it."""
 
         job_id = ctx.job.id
-        ownership = [
-            AnalysisJob.id == job_id,
-            AnalysisJob.worker_id == self.worker_id,
-            AnalysisJob.status == "running",
-        ]
-        if require_cancel_not_requested:
-            ownership.append(AnalysisJob.cancel_requested.is_(False))
-        with ctx.session.no_autoflush:
-            result = ctx.session.execute(
-                update(AnalysisJob).where(*ownership).values(**values).execution_options(synchronize_session="fetch")
-            )
-        if result.rowcount == 0:
+        held = self.control_plane.update_owned(
+            ctx.session,
+            job_id=job_id,
+            worker_id=self.worker_id,
+            values=values,
+            require_cancel_not_requested=require_cancel_not_requested,
+        )
+        if not held:
             ctx.session.rollback()
             raise _LeaseLostError(job_id)
 
@@ -770,7 +742,7 @@ class AnalysisWorker:
             raise
 
     def _cancel_requested(self, ctx: _StageContext) -> bool:
-        return bool(ctx.session.scalar(select(AnalysisJob.cancel_requested).where(AnalysisJob.id == ctx.job.id)))
+        return self.control_plane.cancel_requested(ctx.session, ctx.job.id)
 
     def _fail_open_snapshot(self, ctx: _StageContext, *, code: str) -> None:
         """Mark an opened-but-unsealed snapshot ``failed`` (no-op if reused/sealed)."""
@@ -787,18 +759,38 @@ class AnalysisWorker:
             extra={"job_id": job_id, "worker_id": self.worker_id},
         )
 
+    def _lease_for(self, ctx: _StageContext) -> JobLease:
+        """This worker's ownership token for ``ctx``'s job.
+
+        Paths that did not claim the job themselves — a reconciling sweep, or a
+        test driving a single stage — still own the row by ``worker_id``, which
+        is exactly what every control-plane guard tests. Rebuilding the token
+        from the row therefore asserts the same ownership a claim would have,
+        and never more than it.
+        """
+
+        if ctx.lease is not None:
+            return ctx.lease
+        return JobLease(
+            job_id=ctx.job.id,
+            worker_id=self.worker_id,
+            expires_at=ctx.job.lease_expires_at or self._clock(),
+            attempt=ctx.job.attempt,
+        )
+
     @contextmanager
     def _heartbeat(self, ctx: _StageContext) -> Iterator[_HeartbeatState]:
         """Renew one running job from an independent session during a stage."""
 
         state = _HeartbeatState()
-        self._heartbeat_once(ctx.job.id, state)
+        lease = self._lease_for(ctx)
+        self._heartbeat_once(lease, state)
 
         def _run() -> None:
             while not state.stop.wait(self._heartbeat_interval_seconds):
                 if self._shutdown.is_set():
                     return
-                self._heartbeat_once(ctx.job.id, state)
+                self._heartbeat_once(lease, state)
                 if state.ownership_lost.is_set() or state.cancel_requested.is_set() or state.failure:
                     return
 
@@ -823,73 +815,27 @@ class AnalysisWorker:
                         extra={"job_id": ctx.job.id, "worker_id": self.worker_id},
                     )
 
-    def _heartbeat_once(self, job_id: str, state: _HeartbeatState) -> None:
-        """Atomically renew ownership and return the cancellation flag."""
+    def _heartbeat_once(self, lease: JobLease, state: _HeartbeatState) -> None:
+        """Pulse one lease renewal on an independent session.
+
+        The renewal itself — including the atomic cancellation read-back — is a
+        control-plane call; this method only owns the session and translates the
+        outcome into the thread-safe signals the stage loop watches. A
+        ``deferred`` outcome leaves every signal clear on purpose: ownership is
+        unchanged, so the stage must neither abandon its work nor treat the
+        skipped pulse as a failure.
+        """
 
         session = self.session_factory()
-        sqlite_connection = None
-        sqlite_busy_timeout = None
-
-        def _restore_sqlite_timeout() -> None:
-            nonlocal sqlite_connection
-            if sqlite_connection is None or sqlite_busy_timeout is None:
-                return
-            try:
-                cursor = sqlite_connection.cursor()
-                cursor.execute(f"PRAGMA busy_timeout = {sqlite_busy_timeout}")
-                cursor.close()
-            except Exception:  # noqa: BLE001 - discard a modified connection
-                session.invalidate()
-            finally:
-                sqlite_connection = None
-
         try:
-            if session.bind is not None and session.bind.dialect.name == "sqlite":
-                connection = session.connection()
-                sqlite_connection = connection.connection.driver_connection
-                cursor = sqlite_connection.cursor()
-                sqlite_busy_timeout = int(cursor.execute("PRAGMA busy_timeout").fetchone()[0])
-                # SQLite serializes all writers. If the stage already owns the
-                # database write lock, a sweeper cannot reclaim the job either,
-                # so the heartbeat must not block stage cleanup behind that lock.
-                cursor.execute("PRAGMA busy_timeout = 0")
-                cursor.close()
-            now = self._clock()
-            row = session.execute(
-                update(AnalysisJob)
-                .where(
-                    AnalysisJob.id == job_id,
-                    AnalysisJob.status == "running",
-                    AnalysisJob.worker_id == self.worker_id,
-                )
-                .values(
-                    lease_expires_at=now + timedelta(seconds=self.lease_seconds),
-                    updated_at=now,
-                )
-                .returning(AnalysisJob.cancel_requested)
-                .execution_options(synchronize_session=False)
-            ).first()
-            if row is None:
-                _restore_sqlite_timeout()
-                session.rollback()
+            renewal = self.control_plane.renew(session, lease)
+            if renewal.lost:
                 state.ownership_lost.set()
-                return
-            _restore_sqlite_timeout()
-            session.commit()
-            if row[0]:
+            elif renewal.cancel_requested:
                 state.cancel_requested.set()
         except Exception as exc:  # noqa: BLE001 - surfaced to the owning worker
-            _restore_sqlite_timeout()
-            session.rollback()
-            # A SQLite writer prevents every other SQLite writer, including a
-            # stale sweeper. Skipping that transient pulse avoids a false retry;
-            # PostgreSQL heartbeats remain fully independent and guarded.
-            if session.bind is not None and session.bind.dialect.name == "sqlite" and "locked" in str(exc).lower():
-                logger.debug("SQLite analysis heartbeat skipped while the stage held the write lock")
-            else:
-                state.failure = exc
+            state.failure = exc
         finally:
-            _restore_sqlite_timeout()
             session.close()
 
     @staticmethod
@@ -1050,16 +996,6 @@ class AnalysisWorker:
         """Bounded exponential backoff in seconds (capped at 60)."""
 
         return min(2**attempt, 60)
-
-    @staticmethod
-    def _lease_expired(lease_expires_at: datetime, now: datetime) -> bool:
-        """Compare SQLite-naive and timezone-aware persisted timestamps safely."""
-
-        if lease_expires_at.tzinfo is None and now.tzinfo is not None:
-            lease_expires_at = lease_expires_at.replace(tzinfo=UTC)
-        elif lease_expires_at.tzinfo is not None and now.tzinfo is None:
-            now = now.replace(tzinfo=UTC)
-        return lease_expires_at < now
 
     @staticmethod
     def _error_message(exc: Exception) -> str:
