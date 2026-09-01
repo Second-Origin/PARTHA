@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Same HSL token values as apps/frontend/src/styles/globals.css's :root
+   (light mode only -- this site doesn't need a dark-mode switcher), copied
+   rather than shared so this project has no cross-package dependency on
+   apps/frontend at all. */
+@layer base {
+  :root {
+    --background: 38 27% 94%;
+    --foreground: 258 19% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 258 19% 13%;
+    --primary: 18 99% 38%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 38 25% 92%;
+    --muted-foreground: 263 8% 43%;
+    --accent: 18 100% 94%;
+    --accent-foreground: 258 19% 13%;
+    --success: 142 76% 26%;
+    --success-foreground: 210 40% 98%;
+    --warning: 38 92% 29%;
+    --warning-foreground: 258 19% 13%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 18 66% 76%;
+    --input: 18 42% 84%;
+    --ring: 17 91% 50%;
+    --radius: 1rem;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  button,
+  a,
+  input {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+}
+
+@layer components {
+  .partha-surface {
+    @apply rounded-2xl border border-border bg-card shadow-[0_12px_24px_hsl(var(--foreground)/0.06)];
+  }
+}

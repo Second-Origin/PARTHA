@@ -73,6 +73,10 @@ apps/backend/.env
 !apps/frontend/.env.example
 !apps/backend/.env.example
 
+# Vercel CLI project-link metadata (apps/marketing, #382) -- not secret, but
+# machine-local and not meant to be committed.
+apps/marketing/.vercel
+
 # ==========================================
 # Local-only strategy / roadmap docs (never commit)
 # The Market-Fit Roadmap is the single source of truth for product direction,
