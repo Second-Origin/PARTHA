@@ -168,6 +168,14 @@ class TestCallbackEndpoint:
             _clear_overrides(anonymous)
 
     def test_brand_new_unapproved_identity_redirects_to_signup_required(self, client):
+        # A baseline user is registered first so #388's first-user bootstrap
+        # (AuthService._require_approval, applies to this OAuth path exactly
+        # the same as password registration) has already closed -- otherwise
+        # this callback would BE the first-ever registration on a fresh
+        # database and succeed via bootstrap instead of exercising the
+        # rejection this test is about.
+        register_user(client, "existing-owner@example.com")
+
         identity = OAuthIdentityInfo(
             subject="never-seen-sub", email="brandnew@example.com", email_verified=True, display_name="Brand New"
         )

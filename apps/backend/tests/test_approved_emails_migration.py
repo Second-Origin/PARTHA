@@ -58,6 +58,10 @@ def approved_emails_migration_db(tmp_path, monkeypatch):
     database_url = _database_url(tmp_path)
     monkeypatch.setenv("DATABASE_URL", database_url)
     monkeypatch.setenv("CORS_ORIGINS", "http://testserver")
+    # See tests/conftest.py's `client` fixture: "test", not the default
+    # "development", so AuthService's dev-only allowlist bypass (#384) never
+    # applies here either.
+    monkeypatch.setenv("APP_ENV", "test")
     from app.core import config
 
     config.get_settings.cache_clear()

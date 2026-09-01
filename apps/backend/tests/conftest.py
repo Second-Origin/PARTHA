@@ -79,6 +79,12 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestCli
     monkeypatch.setenv("STORAGE_PATH", str(storage_path))
     monkeypatch.setenv("AUTO_CREATE_TABLES", "true")
     monkeypatch.setenv("CORS_ORIGINS", "http://testserver")
+    # Deliberately "test", not the default "development": AuthService's
+    # dev-only allowlist bypass (#384) is scoped to app_env == "development"
+    # specifically so it never applies to the test suite -- without this,
+    # every test asserting an allowlist rejection would silently start
+    # passing for the wrong reason (auto-approval, not a real check).
+    monkeypatch.setenv("APP_ENV", "test")
     # Tests drive AnalysisWorker.run_once() deterministically; the background
     # daemon thread would otherwise race the queue non-deterministically (#93).
     monkeypatch.setenv("ANALYSIS_WORKER_AUTOSTART", "false")

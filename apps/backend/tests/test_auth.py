@@ -73,11 +73,157 @@ def test_register_with_an_approved_email_succeeds(client):
 
 
 def test_register_rejects_an_email_that_was_never_approved(client):
-    response = _register(client, skip_approval=True)
+    # A baseline first user is registered here so #388's first-user
+    # bootstrap (see below) has already closed before this assertion runs --
+    # otherwise this registration would BE the first-ever one on a fresh
+    # database and succeed via bootstrap instead of exercising the plain
+    # rejection this test is actually about.
+    assert _register(client).status_code == 201
+
+    response = _register(client, email="bob@example.com", skip_approval=True)
 
     error = assert_error_response(response, 422, "validation_error")
     assert "hasn't been approved" in error.message
     assert "waitlist" in error.message.lower()
+
+
+def test_first_ever_registration_becomes_the_owner_without_approval(client):
+    """#388: the very first account on a fresh instance is auto-approved
+    without needing anyone to have pre-approved it -- otherwise a genuine
+    self-hoster running their own copy of PARTHA has no way to ever
+    register at all, since nobody is pre-approved on a fresh database
+    except this project's own owner (seeded by the #374 migration, not
+    relevant to a self-hoster's own instance).
+
+    The `client` fixture itself runs as APP_ENV=test (see conftest.py) --
+    a non-development environment -- so this exercises the real
+    cross-environment bootstrap, not #384's dev-only bypass."""
+    response = _register(client, skip_approval=True)
+
+    assert response.status_code == 201
+    assert response.json()["user"]["email"] == "alice@example.com"
+
+
+def test_second_registration_after_the_first_owner_still_needs_approval(client):
+    """The bootstrap window closes the instant the first registration
+    commits: a second, different unapproved email on the same instance is
+    rejected exactly as it would be without #388 at all."""
+    assert _register(client, skip_approval=True).status_code == 201
+
+    response = _register(client, email="bob@example.com", skip_approval=True)
+
+    error = assert_error_response(response, 422, "validation_error")
+    assert "hasn't been approved" in error.message
+
+
+def test_first_ever_registration_works_in_production_too(client):
+    """Not #384's dev-only bypass, and not specific to the test fixture's
+    own APP_ENV=test -- #388's bootstrap has no environment check at all.
+    Constructed the same way test_development_bypasses_the_allowlist_for_an_
+    unapproved_email builds a non-development AuthService directly against
+    the same (still-empty) database the `client` fixture just created."""
+    from sqlalchemy import select
+
+    from app.auth.service import AuthService
+    from app.core.config import get_settings
+    from app.core.database import SessionLocal
+    from app.models.approved_email import ApprovedEmail
+
+    prod_settings = get_settings().model_copy(update={"app_env": "production"})
+
+    with SessionLocal() as db:
+        user, access_token, refresh_token = AuthService(db, prod_settings).register(
+            "self-hoster@example.com", "correct-horse-battery"
+        )
+        assert user.email == "self-hoster@example.com"
+        assert access_token
+        assert refresh_token
+
+        bootstrap_approval = db.scalars(
+            select(ApprovedEmail).where(ApprovedEmail.email == "self-hoster@example.com")
+        ).one()
+        assert bootstrap_approval.added_by == "first-user-bootstrap"
+        assert bootstrap_approval.used_at is not None
+        assert bootstrap_approval.used_by_user_id == user.id
+
+
+def test_first_user_bootstrap_ignores_the_seed_placeholder_row(client):
+    """A real, Alembic-migrated deployment always has the credential-less
+    SEED_USER_ID placeholder row (app/models/user.py) in `users` before
+    anyone has ever registered -- migration 0002 seeds it on every fresh
+    database, unlike this test's own `create_all`-based fixture DB. #388's
+    "first user" check must not mistake that permanent system row for an
+    already-claimed instance, or bootstrap would never fire on a real
+    deployment at all."""
+    from app.core.database import SessionLocal
+    from app.models.user import SEED_USER_EMAIL, SEED_USER_ID, User
+
+    with SessionLocal() as db:
+        db.add(User(id=SEED_USER_ID, email=SEED_USER_EMAIL, password_hash=None))
+        db.commit()
+
+    response = _register(client, skip_approval=True)
+
+    assert response.status_code == 201
+
+
+def test_development_bypasses_the_allowlist_for_an_unapproved_email(client):
+    """#384: local development must stay exactly as frictionless as it was
+    before the allowlist existed. The `client` fixture itself runs as
+    APP_ENV=test (see conftest.py) specifically so this doesn't leak into
+    the rest of the suite -- this test builds its own AuthService against
+    an app_env="development" copy of the real settings to exercise the
+    bypass directly, the same construction
+    test_register_commit_time_collision_is_reported_as_conflict uses."""
+    from sqlalchemy import select
+
+    from app.auth.service import AuthService
+    from app.core.config import get_settings
+    from app.core.database import SessionLocal
+    from app.models.approved_email import ApprovedEmail
+
+    dev_settings = get_settings().model_copy(update={"app_env": "development"})
+
+    with SessionLocal() as db:
+        user, access_token, refresh_token = AuthService(db, dev_settings).register(
+            "never-approved@example.com", "correct-horse-battery"
+        )
+        assert user.email == "never-approved@example.com"
+        assert access_token
+        assert refresh_token
+
+        # A real, persisted ApprovedEmail row was created -- not a special
+        # in-memory-only path -- so the rest of register()'s audit trail
+        # (used_at/used_by_user_id) behaves identically to a real approval.
+        auto_approval = db.scalars(
+            select(ApprovedEmail).where(ApprovedEmail.email == "never-approved@example.com")
+        ).one()
+        assert auto_approval.added_by == "dev-bypass"
+        assert auto_approval.used_at is not None
+        assert auto_approval.used_by_user_id == user.id
+
+
+def test_development_bypass_does_not_apply_outside_development(client):
+    """The same unapproved email that succeeds under app_env="development"
+    (previous test) must still be rejected under every other environment
+    value -- this is a narrowly-scoped dev convenience, not a relaxation of
+    the check itself. A baseline user is registered first so #388's
+    first-user bootstrap (which, unlike the dev-only bypass, applies in
+    every one of these environments) has already closed before the loop
+    runs -- otherwise the first iteration would succeed via bootstrap
+    rather than exercising the dev-bypass boundary this test is about."""
+    from app.auth.service import AuthService
+    from app.core.config import get_settings
+    from app.core.database import SessionLocal
+    from app.core.exceptions import ValidationServiceError
+
+    assert _register(client).status_code == 201
+
+    for env in ("test", "staging", "production"):
+        settings = get_settings().model_copy(update={"app_env": env})
+        with SessionLocal() as db:
+            with pytest.raises(ValidationServiceError, match="hasn't been approved"):
+                AuthService(db, settings).register(f"never-approved-{env}@example.com", "correct-horse-battery")
 
 
 def test_register_still_succeeds_after_the_approved_email_is_used_once(client):
