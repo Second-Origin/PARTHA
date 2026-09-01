@@ -11,7 +11,25 @@
     <title>PARTHA — Repository Intelligence</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      /* Ported from apps/frontend/index.html (#382): prevents a white flash
+         behind the landing artwork before React mounts and App's own
+         scoped .landing-dark class takes over. This whole site is the
+         landing page, so unlike the real app there's no pathname check. */
+      html[data-landing-theme-boot='dark'] body {
+        background: #000;
+      }
+    </style>
+    <script>
+      (function () {
+        try {
+          var stored = window.localStorage.getItem('partha-landing-theme');
+          var dark = stored === 'dark' || ((stored === 'system' || !stored) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.setAttribute('data-landing-theme-boot', 'dark');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

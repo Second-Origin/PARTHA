@@ -2,32 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Same HSL token values as apps/frontend/src/styles/globals.css's :root
-   (light mode only -- this site doesn't need a dark-mode switcher), copied
-   rather than shared so this project has no cross-package dependency on
-   apps/frontend at all. */
+/* Full token set copied verbatim from apps/frontend/src/styles/globals.css
+   (#382 redesign) -- including .landing-dark, which the reused LandingPage
+   applies to its own root element only (see App.tsx). Copied rather than
+   shared so this project has no cross-package dependency on apps/frontend
+   at all. */
 @layer base {
   :root {
     --background: 38 27% 94%;
     --foreground: 258 19% 13%;
     --card: 0 0% 100%;
     --card-foreground: 258 19% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 258 19% 13%;
     --primary: 18 99% 38%;
     --primary-foreground: 0 0% 100%;
+    --secondary: 198 39% 85%;
+    --secondary-foreground: 260 10% 34%;
     --muted: 38 25% 92%;
     --muted-foreground: 263 8% 43%;
     --accent: 18 100% 94%;
     --accent-foreground: 258 19% 13%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
     --success: 142 76% 26%;
     --success-foreground: 210 40% 98%;
     --warning: 38 92% 29%;
     --warning-foreground: 258 19% 13%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
     --border: 18 66% 76%;
     --input: 18 42% 84%;
     --ring: 17 91% 50%;
     --radius: 1rem;
+  }
+
+  /* Scoped to the landing page's own root element only (never applied to
+     <html>) -- see App.tsx and useLandingTheme.ts. */
+  .landing-dark {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 2% 10%;
+    --card-foreground: 0 0% 100%;
+    --primary: 18 99% 49%;
+    --primary-foreground: 0 0% 100%;
+    --muted-foreground: 0 0% 48%;
+    --accent: 0 0% 16%;
+    --accent-foreground: 0 0% 100%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 18 99% 49%;
   }
 
   body {

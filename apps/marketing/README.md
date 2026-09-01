@@ -1,9 +1,17 @@
 # PARTHA marketing site
 
-A free, static marketing site for PARTHA (#382): a scripted product simulation using canned sample data, a "run it
-yourself" call to action pointing at the main repository, and a waitlist form. Deliberately independent of
-`apps/frontend` — no backend dependency, and nothing here talks to the real Render/Neon deployment (which is paused,
-not live — see #375/#377). It builds and runs entirely on its own.
+A free, static marketing site for PARTHA (#382). It reuses the real `apps/frontend` landing page — the same
+1728px-wide authored design, the same light/dark theme system, the same FAQ and footer — as its visual basis, ported
+in rather than re-invented, with two behavioral differences since this site has no backend or accounts at all:
+
+- The "Log In" nav hotspot has nothing to log in to, so it opens a scripted product simulation instead
+  (`src/components/DemoModal.tsx`), using canned sample data.
+- Every "Analyze a Repository" hotspot has no live backend to analyze against, so it opens fork/clone setup
+  instructions instead (`src/components/RunItYourselfModal.tsx`), plus a note encouraging people to star the repo.
+
+Deliberately independent of `apps/frontend` — no backend dependency, and nothing here talks to the real Render/Neon
+deployment (which is paused, not live — see #375/#377). It builds and runs entirely on its own; shared visual assets
+(SVG artwork, theme hook, tokens) are copied in directly rather than imported cross-package, to keep it that way.
 
 ## Local development
 
@@ -13,9 +21,10 @@ npm install
 npm run dev
 ```
 
-Opens at `http://localhost:5173` (or the next free port Vite picks). The waitlist form will show a "not configured"
-error locally unless you also run `vercel dev` with the env vars below set — that's expected; the rest of the page
-works fully without it.
+Opens at `http://localhost:5173` (or the next free port Vite picks; the repo's `.claude/launch.json` runs it on
+`5174` alongside the real frontend dev server on `5173`). The waitlist form will show a "not configured" error
+locally unless you also run `vercel dev` with the env vars below set — that's expected; the rest of the page works
+fully without it.
 
 ## Verification
 
@@ -63,9 +72,21 @@ submissions or crashing — the rest of the site is unaffected either way.
 To read submissions later: open the Gist directly, or `curl -H "Authorization: Bearer <token>"
 https://api.github.com/gists/<gist-id>`.
 
+## Structure
+
+- `src/App.tsx` — the ported landing page: renders the authored SVG artwork (`src/assets/landing/`), overlays the
+  invisible nav/hero/footer hotspots on top, and wires the two behavioral differences described above.
+- `src/components/DemoModal.tsx`, `RunItYourselfModal.tsx`, `WaitlistModal.tsx` — the three interactive surfaces
+  reached from those hotspots.
+- `src/hooks/useLandingTheme.ts`, `src/components/ThemeSwitcher.tsx` — verbatim ports of the real frontend's
+  light/dark/system theme store and toggle.
+- `src/data/sampleAnalysis.ts` — the canned data behind the demo simulation, using PARTHA's real finding
+  categories/severities/output shape.
+
 ## What this deliberately does not do
 
 - Does not call the real PARTHA API — the "simulation" is entirely canned data in `src/data/sampleAnalysis.ts`,
   clearly labeled in the UI as a scripted sample-repository walkthrough, not a live analysis.
-- Does not create or need a PARTHA account, login, or session.
+- Does not create or need a PARTHA account, login, or session — the reused landing page's "Log In" hotspot opens the
+  demo instead of a login flow.
 - Does not touch `apps/frontend`, the backend, or `render.yaml` — those stay exactly as they are, paused.

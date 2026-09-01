@@ -1,11 +1,10 @@
 import type { Config } from 'tailwindcss';
 
-// A deliberately smaller copy of apps/frontend/tailwind.config.ts's token
-// system -- same HSL custom-property convention and brand primary, but only
-// the tokens this site's own components actually use. Kept as an
-// independent file (not imported across the package boundary) so this site
-// stays a genuinely standalone, independently buildable/deployable project
-// (#382) -- the whole point of splitting it out from apps/frontend.
+// Matches apps/frontend/tailwind.config.ts's token system (#382 redesign:
+// this site now reuses the real LandingPage component, so its Tailwind
+// config needs to resolve the exact same tokens that component's classes
+// reference). Copied rather than shared so this project stays a genuinely
+// standalone, independently buildable/deployable project.
 export default {
   darkMode: 'class',
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -20,6 +19,14 @@ export default {
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))',
         },
         muted: {
           DEFAULT: 'hsl(var(--muted))',
@@ -37,13 +44,13 @@ export default {
           DEFAULT: 'hsl(var(--warning))',
           foreground: 'hsl(var(--warning-foreground))',
         },
-        destructive: {
-          DEFAULT: 'hsl(var(--destructive))',
-          foreground: 'hsl(var(--destructive-foreground))',
-        },
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
+        },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
         },
       },
       borderRadius: {
@@ -56,15 +63,15 @@ export default {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       fontSize: {
-        '2xs': ['0.6875rem', { lineHeight: '1rem' }],
+        '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
       },
       keyframes: {
         fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
         slideIn: { '0%': { opacity: '0', transform: 'translateY(8px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
       },
       animation: {
-        'fade-in': 'fadeIn 0.4s ease-out',
-        'slide-in': 'slideIn 0.35s ease-out',
+        'fade-in': 'fadeIn 0.3s ease-out',
+        'slide-in': 'slideIn 0.3s ease-out',
       },
     },
   },
