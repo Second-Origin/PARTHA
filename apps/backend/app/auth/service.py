@@ -73,9 +73,39 @@ class AuthService:
 
     def _require_approval(self, normalized_email: str) -> ApprovedEmail:
         approval = self.db.scalars(select(ApprovedEmail).where(ApprovedEmail.email == normalized_email)).first()
-        if approval is None:
-            raise ValidationServiceError(EMAIL_NOT_APPROVED)
-        return approval
+        if approval is not None:
+            return approval
+
+        if self.settings.app_env == "development":
+            # #384: local development must stay exactly as frictionless as it
+            # was before the allowlist existed -- restoring that means an
+            # email that was never explicitly approved is auto-approved here
+            # instead of rejected, so the rest of this method's caller
+            # (_create_approved_user) still has a real, persisted
+            # ApprovedEmail row to stamp used_at/used_by_user_id onto. Every
+            # other behavior (uniqueness, the audit trail, the OAuth path)
+            # stays identical to the real approved case -- this only ever
+            # changes what happens when no admin has approved the address
+            # yet, and only in development.
+            #
+            # Deliberately `development` only, not the broader dev/test
+            # leniency pairing used elsewhere in Settings
+            # (AUTH_SECRET_KEY/AI_ENCRYPTION_KEY): the backend test suite
+            # runs under this same default app_env with nothing overriding
+            # it, and its own allowlist-rejection tests need this bypass to
+            # NOT apply to them (see tests/conftest.py's `client` fixture,
+            # which sets APP_ENV=test specifically so this distinction is
+            # real rather than accidental). `test` is intentionally excluded.
+            auto_approval = ApprovedEmail(
+                id=str(uuid4()),
+                email=normalized_email,
+                note="Auto-approved: local development (#384). Never happens outside APP_ENV=development.",
+                added_by="dev-bypass",
+            )
+            self.db.add(auto_approval)
+            return auto_approval
+
+        raise ValidationServiceError(EMAIL_NOT_APPROVED)
 
     def _create_approved_user(self, user: User, approval: ApprovedEmail) -> tuple[User, str, str]:
         self.db.add(user)

@@ -80,6 +80,59 @@ def test_register_rejects_an_email_that_was_never_approved(client):
     assert "waitlist" in error.message.lower()
 
 
+def test_development_bypasses_the_allowlist_for_an_unapproved_email(client):
+    """#384: local development must stay exactly as frictionless as it was
+    before the allowlist existed. The `client` fixture itself runs as
+    APP_ENV=test (see conftest.py) specifically so this doesn't leak into
+    the rest of the suite -- this test builds its own AuthService against
+    an app_env="development" copy of the real settings to exercise the
+    bypass directly, the same construction
+    test_register_commit_time_collision_is_reported_as_conflict uses."""
+    from sqlalchemy import select
+
+    from app.auth.service import AuthService
+    from app.core.config import get_settings
+    from app.core.database import SessionLocal
+    from app.models.approved_email import ApprovedEmail
+
+    dev_settings = get_settings().model_copy(update={"app_env": "development"})
+
+    with SessionLocal() as db:
+        user, access_token, refresh_token = AuthService(db, dev_settings).register(
+            "never-approved@example.com", "correct-horse-battery"
+        )
+        assert user.email == "never-approved@example.com"
+        assert access_token
+        assert refresh_token
+
+        # A real, persisted ApprovedEmail row was created -- not a special
+        # in-memory-only path -- so the rest of register()'s audit trail
+        # (used_at/used_by_user_id) behaves identically to a real approval.
+        auto_approval = db.scalars(
+            select(ApprovedEmail).where(ApprovedEmail.email == "never-approved@example.com")
+        ).one()
+        assert auto_approval.added_by == "dev-bypass"
+        assert auto_approval.used_at is not None
+        assert auto_approval.used_by_user_id == user.id
+
+
+def test_development_bypass_does_not_apply_outside_development(client):
+    """The same unapproved email that succeeds under app_env="development"
+    (previous test) must still be rejected under every other environment
+    value -- this is a narrowly-scoped dev convenience, not a relaxation of
+    the check itself."""
+    from app.auth.service import AuthService
+    from app.core.config import get_settings
+    from app.core.database import SessionLocal
+    from app.core.exceptions import ValidationServiceError
+
+    for env in ("test", "staging", "production"):
+        settings = get_settings().model_copy(update={"app_env": env})
+        with SessionLocal() as db:
+            with pytest.raises(ValidationServiceError, match="hasn't been approved"):
+                AuthService(db, settings).register(f"never-approved-{env}@example.com", "correct-horse-battery")
+
+
 def test_register_still_succeeds_after_the_approved_email_is_used_once(client):
     """Approval is not single-use (#374): re-registering the SAME email a
     second time is rejected by the ordinary email-uniqueness conflict, not

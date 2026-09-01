@@ -9,7 +9,7 @@ def test_health_endpoint(client):
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert response.json()["environment"] == "development"
+    assert response.json()["environment"] == "test"
 
 
 def test_readiness_endpoint(client):
@@ -18,7 +18,7 @@ def test_readiness_endpoint(client):
     assert response.status_code == 200
     assert response.json() == {
         "status": "ready",
-        "environment": "development",
+        "environment": "test",
         "checks": {"database": "ok", "storage": "ok"},
     }
 
@@ -51,7 +51,7 @@ def test_readiness_endpoint_reports_database_failure(client, monkeypatch):
     assert response.status_code == 503
     assert response.json() == {
         "status": "not_ready",
-        "environment": "development",
+        "environment": "test",
         "checks": {"database": "error", "storage": "ok"},
     }
 
@@ -66,7 +66,7 @@ def test_readiness_endpoint_reports_storage_failure(client, monkeypatch):
     assert response.status_code == 503
     assert response.json() == {
         "status": "not_ready",
-        "environment": "development",
+        "environment": "test",
         "checks": {"database": "ok", "storage": "error"},
     }
 
