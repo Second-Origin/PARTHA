@@ -3,6 +3,7 @@ import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
 import { DemoModal } from '@/components/DemoModal';
 import { RunItYourselfModal } from '@/components/RunItYourselfModal';
+import { SlidePanel } from '@/components/SlidePanel';
 import landingReference from '@/assets/landing/landing-reference.svg';
 import landingReferenceDark from '@/assets/landing/landing-reference-dark.svg';
 
@@ -23,7 +24,9 @@ import landingReferenceDark from '@/assets/landing/landing-reference-dark.svg';
  *   product locally (RunItYourselfModal) instead.
  *
  * Everything else -- the artwork, the FAQ, the footer, the theme toggle --
- * is the same interaction shape as the real page.
+ * is the same interaction shape as the real page. The demo, run-it-yourself,
+ * and FAQ dialogs all share the SlidePanel container, which slides in from
+ * the right rather than popping up centered over the page.
  */
 export function App() {
   const [faqIndex, setFaqIndex] = useState<number | null>(null);
@@ -110,8 +113,8 @@ export function App() {
         ))}
 
         {faqIndex !== null && (
-          <div role="dialog" aria-modal="true" aria-labelledby="landing-faq-title" className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-5">
-            <div className="w-full max-w-xl rounded-3xl border border-primary/35 bg-card p-6 shadow-2xl sm:p-8">
+          <SlidePanel onClose={() => setFaqIndex(null)} labelledBy="landing-faq-title" maxWidthClassName="max-w-xl">
+            <div className="p-6 sm:p-8">
               <div className="flex items-start justify-between gap-5">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">FAQ</p>
@@ -121,7 +124,7 @@ export function App() {
               </div>
               <p className="mt-5 text-base leading-relaxed text-muted-foreground">{faqAnswers[faqIndex]}</p>
             </div>
-          </div>
+          </SlidePanel>
         )}
 
         {demoOpen && <DemoModal onClose={() => setDemoOpen(false)} />}

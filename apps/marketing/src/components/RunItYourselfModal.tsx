@@ -1,3 +1,5 @@
+import { SlidePanel } from '@/components/SlidePanel';
+
 const GITHUB_URL = 'https://github.com/Second-Origin/PARTHA';
 
 // Mirrors the exact commands in the repository's own README ("Run PARTHA
@@ -25,8 +27,8 @@ npm run dev:frontend`;
  * "run it yourself" is the only call to action here. */
 export function RunItYourselfModal({ onClose }: { onClose: () => void }) {
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="run-it-yourself-title" className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-5">
-      <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-primary/35 bg-card p-6 shadow-2xl sm:p-8">
+    <SlidePanel onClose={onClose} labelledBy="run-it-yourself-title" maxWidthClassName="max-w-2xl">
+      <div className="p-6 sm:p-8">
         <div className="flex items-start justify-between gap-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Run it yourself</p>
@@ -97,6 +99,6 @@ export function RunItYourselfModal({ onClose }: { onClose: () => void }) {
           </p>
         </div>
       </div>
-    </div>
+    </SlidePanel>
   );
 }
