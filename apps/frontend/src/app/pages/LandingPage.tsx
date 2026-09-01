@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/app/store/useAuthStore';
-import { WaitlistModal } from '@/features/waitlist/components/WaitlistModal';
 import { ThemeSwitcher } from '@/features/landing/components/ThemeSwitcher';
 import { useLandingTheme } from '@/features/landing/hooks/useLandingTheme';
 import landingReference from '@/assets/landing/landing-reference.svg';
@@ -25,7 +24,6 @@ export function LandingPage() {
   const authenticated = useAuthStore((state) => state.status === 'authenticated');
   const [faqIndex, setFaqIndex] = useState<number | null>(null);
   const [footerNotice, setFooterNotice] = useState<string | null>(null);
-  const [waitlistOpen, setWaitlistOpen] = useState(false);
   const workspaceHref = authenticated ? '/dashboard' : '/login';
   const theme = useLandingTheme();
   const dark = theme.resolved === 'dark';
@@ -36,16 +34,18 @@ export function LandingPage() {
     document.documentElement.removeAttribute('data-landing-theme-boot');
   }, []);
 
-  // Registration is invite-only (#341): an unauthenticated visitor's "analyze
-  // a repository" intent opens the waitlist instead of navigating to
-  // /register, which they cannot usefully complete without an invite yet.
+  // Self-hosted is the only deployment model for the foreseeable future
+  // (#382): an unauthenticated visitor's "analyze a repository" intent goes
+  // straight to account creation on this instance, same as it would for
+  // anyone standing up their own copy of PARTHA. Registration itself still
+  // enforces the admin-managed email allowlist (#374/#375) or the
+  // development bypass (#384) exactly as before -- this only changes what
+  // the landing page's CTA points at, not what registering requires.
   const analysisCta = (className: string) =>
     authenticated ? (
       <Link className={className} to="/upload"><span className="sr-only">Analyze a repository</span></Link>
     ) : (
-      <button type="button" className={`${className} border-0 bg-transparent p-0`} onClick={() => setWaitlistOpen(true)}>
-        <span className="sr-only">Join the waitlist</span>
-      </button>
+      <Link className={className} to="/register"><span className="sr-only">Create an account</span></Link>
     );
 
   return (
@@ -123,8 +123,6 @@ export function LandingPage() {
             </div>
           </div>
         )}
-
-        {waitlistOpen && <WaitlistModal dark={dark} onClose={() => setWaitlistOpen(false)} />}
 
         {footerNotice && (
           <div role="status" className="fixed bottom-5 left-1/2 z-50 w-[min(92vw,34rem)] -translate-x-1/2 rounded-2xl border border-primary/35 bg-card px-5 py-4 text-center text-sm font-medium text-foreground shadow-xl">

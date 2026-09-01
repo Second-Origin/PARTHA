@@ -47,11 +47,12 @@ describe('deep-linked route reachability (#179)', () => {
     expect(
       await screen.findByRole('heading', { name: 'Reveal the system behind the code.', level: 1 }, { timeout: ROUTE_RENDER_TIMEOUT_MS }),
     ).toBeInTheDocument();
-    // Registration is invite-only (#341): an unauthenticated visitor's
-    // "analyze a repository" intent opens the waitlist rather than linking
-    // to /register, which they cannot usefully complete without an invite.
+    // Self-hosted is the only deployment model (#382): an unauthenticated
+    // visitor's "analyze a repository" intent links straight to account
+    // creation on this instance, not a waitlist -- registration itself
+    // still enforces the allowlist (#374/#375) or dev bypass (#384).
     expect(screen.queryAllByRole('link', { name: /analyze a repository/i })).toHaveLength(0);
-    expect(screen.getAllByRole('button', { name: /join the waitlist/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: /create an account/i }).length).toBeGreaterThan(0);
   });
 
   it('renders Dashboard directly at /dashboard instead of 404ing', async () => {
