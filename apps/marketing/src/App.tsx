@@ -14,8 +14,10 @@ import landingReferenceDark from '@/assets/landing/landing-reference-dark.svg';
  * direction. Two behavioral differences from the real app, since this
  * standalone site has no backend and no accounts at all:
  *
- * - The nav's "Log in" hotspot has nothing to log in to here, so it opens
- *   the scripted demo simulation (DemoModal) instead of a dead route.
+ * - The nav's "Log in" hotspot and the hero's "See how it works" hotspot
+ *   both open the scripted demo simulation (DemoModal) instead of a dead
+ *   login route / an anchor scroll -- seeing PARTHA "work" here means
+ *   watching the simulation, since there's nothing live to log into.
  * - Every "Analyze a Repository" hotspot has nothing to analyze against
  *   (no live backend), so it opens setup instructions for running the real
  *   product locally (RunItYourselfModal) instead.
@@ -78,7 +80,13 @@ export function App() {
         <div id="capabilities" className="absolute left-0 top-[60.5%]" />
         <div id="faq" className="absolute left-0 top-[72.5%]" />
 
-        <a className="absolute left-[28.2%] top-[13.5%] z-20 h-[1.35%] w-[19.1%]" href="#how-it-works"><span className="sr-only">See how PARTHA works</span></a>
+        <button
+          type="button"
+          className="absolute left-[28.2%] top-[13.5%] z-20 h-[1.35%] w-[19.1%] border-0 bg-transparent p-0"
+          onClick={() => setDemoOpen(true)}
+        >
+          <span className="sr-only">See a scripted demo of PARTHA in action</span>
+        </button>
         {analyzeCta('absolute left-[49.4%] top-[13.5%] z-20 h-[1.35%] w-[22.4%]')}
 
         {faqQuestions.map((question, index) => (
@@ -117,7 +125,7 @@ export function App() {
         )}
 
         {demoOpen && <DemoModal onClose={() => setDemoOpen(false)} />}
-        {runItYourselfOpen && <RunItYourselfModal dark={dark} onClose={() => setRunItYourselfOpen(false)} />}
+        {runItYourselfOpen && <RunItYourselfModal onClose={() => setRunItYourselfOpen(false)} />}
 
         {footerNotice && (
           <div role="status" className="fixed bottom-5 left-1/2 z-50 w-[min(92vw,34rem)] -translate-x-1/2 rounded-2xl border border-primary/35 bg-card px-5 py-4 text-center text-sm font-medium text-foreground shadow-xl">

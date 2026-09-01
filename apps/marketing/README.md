@@ -4,10 +4,14 @@ A free, static marketing site for PARTHA (#382). It reuses the real `apps/fronte
 1728px-wide authored design, the same light/dark theme system, the same FAQ and footer — as its visual basis, ported
 in rather than re-invented, with two behavioral differences since this site has no backend or accounts at all:
 
-- The "Log In" nav hotspot has nothing to log in to, so it opens a scripted product simulation instead
-  (`src/components/DemoModal.tsx`), using canned sample data.
+- The "Log In" nav hotspot and the "See how it works" hero hotspot both open a scripted product simulation instead
+  (`src/components/DemoModal.tsx`), using canned sample data — there's nothing live to log into or scroll to a
+  walkthrough of, so both lead to the same demo.
 - Every "Analyze a Repository" hotspot has no live backend to analyze against, so it opens fork/clone setup
   instructions instead (`src/components/RunItYourselfModal.tsx`), plus a note encouraging people to star the repo.
+
+There is no waitlist or hosted-beta path anywhere on this site: PARTHA is self-hosted only for the foreseeable
+future, with no hosted service planned, so there's nothing to wait for.
 
 Deliberately independent of `apps/frontend` — no backend dependency, and nothing here talks to the real Render/Neon
 deployment (which is paused, not live — see #375/#377). It builds and runs entirely on its own; shared visual assets
@@ -22,16 +26,14 @@ npm run dev
 ```
 
 Opens at `http://localhost:5173` (or the next free port Vite picks; the repo's `.claude/launch.json` runs it on
-`5174` alongside the real frontend dev server on `5173`). The waitlist form will show a "not configured" error
-locally unless you also run `vercel dev` with the env vars below set — that's expected; the rest of the page works
-fully without it.
+`5174` alongside the real frontend dev server on `5173`). The entire page works with zero configuration — there is
+no backend call anywhere on the site.
 
 ## Verification
 
 ```bash
 npm run typecheck  # tsc -b --noEmit
 npm run lint       # eslint .
-npm run test       # node --test against api/waitlist.ts, with fetch mocked -- no real network/GitHub call
 npm run build      # tsc -b && vite build -- outputs to dist/
 npm run preview    # serve the production build locally
 ```
@@ -44,40 +46,16 @@ This project is intentionally **not** part of the root npm workspace (`apps/fron
 1. In the Vercel dashboard: **Add New → Project**, import the `Second-Origin/PARTHA` GitHub repository.
 2. Set the project's **Root Directory** to `apps/marketing`. Vercel auto-detects the Vite framework preset from
    there; `vercel.json` in this directory pins the build command and output directory explicitly regardless.
-3. No required env vars to deploy the site itself — the page renders and the simulation works with zero
-   configuration. The waitlist form needs two, added under **Settings → Environment Variables**, before it will
-   actually store submissions (see below).
+3. No env vars needed to deploy — the page renders and the simulation works with zero configuration.
 4. Deploy. Vercel gives you a `*.vercel.app` URL immediately; a custom domain can be attached afterward under
    **Settings → Domains**.
-
-## Waitlist form setup (one-time)
-
-There's no live Postgres to write submissions to (the real backend is paused). Instead, `api/waitlist.ts` — a Vercel
-serverless function, deployed automatically alongside the site — appends each submission to a private GitHub Gist.
-This needs no new third-party service: just a GitHub token, since the project already has a GitHub account.
-
-1. Create an empty **secret** Gist at <https://gist.github.com>, with exactly one file named `waitlist.json`
-   containing `[]`. Copy its id from the URL (the part after the last `/`).
-2. Create a **fine-grained** GitHub Personal Access Token at
-   <https://github.com/settings/personal-access-tokens/new>, scoped to **only** that Gist (Permissions → Gists →
-   Read and write). Do not use a classic token with broader `repo` scope than this needs.
-3. In the Vercel project, **Settings → Environment Variables**, add:
-   - `WAITLIST_GITHUB_TOKEN` — the token from step 2.
-   - `WAITLIST_GIST_ID` — the Gist id from step 1.
-4. Redeploy (Vercel → Deployments → ⋯ → Redeploy) so the function picks up the new env vars.
-
-Until both are set, the form fails with a clear "not configured yet" message instead of silently dropping
-submissions or crashing — the rest of the site is unaffected either way.
-
-To read submissions later: open the Gist directly, or `curl -H "Authorization: Bearer <token>"
-https://api.github.com/gists/<gist-id>`.
 
 ## Structure
 
 - `src/App.tsx` — the ported landing page: renders the authored SVG artwork (`src/assets/landing/`), overlays the
   invisible nav/hero/footer hotspots on top, and wires the two behavioral differences described above.
-- `src/components/DemoModal.tsx`, `RunItYourselfModal.tsx`, `WaitlistModal.tsx` — the three interactive surfaces
-  reached from those hotspots.
+- `src/components/DemoModal.tsx`, `RunItYourselfModal.tsx` — the two interactive surfaces reached from those
+  hotspots.
 - `src/hooks/useLandingTheme.ts`, `src/components/ThemeSwitcher.tsx` — verbatim ports of the real frontend's
   light/dark/system theme store and toggle.
 - `src/data/sampleAnalysis.ts` — the canned data behind the demo simulation, using PARTHA's real finding
@@ -89,4 +67,6 @@ https://api.github.com/gists/<gist-id>`.
   clearly labeled in the UI as a scripted sample-repository walkthrough, not a live analysis.
 - Does not create or need a PARTHA account, login, or session — the reused landing page's "Log In" hotspot opens the
   demo instead of a login flow.
+- Does not offer a waitlist or any hosted-beta path — the product is self-hosted only, with no hosted service
+  planned, so "run it yourself" is the only call to action.
 - Does not touch `apps/frontend`, the backend, or `render.yaml` — those stay exactly as they are, paused.

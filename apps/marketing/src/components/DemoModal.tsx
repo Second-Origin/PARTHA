@@ -27,12 +27,13 @@ const CATEGORY_STATE_STYLE: Record<string, string> = {
   insufficient_evidence: 'bg-muted text-muted-foreground',
 };
 
-/** Opened from the reused LandingPage's "Log in" nav hotspot (#382 redesign
- * -- there is no login flow or dashboard in this standalone site, so that
- * hotspot now leads here instead of a dead route). A modal, not a page
- * section: keeps the reused landing artwork's own length and layout
- * completely untouched, the same interaction shape the real page already
- * uses for its FAQ answers and waitlist prompt. */
+/** Opened from the reused LandingPage's "Log in" nav hotspot and its "See
+ * how it works" hero hotspot (#382 redesign) -- there is no login flow, no
+ * dashboard, and no anchor-scrollable walkthrough in this standalone site,
+ * so both hotspots lead here instead. A modal, not a page section: keeps
+ * the reused landing artwork's own length and layout completely untouched,
+ * the same interaction shape the real page already uses for its FAQ
+ * answers. */
 export function DemoModal({ onClose }: { onClose: () => void }) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [stepIndex, setStepIndex] = useState(0);

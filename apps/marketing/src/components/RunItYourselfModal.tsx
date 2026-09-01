@@ -1,6 +1,3 @@
-import { useState } from 'react';
-import { WaitlistModal } from '@/components/WaitlistModal';
-
 const GITHUB_URL = 'https://github.com/Second-Origin/PARTHA';
 
 // Mirrors the exact commands in the repository's own README ("Run PARTHA
@@ -23,10 +20,10 @@ npm run dev:frontend`;
  * (#382 redesign) -- there is no live backend for this button to actually
  * analyze anything against, so instead of running the scripted demo (see
  * DemoModal, reached from "Log in" instead) it shows how to run the real
- * product against a visitor's own code. */
-export function RunItYourselfModal({ onClose, dark = false }: { onClose: () => void; dark?: boolean }) {
-  const [waitlistOpen, setWaitlistOpen] = useState(false);
-
+ * product against a visitor's own code. No waitlist/hosted-beta path: the
+ * product direction is self-host-only for the foreseeable future, so
+ * "run it yourself" is the only call to action here. */
+export function RunItYourselfModal({ onClose }: { onClose: () => void }) {
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="run-it-yourself-title" className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-5">
       <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-primary/35 bg-card p-6 shadow-2xl sm:p-8">
@@ -47,9 +44,9 @@ export function RunItYourselfModal({ onClose, dark = false }: { onClose: () => v
           </button>
         </div>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          PARTHA isn&apos;t running as a hosted service right now, so there&apos;s nothing here to submit a repository
-          URL to. It's open source and runs locally with no external service beyond a public GitHub repository to
-          analyze -- fork or clone it, run it, and try it on your own code.
+          PARTHA isn&apos;t running as a hosted service, and there are no plans to host it -- it's open source and
+          self-hosted only. It runs locally with no external service beyond a public GitHub repository to analyze --
+          fork or clone it, run it, and try it on your own code.
         </p>
 
         <div className="mt-6 space-y-4">
@@ -98,17 +95,8 @@ export function RunItYourselfModal({ onClose, dark = false }: { onClose: () => v
             </a>{' '}
             to support the project and help others find it.
           </p>
-          <p className="mt-2">
-            Prefer a hosted version instead of running it yourself?{' '}
-            <button type="button" onClick={() => setWaitlistOpen(true)} className="font-semibold text-primary underline underline-offset-2">
-              Join the waitlist
-            </button>
-            .
-          </p>
         </div>
       </div>
-
-      {waitlistOpen && <WaitlistModal dark={dark} onClose={() => setWaitlistOpen(false)} />}
     </div>
   );
 }
