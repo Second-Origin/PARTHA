@@ -206,8 +206,18 @@ class TestCompleteCallbackLogin:
         (AuthService.register), and an OAuth-created account with no
         equivalent check would be a silent bypass of that gate, not a
         feature. An unapproved visitor is sent back to the allowlist-gated
-        registration form instead."""
+        registration form instead.
+
+        A baseline user is created first so #388's first-user bootstrap
+        (which applies to this OAuth path exactly the same as it does to
+        password registration, since both go through
+        AuthService._require_approval) has already closed before this
+        identity is attempted -- otherwise this OAuth sign-in would BE the
+        first-ever registration on a fresh database and succeed via
+        bootstrap instead of exercising the rejection this test is about."""
         import asyncio
+
+        _create_user(db, "existing-owner@example.com")
 
         identity = OAuthIdentityInfo(
             subject="sub-1", email="newperson@example.com", email_verified=True, display_name="New Person"
@@ -221,6 +231,29 @@ class TestCompleteCallbackLogin:
         assert result.error_code == "email_not_approved"
         assert db.query(User).filter(User.email == "newperson@example.com").count() == 0
         assert db.query(OAuthIdentity).count() == 0
+
+    def test_first_ever_oauth_identity_becomes_the_owner_via_bootstrap(self, db):
+        """#388's first-user bootstrap applies to the OAuth path exactly the
+        same way it applies to password registration, since both call
+        AuthService._require_approval -- a verified provider identity that
+        happens to be the very first account on a fresh, otherwise-empty
+        instance is auto-approved and signed in, not rejected."""
+        import asyncio
+
+        identity = OAuthIdentityInfo(
+            subject="sub-1", email="first-owner@example.com", email_verified=True, display_name="First Owner"
+        )
+        service = _make_service(db, {"google": FakeProviderClient(identity=identity)})
+        url = service.start("google", intent="login", frontend_redirect_base="http://localhost:5173")
+        state = url.split("state=")[1].split("&")[0]
+
+        base, result = asyncio.run(service.complete_callback("google", state=state, code="c", provider_error=None))
+        assert result.kind == "session"
+        assert result.user is not None
+        assert result.user.email == "first-owner@example.com"
+
+        approval = db.query(ApprovedEmail).filter(ApprovedEmail.email == "first-owner@example.com").one()
+        assert approval.added_by == "first-user-bootstrap"
 
     def test_brand_new_approved_identity_creates_an_account_via_oauth(self, db):
         """The one exception to 'OAuth never creates an account': a verified

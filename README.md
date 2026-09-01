@@ -229,6 +229,8 @@ Outside `development` and `test`, the backend requires:
 - `AI_ENCRYPTION_KEY` containing a valid Fernet key;
 - independent network egress controls for AI providers.
 
+Registration is gated by an admin-managed email allowlist, in every environment. On a genuinely fresh instance — an empty database, nobody pre-approved — the first account anyone registers (password or OAuth) is auto-approved automatically and becomes that instance's owner; this is what lets a self-hoster actually use their own deployment. Every registration after that first one needs an existing account holder to approve the email first, with `apps/backend/scripts/approve_email.py`.
+
 Do not expose the development configuration directly to the public internet. Review [SECURITY.md](SECURITY.md) and the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md) before any shared deployment. Report vulnerabilities privately—never in a public issue.
 
 ## Documentation and contributing
