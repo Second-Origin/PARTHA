@@ -726,6 +726,12 @@ PRODUCT_CAPABILITIES: tuple[Capability, ...] = (
         "Semantic extraction is strongest for supported Python and TypeScript/JavaScript constructs.",
     ),
     _product_capability(
+        "repository-lineage",
+        SupportStatus.PARTIAL,
+        "Durable lineage grouping repeated imports of the same repository (RFC-0002).",
+        "The `repository_lineages` table, owner-scoped grouping, and duplicate-revision detection run on every import. No read API or UI for browsing that history exists yet.",
+    ),
+    _product_capability(
         "service-interactions",
         SupportStatus.LIMITED,
         "Outbound service-interaction discovery.",
@@ -819,6 +825,13 @@ PUBLIC_CAPABILITIES: tuple[PublicCapability, ...] = (
         PublicStatus.IMPLEMENTED_WITH_DISCLOSED_LIMITS,
         "Immutable, revision-addressed `ri.v1` snapshots with normalized facts, evidence, query APIs, and a total canonical graph hash. Semantic extraction is strongest for supported Python and TypeScript/JavaScript constructs.",
         ("product.repository-intelligence",),
+    ),
+    PublicCapability(
+        "repository-lineage",
+        "Repository lineage",
+        PublicStatus.IMPLEMENTED_WITH_DISCLOSED_LIMITS,
+        "Repeated imports of the same repository and branch are grouped into a durable, owner-scoped lineage with duplicate-revision detection (RFC-0002). No read API or UI exists yet for browsing that history.",
+        ("product.repository-lineage",),
     ),
     PublicCapability(
         "architecture-authentication",
