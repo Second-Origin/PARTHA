@@ -39,6 +39,54 @@ _TSX_LANGUAGE = Language(tsts.language_tsx())
 _ROUTER_FACTORIES = {"createBrowserRouter", "createHashRouter", "createMemoryRouter"}
 _ROUTE_ELEMENTS = {"Route"}
 
+# A bare call to an ECMAScript/host global (parseInt, structuredClone, ...) has
+# no in-repo definition to resolve to, and is not a relationship worth a
+# resolver diagnostic -- it scales with every call in the file, not with real
+# coverage gaps. A name here that a function scope shadows (see `shadowed` in
+# `_collect_calls`) is still treated as a real local call.
+_GLOBAL_CALL_NAMES = {
+    "parseInt",
+    "parseFloat",
+    "isNaN",
+    "isFinite",
+    "String",
+    "Number",
+    "Boolean",
+    "Array",
+    "Object",
+    "Symbol",
+    "BigInt",
+    "Promise",
+    "Map",
+    "Set",
+    "WeakMap",
+    "WeakSet",
+    "Date",
+    "RegExp",
+    "Error",
+    "TypeError",
+    "RangeError",
+    "JSON",
+    "Math",
+    "Reflect",
+    "Proxy",
+    "structuredClone",
+    "encodeURIComponent",
+    "decodeURIComponent",
+    "encodeURI",
+    "decodeURI",
+    "setTimeout",
+    "setInterval",
+    "clearTimeout",
+    "clearInterval",
+    "queueMicrotask",
+    "atob",
+    "btoa",
+    "alert",
+    "confirm",
+    "prompt",
+}
+
 # Collectors emit this; assign_ordinals sets the RFC §6.4 value on the way out.
 # It is deliberately invalid (ordinals are one-based) so a result that skipped
 # assignment fails loudly rather than persisting a wrong identity.
@@ -597,7 +645,11 @@ class TypeScriptExtractor:
                     function_name = self._node_text(function, source)
                     # CommonJS require() remains an explicitly unsupported
                     # construct, so its diagnostic is the only emitted fact.
-                    if function_name != "require":
+                    # An unshadowed ECMAScript/host global is skipped outright
+                    # -- it has no in-repo target, so it is neither of those,
+                    # it is simply not a relationship.
+                    is_unshadowed_global = function_name in _GLOBAL_CALL_NAMES and function_name not in shadowed
+                    if function_name != "require" and not is_unshadowed_global:
                         evidence, _ = build_evidence(
                             path,
                             node.start_point[0] + 1,

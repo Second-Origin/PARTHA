@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import builtins
 
 from app.extraction.http import HTTP_METHOD_ATTRIBUTES, describe_destination
 from app.extraction.base import (
@@ -29,6 +30,13 @@ from app.intelligence import canonical
 _ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
 _REFLECTION_CALLS = {"getattr", "setattr", "delattr"}
 _DEPENDENCY_MARKERS = {"Depends"}
+
+# A bare call to a language builtin (print, len, isinstance, sorted, ...) has
+# no in-repo definition to resolve to, and is not a relationship worth a
+# resolver diagnostic -- it scales with every call in the file, not with real
+# coverage gaps. Excludes the reflection calls below, which keep their own
+# explicit "unsupported" diagnostic instead of being silently dropped.
+_PYTHON_BUILTIN_NAMES = frozenset(name for name in dir(builtins) if not name.startswith("_"))
 
 # --- Supported HTTP client surface (#209) -----------------------------------
 #
@@ -478,6 +486,12 @@ class PythonExtractor:
             # not become resolver input (or an observed relationship fact).
             if node.func.id in {"dir", "getattr", "hasattr", "setattr", "vars"}:
                 return
+            # Skip builtins the user hasn't shadowed. ``scope.resolve`` walks
+            # the full chain including module scope, so a user's own
+            # ``def print(...)`` -- whether module-level or nested -- still
+            # produces a real binding and this does not skip the call.
+            if node.func.id in _PYTHON_BUILTIN_NAMES and scope.resolve(node.func.id) is None:
+                return
             evidence, diagnostic = build_evidence(
                 path,
                 node.lineno,
@@ -590,6 +604,15 @@ class PythonExtractor:
                 scan(child, scope)
 
         module_scope = _BindingScope()
+        # A module-level def/class/import/assignment is a real, resolvable
+        # symbol -- pre-bind it the same way a function or class scope's own
+        # declarations are, so a call to it (including one that happens to
+        # share a builtin's name) is never mistaken for an unbound name.
+        module_declarations = _ScopeDeclarations()
+        for statement in tree.body:
+            module_declarations.visit(statement)
+        for name in module_declarations.names:
+            module_scope.bind(name, _BINDING_LOCAL)
         for statement in tree.body:
             scan(statement, module_scope)
 

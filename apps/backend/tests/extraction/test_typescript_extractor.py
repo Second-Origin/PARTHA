@@ -62,3 +62,53 @@ def test_root_level_file_module_has_no_short_name():
     module = next(n for n in result.nodes if n.node_kind == "module")
     assert module.stable_key == "mod:"
     assert module.name is None
+
+
+def test_bare_global_calls_produce_no_call_observation():
+    """#392: a call to an ECMAScript/host global has no in-repo target and is
+    not a relationship worth a resolver diagnostic -- it must not even reach
+    the resolver as an observation, unlike a genuine unresolved call."""
+    result = _extract(
+        "src/util.ts",
+        "function caller(value: string) {\n"
+        "  parseInt(value);\n"
+        "  structuredClone(value);\n"
+        "  setTimeout(() => {}, 0);\n"
+        "  return String(value);\n"
+        "}\n",
+    )
+    calls = [
+        observation.referent_text
+        for observation in result.observations
+        if observation.observed_kind in ("call", "call_shadowed")
+    ]
+    assert calls == []
+
+
+def test_genuinely_undefined_call_is_unaffected_by_the_global_skip():
+    result = _extract("src/util.ts", "function caller() {\n  return someUndefinedThing();\n}\n")
+    calls = [
+        observation.referent_text
+        for observation in result.observations
+        if observation.observed_kind == "call"
+    ]
+    assert calls == ["someUndefinedThing"]
+
+
+def test_function_scoped_shadow_of_a_global_still_yields_a_call_observation():
+    """A local function that shadows a global name (e.g. a parameter or inner
+    declaration named ``String``) is a real, resolvable local call -- the
+    global skip must not swallow it just because the name is also a global."""
+    result = _extract(
+        "src/util.ts",
+        "function caller() {\n"
+        "  function String(value: unknown) { return value; }\n"
+        "  return String('hi');\n"
+        "}\n",
+    )
+    calls = [
+        observation.referent_text
+        for observation in result.observations
+        if observation.observed_kind in ("call", "call_shadowed")
+    ]
+    assert "String" in calls

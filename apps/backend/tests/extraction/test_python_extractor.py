@@ -84,6 +84,46 @@ def test_parameter_shadowing_is_recorded_at_the_call_site():
     assert shadowed == ["target"]
 
 
+def test_bare_builtin_calls_produce_no_call_observation():
+    """#392: a call to print/len/isinstance/... has no in-repo target and is
+    not a relationship worth a resolver diagnostic -- it must not even reach
+    the resolver as an observation, unlike a genuine unresolved call."""
+    result = _extract(
+        "def caller(items):\n"
+        "    print(items)\n"
+        "    return len(items), isinstance(items, list), sorted(items)\n"
+    )
+    calls = [
+        observation.referent_text
+        for observation in result.observations
+        if observation.observed_kind in ("call", "call_shadowed")
+    ]
+    assert calls == []
+
+
+def test_genuinely_undefined_call_is_unaffected_by_the_builtin_skip():
+    result = _extract("def caller():\n    return someUndefinedThing()\n")
+    calls = [
+        observation.referent_text
+        for observation in result.observations
+        if observation.observed_kind == "call"
+    ]
+    assert calls == ["someUndefinedThing"]
+
+
+def test_module_level_shadow_of_a_builtin_still_yields_a_call_observation():
+    """A user's own top-level ``def print(...)`` is a real, resolvable symbol
+    -- the builtin skip must not treat its name as an untracked builtin just
+    because the name also happens to be one."""
+    result = _extract("def print(*args):\n    pass\n\n\ndef caller():\n    print('hi')\n")
+    calls = [
+        observation.referent_text
+        for observation in result.observations
+        if observation.observed_kind == "call"
+    ]
+    assert calls == ["print"]
+
+
 def test_function_local_import_is_not_exposed_as_a_file_wide_binding():
     result = _extract(
         "def first():\n"
