@@ -1,6 +1,8 @@
 import posixpath
 from collections import Counter, defaultdict
 
+from app.extraction.lockfiles import SUPPORTED_LOCKFILE_FILENAMES
+from app.extraction.manifests import SUPPORTED_MANIFEST_FILENAMES
 from app.intelligence.classification import LAYER_ORDER, layer_for_role
 from app.intelligence.query_service import (
     ARCHITECTURE_DIAGNOSTIC_CODES,
@@ -25,7 +27,7 @@ from app.schemas.architecture import (
 
 
 ROLE_TO_NODE_TYPE = {
-    "entrypoint": "frontend",
+    "entrypoint": "entrypoint",
     "controller": "controller",
     "route": "route",
     "service": "service",
@@ -183,10 +185,17 @@ class ArchitectureAnalyzer:
             # unresolved. It stays as an honest, empty module set rather than
             # ever reading `record.file_tree` (unsealed repository metadata).
             return self._empty_module([])
+        # Dependency-manifest and lockfile paths already surface as
+        # dependency evidence (Dependency Graph) -- grouping them into an
+        # architecture module too misrepresents `package.json`/
+        # `pyproject.toml` as a piece of the system's own structure.
+        _non_module_filenames = SUPPORTED_MANIFEST_FILENAMES + SUPPORTED_LOCKFILE_FILENAMES
         file_paths = sorted(
             node.stable_key.removeprefix("file:")
             for node in facts.nodes
-            if node.node_kind == "file" and node.stable_key.startswith("file:")
+            if node.node_kind == "file"
+            and node.stable_key.startswith("file:")
+            and posixpath.basename(node.stable_key.removeprefix("file:")) not in _non_module_filenames
         )
         if not file_paths:
             return self._empty_module([])
@@ -209,7 +218,7 @@ class ArchitectureAnalyzer:
             modules.append(
                 RepositoryModule(
                     id=module_id,
-                    name=module_id.replace("module:", "").replace("-", " ").title(),
+                    name=self._module_display_name(module_id),
                     role=dominant,  # type: ignore[arg-type]
                     layer=layer_for_role(dominant),
                     path_prefix=self._path_prefix(paths),
@@ -242,6 +251,17 @@ class ArchitectureAnalyzer:
         if parts and parts[0] in {"app", "src", "backend", "frontend", "apps"} and len(parts) > 1:
             return f"module:{parts[1].lower()}"
         return f"module:{parts[0].lower() if parts else 'repository'}"
+
+    @staticmethod
+    def _module_display_name(module_id: str) -> str:
+        raw = module_id.removeprefix("module:")
+        if "." in raw:
+            # `_module_id`'s fallback groups a top-level file with no
+            # directory nesting by its own filename (e.g. "app.py") -- that
+            # is a real filename, not a word slug, and Title Case corrupts
+            # its extension ("app.py" -> "App.Py"). Render it verbatim.
+            return raw
+        return raw.replace("-", " ").title()
 
     @staticmethod
     def _path_prefix(paths: list[str]) -> str:

@@ -1199,7 +1199,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "frontend" | "backend" | "controller" | "route" | "service" | "repository" | "database" | "configuration" | "authentication" | "middleware" | "utilities" | "models" | "external-api" | "shared-library" | "environment" | "queue" | "cache";
+            type: "frontend" | "backend" | "entrypoint" | "controller" | "route" | "service" | "repository" | "database" | "configuration" | "authentication" | "middleware" | "utilities" | "models" | "external-api" | "shared-library" | "environment" | "queue" | "cache";
         };
         /**
          * AuthChain
@@ -2047,7 +2047,7 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "frontend" | "backend" | "controller" | "route" | "service" | "repository" | "database" | "configuration" | "authentication" | "middleware" | "utilities" | "models" | "external-api" | "shared-library" | "environment" | "queue" | "cache";
+            type: "frontend" | "backend" | "entrypoint" | "controller" | "route" | "service" | "repository" | "database" | "configuration" | "authentication" | "middleware" | "utilities" | "models" | "external-api" | "shared-library" | "environment" | "queue" | "cache";
         };
         /** ReviewCategoryAssessment */
         ReviewCategoryAssessment: {

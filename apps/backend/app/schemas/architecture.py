@@ -7,6 +7,7 @@ from app.schemas.base import CamelModel
 ArchNodeType = Literal[
     "frontend",
     "backend",
+    "entrypoint",
     "controller",
     "route",
     "service",
