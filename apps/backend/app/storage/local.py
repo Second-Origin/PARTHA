@@ -7,6 +7,7 @@ from fastapi import UploadFile
 
 from app.core.config import Settings
 from app.core.exceptions import ValidationServiceError
+from app.parsers.repository_parser import is_macos_artifact
 
 
 class LocalStorage:
@@ -82,11 +83,13 @@ class LocalStorage:
             if zipfile.is_zipfile(archive_path):
                 with zipfile.ZipFile(archive_path) as archive:
                     self._safe_extract_zip(archive, destination)
+                self._strip_macos_artifacts(destination)
                 return self._normalise_single_root(destination)
 
             if tarfile.is_tarfile(archive_path):
                 with tarfile.open(archive_path) as archive:
                     self._safe_extract_tar(archive, destination)
+                self._strip_macos_artifacts(destination)
                 return self._normalise_single_root(destination)
         except (zipfile.BadZipFile, tarfile.TarError, OSError) as exc:
             raise ValidationServiceError("Archive is corrupted or cannot be extracted.") from exc
@@ -148,8 +151,29 @@ class LocalStorage:
         # behaviour on silently. Being explicit keeps it a decision.
         archive.extractall(destination, filter="data")
 
+    def _strip_macos_artifacts(self, destination: Path) -> None:
+        """Delete Finder/Archive Utility artifacts an archive may carry (#397).
+
+        RepositoryParser already excludes these from the persisted file tree
+        (so they never reach the extraction pipeline or the UI), but that
+        leaves them sitting on disk in the repository's own storage tree.
+        Removing them here too keeps that tree honest, not just what's
+        derived from it.
+        """
+
+        if destination.name == "__MACOSX" or is_macos_artifact(destination.name):
+            if destination.is_dir():
+                shutil.rmtree(destination)
+            else:
+                destination.unlink()
+            return
+        if not destination.is_dir():
+            return
+        for child in list(destination.iterdir()):
+            self._strip_macos_artifacts(child)
+
     def _normalise_single_root(self, destination: Path) -> Path:
-        children = [child for child in destination.iterdir() if child.name != "__MACOSX"]
+        children = list(destination.iterdir())
         if len(children) == 1 and children[0].is_dir():
             return children[0]
         return destination

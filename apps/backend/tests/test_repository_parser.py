@@ -94,6 +94,36 @@ def test_repository_parser_does_not_count_ignored_directories(tmp_path: Path):
     assert [node.name for node in tree] == ["main.py"]
 
 
+def test_repository_parser_drops_macos_archive_artifacts(tmp_path: Path):
+    """#398: __MACOSX/, ._<name> AppleDouble sidecars, and .DS_Store are
+    archiver/Finder bookkeeping, not repository content -- an AppleDouble
+    sidecar in particular shares its real counterpart's extension
+    (``._app.py`` next to ``app.py``) while being opaque binary, so it must
+    never reach a downstream extension-based extractor as a second module."""
+
+    macosx = tmp_path / "__MACOSX"
+    macosx.mkdir()
+    (macosx / "._app.py").write_bytes(b"\x00\x05\x16\x07 not real python")
+    (tmp_path / "._app.py").write_bytes(b"\x00\x05\x16\x07 not real python")
+    (tmp_path / ".DS_Store").write_bytes(b"junk")
+    (tmp_path / "app.py").write_text("print('ok')\n", encoding="utf-8")
+
+    tree, meta, _ = RepositoryParser().parse(tmp_path, max_file_count=10)
+
+    assert meta.total_files == 1
+    assert [node.name for node in tree] == ["app.py"]
+
+
+def test_repository_parser_file_count_preflight_ignores_macos_artifacts(tmp_path: Path):
+    (tmp_path / ".DS_Store").write_bytes(b"junk")
+    (tmp_path / "._app.py").write_bytes(b"junk")
+    (tmp_path / "app.py").write_text("print('ok')\n", encoding="utf-8")
+
+    tree, meta, _ = RepositoryParser().parse(tmp_path, max_file_count=1)
+
+    assert meta.total_files == 1
+
+
 # --- symlink safety -----------------------------------------------------------
 #
 # Archive uploads can't reach this: TAR extraction rejects symlink/link/device

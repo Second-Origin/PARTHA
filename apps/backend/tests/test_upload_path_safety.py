@@ -1,5 +1,6 @@
 import asyncio
 import io
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -58,6 +59,25 @@ def test_save_upload_preserves_only_allowlisted_suffix(storage: LocalStorage) ->
     upload = UploadFile(filename="whatever.tar.gz", file=io.BytesIO(b"payload"))
     saved = asyncio.run(storage.save_upload("22222222-2222-2222-2222-222222222222", upload, 1024))
     assert saved.name == "22222222-2222-2222-2222-222222222222.tar.gz"
+
+
+def test_extract_archive_strips_macos_finder_artifacts(storage: LocalStorage, tmp_path: Path) -> None:
+    """#398: a zip made by macOS Finder's "Compress" carries __MACOSX/ plus a
+    ._<name> AppleDouble sidecar per real file, and Finder itself may drop a
+    .DS_Store into any directory -- none of it is repository content, and it
+    must not still be sitting in the extracted repository's storage tree."""
+
+    archive_path = tmp_path / "archive.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("project/app.py", "print('ok')\n")
+        archive.writestr("project/.DS_Store", "junk")
+        archive.writestr("__MACOSX/project/._app.py", "\x00\x05\x16\x07 resource fork")
+        archive.writestr("project/._app.py", "\x00\x05\x16\x07 resource fork")
+
+    root = storage.extract_archive(archive_path, "33333333-3333-3333-3333-333333333333")
+
+    remaining = sorted(path.name for path in root.rglob("*"))
+    assert remaining == ["app.py"]
 
     unsafe = UploadFile(filename="whatever.py", file=io.BytesIO(b"payload"))
     saved_unsafe = asyncio.run(storage.save_upload("33333333-3333-3333-3333-333333333333", unsafe, 1024))
