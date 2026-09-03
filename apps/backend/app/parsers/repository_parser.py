@@ -24,7 +24,24 @@ IGNORED_DIRS = {
     "vendor",
     "vendors",
     "generated",
+    "__MACOSX",
 }
+
+
+def is_macos_artifact(name: str) -> bool:
+    """True for a macOS Finder/Archive Utility artifact, not real repository content.
+
+    ``.DS_Store`` is Finder's per-directory bookkeeping file. ``._<name>`` is
+    an AppleDouble sidecar -- the resource-fork half of a file, written
+    whenever the destination filesystem can't hold one natively (a plain zip,
+    for one) -- and it shares its real counterpart's extension while being
+    opaque binary, not source: left unfiltered, ``._app.py`` looks like a
+    second Python module to every downstream extension check and either
+    extracts as garbage or fails to parse.
+    """
+
+    return name == ".DS_Store" or name.startswith("._")
+
 
 LANGUAGE_BY_EXTENSION = {
     "py": "Python",
@@ -132,7 +149,7 @@ class RepositoryParser:
         root = root or path
         with os.scandir(path) as entries:
             for entry in entries:
-                if entry.name in IGNORED_DIRS:
+                if entry.name in IGNORED_DIRS or is_macos_artifact(entry.name):
                     continue
                 if entry.is_symlink():
                     relative = "/" + str(Path(entry.path).relative_to(root)).replace("\\", "/")
@@ -147,7 +164,7 @@ class RepositoryParser:
     def _build_tree(self, path: Path, root: Path) -> list[FileTreeNode]:
         nodes: list[FileTreeNode] = []
         for child in sorted(path.iterdir(), key=lambda item: (item.is_file(), item.name.lower())):
-            if child.name in IGNORED_DIRS:
+            if child.name in IGNORED_DIRS or is_macos_artifact(child.name):
                 continue
             relative = "/" + str(child.relative_to(root)).replace("\\", "/")
             if child.is_symlink():
