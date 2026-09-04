@@ -30,9 +30,15 @@ def _repository(session: Session) -> RepositoryRecord:
     session.add(owner)
     session.commit()
     record = RepositoryRecord(
-        id=str(uuid4()), owner_id=owner.id, name="repo", source="upload",
-        revision_kind="upload", revision_value=UPLOAD_REVISION,
-        local_path="/x", status="completed", file_tree=[],
+        id=str(uuid4()),
+        owner_id=owner.id,
+        name="repo",
+        source="upload",
+        revision_kind="upload",
+        revision_value=UPLOAD_REVISION,
+        local_path="/x",
+        status="completed",
+        file_tree=[],
     )
     session.add(record)
     session.commit()
@@ -41,9 +47,12 @@ def _repository(session: Session) -> RepositoryRecord:
 
 def _to_evidence(extracted) -> Evidence:
     return Evidence(
-        path=extracted.path, start_line=extracted.start_line,
-        end_line=extracted.end_line, extractor="typescript-ast",
-        extractor_version="1.2.0", logical_line_count=extracted.logical_line_count,
+        path=extracted.path,
+        start_line=extracted.start_line,
+        end_line=extracted.end_line,
+        extractor="typescript-ast",
+        extractor_version="1.2.0",
+        logical_line_count=extracted.logical_line_count,
         granularity=extracted.granularity,
     )
 
@@ -62,29 +71,47 @@ def test_typescript_extraction_result_seals_into_a_snapshot(session):
     )
     # a repo:root node is required for a coherent snapshot (RFC §11.2 rule 5)
     root_ev = Evidence(
-        path="src/auth/service.ts", start_line=1, end_line=1,
-        extractor="typescript-ast", extractor_version="1.2.0",
-        logical_line_count=1, granularity="file",
+        path="src/auth/service.ts",
+        start_line=1,
+        end_line=1,
+        extractor="typescript-ast",
+        extractor_version="1.2.0",
+        logical_line_count=1,
+        granularity="file",
     )
     store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[root_ev])
     for node in result.nodes:
         store.add_node(
-            snapshot, node_kind=node.node_kind, stable_key=node.stable_key,
-            name=node.name, language=node.language,
+            snapshot,
+            node_kind=node.node_kind,
+            stable_key=node.stable_key,
+            name=node.name,
+            language=node.language,
             properties=node.properties,
             evidence=[_to_evidence(e) for e in node.evidence],
         )
     for obs in result.observations:
         store.add_observation(
-            snapshot, observed_kind=obs.observed_kind, subject_kind=obs.subject_kind,
-            subject_key=obs.subject_key, referent_text=obs.referent_text,
-            ordinal=obs.ordinal, evidence=_to_evidence(obs.evidence),
+            snapshot,
+            observed_kind=obs.observed_kind,
+            subject_kind=obs.subject_kind,
+            subject_key=obs.subject_key,
+            referent_text=obs.referent_text,
+            ordinal=obs.ordinal,
+            evidence=_to_evidence(obs.evidence),
         )
     for diag in result.diagnostics:
         store.add_diagnostic(
-            snapshot, code=diag.code, category=diag.category, severity=diag.severity,
-            message=diag.message, producer="typescript-ast@1.2.0", path=diag.path,
-            span=diag.span, subject=diag.subject, details=diag.details,
+            snapshot,
+            code=diag.code,
+            category=diag.category,
+            severity=diag.severity,
+            message=diag.message,
+            producer="typescript-ast@1.2.0",
+            path=diag.path,
+            span=diag.span,
+            subject=diag.subject,
+            details=diag.details,
         )
 
     sealed = store.seal(snapshot)
@@ -103,12 +130,20 @@ def test_sibling_typescript_files_seal_into_one_snapshot(session):
         producer_version_set=["typescript-ast@1.2.0"],
     )
     store.add_node(
-        snapshot, node_kind="repository", stable_key="repo:root",
-        evidence=[Evidence(
-            path="src/auth/service.ts", start_line=1, end_line=1,
-            extractor="typescript-ast", extractor_version="1.2.0",
-            logical_line_count=1, granularity="file",
-        )],
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[
+            Evidence(
+                path="src/auth/service.ts",
+                start_line=1,
+                end_line=1,
+                extractor="typescript-ast",
+                extractor_version="1.2.0",
+                logical_line_count=1,
+                granularity="file",
+            )
+        ],
     )
     extractor = TypeScriptExtractor()
     files = {
@@ -119,15 +154,23 @@ def test_sibling_typescript_files_seal_into_one_snapshot(session):
         result = extractor.extract(path, source)
         for node in result.nodes:
             store.add_node(
-                snapshot, node_kind=node.node_kind, stable_key=node.stable_key,
-                name=node.name, language=node.language, properties=node.properties,
+                snapshot,
+                node_kind=node.node_kind,
+                stable_key=node.stable_key,
+                name=node.name,
+                language=node.language,
+                properties=node.properties,
                 evidence=[_to_evidence(e) for e in node.evidence],
             )
         for obs in result.observations:
             store.add_observation(
-                snapshot, observed_kind=obs.observed_kind, subject_kind=obs.subject_kind,
-                subject_key=obs.subject_key, referent_text=obs.referent_text,
-                ordinal=obs.ordinal, evidence=_to_evidence(obs.evidence),
+                snapshot,
+                observed_kind=obs.observed_kind,
+                subject_kind=obs.subject_kind,
+                subject_key=obs.subject_key,
+                referent_text=obs.referent_text,
+                ordinal=obs.ordinal,
+                evidence=_to_evidence(obs.evidence),
             )
 
     sealed = store.seal(snapshot)

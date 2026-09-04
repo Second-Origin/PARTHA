@@ -139,7 +139,13 @@ def _zip_bytes(files: dict[str, str]) -> bytes:
 def _upload_sample(client, headers: dict[str, str]) -> str:
     response = client.post(
         "/repositories/upload",
-        files={"file": ("sample.zip", _zip_bytes({"sample/package.json": '{"dependencies":{}}'}), "application/octet-stream")},
+        files={
+            "file": (
+                "sample.zip",
+                _zip_bytes({"sample/package.json": '{"dependencies":{}}'}),
+                "application/octet-stream",
+            )
+        },
         headers=headers,
     )
     assert response.status_code == 201, response.text
@@ -423,7 +429,12 @@ def test_configuration_save_is_validated_before_database_mutation(client):
 
     db = SessionLocal()
     try:
-        assert db.scalars(select(AiProviderConfigRecord).where(AiProviderConfigRecord.owner_id == auth["user"]["id"])).first() is None
+        assert (
+            db.scalars(
+                select(AiProviderConfigRecord).where(AiProviderConfigRecord.owner_id == auth["user"]["id"])
+            ).first()
+            is None
+        )
     finally:
         db.close()
 
@@ -566,9 +577,7 @@ def test_real_tls_handshake_uses_original_hostname_for_sni_and_verification(tmp_
         observed_sni: list[str | None] = []
         server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         server_context.load_cert_chain(certificate_path, key_path)
-        server_context.set_servername_callback(
-            lambda _socket, server_name, _context: observed_sni.append(server_name)
-        )
+        server_context.set_servername_callback(lambda _socket, server_name, _context: observed_sni.append(server_name))
 
         async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             try:
@@ -617,9 +626,7 @@ def test_real_tls_handshake_rejects_certificate_for_wrong_hostname(tmp_path: Pat
         observed_sni: list[str | None] = []
         server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         server_context.load_cert_chain(certificate_path, key_path)
-        server_context.set_servername_callback(
-            lambda _socket, server_name, _context: observed_sni.append(server_name)
-        )
+        server_context.set_servername_callback(lambda _socket, server_name, _context: observed_sni.append(server_name))
 
         async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             try:
@@ -765,13 +772,17 @@ def test_persisted_unsafe_configuration_and_all_ai_routes_cannot_bypass_policy(c
     assert test_response.status_code == 422
 
     for path in ("/ai/query",):
-        response = client.post(path, json={"repositoryId": repository_id, "query": "Summarize"}, headers=auth["headers"])
+        response = client.post(
+            path, json={"repositoryId": repository_id, "query": "Summarize"}, headers=auth["headers"]
+        )
         assert response.status_code == 422
         assert "unapproved.example" not in response.text
 
 
 def test_policy_denials_never_include_url_or_resolved_address():
-    policy = ProviderEgressPolicy(mode="hosted", allowed_base_urls=["https://provider.example"], resolver=MutableResolver(["127.0.0.1"]))
+    policy = ProviderEgressPolicy(
+        mode="hosted", allowed_base_urls=["https://provider.example"], resolver=MutableResolver(["127.0.0.1"])
+    )
 
     with pytest.raises(DestinationPolicyError) as caught:
         policy.validate_config(AiProviderConfig(provider="ollama", base_url="https://provider.example"))

@@ -5,7 +5,6 @@ from uuid import uuid4
 import pytest
 
 from app.intelligence.query_service import IMPACT_MAX_DEPTH
-from tests.conftest import register_user
 
 
 def _seed_snapshot(owner_id: str, *, suffix: str = "one", schema_version: str = "ri.v1") -> tuple[str, str]:
@@ -45,9 +44,30 @@ def _seed_snapshot(owner_id: str, *, suffix: str = "one", schema_version: str = 
             return Evidence(path, start, end, producer, "1.0.0", logical_line_count=40)
 
         store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[evidence("README.md", 1, 2)])
-        store.add_node(snapshot, node_kind="file", stable_key="file:src/app.py", name="app.py", language="python", evidence=[evidence("src/app.py", 1, 40)])
-        store.add_node(snapshot, node_kind="symbol", stable_key=f"src/app.py::a_{suffix}", name=f"a_{suffix}", language="python", evidence=[evidence("src/app.py", 4, 6)])
-        store.add_node(snapshot, node_kind="symbol", stable_key=f"src/app.py::z_{suffix}", name=f"z_{suffix}", language="python", evidence=[evidence("src/app.py", 10, 12)])
+        store.add_node(
+            snapshot,
+            node_kind="file",
+            stable_key="file:src/app.py",
+            name="app.py",
+            language="python",
+            evidence=[evidence("src/app.py", 1, 40)],
+        )
+        store.add_node(
+            snapshot,
+            node_kind="symbol",
+            stable_key=f"src/app.py::a_{suffix}",
+            name=f"a_{suffix}",
+            language="python",
+            evidence=[evidence("src/app.py", 4, 6)],
+        )
+        store.add_node(
+            snapshot,
+            node_kind="symbol",
+            stable_key=f"src/app.py::z_{suffix}",
+            name=f"z_{suffix}",
+            language="python",
+            evidence=[evidence("src/app.py", 10, 12)],
+        )
         observation = store.add_observation(
             snapshot,
             observed_kind="import",
@@ -227,10 +247,14 @@ def _seed_duplicate_heavy_impact_snapshot(owner_id: str) -> tuple[str, str]:
         store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[evidence(1)])
         for number in range(4):
             key = f"file:frontier/{number:02d}.py"
-            store.add_node(snapshot, node_kind="file", stable_key=key, name=key.rsplit("/", 1)[-1], evidence=[evidence(number + 2)])
+            store.add_node(
+                snapshot, node_kind="file", stable_key=key, name=key.rsplit("/", 1)[-1], evidence=[evidence(number + 2)]
+            )
         for number in range(96):
             key = f"file:shared/{number:03d}.py"
-            store.add_node(snapshot, node_kind="file", stable_key=key, name=key.rsplit("/", 1)[-1], evidence=[evidence(number + 6)])
+            store.add_node(
+                snapshot, node_kind="file", stable_key=key, name=key.rsplit("/", 1)[-1], evidence=[evidence(number + 6)]
+            )
         store.add_node(
             snapshot,
             node_kind="file",
@@ -265,9 +289,9 @@ def _seed_duplicate_heavy_impact_snapshot(owner_id: str) -> tuple[str, str]:
         for number in range(4):
             edge("repo:root", f"file:frontier/{number:02d}.py", 103 + number)
         for number in range(96):
-            edge(f"file:frontier/00.py", f"file:shared/{number:03d}.py", 107 + number)
+            edge("file:frontier/00.py", f"file:shared/{number:03d}.py", 107 + number)
         for number in range(13):
-            edge(f"file:frontier/01.py", f"file:shared/{number:03d}.py", 203 + number)
+            edge("file:frontier/01.py", f"file:shared/{number:03d}.py", 203 + number)
         edge("file:frontier/03.py", "file:overflow.py", 216)
         return repository_id, store.seal(snapshot).snapshot_id
     finally:
@@ -280,7 +304,16 @@ def test_snapshot_query_endpoints_are_authenticated_owner_scoped_and_filesystem_
     _, alice_snapshot = _seed_snapshot(alice["user"]["id"])
     _, bob_snapshot = _seed_snapshot(bob["user"]["id"], suffix="two")
 
-    endpoints = ["", "/symbols", "/neighbours?nodeKey=repo:root", "/impact?nodeKey=repo:root", "/references", "/assertions", "/paths", "/evidence"]
+    endpoints = [
+        "",
+        "/symbols",
+        "/neighbours?nodeKey=repo:root",
+        "/impact?nodeKey=repo:root",
+        "/references",
+        "/assertions",
+        "/paths",
+        "/evidence",
+    ]
     for endpoint in endpoints:
         unauthenticated = client.get(f"/intelligence/v1/snapshots/{alice_snapshot}{endpoint}")
         assert unauthenticated.status_code == 401
@@ -316,10 +349,19 @@ def test_snapshot_query_mappings_and_deterministic_pagination(client, make_auth_
     assert first.json()["data"][0]["stableKey"] == "src/app.py::a_one"
     assert second.json()["data"][0]["stableKey"] == "src/app.py::z_one"
     assert first.json()["data"][0]["truthClass"] == "observed"
-    assert first.json()["data"][0]["evidence"] == [{
-        "schemaVersion": "ri.v1", "factKind": "node", "factId": "src/app.py::a_one", "path": "src/app.py",
-        "startLine": 4, "endLine": 6, "granularity": "span", "extractor": "inventory", "extractorVersion": "1.0.0",
-    }]
+    assert first.json()["data"][0]["evidence"] == [
+        {
+            "schemaVersion": "ri.v1",
+            "factKind": "node",
+            "factId": "src/app.py::a_one",
+            "path": "src/app.py",
+            "startLine": 4,
+            "endLine": 6,
+            "granularity": "span",
+            "extractor": "inventory",
+            "extractorVersion": "1.0.0",
+        }
+    ]
 
     neighbours = client.get(f"{base}/neighbours?nodeKey=src/app.py::a_one", headers=owner["headers"])
     assert neighbours.status_code == 200
@@ -356,7 +398,16 @@ def test_query_rejects_owner_visible_unsupported_schema_without_cross_owner_disc
     _, snapshot_id = _seed_snapshot(owner["user"]["id"], schema_version="ri.v2")
     path = f"/intelligence/v1/snapshots/{snapshot_id}"
 
-    for suffix in ["", "/symbols", "/neighbours?nodeKey=repo:root", "/impact?nodeKey=repo:root", "/references", "/assertions", "/paths", "/evidence"]:
+    for suffix in [
+        "",
+        "/symbols",
+        "/neighbours?nodeKey=repo:root",
+        "/impact?nodeKey=repo:root",
+        "/references",
+        "/assertions",
+        "/paths",
+        "/evidence",
+    ]:
         rejected = client.get(f"{path}{suffix}", headers=owner["headers"])
         assert rejected.status_code == 422
         assert rejected.json()["code"] == "unsupported_schema_version"
@@ -409,9 +460,7 @@ def test_impact_query_returns_bounded_direct_and_transitive_relationships_with_p
     ]
     assert [item["depth"] for item in depth_two.json()["dependents"]["data"]] == [1, 1, 2]
     assert "file:src/a.py" not in {
-        item["nodeKey"]
-        for direction in ("dependencies", "dependents")
-        for item in depth_two.json()[direction]["data"]
+        item["nodeKey"] for direction in ("dependencies", "dependents") for item in depth_two.json()[direction]["data"]
     }
     first_hop = depth_two.json()["dependencies"]["data"][0]
     assert first_hop["via"]["predicate"] == "imports"

@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from benchmark import determinism as determinism_module
 from benchmark import runner
 from benchmark.determinism import DeterminismResult
 from benchmark.facts import EvidenceSpan, Fact
@@ -75,13 +74,26 @@ class BadCitationAdapter:
         for index, fact in enumerate(facts):
             if fact.evidence:
                 span = fact.evidence[0]
-                broken = EvidenceSpan(span.path, span.start_line, 99999, span.extractor, span.extractor_version, span.granularity)
+                broken = EvidenceSpan(
+                    span.path, span.start_line, 99999, span.extractor, span.extractor_version, span.granularity
+                )
                 facts[index] = Fact(
-                    fact_type=fact.fact_type, kind=fact.kind, subject=fact.subject, object=fact.object,
-                    predicate=fact.predicate, name=fact.name, language=fact.language,
-                    referent=fact.referent, ordinal=fact.ordinal, truth_class=fact.truth_class,
-                    value=fact.value, severity=fact.severity, category=fact.category,
-                    message=fact.message, producer=fact.producer, evidence=(broken,),
+                    fact_type=fact.fact_type,
+                    kind=fact.kind,
+                    subject=fact.subject,
+                    object=fact.object,
+                    predicate=fact.predicate,
+                    name=fact.name,
+                    language=fact.language,
+                    referent=fact.referent,
+                    ordinal=fact.ordinal,
+                    truth_class=fact.truth_class,
+                    value=fact.value,
+                    severity=fact.severity,
+                    category=fact.category,
+                    message=fact.message,
+                    producer=fact.producer,
+                    evidence=(broken,),
                     details=fact.details,
                 )
                 break
@@ -150,8 +162,9 @@ def test_a_support_matrix_mismatch_fails_the_build(tmp_path: Path):
 
 def test_a_determinism_break_fails_the_build(monkeypatch):
     def fake_check(fixture, db_path):
-        return DeterminismResult(fixture.fixture_id, "sha256:" + "a" * 64, "sha256:" + "b" * 64,
-                                 "sha256:" + "a" * 64, "sha256:" + "a" * 64)
+        return DeterminismResult(
+            fixture.fixture_id, "sha256:" + "a" * 64, "sha256:" + "b" * 64, "sha256:" + "a" * 64, "sha256:" + "a" * 64
+        )
 
     monkeypatch.setattr(runner, "check_fixture", fake_check)
     result = runner.run()

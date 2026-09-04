@@ -28,7 +28,13 @@ def _zip_bytes(files: dict[str, str]) -> bytes:
 def _upload_sample(client, headers: dict) -> str:
     response = client.post(
         "/repositories/upload",
-        files={"file": ("sample.zip", _zip_bytes({"sample/package.json": '{"dependencies":{}}'}), "application/octet-stream")},
+        files={
+            "file": (
+                "sample.zip",
+                _zip_bytes({"sample/package.json": '{"dependencies":{}}'}),
+                "application/octet-stream",
+            )
+        },
         headers=headers,
     )
     assert response.status_code == 201, response.text

@@ -24,16 +24,11 @@ def test_jsx_route_path_becomes_route_observation():
 
 
 def test_dynamic_jsx_route_path_is_diagnostic_not_a_literal_route():
-    source = (
-        "const routePath = '/settings';\n"
-        "const x = <Route path={routePath} element={<Settings />} />;\n"
-    )
+    source = "const routePath = '/settings';\nconst x = <Route path={routePath} element={<Settings />} />;\n"
     result = EXTRACTOR.extract("src/app/routes/tree.tsx", source.encode("utf-8"))
 
     assert [
-        observation
-        for observation in result.observations
-        if observation.observed_kind in {"route", "route_handler"}
+        observation for observation in result.observations if observation.observed_kind in {"route", "route_handler"}
     ] == []
     assert [node for node in result.nodes if node.name == "route"] == []
     assert [
@@ -74,11 +69,7 @@ def test_non_route_jsx_component_path_attribute_is_not_a_route():
 
 
 def test_nested_router_children_are_routes():
-    source = (
-        "export const router = createBrowserRouter([\n"
-        "  { path: '/', children: [{ path: '/nested' }] },\n"
-        "]);\n"
-    )
+    source = "export const router = createBrowserRouter([\n  { path: '/', children: [{ path: '/nested' }] },\n]);\n"
     assert sorted(_routes("src/app/routes/router.ts", source)) == ["/", "/nested"]
 
 
@@ -106,10 +97,7 @@ def test_router_options_argument_is_not_a_route_table():
 
 def test_router_options_argument_ignored_while_route_table_still_read():
     source = (
-        "const router = createBrowserRouter(\n"
-        "  [{ path: '/login' }],\n"
-        "  { path: '/not-a-route', future: {} },\n"
-        ");\n"
+        "const router = createBrowserRouter(\n  [{ path: '/login' }],\n  { path: '/not-a-route', future: {} },\n);\n"
     )
     assert _routes("src/app/routes/router.ts", source) == ["/login"]
 
@@ -117,7 +105,6 @@ def test_router_options_argument_ignored_while_route_table_still_read():
 def test_route_inside_createbrowserrouter_variable_is_not_matched_elsewhere():
     # A `path` key in an unrelated object in the same file stays unmatched.
     source = (
-        "export const router = createBrowserRouter([{ path: '/login' }]);\n"
-        "const opts = { path: '/not-a-route' };\n"
+        "export const router = createBrowserRouter([{ path: '/login' }]);\nconst opts = { path: '/not-a-route' };\n"
     )
     assert _routes("src/app/routes/router.ts", source) == ["/login"]

@@ -20,7 +20,7 @@ _SOURCES = {
         b"from fastapi import FastAPI, Depends\n"
         b"from src.dependencies import get_current_user\n\n"
         b"app = FastAPI()\n\n\n"
-        b"@app.get(\"/me\")\n"
+        b'@app.get("/me")\n'
         b"def read_me(user=Depends(get_current_user)):\n"
         b"    return user\n"
     ),
@@ -64,7 +64,10 @@ def _persist_snapshot(repository_id: str, sources: dict[str, bytes], *, schema_v
     runs = pipeline.run(sources)
     producer_version_set = sorted(
         {run.producer for run in runs}
-        | {f"{RelationshipResolver.name}@{RelationshipResolver.version}", f"{RoleClassifier.name}@{RoleClassifier.version}"}
+        | {
+            f"{RelationshipResolver.name}@{RelationshipResolver.version}",
+            f"{RoleClassifier.name}@{RoleClassifier.version}",
+        }
     )
 
     with SessionLocal() as session:

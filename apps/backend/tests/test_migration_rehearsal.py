@@ -116,8 +116,7 @@ def test_postgres_rehearsal_redacts_credentials_on_a_real_connection_failure():
         **os.environ,
         "PARTHA_MIGRATION_REHEARSAL_CONFIRM": "disposable",
         "PARTHA_MIGRATION_REHEARSAL_PG_URL": (
-            "postgresql+psycopg://rehearsal-user:should-not-appear-in-output"
-            "@db.example.invalid/postgres"
+            "postgresql+psycopg://rehearsal-user:should-not-appear-in-output@db.example.invalid/postgres"
         ),
     }
     result = subprocess.run(

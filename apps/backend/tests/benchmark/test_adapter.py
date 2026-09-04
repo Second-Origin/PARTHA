@@ -104,9 +104,7 @@ def test_duplicate_symbols_observations_properties_and_provenance_are_preserved(
 def test_real_source_size_policy_emits_limit_diagnostic(tmp_path: Path):
     _write(tmp_path, "src/large.py", b"x = 1\n" * 5)
 
-    facts = RealExtractionAdapter().extract(
-        _fixture(tmp_path, max_source_bytes=8)
-    )
+    facts = RealExtractionAdapter().extract(_fixture(tmp_path, max_source_bytes=8))
 
     diagnostic = next(fact for fact in facts if fact.kind == "RI-LIMIT-SKIP")
     assert diagnostic.producer == "repository-inventory@1.1.0"

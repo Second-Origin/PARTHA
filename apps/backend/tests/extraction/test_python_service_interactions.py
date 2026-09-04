@@ -67,9 +67,7 @@ def test_a_client_object_inherits_the_library_method_surface(setup):
 
 def test_a_request_call_reads_its_method_from_a_literal_argument():
     positional = _extract('import requests\n\nrequests.request("DELETE", "https://api.example.com/v1/1")\n')
-    keyword = _extract(
-        'import requests\n\nrequests.request(method="patch", url="https://api.example.com/v1/1")\n'
-    )
+    keyword = _extract('import requests\n\nrequests.request(method="patch", url="https://api.example.com/v1/1")\n')
 
     assert _http_calls(positional) == [("DELETE|https://api.example.com|/v1/1", 3)]
     # The method token is canonicalized; the destination is not.
@@ -84,9 +82,7 @@ def test_a_url_keyword_argument_is_read_like_the_positional_one():
 
 def test_one_origin_is_one_service_however_many_call_sites_reach_it():
     result = _extract(
-        "import requests\n\n"
-        'requests.get("https://api.example.com/a")\n'
-        'requests.post("https://api.example.com/b")\n'
+        'import requests\n\nrequests.get("https://api.example.com/a")\nrequests.post("https://api.example.com/b")\n'
     )
 
     assert _services(result) == ["svc:https://api.example.com"]
@@ -119,8 +115,7 @@ def test_origins_are_normalized_so_one_service_has_one_identity(url, expected):
 
 def test_query_strings_and_credentials_never_enter_a_stored_fact():
     result = _extract(
-        "import requests\n\n"
-        'requests.get("https://user:pa55@api.example.com/v1/users?api_key=secret&x=1")\n'
+        'import requests\n\nrequests.get("https://user:pa55@api.example.com/v1/users?api_key=secret&x=1")\n'
     )
 
     referent, _ = _http_calls(result)[0]

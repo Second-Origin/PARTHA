@@ -241,16 +241,36 @@ def to_markdown(report: BenchmarkReport) -> str:
         lines.extend(
             _table(
                 ["Scope", "TP", "FP", "FN", "Precision", "Recall"],
-                [["overall", str(overall.true_positives), str(overall.false_positives),
-                  str(overall.false_negatives), _ratio(overall.precision), _ratio(overall.recall)]]
+                [
+                    [
+                        "overall",
+                        str(overall.true_positives),
+                        str(overall.false_positives),
+                        str(overall.false_negatives),
+                        _ratio(overall.precision),
+                        _ratio(overall.recall),
+                    ]
+                ]
                 + [
-                    [f"lang:{lang}", str(c.true_positives), str(c.false_positives), str(c.false_negatives),
-                     _ratio(c.precision), _ratio(c.recall)]
+                    [
+                        f"lang:{lang}",
+                        str(c.true_positives),
+                        str(c.false_positives),
+                        str(c.false_negatives),
+                        _ratio(c.precision),
+                        _ratio(c.recall),
+                    ]
                     for lang, c in sorted(score_report.by_language.items())
                 ]
                 + [
-                    [f"class:{fixture_class}", str(c.true_positives), str(c.false_positives),
-                     str(c.false_negatives), _ratio(c.precision), _ratio(c.recall)]
+                    [
+                        f"class:{fixture_class}",
+                        str(c.true_positives),
+                        str(c.false_positives),
+                        str(c.false_negatives),
+                        _ratio(c.precision),
+                        _ratio(c.recall),
+                    ]
                     for fixture_class, c in sorted(score_report.by_class.items())
                 ],
             )
@@ -266,13 +286,16 @@ def to_markdown(report: BenchmarkReport) -> str:
             )
             if actual_provenance.invalid:
                 lines.extend(
-                    ["", *_table(
-                        ["Fixture", "Subject", "Path", "Span", "Reason"],
-                        [
-                            [c.fixture_id, c.subject, c.path, f"{c.start_line}..{c.end_line}", c.reason]
-                            for c in actual_provenance.invalid
-                        ],
-                    )]
+                    [
+                        "",
+                        *_table(
+                            ["Fixture", "Subject", "Path", "Span", "Reason"],
+                            [
+                                [c.fixture_id, c.subject, c.path, f"{c.start_line}..{c.end_line}", c.reason]
+                                for c in actual_provenance.invalid
+                            ],
+                        ),
+                    ]
                 )
 
         lines += ["", "## False positives", ""]

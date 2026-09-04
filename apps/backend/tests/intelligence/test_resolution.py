@@ -39,8 +39,15 @@ def _store(session, producer_version_set: list[str] | None = None):
     session.add(owner)
     session.commit()
     repository = RepositoryRecord(
-        id=str(uuid4()), owner_id=owner.id, name="resolver", source="upload",
-        revision_kind="upload", revision_value=REVISION, local_path="/x", status="completed", file_tree=[],
+        id=str(uuid4()),
+        owner_id=owner.id,
+        name="resolver",
+        source="upload",
+        revision_kind="upload",
+        revision_value=REVISION,
+        local_path="/x",
+        status="completed",
+        file_tree=[],
     )
     session.add(repository)
     session.commit()
@@ -55,22 +62,30 @@ def _store(session, producer_version_set: list[str] | None = None):
 
 def _evidence(path: str, line: int = 1) -> Evidence:
     return Evidence(
-        path=path, start_line=line, end_line=line,
-        extractor=SOURCE_PRODUCER, extractor_version=SOURCE_VERSION,
+        path=path,
+        start_line=line,
+        end_line=line,
+        extractor=SOURCE_PRODUCER,
+        extractor_version=SOURCE_VERSION,
         logical_line_count=30,
     )
 
 
 def _node(store, snapshot, kind: str, key: str, *, name: str | None = None, path: str = "src/source.ts", line: int = 1):
-    return store.add_node(
-        snapshot, node_kind=kind, stable_key=key, name=name, evidence=[_evidence(path, line)]
-    )
+    return store.add_node(snapshot, node_kind=kind, stable_key=key, name=name, evidence=[_evidence(path, line)])
 
 
-def _observation(store, snapshot, *, kind: str, subject_kind: str, subject: str, referent: str | None, path: str, line: int):
+def _observation(
+    store, snapshot, *, kind: str, subject_kind: str, subject: str, referent: str | None, path: str, line: int
+):
     return store.add_observation(
-        snapshot, observed_kind=kind, subject_kind=subject_kind, subject_key=subject,
-        referent_text=referent, ordinal=1, evidence=_evidence(path, line),
+        snapshot,
+        observed_kind=kind,
+        subject_kind=subject_kind,
+        subject_key=subject,
+        referent_text=referent,
+        ordinal=1,
+        evidence=_evidence(path, line),
     )
 
 
@@ -94,16 +109,106 @@ def test_resolver_persists_all_supported_relationship_kinds(session):
     route = _node(store, snapshot, "symbol", "src/source.ts::(anonymous:route#1)", name="route", line=12)
     dependency = _node(store, snapshot, "dependency", "dep:npm:react", name="react", path="package.json", line=2)
 
-    _observation(store, snapshot, kind="definition", subject_kind="symbol", subject=caller.stable_key, referent=None, path="src/source.ts", line=2)
-    _observation(store, snapshot, kind="definition", subject_kind="symbol", subject=callee.stable_key, referent=None, path="src/target.ts", line=2)
-    _observation(store, snapshot, kind="definition", subject_kind="symbol", subject=interface.stable_key, referent=None, path="src/target.ts", line=4)
-    _observation(store, snapshot, kind="definition", subject_kind="symbol", subject=implementation.stable_key, referent=None, path="src/source.ts", line=7)
-    _observation(store, snapshot, kind="import", subject_kind="file", subject="file:src/source.ts", referent="./target", path="src/source.ts", line=1)
-    _observation(store, snapshot, kind="call", subject_kind="symbol", subject=caller.stable_key, referent=callee.stable_key, path="src/source.ts", line=3)
-    _observation(store, snapshot, kind="implements", subject_kind="symbol", subject=implementation.stable_key, referent=interface.stable_key, path="src/source.ts", line=7)
-    _observation(store, snapshot, kind="route", subject_kind="symbol", subject=route.stable_key, referent="/work", path="src/source.ts", line=12)
-    _observation(store, snapshot, kind="route_handler", subject_kind="symbol", subject=route.stable_key, referent=caller.stable_key, path="src/source.ts", line=12)
-    _observation(store, snapshot, kind="dependency", subject_kind="dependency", subject=dependency.stable_key, referent="react", path="package.json", line=2)
+    _observation(
+        store,
+        snapshot,
+        kind="definition",
+        subject_kind="symbol",
+        subject=caller.stable_key,
+        referent=None,
+        path="src/source.ts",
+        line=2,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="definition",
+        subject_kind="symbol",
+        subject=callee.stable_key,
+        referent=None,
+        path="src/target.ts",
+        line=2,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="definition",
+        subject_kind="symbol",
+        subject=interface.stable_key,
+        referent=None,
+        path="src/target.ts",
+        line=4,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="definition",
+        subject_kind="symbol",
+        subject=implementation.stable_key,
+        referent=None,
+        path="src/source.ts",
+        line=7,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="import",
+        subject_kind="file",
+        subject="file:src/source.ts",
+        referent="./target",
+        path="src/source.ts",
+        line=1,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="call",
+        subject_kind="symbol",
+        subject=caller.stable_key,
+        referent=callee.stable_key,
+        path="src/source.ts",
+        line=3,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="implements",
+        subject_kind="symbol",
+        subject=implementation.stable_key,
+        referent=interface.stable_key,
+        path="src/source.ts",
+        line=7,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="route",
+        subject_kind="symbol",
+        subject=route.stable_key,
+        referent="/work",
+        path="src/source.ts",
+        line=12,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="route_handler",
+        subject_kind="symbol",
+        subject=route.stable_key,
+        referent=caller.stable_key,
+        path="src/source.ts",
+        line=12,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="dependency",
+        subject_kind="dependency",
+        subject=dependency.stable_key,
+        referent="react",
+        path="package.json",
+        line=2,
+    )
 
     result = RelationshipResolver(store).resolve(snapshot)
     assert result.diagnostics_added == 0
@@ -142,8 +247,26 @@ def test_ambiguous_reference_is_a_warning_without_a_guessed_edge(session):
     caller = _node(store, snapshot, "symbol", "src/source.ts::caller", name="caller", line=2)
     _node(store, snapshot, "symbol", "src/shared.ts::shared", name="shared", path="src/shared.ts")
     _node(store, snapshot, "symbol", "src/shared.tsx::shared", name="shared", path="src/shared.tsx")
-    _observation(store, snapshot, kind="import_binding", subject_kind="file", subject="file:src/source.ts", referent="./shared|shared|shared", path="src/source.ts", line=1)
-    _observation(store, snapshot, kind="call", subject_kind="symbol", subject=caller.stable_key, referent="shared", path="src/source.ts", line=3)
+    _observation(
+        store,
+        snapshot,
+        kind="import_binding",
+        subject_kind="file",
+        subject="file:src/source.ts",
+        referent="./shared|shared|shared",
+        path="src/source.ts",
+        line=1,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="call",
+        subject_kind="symbol",
+        subject=caller.stable_key,
+        referent="shared",
+        path="src/source.ts",
+        line=3,
+    )
 
     result = RelationshipResolver(store).resolve(snapshot)
     assert result.edges_added == 0
@@ -166,7 +289,16 @@ def test_call_without_binding_does_not_borrow_a_repository_wide_name(session):
     _node(store, snapshot, "file", "file:src/source.ts")
     caller = _node(store, snapshot, "symbol", "src/source.ts::caller", name="caller", line=2)
     _node(store, snapshot, "symbol", "src/other.ts::helper", name="helper", path="src/other.ts")
-    _observation(store, snapshot, kind="call", subject_kind="symbol", subject=caller.stable_key, referent="helper", path="src/source.ts", line=3)
+    _observation(
+        store,
+        snapshot,
+        kind="call",
+        subject_kind="symbol",
+        subject=caller.stable_key,
+        referent="helper",
+        path="src/source.ts",
+        line=3,
+    )
 
     result = RelationshipResolver(store).resolve(snapshot)
     assert result.edges_added == 0
@@ -185,8 +317,26 @@ def test_broken_binding_does_not_fall_back_to_a_same_named_symbol(session):
     _node(store, snapshot, "file", "file:src/source.ts")
     caller = _node(store, snapshot, "symbol", "src/source.ts::caller", name="caller", line=2)
     _node(store, snapshot, "symbol", "src/other.ts::run", name="run", path="src/other.ts")
-    _observation(store, snapshot, kind="import_binding", subject_kind="file", subject="file:src/source.ts", referent="./missing|run|run", path="src/source.ts", line=1)
-    _observation(store, snapshot, kind="call", subject_kind="symbol", subject=caller.stable_key, referent="run", path="src/source.ts", line=3)
+    _observation(
+        store,
+        snapshot,
+        kind="import_binding",
+        subject_kind="file",
+        subject="file:src/source.ts",
+        referent="./missing|run|run",
+        path="src/source.ts",
+        line=1,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="call",
+        subject_kind="symbol",
+        subject=caller.stable_key,
+        referent="run",
+        path="src/source.ts",
+        line=3,
+    )
 
     result = RelationshipResolver(store).resolve(snapshot)
     assert result.edges_added == 0
@@ -206,11 +356,40 @@ def test_imported_route_handler_without_resolvable_binding_stays_unresolved(sess
     store, snapshot = _store(session)
     _node(store, snapshot, "repository", "repo:root")
     _node(store, snapshot, "file", "file:src/routes.ts", path="src/routes.ts")
-    route = _node(store, snapshot, "symbol", "src/routes.ts::(anonymous:route#1)", name="route", path="src/routes.ts", line=2)
+    route = _node(
+        store, snapshot, "symbol", "src/routes.ts::(anonymous:route#1)", name="route", path="src/routes.ts", line=2
+    )
     _node(store, snapshot, "symbol", "src/other.ts::Handler", name="Handler", path="src/other.ts")
-    _observation(store, snapshot, kind="route", subject_kind="symbol", subject=route.stable_key, referent="/x", path="src/routes.ts", line=2)
-    _observation(store, snapshot, kind="route_handler", subject_kind="symbol", subject=route.stable_key, referent="Handler", path="src/routes.ts", line=2)
-    _observation(store, snapshot, kind="import_binding", subject_kind="file", subject="file:src/routes.ts", referent="./missing|Handler|Handler", path="src/routes.ts", line=1)
+    _observation(
+        store,
+        snapshot,
+        kind="route",
+        subject_kind="symbol",
+        subject=route.stable_key,
+        referent="/x",
+        path="src/routes.ts",
+        line=2,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="route_handler",
+        subject_kind="symbol",
+        subject=route.stable_key,
+        referent="Handler",
+        path="src/routes.ts",
+        line=2,
+    )
+    _observation(
+        store,
+        snapshot,
+        kind="import_binding",
+        subject_kind="file",
+        subject="file:src/routes.ts",
+        referent="./missing|Handler|Handler",
+        path="src/routes.ts",
+        line=1,
+    )
 
     result = RelationshipResolver(store).resolve(snapshot)
     assert result.edges_added == 0
@@ -231,7 +410,16 @@ def test_implemented_interface_without_evidence_stays_unresolved(session):
     _node(store, snapshot, "file", "file:src/impl.ts", path="src/impl.ts")
     impl = _node(store, snapshot, "symbol", "src/impl.ts::Service", name="Service", path="src/impl.ts", line=2)
     _node(store, snapshot, "symbol", "src/other.ts::Contract", name="Contract", path="src/other.ts")
-    _observation(store, snapshot, kind="implements", subject_kind="symbol", subject=impl.stable_key, referent="Contract", path="src/impl.ts", line=2)
+    _observation(
+        store,
+        snapshot,
+        kind="implements",
+        subject_kind="symbol",
+        subject=impl.stable_key,
+        referent="Contract",
+        path="src/impl.ts",
+        line=2,
+    )
 
     result = RelationshipResolver(store).resolve(snapshot)
     assert result.edges_added == 0
@@ -245,7 +433,16 @@ def test_unresolved_import_is_preserved_as_a_warning(session):
     store, snapshot = _store(session)
     _node(store, snapshot, "repository", "repo:root")
     _node(store, snapshot, "file", "file:src/source.ts")
-    _observation(store, snapshot, kind="import", subject_kind="file", subject="file:src/source.ts", referent="./missing", path="src/source.ts", line=1)
+    _observation(
+        store,
+        snapshot,
+        kind="import",
+        subject_kind="file",
+        subject="file:src/source.ts",
+        referent="./missing",
+        path="src/source.ts",
+        line=1,
+    )
 
     result = RelationshipResolver(store).resolve(snapshot)
     assert result.edges_added == 0
@@ -268,7 +465,9 @@ def _persist_extraction(store, snapshot, result, producer: str):
             name=node.name,
             language=node.language,
             properties=node.properties,
-            ordered_array_keys=frozenset({"decorators"}) if node.properties and "decorators" in node.properties else frozenset(),
+            ordered_array_keys=frozenset({"decorators"})
+            if node.properties and "decorators" in node.properties
+            else frozenset(),
             evidence=[
                 Evidence(
                     path=evidence.path,
@@ -304,9 +503,12 @@ def _persist_extraction(store, snapshot, result, producer: str):
 
 def test_typescript_extractor_inputs_resolve_import_and_aliased_call(session):
     store, snapshot = _store(session, ["typescript-ast@1.2.0", RESOLVER_PRODUCER])
-    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/source.ts", 1, 1, "typescript-ast", "1.2.0", 3)
-    ])
+    store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[Evidence("src/source.ts", 1, 1, "typescript-ast", "1.2.0", 3)],
+    )
     extractor = TypeScriptExtractor()
     _persist_extraction(
         store,
@@ -333,18 +535,22 @@ def test_typescript_extractor_inputs_resolve_import_and_aliased_call(session):
 
 def test_python_extractor_route_inputs_resolve_to_the_decorated_handler(session):
     store, snapshot = _store(session, ["python-ast@1.1.0", RESOLVER_PRODUCER])
-    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("app/routes.py", 1, 1, "python-ast", "1.1.0", 3)
-    ])
-    store.add_node(snapshot, node_kind="file", stable_key="file:app/routes.py", evidence=[
-        Evidence("app/routes.py", 1, 3, "python-ast", "1.1.0", 3, "file")
-    ])
+    store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[Evidence("app/routes.py", 1, 1, "python-ast", "1.1.0", 3)],
+    )
+    store.add_node(
+        snapshot,
+        node_kind="file",
+        stable_key="file:app/routes.py",
+        evidence=[Evidence("app/routes.py", 1, 3, "python-ast", "1.1.0", 3, "file")],
+    )
     _persist_extraction(
         store,
         snapshot,
-        PythonExtractor().extract(
-            "app/routes.py", b"@router.get('/health')\ndef health():\n    return None\n"
-        ),
+        PythonExtractor().extract("app/routes.py", b"@router.get('/health')\ndef health():\n    return None\n"),
         "python-ast",
     )
 
@@ -365,9 +571,12 @@ def test_golden_ambiguous_call_fixture_emits_a_diagnostic_not_an_edge(session):
     # `calls` edge — never a guess at one of the same-named repository symbols.
     fixture = FIXTURE_ROOT / "ambiguous-call"
     store, snapshot = _store(session, ["typescript-ast@1.2.0", RESOLVER_PRODUCER])
-    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/source.ts", 1, 1, "typescript-ast", "1.2.0", 3)
-    ])
+    store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[Evidence("src/source.ts", 1, 1, "typescript-ast", "1.2.0", 3)],
+    )
     extractor = TypeScriptExtractor()
     for source_path in sorted(fixture.rglob("*.ts")):
         relative = source_path.relative_to(fixture).as_posix()
@@ -389,17 +598,27 @@ def _python_import_snapshot(session, source: bytes, *, files: list[str], depende
     """
 
     store, snapshot = _store(session, ["python-ast@1.1.0", RESOLVER_PRODUCER])
-    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("app/main.py", 1, 1, "python-ast", "1.1.0", 3)
-    ])
+    store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[Evidence("app/main.py", 1, 1, "python-ast", "1.1.0", 3)],
+    )
     for path in files:
-        store.add_node(snapshot, node_kind="file", stable_key=f"file:{path}", evidence=[
-            Evidence(path, 1, 1, "python-ast", "1.1.0", 1, "file")
-        ])
+        store.add_node(
+            snapshot,
+            node_kind="file",
+            stable_key=f"file:{path}",
+            evidence=[Evidence(path, 1, 1, "python-ast", "1.1.0", 1, "file")],
+        )
     for name in dependencies:
-        store.add_node(snapshot, node_kind="dependency", stable_key=f"dep:pypi:{name}", name=name, evidence=[
-            Evidence("pyproject.toml", 1, 1, "python-ast", "1.1.0", 1)
-        ])
+        store.add_node(
+            snapshot,
+            node_kind="dependency",
+            stable_key=f"dep:pypi:{name}",
+            name=name,
+            evidence=[Evidence("pyproject.toml", 1, 1, "python-ast", "1.1.0", 1)],
+        )
     _persist_extraction(store, snapshot, PythonExtractor().extract("app/main.py", source), "python-ast")
     return store, snapshot
 
@@ -421,8 +640,10 @@ def test_python_absolute_from_import_prefers_local_module_over_dependency(sessio
     # A `dep:pypi:pkg` node with the same package root must not replace the local
     # module once a local file candidate exists.
     store, snapshot = _python_import_snapshot(
-        session, b"from pkg.service import run\n",
-        files=["app/main.py", "pkg/service.py"], dependencies=["pkg"],
+        session,
+        b"from pkg.service import run\n",
+        files=["app/main.py", "pkg/service.py"],
+        dependencies=["pkg"],
     )
     result = RelationshipResolver(store).resolve(snapshot)
     assert result.diagnostics_added == 0
@@ -433,9 +654,7 @@ def test_python_absolute_from_import_prefers_local_module_over_dependency(sessio
 
 
 def test_python_absolute_from_import_without_module_or_dependency_is_unresolved(session):
-    store, snapshot = _python_import_snapshot(
-        session, b"from pkg.service import run\n", files=["app/main.py"]
-    )
+    store, snapshot = _python_import_snapshot(session, b"from pkg.service import run\n", files=["app/main.py"])
     result = RelationshipResolver(store).resolve(snapshot)
     assert result.edges_added == 0
     assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "imports"]
@@ -448,7 +667,8 @@ def test_python_absolute_from_import_with_two_module_candidates_is_ambiguous(ses
     # Both interpretations exist as files: `run` as a member of `pkg/service.py`
     # and `run` as the submodule `pkg/service/run.py`. Deterministically ambiguous.
     store, snapshot = _python_import_snapshot(
-        session, b"from pkg.service import run\n",
+        session,
+        b"from pkg.service import run\n",
         files=["app/main.py", "pkg/service.py", "pkg/service/run.py"],
     )
     result = RelationshipResolver(store).resolve(snapshot)
@@ -462,9 +682,12 @@ def test_python_absolute_from_import_with_two_module_candidates_is_ambiguous(ses
 
 def test_shadowed_typescript_parameter_does_not_resolve_to_same_file_global(session):
     store, snapshot = _store(session, ["typescript-ast@1.2.0", RESOLVER_PRODUCER])
-    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/main.ts", 1, 1, "typescript-ast", "1.2.0", 2)
-    ])
+    store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[Evidence("src/main.ts", 1, 1, "typescript-ast", "1.2.0", 2)],
+    )
     _persist_extraction(
         store,
         snapshot,
@@ -496,19 +719,24 @@ def test_shadowed_typescript_parameter_does_not_resolve_to_same_file_global(sess
 
 def test_shadowed_python_parameter_does_not_resolve_to_same_file_global(session):
     store, snapshot = _store(session, ["python-ast@1.1.0", RESOLVER_PRODUCER])
-    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("app/main.py", 1, 1, "python-ast", "1.1.0", 4)
-    ])
-    store.add_node(snapshot, node_kind="file", stable_key="file:app/main.py", evidence=[
-        Evidence("app/main.py", 1, 4, "python-ast", "1.1.0", 4, "file")
-    ])
+    store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[Evidence("app/main.py", 1, 1, "python-ast", "1.1.0", 4)],
+    )
+    store.add_node(
+        snapshot,
+        node_kind="file",
+        stable_key="file:app/main.py",
+        evidence=[Evidence("app/main.py", 1, 4, "python-ast", "1.1.0", 4, "file")],
+    )
     _persist_extraction(
         store,
         snapshot,
         PythonExtractor().extract(
             "app/main.py",
-            b"def target():\n    return 1\n"
-            b"def caller(target):\n    return target()\n",
+            b"def target():\n    return 1\ndef caller(target):\n    return target()\n",
         ),
         "python-ast",
     )
@@ -525,9 +753,12 @@ def test_shadowed_python_parameter_does_not_resolve_to_same_file_global(session)
 
 def test_default_imported_react_route_handler_resolves(session):
     store, snapshot = _store(session, ["typescript-ast@1.2.0", RESOLVER_PRODUCER])
-    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/routes.tsx", 1, 1, "typescript-ast", "1.2.0", 2)
-    ])
+    store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[Evidence("src/routes.tsx", 1, 1, "typescript-ast", "1.2.0", 2)],
+    )
     extractor = TypeScriptExtractor()
     _persist_extraction(
         store,
@@ -543,8 +774,7 @@ def test_default_imported_react_route_handler_resolves(session):
         snapshot,
         extractor.extract(
             "src/routes.tsx",
-            b"import Home from './Home';\n"
-            b"const routes = createBrowserRouter([{ path: '/', Component: Home }]);\n",
+            b"import Home from './Home';\nconst routes = createBrowserRouter([{ path: '/', Component: Home }]);\n",
         ),
         "typescript-ast",
     )
@@ -560,9 +790,12 @@ def test_default_imported_react_route_handler_resolves(session):
 
 def test_top_level_and_recursive_calls_resolve_without_dropping_self_edges(session):
     store, snapshot = _store(session, ["typescript-ast@1.2.0", RESOLVER_PRODUCER])
-    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/main.ts", 1, 1, "typescript-ast", "1.2.0", 4)
-    ])
+    store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[Evidence("src/main.ts", 1, 1, "typescript-ast", "1.2.0", 4)],
+    )
     _persist_extraction(
         store,
         snapshot,
@@ -594,9 +827,12 @@ def test_top_level_and_recursive_calls_resolve_without_dropping_self_edges(sessi
 
 def test_abstract_generic_implements_resolves_to_base_interface(session):
     store, snapshot = _store(session, ["typescript-ast@1.2.0", RESOLVER_PRODUCER])
-    store.add_node(snapshot, node_kind="repository", stable_key="repo:root", evidence=[
-        Evidence("src/worker.ts", 1, 1, "typescript-ast", "1.2.0", 2)
-    ])
+    store.add_node(
+        snapshot,
+        node_kind="repository",
+        stable_key="repo:root",
+        evidence=[Evidence("src/worker.ts", 1, 1, "typescript-ast", "1.2.0", 2)],
+    )
     _persist_extraction(
         store,
         snapshot,

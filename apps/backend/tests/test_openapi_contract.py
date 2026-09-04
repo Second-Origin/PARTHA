@@ -216,9 +216,7 @@ def test_openapi_has_success_examples_except_for_no_content_deletes(client):
         media_type = "text/plain" if key == ("GET", "/metrics") else "application/json"
         media = _response_media(operation, success_status, media_type)
         assert media.get("schema"), f"{key} lacks a success response schema"
-        assert media.get("example") is not None, (
-            f"{key} lacks a success response example"
-        )
+        assert media.get("example") is not None, f"{key} lacks a success response example"
 
 
 def test_readiness_documents_its_actual_non_error_503_payload(client):
@@ -239,7 +237,5 @@ def test_dependency_openapi_exposes_manifest_provenance_and_diagnostics(client):
     response = schemas["DependencyGraphResponse"]["properties"]
     assert response["manifestCount"]["type"] == "integer"
     assert response["diagnostics"]["items"] == {"$ref": "#/components/schemas/DependencyDiagnostic"}
-    example = _response_media(
-        _operations(document)[("GET", "/analysis/{repository_id}/dependencies")], 200
-    )["example"]
+    example = _response_media(_operations(document)[("GET", "/analysis/{repository_id}/dependencies")], 200)["example"]
     assert example["nodes"][0]["declarations"][0]["manifestPath"] == "apps/frontend/package.json"

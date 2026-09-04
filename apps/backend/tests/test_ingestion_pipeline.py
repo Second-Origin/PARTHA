@@ -150,9 +150,7 @@ def test_analysis_read_endpoints_return_typed_defaults_before_worker_runs(auth_c
 
     review_response = auth_client.get(f"/analysis/{repository_id}/review")
     error = assert_error_response(review_response, 404, "not_found")
-    assert error.message == (
-        "No sealed Repository Intelligence snapshot is available for this repository."
-    )
+    assert error.message == ("No sealed Repository Intelligence snapshot is available for this repository.")
     assert error.details == {"repositoryId": repository_id}
 
     # Read endpoints must not rebuild the missing compatibility model from disk.
@@ -186,12 +184,7 @@ def test_dependency_endpoint_reports_uncomputed_assessments_without_clean_claims
     assert any(node["name"] == "lodash" and node["version"] == "4.17.15" for node in payload["nodes"])
     assert payload["edges"]
 
-    serialized_keys = {
-        key
-        for value in _walk_json(payload)
-        if isinstance(value, dict)
-        for key in value
-    }
+    serialized_keys = {key for value in _walk_json(payload) if isinstance(value, dict) for key in value}
     assert serialized_keys.isdisjoint(
         {
             "has_vulnerabilities",
@@ -232,12 +225,12 @@ def test_dependency_endpoint_returns_nested_manifest_provenance_and_malformed_di
         "nested-dependencies.zip",
         _zip_bytes(
             {
-                "nested/apps/frontend/package.json": '''{
+                "nested/apps/frontend/package.json": """{
   "dependencies": {
     "react": "^18.3.0"
   }
 }
-''',
+""",
                 "nested/apps/backend/pyproject.toml": '[project]\ndependencies = ["fastapi>=0.115"]\n',
                 "nested/services/worker/requirements.txt": "fastapi==0.116\ncelery==5.4\n",
                 "nested/apps/broken/package.json": "{",

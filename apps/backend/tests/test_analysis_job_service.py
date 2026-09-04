@@ -17,7 +17,6 @@ from app.models.snapshot import RiSnapshot
 from app.services.analysis_job_service import (
     ANALYSIS_CONFIG_HASH,
     ANALYSIS_PRODUCER_VERSION_SET,
-    ANALYSIS_SCHEMA_VERSION,
     AnalysisJobService,
 )
 from app.workers.analysis_worker import AnalysisWorker, _StageContext
@@ -200,20 +199,21 @@ def _assert_submit_reconciles_worker_completion(factory) -> None:
         worker_session.close()
 
     with factory() as reader:
-        jobs = reader.scalars(
-            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
-        ).all()
+        jobs = reader.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).all()
         assert len(jobs) == 1
         assert jobs[0].status == "completed"
         assert jobs[0].snapshot_id is not None
-        assert reader.scalar(
-            select(func.count())
-            .select_from(RiSnapshot)
-            .where(
-                RiSnapshot.repository_id == record_id,
-                RiSnapshot.state == "completed",
+        assert (
+            reader.scalar(
+                select(func.count())
+                .select_from(RiSnapshot)
+                .where(
+                    RiSnapshot.repository_id == record_id,
+                    RiSnapshot.state == "completed",
+                )
             )
-        ) == 1
+            == 1
+        )
 
 
 def test_submit_is_atomic_against_worker_completion(session_factory):
@@ -298,9 +298,7 @@ def test_concurrent_completed_snapshot_submits_reconcile_to_one_job(session_fact
         session_b.close()
 
     with session_factory() as reader:
-        jobs = reader.scalars(
-            select(AnalysisJob).where(AnalysisJob.snapshot_id == snapshot_id)
-        ).all()
+        jobs = reader.scalars(select(AnalysisJob).where(AnalysisJob.snapshot_id == snapshot_id)).all()
         assert len(jobs) == 1
         assert jobs[0].status == "completed"
         assert reader.scalar(select(func.count()).select_from(RiSnapshot)) == 1
@@ -433,9 +431,7 @@ def test_cancel_reconciles_a_queued_to_running_claim_race(session_factory):
         worker_session.close()
 
     with session_factory() as reader:
-        job = reader.scalars(
-            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
-        ).one()
+        job = reader.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
         assert job.status == "cancelled"
         assert job.worker_id is None
         assert job.lease_expires_at is None
@@ -476,9 +472,7 @@ def test_cancel_does_not_overwrite_a_worker_completion_race(session_factory):
         worker_session.close()
 
     with session_factory() as reader:
-        job = reader.scalars(
-            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
-        ).one()
+        job = reader.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
         assert job.status == "completed"
         assert job.cancel_requested is False
         assert job.worker_id is None
@@ -518,9 +512,7 @@ def test_accepted_cancel_wins_after_the_workers_final_cancel_check(session_facto
         cancel_session.close()
 
     with session_factory() as reader:
-        job = reader.scalars(
-            select(AnalysisJob).where(AnalysisJob.repository_id == record_id)
-        ).one()
+        job = reader.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
         assert job.status == "cancelled"
         assert job.completed_at is not None
         assert job.worker_id is None

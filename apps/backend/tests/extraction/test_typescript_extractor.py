@@ -87,11 +87,7 @@ def test_bare_global_calls_produce_no_call_observation():
 
 def test_genuinely_undefined_call_is_unaffected_by_the_global_skip():
     result = _extract("src/util.ts", "function caller() {\n  return someUndefinedThing();\n}\n")
-    calls = [
-        observation.referent_text
-        for observation in result.observations
-        if observation.observed_kind == "call"
-    ]
+    calls = [observation.referent_text for observation in result.observations if observation.observed_kind == "call"]
     assert calls == ["someUndefinedThing"]
 
 
@@ -101,10 +97,7 @@ def test_function_scoped_shadow_of_a_global_still_yields_a_call_observation():
     global skip must not swallow it just because the name is also a global."""
     result = _extract(
         "src/util.ts",
-        "function caller() {\n"
-        "  function String(value: unknown) { return value; }\n"
-        "  return String('hi');\n"
-        "}\n",
+        "function caller() {\n  function String(value: unknown) { return value; }\n  return String('hi');\n}\n",
     )
     calls = [
         observation.referent_text

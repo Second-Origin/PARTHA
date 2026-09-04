@@ -191,8 +191,8 @@ jobs:
       - name: Static analysis
         working-directory: apps/backend
         run: |
-          ruff check app scripts
-          ruff format --check app scripts
+          ruff check app scripts tests
+          ruff format --check app scripts tests
           mypy app scripts
 
       - name: Validate capability registry and README

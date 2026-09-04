@@ -29,7 +29,9 @@ def _fixture(directory: Path) -> LoadedFixture:
     )
 
 
-def _node(path: str, start: int, end: int, *, extractor: str = "python-ast", version: str = "1.1.0", granularity: str = "span") -> Fact:
+def _node(
+    path: str, start: int, end: int, *, extractor: str = "python-ast", version: str = "1.1.0", granularity: str = "span"
+) -> Fact:
     return Fact(
         fact_type="node",
         kind="symbol",

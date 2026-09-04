@@ -30,9 +30,7 @@ _SOURCES = {
         b"    return UserService(token)\n"
     ),
     "src/services.py": (
-        b"from src.models import UserModel\n\n\n"
-        b"def UserService(token: str) -> dict:\n"
-        b"    return UserModel(token)\n"
+        b"from src.models import UserModel\n\n\ndef UserService(token: str) -> dict:\n    return UserModel(token)\n"
     ),
     "src/models.py": b"def UserModel(token: str) -> dict:\n    return {'token': token}\n",
     "src/routes.py": (
@@ -88,9 +86,7 @@ def test_evidence_backed_prototype_journey(auth_client, make_auth_headers):
     assert architecture["nodes"]
 
     # 6. The authentication question returns an evidence-backed answer.
-    explanation = auth_client.get(
-        f"/analysis/{repository_id}/architecture/authentication"
-    ).json()
+    explanation = auth_client.get(f"/analysis/{repository_id}/architecture/authentication").json()
     assert explanation["status"] == "ready"
     assert explanation["snapshotId"] == snapshot_id
     claims = explanation["claims"]
@@ -136,9 +132,7 @@ def test_evidence_backed_prototype_journey(auth_client, make_auth_headers):
     assert forged["content"] is None
 
     # 10. The revision manifest names that same snapshot and verifies.
-    manifest_response = auth_client.get(
-        f"/analysis/{repository_id}/revision-manifest"
-    ).json()
+    manifest_response = auth_client.get(f"/analysis/{repository_id}/revision-manifest").json()
     manifest = manifest_response["manifest"]
     assert manifest["snapshotId"] == snapshot_id
     assert manifest["revisionValue"] == revision["value"]
@@ -208,9 +202,7 @@ def test_journey_reports_honest_state_before_a_snapshot_exists(auth_client):
     # repository metadata (#217) -- the same honest contract as the manifest below.
     assert auth_client.get(f"/analysis/{repository_id}/architecture").status_code == 404
 
-    explanation = auth_client.get(
-        f"/analysis/{repository_id}/architecture/authentication"
-    ).json()
+    explanation = auth_client.get(f"/analysis/{repository_id}/architecture/authentication").json()
     assert explanation["status"] == "missing_snapshot"
     assert explanation["claims"] == []
 

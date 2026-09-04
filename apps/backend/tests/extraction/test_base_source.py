@@ -2,10 +2,10 @@ from app.extraction.base import decode_source, logical_line_count
 
 
 def test_logical_line_count_matches_rfc_convention():
-    assert logical_line_count("") == 1          # empty file = 1 logical line
+    assert logical_line_count("") == 1  # empty file = 1 logical line
     assert logical_line_count("a") == 1
-    assert logical_line_count("a\n") == 2       # trailing newline = final empty line
-    assert logical_line_count("a\r\nb") == 2    # \r\n counts once (only \n)
+    assert logical_line_count("a\n") == 2  # trailing newline = final empty line
+    assert logical_line_count("a\r\nb") == 2  # \r\n counts once (only \n)
     assert logical_line_count("a\nb\nc") == 3
 
 

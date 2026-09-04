@@ -23,6 +23,7 @@ from pathlib import Path
 from benchmark import paths
 from benchmark.adapter import ExtractionAdapter, default_adapter
 from benchmark.determinism import DeterminismResult, check_fixture
+from benchmark.facts import Fact
 from benchmark.loader import (
     LoadedFixture,
     ManifestError,
@@ -71,6 +72,7 @@ class ScoringOutcome:
     available: bool
     report: ScoreReport | None = None
     actual_provenance: ProvenanceResult | None = None
+
 
 @dataclass
 class BenchmarkReport:
@@ -173,21 +175,18 @@ class BenchmarkReport:
             overall = self.scoring.report.overall
             if overall.precision < self.thresholds.precision:
                 reasons.append(
-                    f"scoring: precision {float(overall.precision):.4f} is below "
-                    f"{float(self.thresholds.precision):.4f}"
+                    f"scoring: precision {float(overall.precision):.4f} is below {float(self.thresholds.precision):.4f}"
                 )
             if overall.recall < self.thresholds.recall:
                 reasons.append(
-                    f"scoring: recall {float(overall.recall):.4f} is below "
-                    f"{float(self.thresholds.recall):.4f}"
+                    f"scoring: recall {float(overall.recall):.4f} is below {float(self.thresholds.recall):.4f}"
                 )
             if self.scoring.actual_provenance is None:
                 reasons.append("real extractor provenance: no citation validation result was produced")
             else:
                 for check in self.scoring.actual_provenance.invalid:
                     reasons.append(
-                        f"real extractor provenance: {check.fixture_id} {check.subject} "
-                        f"{check.path} — {check.reason}"
+                        f"real extractor provenance: {check.fixture_id} {check.subject} {check.path} — {check.reason}"
                     )
         return reasons
 
@@ -198,7 +197,9 @@ def _corpus_summary(fixtures: list[LoadedFixture]) -> CorpusSummary:
     for fixture in fixtures:
         by_class[fixture.fixture_class] = by_class.get(fixture.fixture_class, 0) + 1
         by_language[fixture.language] = by_language.get(fixture.language, 0) + 1
-    return CorpusSummary(total=len(fixtures), by_class=dict(sorted(by_class.items())), by_language=dict(sorted(by_language.items())))
+    return CorpusSummary(
+        total=len(fixtures), by_class=dict(sorted(by_class.items())), by_language=dict(sorted(by_language.items()))
+    )
 
 
 def _covered_constructs(fixtures: list[LoadedFixture]) -> set[str]:
@@ -237,7 +238,9 @@ def _diagnostics_check(fixtures: list[LoadedFixture], support_matrix: SupportMat
         if spec.supported or spec.expected_diagnostic is None:
             continue
         if (cid, spec.expected_diagnostic) not in declared:
-            missing.append(f"unsupported construct {cid!r} requires a {spec.expected_diagnostic} diagnostic in some fixture")
+            missing.append(
+                f"unsupported construct {cid!r} requires a {spec.expected_diagnostic} diagnostic in some fixture"
+            )
     return DiagnosticsCheck(missing=missing)
 
 

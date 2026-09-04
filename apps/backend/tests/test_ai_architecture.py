@@ -45,37 +45,41 @@ def _record(root: Path) -> RepositoryRecord:
 
 def _projection(*, conflict: bool = False) -> ProductSnapshotProjection:
     declarations = (
-        SnapshotDependencyDeclaration(
-            version="==2.31.0",
-            dependency_type="production",
-            manifest_path="requirements.txt",
-            workspace_path=".",
-            start_line=1,
-            end_line=1,
-            extractor="dependency-manifest",
-            extractor_version="1",
-        ),
-        SnapshotDependencyDeclaration(
-            version=">=2.32.0",
-            dependency_type="production",
-            manifest_path="requirements.txt",
-            workspace_path=".",
-            start_line=2,
-            end_line=2,
-            extractor="dependency-manifest",
-            extractor_version="1",
-        ),
-    ) if conflict else (
-        SnapshotDependencyDeclaration(
-            version="^18.0.0",
-            dependency_type="production",
-            manifest_path="package.json",
-            workspace_path=".",
-            start_line=1,
-            end_line=1,
-            extractor="dependency-manifest",
-            extractor_version="1",
-        ),
+        (
+            SnapshotDependencyDeclaration(
+                version="==2.31.0",
+                dependency_type="production",
+                manifest_path="requirements.txt",
+                workspace_path=".",
+                start_line=1,
+                end_line=1,
+                extractor="dependency-manifest",
+                extractor_version="1",
+            ),
+            SnapshotDependencyDeclaration(
+                version=">=2.32.0",
+                dependency_type="production",
+                manifest_path="requirements.txt",
+                workspace_path=".",
+                start_line=2,
+                end_line=2,
+                extractor="dependency-manifest",
+                extractor_version="1",
+            ),
+        )
+        if conflict
+        else (
+            SnapshotDependencyDeclaration(
+                version="^18.0.0",
+                dependency_type="production",
+                manifest_path="package.json",
+                workspace_path=".",
+                start_line=1,
+                end_line=1,
+                extractor="dependency-manifest",
+                extractor_version="1",
+            ),
+        )
     )
     dependency = SnapshotDependencyFact(
         stable_key="dep:pypi:requests" if conflict else "dep:npm:react",

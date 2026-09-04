@@ -8,13 +8,8 @@ def _extract(source: str):
 
 
 def test_imports_become_observations():
-    result = _extract(
-        "import { issueToken } from './tokens';\n"
-        "export { refresh } from './session';\n"
-    )
-    specifiers = sorted(
-        o.referent_text for o in result.observations if o.observed_kind == "import"
-    )
+    result = _extract("import { issueToken } from './tokens';\nexport { refresh } from './session';\n")
+    specifiers = sorted(o.referent_text for o in result.observations if o.observed_kind == "import")
     assert specifiers == ["./session", "./tokens"]
 
 

@@ -170,9 +170,7 @@ def test_an_entry_without_a_concrete_version_claims_nothing():
 
 @pytest.mark.parametrize("lockfile_version", [1, 4, 0])
 def test_an_unsupported_npm_lockfile_version_is_disclosed_not_parsed(lockfile_version):
-    source = (
-        b'{"lockfileVersion": %d, "dependencies": {"left-pad": {"version": "1.3.0"}}}' % lockfile_version
-    )
+    source = b'{"lockfileVersion": %d, "dependencies": {"left-pad": {"version": "1.3.0"}}}' % lockfile_version
 
     result = _extract("package-lock.json", source)
 
@@ -257,7 +255,7 @@ def test_each_resolution_emits_an_observation_carrying_the_pinned_version():
         ("poetry.lock", b"[[package\n"),
         ("poetry.lock", b'[[package]]\nname = "a"\n\n[metadata]\nlock-version = "2.0"\n'),
         ("poetry.lock", b'[[package]]\nname = "a"\nversion = "1"\n'),
-        ("poetry.lock", b'[metadata]\nlock-version = 2\n'),
+        ("poetry.lock", b"[metadata]\nlock-version = 2\n"),
     ],
 )
 def test_structurally_invalid_lockfiles_fail_closed_with_one_diagnostic(path, source):

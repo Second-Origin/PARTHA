@@ -15,10 +15,7 @@ from tests.analysis_helpers import run_analysis_jobs
 
 _FINDING_SOURCES = {
     "README.md": b"# review fixture\n",
-    "src/index.ts": (
-        b"import { missing } from './missing';\n"
-        b"export const value = missing();\n"
-    ),
+    "src/index.ts": (b"import { missing } from './missing';\nexport const value = missing();\n"),
 }
 _EMPTY_SOURCES = {
     "README.md": b"# review fixture with no supported diagnostics\n",
@@ -332,9 +329,7 @@ def test_review_evidence_reads_stay_within_the_sql_parameter_bound(client):
     from app.review.review_service import EngineeringReviewBuilder
 
     identifier_count = SNAPSHOT_IN_CLAUSE_BATCH_SIZE * 2 + 1
-    diagnostics = [
-        _FileDiagnostic(path=f"src/module-{index:05d}.ts") for index in range(identifier_count)
-    ]
+    diagnostics = [_FileDiagnostic(path=f"src/module-{index:05d}.ts") for index in range(identifier_count)]
 
     parameter_counts: list[int] = []
 
@@ -384,8 +379,7 @@ def test_overall_assessment_status_never_overstates_coverage():
     assert _overall_assessment_status(Counter({"assessed": 4, "not_assessed": 4})) == "partially_assessed"
     assert _overall_assessment_status(Counter({"not_assessed": 8})) == "not_assessed"
     assert (
-        _overall_assessment_status(Counter({"insufficient_evidence": 2, "not_assessed": 6}))
-        == "insufficient_evidence"
+        _overall_assessment_status(Counter({"insufficient_evidence": 2, "not_assessed": 6})) == "insufficient_evidence"
     )
 
 
@@ -402,8 +396,7 @@ def _multi_finding_sources(finding_count: int) -> dict[str, bytes]:
     sources: dict[str, bytes] = {"README.md": b"# review pagination fixture\n"}
     for index in range(finding_count // 2):
         sources[f"src/module-{index:03d}.ts"] = (
-            f"import {{ missing_{index} }} from './missing-{index}';\n"
-            f"export const value_{index} = missing_{index}();\n"
+            f"import {{ missing_{index} }} from './missing-{index}';\nexport const value_{index} = missing_{index}();\n"
         ).encode()
     return sources
 
@@ -425,18 +418,10 @@ def test_review_default_page_is_bounded_and_reports_total(auth_client):
 def test_review_pagination_offset_and_limit_are_respected(auth_client):
     repository = _upload(auth_client, _multi_finding_sources(60))
 
-    first_page = auth_client.get(
-        f"/analysis/{repository['id']}/review", params={"limit": 20}
-    ).json()
-    second_page = auth_client.get(
-        f"/analysis/{repository['id']}/review", params={"offset": 20, "limit": 20}
-    ).json()
-    last_page = auth_client.get(
-        f"/analysis/{repository['id']}/review", params={"offset": 40, "limit": 20}
-    ).json()
-    past_the_end = auth_client.get(
-        f"/analysis/{repository['id']}/review", params={"offset": 60, "limit": 20}
-    ).json()
+    first_page = auth_client.get(f"/analysis/{repository['id']}/review", params={"limit": 20}).json()
+    second_page = auth_client.get(f"/analysis/{repository['id']}/review", params={"offset": 20, "limit": 20}).json()
+    last_page = auth_client.get(f"/analysis/{repository['id']}/review", params={"offset": 40, "limit": 20}).json()
+    past_the_end = auth_client.get(f"/analysis/{repository['id']}/review", params={"offset": 60, "limit": 20}).json()
 
     assert len(first_page["findings"]) == 20
     assert len(second_page["findings"]) == 20
@@ -449,9 +434,7 @@ def test_review_pagination_offset_and_limit_are_respected(auth_client):
     second_ids = [item["id"] for item in second_page["findings"]]
     last_ids = [item["id"] for item in last_page["findings"]]
     assert len(set(first_ids) & set(second_ids) & set(last_ids)) == 0
-    full = auth_client.get(
-        f"/analysis/{repository['id']}/review", params={"limit": 200}
-    ).json()
+    full = auth_client.get(f"/analysis/{repository['id']}/review", params={"limit": 200}).json()
     assert first_ids + second_ids + last_ids == [item["id"] for item in full["findings"]]
 
 
@@ -473,9 +456,7 @@ def test_review_diagnostic_code_filter_narrows_findings_without_changing_the_mat
     filtered = auth_client.get(
         f"/analysis/{repository['id']}/review", params={"diagnosticCode": "RI-NO-SUCH-CODE"}
     ).json()
-    matched = auth_client.get(
-        f"/analysis/{repository['id']}/review", params={"diagnosticCode": code}
-    ).json()
+    matched = auth_client.get(f"/analysis/{repository['id']}/review", params={"diagnosticCode": code}).json()
 
     assert filtered["findings"] == []
     assert filtered["pagination"]["total"] == 0

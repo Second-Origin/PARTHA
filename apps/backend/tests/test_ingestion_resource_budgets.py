@@ -222,9 +222,7 @@ def test_github_import_with_file_tree_over_file_count_limit_is_rejected_and_clea
     monkeypatch.setattr(GitHubClient, "read_head_commit", lambda *_: "a" * 40)
     monkeypatch.setattr(GitHubClient, "read_head_ref", lambda *_: "refs/heads/main")
 
-    response = file_count_limited_client.post(
-        "/repositories/github", json={"url": "https://github.com/example/demo"}
-    )
+    response = file_count_limited_client.post("/repositories/github", json={"url": "https://github.com/example/demo"})
 
     error = assert_error_response(response, 422, "validation_error")
     assert error.message == "Repository exceeds the configured maximum file count."

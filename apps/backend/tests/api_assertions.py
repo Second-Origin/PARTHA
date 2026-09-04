@@ -13,8 +13,7 @@ def assert_error_response(response: Response, status_code: int, code: str) -> Er
     payload = response.json()
     assert isinstance(payload, dict), f"error response must be a JSON object: {payload!r}"
     assert set(payload) == ERROR_RESPONSE_FIELDS, (
-        "error response fields must be exactly "
-        f"{sorted(ERROR_RESPONSE_FIELDS)}; got {sorted(payload)}"
+        f"error response fields must be exactly {sorted(ERROR_RESPONSE_FIELDS)}; got {sorted(payload)}"
     )
 
     error = ErrorResponse.model_validate(payload)
