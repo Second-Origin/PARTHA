@@ -442,9 +442,7 @@ def test_a_terminal_job_cannot_be_renewed_or_mutated(session_factory):
 
     with session_factory() as session:
         assert plane.renew(session, lease).lost is True
-        assert (
-            plane.update_owned(session, job_id=job_id, values={"progress": 50}, worker_id="worker-a") is False
-        )
+        assert plane.update_owned(session, job_id=job_id, values={"progress": 50}, worker_id="worker-a") is False
         session.rollback()
 
     with session_factory() as reader:
