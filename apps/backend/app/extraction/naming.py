@@ -65,6 +65,30 @@ def module_stable_key(path: str) -> str:
     return canonical.normalize_stable_key("module", f"mod:{directory}")
 
 
+def package_root(specifier: str, source_path: str) -> str:
+    """The top-level package name a module specifier would be published under.
+
+    Shared by the resolver (matching an import against a declared dependency
+    node) and the review layer (deciding whether an unresolved import's
+    target is a recognized external package rather than a broken internal
+    reference) so the two never independently drift on what "the package"
+    means for a given specifier.
+
+    A Python specifier is always dotted (``django.core.wsgi``,
+    ``.models.User`` for a relative import) — the root is everything before
+    the first ``.``, which is empty for a relative import, correctly ruling
+    it out as an external package. A JS/TS specifier is slash-separated; a
+    scoped package's root is its first two segments (``@scope/name``), an
+    unscoped or relative one's is its first (``react``, ``./util``).
+    """
+
+    if source_path.endswith(".py"):
+        return specifier.split(".", 1)[0]
+    if specifier.startswith("@"):
+        return "/".join(specifier.split("/")[:2])
+    return specifier.split("/", 1)[0]
+
+
 def module_name(path: str) -> str | None:
     """Name a module after its directory, not the file that evidenced it.
 

@@ -195,6 +195,134 @@ def test_review_category_matrix_and_honest_empty_finding_state(auth_client):
     assert all("score" not in item["explanation"].lower() for item in categories.values())
 
 
+# --- unresolved-import disposition: stdlib and declared dependencies never
+# become a finding, but a genuine gap still does (#412) --------------------
+
+
+def _relationship_findings(body: dict) -> list[dict]:
+    return [item for item in body["findings"] if item["category"] == "relationship_resolution"]
+
+
+def test_a_bare_stdlib_import_is_not_a_finding(auth_client):
+    """`import os` / `from pathlib import Path` are language, not a gap.
+
+    The Django-boilerplate pattern this reproduces: config files that are
+    almost entirely stdlib imports, none of which live in the scanned repo
+    and none of which should ever have resolved to an in-repo edge.
+    """
+
+    repository = _upload(
+        auth_client,
+        {
+            "README.md": b"# stdlib-only fixture\n",
+            # No calls to any bare imported name here on purpose: that would
+            # trip the separate, unrelated "calls has no resolvable target"
+            # gap (#393) this fixture isn't testing.
+            "app.py": b"import os\nimport sys\nfrom pathlib import Path\n\nBASE_DIR = Path\n",
+        },
+    )
+
+    body = auth_client.get(f"/analysis/{repository['id']}/review").json()
+
+    assert _relationship_findings(body) == []
+
+
+def test_an_import_declared_in_requirements_txt_is_not_a_finding(auth_client):
+    repository = _upload(
+        auth_client,
+        {
+            "README.md": b"# declared dependency fixture\n",
+            "requirements.txt": b"requests==2.34.2\n",
+            "app.py": b"import requests\n\nrequests.get('https://api.example.com/health')\n",
+        },
+    )
+
+    body = auth_client.get(f"/analysis/{repository['id']}/review").json()
+
+    assert _relationship_findings(body) == []
+
+
+def test_an_import_that_is_neither_stdlib_nor_declared_is_still_a_finding(auth_client):
+    """A real gap: not the language, not in requirements.txt, not same-repo."""
+
+    repository = _upload(
+        auth_client,
+        {
+            "README.md": b"# undeclared dependency fixture\n",
+            "requirements.txt": b"requests==2.34.2\n",
+            "app.py": b"import totallymadeupdependency\n",
+        },
+    )
+
+    body = auth_client.get(f"/analysis/{repository['id']}/review").json()
+
+    findings = _relationship_findings(body)
+    assert len(findings) == 1
+    assert findings[0]["path"] == "app.py"
+
+
+def test_django_boilerplate_config_files_produce_no_import_noise(auth_client):
+    """The real pattern that motivated this fix: a Django project's own
+    config boilerplate (asgi.py/wsgi.py/settings.py/urls.py/manage.py) is
+    almost entirely stdlib imports plus a declared Django dependency --
+    real analysis of a repo like this previously surfaced hundreds of
+    "imports has no resolvable target" findings for exactly this pattern.
+    """
+
+    repository = _upload(
+        auth_client,
+        {
+            "requirements.txt": b"Django==5.0.6\ngunicorn==22.0.0\n",
+            "manage.py": (
+                b"import os\nimport sys\n\n\n"
+                b"def main():\n"
+                b'    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "server.config.settings")\n'
+                b"    sys.exit(0)\n"
+            ),
+            "server/config/__init__.py": b"",
+            "server/config/asgi.py": (
+                b"import os\n\nfrom django.core.asgi import get_asgi_application\n\n"
+                b'os.environ.setdefault("DJANGO_SETTINGS_MODULE", "server.config.settings")\n'
+            ),
+            "server/config/wsgi.py": (
+                b"import os\n\nfrom django.core.wsgi import get_wsgi_application\n\n"
+                b'os.environ.setdefault("DJANGO_SETTINGS_MODULE", "server.config.settings")\n'
+            ),
+            "server/config/settings.py": (b"import os\nimport sys\nfrom pathlib import Path\n\nBASE_DIR = Path\n"),
+            "server/config/urls.py": b"from django.contrib import admin\n\nroutes = admin\n",
+        },
+    )
+
+    body = auth_client.get(f"/analysis/{repository['id']}/review").json()
+
+    import_findings = [
+        item for item in _relationship_findings(body) if item["explanation"] == "imports has no resolvable target"
+    ]
+    assert import_findings == []
+
+
+def test_a_genuinely_broken_relative_import_is_still_a_finding(auth_client):
+    """A relative import has no package root at all -- it can never be an
+    external dependency, so it must never be suppressed as one (#412)."""
+
+    repository = _upload(
+        auth_client,
+        {
+            "README.md": b"# broken relative import fixture\n",
+            # `missing` is never called here on purpose: calling it would also
+            # trip the separate, unrelated "calls has no resolvable target"
+            # gap (#393), which is not what this test is isolating.
+            "src/index.ts": b"import { missing } from './missing';\nexport const unused = 1;\n",
+        },
+    )
+
+    body = auth_client.get(f"/analysis/{repository['id']}/review").json()
+
+    findings = _relationship_findings(body)
+    assert len(findings) == 1
+    assert findings[0]["path"] == "src/index.ts"
+
+
 def _seal_snapshot_with_file_diagnostic(auth_client, *, granularity: str) -> dict:
     """Seal a snapshot whose only rule-matching diagnostic records no span.
 

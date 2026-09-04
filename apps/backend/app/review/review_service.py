@@ -20,6 +20,7 @@ from app.intelligence.canonical import canonical_json_bytes
 from app.intelligence.query_service import SnapshotQueryService, batched_ids
 from app.models.repository import RepositoryRecord
 from app.models.snapshot import RiDiagnostic, RiEvidence, RiNode, RiObservation
+from app.review.import_dispositions import is_recognized_external_import
 from app.schemas.review import (
     AssessmentState,
     EngineeringReviewResponse,
@@ -171,6 +172,10 @@ class EngineeringReviewBuilder:
             or 0
         )
         evidence_by_fact = self._evidence_by_fact(snapshot.snapshot_id, diagnostics)
+        import_specifiers = self._unresolved_import_specifiers(snapshot.snapshot_id, diagnostics)
+        declared_dependency_keys = (
+            self._declared_dependency_keys(snapshot.snapshot_id) if import_specifiers else frozenset[str]()
+        )
         provenance = ReviewProvenance(
             snapshot_id=snapshot.snapshot_id,
             snapshot_schema_version=snapshot.schema_version,
@@ -183,6 +188,9 @@ class EngineeringReviewBuilder:
             rule = _RULES.get(diagnostic.code)
             supported = self._support_for(diagnostic, evidence_by_fact)
             if rule is None or supported is None:
+                omitted += 1
+                continue
+            if self._is_suppressed_import(diagnostic, import_specifiers, declared_dependency_keys):
                 omitted += 1
                 continue
             category, title, remediation = rule
@@ -412,6 +420,74 @@ class EngineeringReviewBuilder:
                 )
             )
         return dict(grouped)
+
+    def _unresolved_import_specifiers(
+        self,
+        snapshot_id: str,
+        diagnostics: list[RiDiagnostic],
+    ) -> dict[str, str]:
+        """``observation_id`` -> the import specifier it named, for every
+        unresolved ``import``-kind diagnostic only.
+
+        Used solely to decide whether an unresolved import's target is a
+        recognized external dependency (never surfaced in a finding's own
+        text -- the diagnostic's message stays generic per RFC §13).
+        """
+
+        observation_ids = {
+            value
+            for diagnostic in diagnostics
+            if diagnostic.code == "RI-RES-UNRESOLVED"
+            for value in [(diagnostic.details or {}).get("observation_id")]
+            if isinstance(value, str)
+        }
+        if not observation_ids:
+            return {}
+        specifiers: dict[str, str] = {}
+        for batch in batched_ids(sorted(observation_ids)):
+            rows = self.snapshots.db.scalars(
+                select(RiObservation).where(
+                    RiObservation.snapshot_id == snapshot_id,
+                    RiObservation.observation_id.in_(batch),
+                    RiObservation.observed_kind == "import",
+                )
+            ).all()
+            for row in rows:
+                if row.referent_text:
+                    specifiers[row.observation_id] = row.referent_text
+        return specifiers
+
+    def _declared_dependency_keys(self, snapshot_id: str) -> frozenset[str]:
+        return frozenset(
+            self.snapshots.db.scalars(
+                select(RiNode.stable_key).where(
+                    RiNode.snapshot_id == snapshot_id,
+                    RiNode.node_kind == "dependency",
+                )
+            ).all()
+        )
+
+    @staticmethod
+    def _is_suppressed_import(
+        diagnostic: RiDiagnostic,
+        import_specifiers: dict[str, str],
+        declared_dependency_keys: frozenset[str],
+    ) -> bool:
+        """True only for an unresolved *import* whose target is stdlib/a
+        Node builtin, or a package the repository's own manifest declares.
+
+        A relative import, or a bare specifier that matches neither, still
+        looks like a same-repo reference the resolver genuinely couldn't
+        find -- a real gap, not noise -- and this returns False for it.
+        """
+
+        if diagnostic.code != "RI-RES-UNRESOLVED" or not diagnostic.path:
+            return False
+        observation_id = (diagnostic.details or {}).get("observation_id")
+        specifier = import_specifiers.get(observation_id) if isinstance(observation_id, str) else None
+        if specifier is None:
+            return False
+        return is_recognized_external_import(specifier, diagnostic.path, declared_dependency_keys)
 
     @staticmethod
     def _support_for(
