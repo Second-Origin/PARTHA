@@ -10,8 +10,9 @@ Audience: contributors and maintainers who need to know what runs, where the bou
 
 PARTHA is a monorepo: a React frontend, a FastAPI backend, and a local
 filesystem plus relational database for persistence. Durable analysis uses the
-database as its queue and a daemon worker thread inside the API process; there
-is no external message queue or separate analysis service.
+database as its queue behind an explicit control-plane boundary, driven by a
+daemon worker thread inside the API process; there is no external message queue
+or separate analysis service.
 
 ```mermaid
 flowchart LR
@@ -22,13 +23,15 @@ flowchart LR
         MW["<b>Middleware</b><br/>rate limit · security headers<br/>CORS · request ID"]
         Routes["<b>Routes</b><br/>app/api/routes/"]
         Services["<b>Services</b><br/>app/services/"]
+        Queue["<b>Control plane</b><br/>app/workers/control_plane.py<br/>claim · lease · reclaim"]
         Worker["<b>Analysis worker</b><br/>app/workers/ · daemon thread"]
         Extract["<b>Extractors</b><br/>app/extraction/"]
         RI["<b>Repository Intelligence</b><br/>app/intelligence/<br/>sealed read model"]
         Consumers["<b>Consumers</b><br/>analysis · graph · review · insights<br/>documentation · ai · reports"]
 
         MW --> Routes --> Services
-        Services -->|"enqueue"| Worker
+        Services -->|"enqueue"| Queue
+        Queue -->|"lease"| Worker
         Worker --> Extract --> RI
         Services --> Consumers
         Consumers -->|"read only"| RI
@@ -48,6 +51,7 @@ flowchart LR
 
     UI --> MW
     RI --> DB
+    Queue --> DB
     Worker --> DB
     Services --> Disk
     Services --> GH
@@ -84,7 +88,9 @@ flowchart LR
 | `auth/` | Argon2 password hashing, HS256 access tokens, rotating refresh tokens with reuse detection. | — |
 | `core/` | Settings and validation, database engine, structured logging with redaction, request IDs, metrics, rate limiting, security headers. | — |
 | `storage/` | Local filesystem storage for uploads and extracted/cloned repositories. Enforces path safety on extraction. | — |
-| `workers/` | Database-backed durable analysis execution, lease renewal, bounded retry, cancellation, and stale-job reconciliation. | Serve request-specific data or bypass owner-scoped API services. |
+| `workers/control_plane.py` | The queue boundary: which jobs are eligible, and who owns them — claiming, lease renewal, expiry, reclaim, and every ownership guard. | Analyse a repository, or read anything but `analysis_jobs`. |
+| `workers/runner.py` | The in-process runner: worker identity, the poll/sweep loop, and shutdown. The same loop a standalone worker process would run. | Contain queue policy of its own, or be imported by the API for anything but start/stop. |
+| `workers/analysis_worker.py` | Execution of an *already-claimed* job: the extraction pipeline, snapshot sealing, bounded retry, cancellation and stale-job reconciliation. | Decide who owns a job, or serve request-specific data. |
 
 ---
 
@@ -102,6 +108,7 @@ sequenceDiagram
     participant Repo as RepositoryService
     participant Store as LocalStorage
     participant Parser as RepositoryParser
+    participant Queue as Control plane
     participant Worker as AnalysisWorker
     participant RI as Extraction + Intelligence
     participant DB as Database
@@ -118,16 +125,26 @@ sequenceDiagram
     UI->>API: POST /analysis/{id}/start
     API->>DB: insert queued analysis_jobs row
     API-->>UI: queued + job id
-    Worker->>DB: claim job + renew lease by stage
+    Worker->>Queue: claim
+    Queue->>DB: compare-and-swap queued -> running + lease
+    Queue-->>Worker: JobLease
+    Worker->>Queue: renew lease by stage (reports cancellation)
     Worker->>RI: extract and resolve repository facts
     Worker->>DB: persist and seal normalized ri.v1 snapshot
 ```
 
 Clone/archive extraction and initial file-tree parsing run synchronously during
 import. `POST /analysis/{id}/start` durably enqueues the analysis and returns
-immediately. A daemon worker thread in the API process claims jobs from the
-database, reports progress at completed stage boundaries, seals the normalized
-snapshot, and serves every product consumer from that immutable read model.
+immediately. A daemon worker thread in the API process claims jobs *through the
+control plane*, reports progress at completed stage boundaries, seals the
+normalized snapshot, and serves every product consumer from that immutable read
+model.
+
+The API process hosts that worker but does not own the queue. Claiming, leases,
+expiry, reclaim and ownership guards live in `app/workers/control_plane.py`, and
+the poll/sweep loop lives in `app/workers/runner.py`, so the same components
+would drive a standalone worker process without changing the claim/lease
+contract. Running analysis in a separate process is not implemented today.
 
 ---
 
@@ -268,7 +285,7 @@ These are properties of the system as built, not a wish list.
    populates immutable normalized snapshots, and every product consumer
    requires the latest owner-scoped snapshot matching the current revision.
    Missing or stale snapshots return 404 without fallback.
-4. **Analysis is whole-repository.** It runs in a durable, cancellable background job with bounded retry and stale-worker recovery, but incremental re-analysis is not implemented. Import extraction and file-tree parsing remain synchronous.
+4. **Analysis is whole-repository, and its worker is still in-process.** It runs in a durable, cancellable background job with bounded retry and stale-worker recovery, claimed through an explicit control plane, but incremental re-analysis is not implemented and no standalone worker process is deployed — one API process runs one worker. Import extraction and file-tree parsing remain synchronous.
 5. **The rate limiter trusts only the direct socket peer for unauthenticated requests.** `X-Forwarded-For` is deliberately ignored, so behind a reverse proxy every unauthenticated client shares one IP budget until a trusted-proxy allowlist is designed. Authenticated requests are keyed per user and unaffected.
 6. **Dependency coverage is narrow.** Three manifest formats plus two lockfile formats (`package-lock.json`, `poetry.lock`), whose exact pins are recorded as resolutions on the same dependency identity rather than as direct edges. There is no transitive resolution and no vulnerability or outdated-version scanning. The API exposes explicit `not_computed` assessment statuses and does not emit a clean result or count without a scanner.
 7. **Frontend assurance remains focused.** Vitest covers shared and feature

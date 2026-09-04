@@ -3,10 +3,8 @@ from contextlib import asynccontextmanager
 from os import getpid
 from pathlib import Path
 import logging
-import threading
 from time import perf_counter
-from typing import Any, Literal
-from uuid import uuid4
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,9 +31,10 @@ from app.core.schema_sync import ensure_schema_in_sync, stamp_head
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.models.base import Base
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from app.workers.runner import AnalysisWorkerRunner
 
-_ANALYSIS_STALE_SWEEP_INTERVAL = 10
+logger = logging.getLogger(__name__)
 
 _READINESS_SCHEMA = {
     "type": "object",
@@ -94,63 +93,28 @@ def check_storage_ready() -> bool:
     return True
 
 
-def _analysis_worker_id() -> str:
-    """Return a process-observable, globally unique worker ownership token."""
+def _start_analysis_worker() -> "AnalysisWorkerRunner | None":
+    """Start the in-process analysis worker, unless it is switched off (#324).
 
-    return f"analysis-worker-{getpid()}-{uuid4().hex}"
+    The API process hosts a worker for compatibility; it does not *own* the
+    queue. Worker identity, poll cadence, stale-sweep cadence and shutdown all
+    live in ``app.workers.runner`` behind the control-plane boundary, so a
+    standalone worker process would reuse the identical loop rather than
+    reimplementing this function.
 
-
-def _start_analysis_worker() -> tuple[threading.Thread, threading.Event, Any] | None:
-    """Start the durable analysis worker on a daemon thread (#93).
-
-    The loop claims and runs one queued job per iteration, sleeping only when the
-    queue is empty so a backlog drains promptly. It is gated by
-    ``analysis_worker_autostart`` so tests drive ``run_once`` deterministically
-    instead of racing this thread.
+    ``analysis_worker_autostart`` gates the runner so tests drive
+    ``AnalysisWorker.run_once`` deterministically instead of racing a thread.
     """
 
     settings = get_settings()
     if not settings.analysis_worker_autostart:
         return None
 
-    from app.core.database import SessionLocal
-    from app.workers.analysis_worker import AnalysisWorker
+    from app.workers.runner import build_analysis_worker_runner
 
-    worker = AnalysisWorker(
-        SessionLocal,
-        worker_id=_analysis_worker_id(),
-        lease_seconds=settings.analysis_job_lease_seconds,
-        max_repository_source_bytes=settings.analysis_max_repository_source_bytes,
-        max_process_rss_bytes=settings.analysis_max_process_rss_bytes,
-        max_analysis_seconds=settings.analysis_max_duration_seconds,
-    )
-    stop_event = threading.Event()
-
-    def _loop() -> None:
-        polls_since_sweep = 0
-        while not stop_event.is_set():
-            try:
-                claimed = worker.run_once()
-                polls_since_sweep += 1
-                if polls_since_sweep >= _ANALYSIS_STALE_SWEEP_INTERVAL:
-                    worker.sweep_stale()
-                    polls_since_sweep = 0
-            except Exception:  # noqa: BLE001 - a single bad job must not kill the loop
-                logger.exception("Analysis worker iteration failed")
-                claimed = False
-            if not claimed:
-                stop_event.wait(settings.analysis_job_poll_interval_seconds)
-
-    # Reclaim jobs orphaned by a previous hard process exit immediately on
-    # startup; the loop repeats the sweep periodically for later crashes.
-    try:
-        worker.sweep_stale()
-    except Exception:  # noqa: BLE001 - stale cleanup must not prevent API startup
-        logger.exception("Initial stale analysis-job sweep failed")
-
-    thread = threading.Thread(target=_loop, name="analysis-worker", daemon=True)
-    thread.start()
-    return thread, stop_event, worker
+    runner = build_analysis_worker_runner(settings)
+    runner.start()
+    return runner
 
 
 @asynccontextmanager
@@ -174,15 +138,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             Base.metadata.create_all(bind=database.engine)
     else:
         ensure_schema_in_sync(database.engine, app_env=settings.app_env)
-    worker_handle = _start_analysis_worker()
+    analysis_worker_runner = _start_analysis_worker()
     try:
         yield
     finally:
-        if worker_handle is not None:
-            thread, stop_event, worker = worker_handle
-            stop_event.set()
-            worker.shutdown()
-            thread.join(timeout=10)
+        if analysis_worker_runner is not None:
+            analysis_worker_runner.stop()
         aclose = getattr(app.state.rate_limit_store, "aclose", None)
         if aclose is not None:
             await aclose()

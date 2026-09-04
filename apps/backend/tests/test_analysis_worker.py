@@ -544,9 +544,8 @@ def test_sqlite_write_lock_does_not_leave_a_heartbeat_thread_running(session_fac
         heartbeat_interval_seconds=0.02,
     )
     with session_factory() as claim_session:
-        job = worker._claim(claim_session)
-        assert job is not None
-        job_id = job.id
+        lease = worker.control_plane.claim(claim_session, worker_id="worker-a")
+        assert lease is not None
 
     blocker = session_factory()
     try:
@@ -554,7 +553,7 @@ def test_sqlite_write_lock_does_not_leave_a_heartbeat_thread_running(session_fac
             update(RepositoryRecord).where(RepositoryRecord.id == record_id).values(updated_at=datetime.now(UTC))
         )
         state = _HeartbeatState()
-        thread = threading.Thread(target=worker._heartbeat_once, args=(job_id, state))
+        thread = threading.Thread(target=worker._heartbeat_once, args=(lease, state))
         thread.start()
         thread.join(timeout=1)
 
