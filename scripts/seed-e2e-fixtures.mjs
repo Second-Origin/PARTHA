@@ -31,6 +31,11 @@ const FIXTURES = [
       'src/services/user-service.ts': moduleSource('UserService', ['../models/user']),
       'src/models/user.ts': 'export interface User { id: string; }\nexport const value = "user";\n',
       'src/repositories/user-repository.ts': moduleSource('UserRepository', ['../models/user']),
+      // A standalone config module with no edges into the routes -> services ->
+      // domain chain: package.json itself no longer becomes a module (#396),
+      // so this is what keeps the default layout genuinely multi-row instead
+      // of a single straight dependency line.
+      'src/config/settings.ts': moduleSource('Settings'),
       'README.md': '# Small snapshot-backed fixture\n',
     },
   },

@@ -6,6 +6,7 @@ import zipfile
 
 from sqlalchemy import event
 
+from app.analysis.architecture import ArchitectureAnalyzer
 from app.extraction.manifests import DependencyManifestExtractor
 from app.extraction.pipeline import ExtractionPipeline
 from app.extraction.typescript import TypeScriptExtractor
@@ -279,6 +280,57 @@ def test_architecture_maps_every_snapshot_file_to_a_module(auth_client):
     ]
     assert len(import_edges) == 1
     assert import_edges[0]["evidence"][0]["path"] == "unmapped.ts"
+
+
+def test_architecture_entrypoint_role_is_not_classified_as_frontend(auth_client):
+    """#396: an entrypoint file (main/app/index) previously mapped to node
+    type "frontend" regardless of language -- a Python or backend entrypoint
+    is not a frontend just because it's where execution starts."""
+
+    sources = {"index.ts": b"export function main() { return 1; }\n"}
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(repository["id"], sources)
+
+    response = auth_client.get(f"/analysis/{repository['id']}/architecture")
+
+    assert response.status_code == 200
+    nodes = {node["id"]: node for node in response.json()["nodes"]}
+    module = nodes["module:index.ts"]
+    assert module["type"] == "entrypoint"
+    assert module["type"] != "frontend"
+
+
+def test_architecture_excludes_manifest_and_lockfile_paths_from_modules(auth_client):
+    """#396: package.json/pyproject.toml/lockfiles already surface as
+    dependency evidence -- grouping them into an architecture module too
+    misrepresents them as part of the system's own structure."""
+
+    sources = {
+        "src/beta/index.ts": b"export function beta() { return 1; }\n",
+        "package.json": b'{"name": "fixture", "dependencies": {}}\n',
+        "package-lock.json": b'{"name": "fixture", "lockfileVersion": 3, "packages": {}}\n',
+    }
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(repository["id"], sources)
+
+    response = auth_client.get(f"/analysis/{repository['id']}/architecture")
+
+    assert response.status_code == 200
+    node_ids = {node["id"] for node in response.json()["nodes"]}
+    assert not any("package.json" in node_id for node_id in node_ids)
+    assert not any("package-lock.json" in node_id for node_id in node_ids)
+    assert "module:beta" in node_ids
+
+
+def test_architecture_module_name_for_a_bare_file_is_not_title_cased():
+    """#396: a top-level file with no directory nesting is grouped by its own
+    filename (e.g. "unmapped.ts", see test_architecture_maps_every_snapshot_
+    file_to_a_module above) -- Title Case corrupts its extension
+    ("unmapped.ts" -> "Unmapped.Ts"). A role-based grouping's plain word slug
+    (e.g. "services") keeps its existing, readable Title Case."""
+
+    assert ArchitectureAnalyzer._module_display_name("module:unmapped.ts") == "unmapped.ts"
+    assert ArchitectureAnalyzer._module_display_name("module:services") == "Services"
 
 
 def test_architecture_language_comes_from_files_when_source_has_no_symbols(auth_client):

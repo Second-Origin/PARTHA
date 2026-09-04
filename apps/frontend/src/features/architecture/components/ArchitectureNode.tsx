@@ -3,7 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import {
   Monitor, Server, Waypoints, Route, Cog, Database, Settings,
   Shield, Layers, Wrench, Box, Globe, Library, CloudCog,
-  ListTodo, Zap,
+  ListTodo, Zap, Play,
 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import type { ArchNodeType, RelationshipState } from '@/shared/types/architecture';
@@ -11,6 +11,7 @@ import type { ArchNodeType, RelationshipState } from '@/shared/types/architectur
 const nodeConfig: Record<ArchNodeType, { icon: typeof Monitor; color: string; bg: string }> = {
   frontend: { icon: Monitor, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30' },
   backend: { icon: Server, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' },
+  entrypoint: { icon: Play, color: 'text-lime-400', bg: 'bg-lime-500/10 border-lime-500/30' },
   controller: { icon: Waypoints, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
   route: { icon: Route, color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/30' },
   service: { icon: Cog, color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/30' },
