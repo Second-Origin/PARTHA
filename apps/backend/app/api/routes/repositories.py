@@ -7,6 +7,7 @@ from app.api.openapi import documented_responses, error_responses, suppress_auto
 from app.schemas.repository import (
     GitHubImportRequest,
     RepositoryFileResponse,
+    RepositoryLineageResponse,
     RepositoryListResponse,
     RepositoryResponse,
 )
@@ -41,6 +42,40 @@ _REPOSITORY_EXAMPLE = {
     "commitSha": "0123456789abcdef0123456789abcdef01234567",
     "meta": None,
     "fileTree": [],
+}
+_REPOSITORY_LINEAGE_EXAMPLE = {
+    "isLineaged": True,
+    "lineageId": "22222222-2222-2222-2222-222222222222",
+    "canonicalSourceKey": "github.com/example/example-service",
+    "canonicalBranch": "refs/heads/main",
+    "entries": [
+        {
+            "repositoryId": _REPOSITORY_ID,
+            "sequence": 2,
+            "name": "example-service",
+            "status": "completed",
+            "revision": {
+                "kind": "git",
+                "value": "0123456789abcdef0123456789abcdef01234567",
+                "ref": "refs/heads/main",
+            },
+            "uploadedAt": "2026-07-17T00:00:00Z",
+            "isCurrent": True,
+        },
+        {
+            "repositoryId": "33333333-3333-3333-3333-333333333333",
+            "sequence": 1,
+            "name": "example-service",
+            "status": "completed",
+            "revision": {
+                "kind": "git",
+                "value": "abcdef0123456789abcdef0123456789abcdef01",
+                "ref": "refs/heads/main",
+            },
+            "uploadedAt": "2026-06-01T00:00:00Z",
+            "isCurrent": False,
+        },
+    ],
 }
 _GITHUB_IMPORT_EXAMPLE = {
     "summary": "Import a public GitHub repository",
@@ -145,6 +180,28 @@ def get_repository(
     service: RepositoryService = Depends(get_repository_service),
 ) -> RepositoryResponse:
     return service.get_repository(repository_id)
+
+
+@router.get(
+    "/{repository_id}/lineage",
+    response_model=RepositoryLineageResponse,
+    responses=documented_responses(
+        status.HTTP_200_OK,
+        "History of repository imports this repository belongs to, most recent first. "
+        "A standalone (unlineaged) repository returns `isLineaged: false` and a single entry: itself.",
+        _REPOSITORY_LINEAGE_EXAMPLE,
+        401,
+        404,
+        429,
+        500,
+    ),
+    openapi_extra=suppress_automatic_validation_error(),
+)
+def get_repository_lineage(
+    repository_id: str,
+    service: RepositoryService = Depends(get_repository_service),
+) -> RepositoryLineageResponse:
+    return service.get_lineage(repository_id)
 
 
 @router.get(

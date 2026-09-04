@@ -52,6 +52,27 @@ class RepositoryRepository:
             return None
         return record
 
+    def get_lineage_for_owner(self, lineage_id: str, owner_id: str) -> RepositoryLineage | None:
+        return self.db.execute(
+            select(RepositoryLineage).where(RepositoryLineage.id == lineage_id, RepositoryLineage.owner_id == owner_id)
+        ).scalar_one_or_none()
+
+    def list_lineage_members(self, lineage_id: str, owner_id: str) -> list[RepositoryRecord]:
+        """Every repository in `lineage_id`, most recently imported first.
+
+        Owner-scoped on both columns, matching every other accessor here --
+        `lineage_id` alone would already be unambiguous (a lineage belongs to
+        exactly one owner), but this stays defensive against a caller passing
+        a lineage id it never actually verified against the requesting owner.
+        """
+
+        statement = (
+            select(RepositoryRecord)
+            .where(RepositoryRecord.lineage_id == lineage_id, RepositoryRecord.owner_id == owner_id)
+            .order_by(RepositoryRecord.sequence.desc())
+        )
+        return list(self.db.scalars(statement).all())
+
     def find_by_revision_for_owner(self, revision_value: str, owner_id: str) -> RepositoryRecord | None:
         """Find an owner's upload already imported at this exact content hash."""
         statement = select(RepositoryRecord).where(

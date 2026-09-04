@@ -18,6 +18,8 @@ from app.schemas.repository import (
     FileTreeNode,
     GitHubImportRequest,
     RepositoryFileResponse,
+    RepositoryLineageEntry,
+    RepositoryLineageResponse,
     RepositoryListResponse,
     RepositoryMeta,
     RepositoryResponse,
@@ -66,6 +68,51 @@ class RepositoryService:
 
     def get_repository(self, repository_id: str) -> RepositoryResponse:
         return self.to_response(self._get_record(repository_id))
+
+    def get_lineage(self, repository_id: str) -> RepositoryLineageResponse:
+        """The history behind `repository_id` (#299, RFC-0002; #400).
+
+        A standalone import (an upload, or a GitHub import whose ref never
+        resolved -- RFC §4.3/§6) has no lineage row to read: this returns
+        `is_lineaged=False` and a one-entry history containing only the
+        requested repository, rather than fabricating a lineage or a 404.
+        """
+
+        record = self._get_record(repository_id)
+        if record.lineage_id is None:
+            return RepositoryLineageResponse(
+                is_lineaged=False,
+                entries=[self._lineage_entry(record, current_id=repository_id)],
+            )
+        lineage = self.repository.get_lineage_for_owner(record.lineage_id, self.owner_id)
+        # Defensive only: a repository's lineage_id always names a lineage row
+        # owned by that same repository's owner (the DB-level composite FK
+        # ties them together), so this is never actually None in production.
+        assert lineage is not None
+        members = self.repository.list_lineage_members(record.lineage_id, self.owner_id)
+        return RepositoryLineageResponse(
+            is_lineaged=True,
+            lineage_id=lineage.id,
+            canonical_source_key=lineage.canonical_source_key,
+            canonical_branch=lineage.canonical_branch,
+            entries=[self._lineage_entry(member, current_id=repository_id) for member in members],
+        )
+
+    def _lineage_entry(self, record: RepositoryRecord, *, current_id: str) -> RepositoryLineageEntry:
+        revision = None
+        if record.revision_kind and record.revision_value:
+            revision = RepositoryRevision(
+                kind=record.revision_kind, value=record.revision_value, ref=record.revision_ref
+            )
+        return RepositoryLineageEntry(
+            repository_id=record.id,
+            sequence=record.sequence,
+            name=record.name,
+            status=record.status,
+            revision=revision,
+            uploaded_at=record.uploaded_at,
+            is_current=record.id == current_id,
+        )
 
     def delete_repository(self, repository_id: str) -> None:
         record = self._get_record(repository_id)
