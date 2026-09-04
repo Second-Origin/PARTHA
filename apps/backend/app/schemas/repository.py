@@ -101,3 +101,32 @@ class RepositoryFileResponse(CamelModel):
     is_binary: bool = False
     is_image: bool = False
     media_type: str | None = None
+
+
+class RepositoryLineageEntry(CamelModel):
+    """One repository row belonging to a lineage (#299, RFC-0002), or the
+    lone entry for a standalone (unlineaged) repository."""
+
+    repository_id: str
+    sequence: int | None = None
+    name: str
+    status: RepositoryStatus
+    revision: RepositoryRevision | None = None
+    uploaded_at: datetime
+    is_current: bool
+
+
+class RepositoryLineageResponse(CamelModel):
+    """History for the repository requested, most recent import first.
+
+    An unlineaged repository (an upload, or a GitHub import whose ref never
+    resolved -- RFC §4.3/§6) is never fabricated a lineage: ``is_lineaged`` is
+    ``false``, ``lineage_id``/``canonical_source_key``/``canonical_branch``
+    stay ``null``, and ``entries`` holds exactly the one requested repository.
+    """
+
+    is_lineaged: bool
+    lineage_id: str | None = None
+    canonical_source_key: str | None = None
+    canonical_branch: str | None = None
+    entries: list[RepositoryLineageEntry]
