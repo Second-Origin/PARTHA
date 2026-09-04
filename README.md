@@ -37,7 +37,7 @@ PARTHA is for technical founders, staff and platform engineers, and engineering 
 
 PARTHA is being built toward a private, versioned intelligence layer for software repositories. It should help people understand unfamiliar code faster and give AI a trusted, governed context instead of making it repeatedly reread the entire codebase.
 
-Today, PARTHA analyzes a supported repository revision and produces an immutable `ri.v1` intelligence snapshot. Over time, the project is intended to support refresh, repository lineage, and cross-revision comparison so its understanding can remain current as the codebase evolves.
+Today, PARTHA analyzes a supported repository revision and produces an immutable `ri.v1` intelligence snapshot. Repeated imports of the same repository are already grouped into a durable lineage at the data layer; a read API and UI for browsing that history are not built yet. Over time, the project is intended to add refresh and cross-revision comparison on top of that lineage so its understanding can remain current as the codebase evolves.
 
 PARTHA can be self-hosted, and provider-backed AI is optional. AI consumes PARTHA's repository intelligence; it is not the independent source of truth.
 
@@ -82,6 +82,7 @@ Statuses describe executable behaviour on the current `dev` branch:
 | Authentication and owner isolation | **Implemented** | Email/password, Argon2, short-lived access tokens, rotating refresh tokens with reuse detection. Protected resources are owner-scoped; non-owner access returns 404. |
 | Analysis lifecycle | **Implemented** | Database-backed, cancellable job with progress, bounded retry, lease renewal, and stale-worker recovery. |
 | Repository Intelligence | **Implemented with disclosed limits** | Immutable, revision-addressed `ri.v1` snapshots with normalized facts, evidence, query APIs, and a total canonical graph hash. Semantic extraction is strongest for supported Python and TypeScript/JavaScript constructs. |
+| Repository lineage | **Implemented with disclosed limits** | Repeated imports of the same repository and branch are grouped into a durable, owner-scoped lineage with duplicate-revision detection (RFC-0002). No read API or UI exists yet for browsing that history. |
 | Architecture and authentication explanation | **Implemented with disclosed limits** | Interactive snapshot-backed graph. Module/layer classification is heuristic. The cited authentication subgraph covers supported Python/FastAPI patterns only. |
 | Dependency Graph | **Implemented with disclosed limits** | Direct declarations from `package.json`, `pyproject.toml`, and `requirements.txt` plus resolved pins from `package-lock.json` and `poetry.lock`, merged onto one dependency identity with repeated workspace declarations and exact spans. A lockfile pin is recorded as a resolution, never as a direct dependency edge, so transitive resolution is still not claimed. |
 | Service-interaction discovery | **Implemented with disclosed limits** | Outbound HTTP call sites on `requests`, `httpx`, `fetch`, and `axios` resolve to a service node identified by its absolute origin, with the literal method and path on the call's own observation. A computed, relative, or shadowed destination is a diagnostic, never an edge. |
@@ -240,7 +241,7 @@ Do not expose the development configuration directly to the public internet. Rev
 - [System Overview](docs/architecture/SYSTEM_OVERVIEW.md) — components, runtime flow, persistence, and trust boundaries.
 - [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) — extraction, snapshot, consumer, and evidence rules.
 - [Accepted `ri.v1` RFC](docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md) — the versioned snapshot contract.
-- [Repository Lineage RFC](docs/architecture/REPOSITORY_LINEAGE_RFC.md) — accepted design (RFC-0002) for grouping repeated imports of the same repository into a durable lineage. Design only: no table, column, or surface exists yet.
+- [Repository Lineage RFC](docs/architecture/REPOSITORY_LINEAGE_RFC.md) — accepted design (RFC-0002) for grouping repeated imports of the same repository into a durable lineage, implemented per [#299](https://github.com/Second-Origin/PARTHA/issues/299): the `repository_lineages` table, owner-scoped grouping, and duplicate-revision detection all exist and run on every import. No read API or UI surface exists yet — see [#400](https://github.com/Second-Origin/PARTHA/issues/400).
 - [Backend guide](apps/backend/README.md) and [frontend guide](apps/frontend/README.md) — area-specific setup and commands.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — fork-first workflow, issue claiming, branch conventions, validation, and pull-request requirements.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — expected conduct.
