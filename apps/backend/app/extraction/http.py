@@ -72,18 +72,14 @@ def normalize_method(raw: str) -> str | None:
     return token
 
 
-def describe_destination(method: str, url: str) -> HttpDestination | None:
-    """Build a destination from a literal method and URL, or ``None``.
+def _split_origin(url: str) -> tuple[str, str] | None:
+    """Parse ``url`` and return ``(origin, path)``, or ``None``.
 
-    ``None`` means the URL is not an absolute ``http``/``https`` address — a
-    relative path, a scheme-relative ``//host`` reference, a non-HTTP scheme, or
-    a host-less string. None of those identify a service on their own, and the
-    caller turns each into an explicit diagnostic rather than a guessed edge.
+    Shared by both entry points below: neither a fully literal URL nor a
+    literal f-string/template-literal prefix trusts a scheme, host, or origin
+    that don't come out of this one check.
     """
 
-    normalized_method = normalize_method(method)
-    if normalized_method is None:
-        return None
     try:
         parts = urlsplit(url.strip())
     except ValueError:
@@ -101,7 +97,59 @@ def describe_destination(method: str, url: str) -> HttpDestination | None:
     origin = f"{scheme}://{host}"
     if port is not None and str(port) != _DEFAULT_PORTS[scheme]:
         origin = f"{origin}:{port}"
-    return HttpDestination(method=normalized_method, origin=origin, path=parts.path or "/")
+    return origin, parts.path
+
+
+def describe_destination(method: str, url: str) -> HttpDestination | None:
+    """Build a destination from a literal method and URL, or ``None``.
+
+    ``None`` means the URL is not an absolute ``http``/``https`` address — a
+    relative path, a scheme-relative ``//host`` reference, a non-HTTP scheme, or
+    a host-less string. None of those identify a service on their own, and the
+    caller turns each into an explicit diagnostic rather than a guessed edge.
+    """
+
+    normalized_method = normalize_method(method)
+    if normalized_method is None:
+        return None
+    split = _split_origin(url)
+    if split is None:
+        return None
+    origin, path = split
+    return HttpDestination(method=normalized_method, origin=origin, path=path or "/")
+
+
+def describe_destination_from_literal_prefix(method: str, literal_prefix: str) -> HttpDestination | None:
+    """Build a destination from an f-string/template-literal's leading literal
+    text -- everything from the start of the string up to its first
+    interpolation -- or ``None``.
+
+    Origin identity is only ``scheme://host[:port]``, so a call like
+    ``f"https://api.example.com/users/{user_id}"`` proves its destination
+    origin from ``literal_prefix`` alone even though the full URL isn't a
+    compile-time constant: nothing after the authority can change what
+    service this is.
+
+    That's only true once the authority is *closed off* within the literal
+    text, though -- ``literal_prefix`` must already contain the ``/`` that
+    starts the path (or the caller wouldn't have anything left to
+    interpolate into the URL at all). Without it, the interpolation could
+    still be extending the host itself (``f"https://{tenant}.example.com"``,
+    or the more dangerous ``f"https://api.example.com{suffix}"`` where a
+    ``suffix`` that doesn't start with ``/`` silently becomes part of the
+    hostname), and there is no origin here to trust.
+    """
+
+    normalized_method = normalize_method(method)
+    if normalized_method is None:
+        return None
+    split = _split_origin(literal_prefix)
+    if split is None:
+        return None
+    origin, path = split
+    if not path:
+        return None
+    return HttpDestination(method=normalized_method, origin=origin, path=path)
 
 
 def parse_referent(referent: str) -> HttpDestination | None:

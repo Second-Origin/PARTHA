@@ -3,7 +3,11 @@ from __future__ import annotations
 import ast
 import builtins
 
-from app.extraction.http import HTTP_METHOD_ATTRIBUTES, describe_destination
+from app.extraction.http import (
+    HTTP_METHOD_ATTRIBUTES,
+    describe_destination,
+    describe_destination_from_literal_prefix,
+)
 from app.extraction.base import (
     ExtractedDiagnostic,
     ExtractedNode,
@@ -664,6 +668,20 @@ class PythonExtractor:
                 return node.value
             return None
 
+        def leading_fstring_literal(node) -> str | None:
+            """The literal text an f-string opens with, up to its first
+            interpolation -- or ``None`` if it isn't an f-string, is empty, or
+            starts with one (``f"{x}..."``, where there is no leading literal
+            text at all).
+            """
+
+            if not isinstance(node, ast.JoinedStr) or not node.values:
+                return None
+            first = node.values[0]
+            if not isinstance(first, ast.Constant) or not isinstance(first.value, str):
+                return None
+            return first.value
+
         def keyword_value(call: ast.Call, name: str):
             for keyword in call.keywords:
                 if keyword.arg == name:
@@ -723,11 +741,7 @@ class PythonExtractor:
                     else:
                         scope.bind(name, _BINDING_LOCAL)
 
-        def emit(call: ast.Call, method: str, url: str) -> None:
-            destination = describe_destination(method, url)
-            if destination is None:
-                flag(call, "HTTP destination without an absolute http(s) URL is unsupported")
-                return
+        def emit_destination(call: ast.Call, destination) -> None:
             evidence, diagnostic = build_evidence(
                 path,
                 call.lineno,
@@ -764,6 +778,26 @@ class PythonExtractor:
                 )
             )
 
+        def resolve_destination(call: ast.Call, method: str, url_node) -> None:
+            url = literal_string(url_node) if url_node is not None else None
+            if url is not None:
+                destination = describe_destination(method, url)
+                if destination is None:
+                    flag(call, "HTTP destination without an absolute http(s) URL is unsupported")
+                    return
+                emit_destination(call, destination)
+                return
+            # The URL wasn't a plain literal -- an f-string still proves the
+            # origin when everything up to its first interpolation is literal
+            # text and that text already closes off the authority (#408).
+            prefix = leading_fstring_literal(url_node) if url_node is not None else None
+            if prefix is not None:
+                destination = describe_destination_from_literal_prefix(method, prefix)
+                if destination is not None:
+                    emit_destination(call, destination)
+                    return
+            flag(call, "dynamic HTTP destination is unsupported")
+
         def visit_client_call(call: ast.Call, attribute: str) -> None:
             if attribute in HTTP_METHOD_ATTRIBUTES:
                 url_node = call.args[0] if call.args else keyword_value(call, "url")
@@ -779,11 +813,7 @@ class PythonExtractor:
                 # ``requests.codes``, ``client.close()``, and friends are not
                 # request call sites at all.
                 return
-            url = literal_string(url_node) if url_node is not None else None
-            if url is None:
-                flag(call, "dynamic HTTP destination is unsupported")
-                return
-            emit(call, method, url)
+            resolve_destination(call, method, url_node)
 
         def visit_call(call: ast.Call, scope: _BindingScope) -> None:
             function = call.func
