@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useRepository } from './useRepository';
 
-const tabs = ['Overview', 'Explorer'] as const;
+const tabs = ['Overview', 'Explorer', 'History'] as const;
 export type RepositoryDetailTab = (typeof tabs)[number];
 
 function isRepositoryDetailTab(value: string | null): value is RepositoryDetailTab {

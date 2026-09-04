@@ -5,6 +5,7 @@ import type {
   RepositoryResponse,
   RepositoryListResponse,
   RepositoryFileResponse,
+  RepositoryLineageResponse,
   ImportGithubRequest,
   RiNeighboursResponse,
   RiSnapshotMetadata,
@@ -17,6 +18,10 @@ export const repositoryService = {
 
   getById(id: string, config?: RequestConfig): Promise<RepositoryResponse> {
     return api.get(`/repositories/${id}`, config);
+  },
+
+  getLineage(id: string, config?: RequestConfig): Promise<RepositoryLineageResponse> {
+    return api.get(`/repositories/${id}/lineage`, config);
   },
 
   getFile(id: string, path: string, config?: RequestConfig): Promise<RepositoryFileResponse> {
