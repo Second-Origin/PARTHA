@@ -24,6 +24,12 @@ vi.mock('@/features/explorer/components/RepositoryExplorer', () => ({
   },
 }));
 
+vi.mock('@/features/repositories/components/RepositoryLineageHistory', () => ({
+  RepositoryLineageHistory: ({ repositoryId }: { repositoryId: string }) => (
+    <div data-testid="repository-lineage-history-stub">History for {repositoryId}</div>
+  ),
+}));
+
 const completedRepository: Repository = {
   id: 'repo-1',
   name: 'sample',
@@ -91,6 +97,15 @@ describe('RepositoryDetailPage', () => {
     expect(screen.getByTestId('repository-explorer-stub')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Explorer' })).toHaveClass('text-foreground');
     expect(explorerProps.initialPath).toBe('src/main.tsx');
+  });
+
+  it('opens the History tab for this repository (#400)', () => {
+    repositoryState.repositories = [completedRepository];
+
+    renderPage('repo-1', '?tab=History');
+
+    expect(screen.getByRole('button', { name: 'History' })).toHaveClass('text-foreground');
+    expect(screen.getByTestId('repository-lineage-history-stub')).toHaveTextContent('History for repo-1');
   });
 });
 

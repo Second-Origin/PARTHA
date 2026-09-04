@@ -30,6 +30,8 @@ export type RepositoryResponse = components['schemas']['RepositoryResponse'];
 export type ImportGithubRequest = components['schemas']['GitHubImportRequest'];
 export type RepositoryListResponse = components['schemas']['RepositoryListResponse'];
 export type RepositoryFileResponse = components['schemas']['RepositoryFileResponse'];
+export type RepositoryLineageResponse = components['schemas']['RepositoryLineageResponse'];
+export type RepositoryLineageEntry = components['schemas']['RepositoryLineageEntry'];
 
 export type RiSchemaVersion = components['schemas']['RiEvidenceResponse']['schemaVersion'];
 export type RiPagination = components['schemas']['RiPagination'];
