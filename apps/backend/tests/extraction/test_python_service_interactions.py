@@ -124,6 +124,25 @@ def test_query_strings_and_credentials_never_enter_a_stored_fact():
     assert _services(result) == ["svc:https://api.example.com"]
 
 
+# --- f-string origins (#408) -------------------------------------------------
+
+
+def test_an_fstring_url_with_a_literal_origin_and_dynamic_path_is_proven():
+    result = _extract(
+        'import requests\n\n\ndef f(user_id):\n    return requests.get(f"https://api.example.com/users/{user_id}")\n'
+    )
+
+    assert _http_calls(result) == [("GET|https://api.example.com|/users/", 5)]
+    assert _services(result) == ["svc:https://api.example.com"]
+    assert _unsupported(result) == []
+
+
+def test_an_fstring_url_with_only_a_dynamic_path_suffix_is_proven():
+    result = _extract('import requests\n\n\ndef f(path):\n    return requests.get(f"https://api.example.com/{path}")\n')
+
+    assert _http_calls(result) == [("GET|https://api.example.com|/", 5)]
+
+
 # --- disclosures ------------------------------------------------------------
 
 
@@ -132,6 +151,12 @@ def test_query_strings_and_credentials_never_enter_a_stored_fact():
     [
         ("requests.get(target)", "dynamic HTTP destination is unsupported"),
         ('requests.get(f"https://{target}/v1")', "dynamic HTTP destination is unsupported"),
+        # The host itself isn't closed off within the literal prefix here --
+        # a `target` that doesn't start with '/' would silently extend the
+        # hostname, not start a path -- so this must stay unsupported even
+        # though the string looks "mostly literal".
+        ('requests.get(f"https://api.example.com{target}")', "dynamic HTTP destination is unsupported"),
+        ('requests.get(f"{target}https://api.example.com/v1")', "dynamic HTTP destination is unsupported"),
         ('requests.get("https://a.example.com/" + target)', "dynamic HTTP destination is unsupported"),
         ("requests.get()", "dynamic HTTP destination is unsupported"),
         ('requests.get("/v1/users")', "HTTP destination without an absolute http(s) URL is unsupported"),

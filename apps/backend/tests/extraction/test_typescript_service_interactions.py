@@ -95,6 +95,25 @@ def test_query_strings_never_enter_a_stored_fact():
     assert "secret" not in referent
 
 
+# --- template-literal origins (#408) -----------------------------------------
+
+
+def test_a_template_literal_url_with_a_literal_origin_and_dynamic_path_is_proven():
+    result = _extract(
+        "export function f(userId: string) {\n  return fetch(`https://api.example.com/users/${userId}`);\n}\n"
+    )
+
+    assert _http_calls(result) == [("GET|https://api.example.com|/users/", 2)]
+    assert _services(result) == ["svc:https://api.example.com"]
+    assert _unsupported(result) == []
+
+
+def test_a_template_literal_url_with_only_a_dynamic_path_suffix_is_proven():
+    result = _extract("export function f(path: string) {\n  return fetch(`https://api.example.com/${path}`);\n}\n")
+
+    assert _http_calls(result) == [("GET|https://api.example.com|/", 2)]
+
+
 # --- the generic call pass --------------------------------------------------
 
 
@@ -126,6 +145,12 @@ def test_an_unrelated_identifier_call_is_untouched():
     [
         ("fetch(target)", "dynamic HTTP destination is unsupported"),
         ("fetch(`https://${target}/v1`)", "dynamic HTTP destination is unsupported"),
+        # The host itself isn't closed off within the literal prefix here --
+        # a `target` that doesn't start with '/' would silently extend the
+        # hostname, not start a path -- so this must stay unsupported even
+        # though the string looks "mostly literal".
+        ("fetch(`https://api.example.com${target}`)", "dynamic HTTP destination is unsupported"),
+        ("fetch(`${target}https://api.example.com/v1`)", "dynamic HTTP destination is unsupported"),
         ("fetch()", "dynamic HTTP destination is unsupported"),
         ('fetch("/v1/users")', "HTTP destination without an absolute http(s) URL is unsupported"),
         ('fetch("ws://api.example.com/v1")', "HTTP destination without an absolute http(s) URL is unsupported"),

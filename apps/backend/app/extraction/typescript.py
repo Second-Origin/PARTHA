@@ -22,6 +22,7 @@ from app.extraction.base import (
 from app.extraction.http import (
     HTTP_METHOD_ATTRIBUTES,
     describe_destination,
+    describe_destination_from_literal_prefix,
 )
 from app.extraction.naming import (
     DiscriminatorAssigner,
@@ -736,6 +737,20 @@ class TypeScriptExtractor:
                 return None
             return self._node_text(node, source).strip("'\"")
 
+        def leading_template_literal(node) -> str | None:
+            """The literal text a template literal opens with, up to its first
+            ``${...}`` substitution -- or ``None`` if it isn't a template
+            literal, or starts with one (`` `${x}...` ``, where there is no
+            leading literal text at all) (#408).
+            """
+
+            if node is None or node.type != "template_string":
+                return None
+            named = node.named_children
+            if not named or named[0].type != "string_fragment":
+                return None
+            return self._node_text(named[0], source)
+
         def fetch_method(arguments) -> str | None | bool:
             """Method for a ``fetch`` call: name, ``False`` if computed."""
 
@@ -758,15 +773,7 @@ class TypeScriptExtractor:
                 return literal if literal is not None else False
             return _FETCH_DEFAULT_METHOD
 
-        def emit(call, method: str, url_node) -> None:
-            url = string_literal(url_node)
-            if url is None:
-                flag(call, "dynamic HTTP destination is unsupported")
-                return
-            destination = describe_destination(method, url)
-            if destination is None:
-                flag(call, "HTTP destination without an absolute http(s) URL is unsupported")
-                return
+        def emit_destination(call, destination) -> None:
             evidence, _ = build_evidence(
                 path,
                 call.start_point[0] + 1,
@@ -800,6 +807,27 @@ class TypeScriptExtractor:
                     evidence=evidence,
                 )
             )
+
+        def emit(call, method: str, url_node) -> None:
+            url = string_literal(url_node)
+            if url is not None:
+                destination = describe_destination(method, url)
+                if destination is None:
+                    flag(call, "HTTP destination without an absolute http(s) URL is unsupported")
+                    return
+                emit_destination(call, destination)
+                return
+            # The URL wasn't a plain literal -- a template literal still
+            # proves the origin when everything up to its first `${...}` is
+            # literal text and that text already closes off the authority
+            # (#408).
+            prefix = leading_template_literal(url_node)
+            if prefix is not None:
+                destination = describe_destination_from_literal_prefix(method, prefix)
+                if destination is not None:
+                    emit_destination(call, destination)
+                    return
+            flag(call, "dynamic HTTP destination is unsupported")
 
         def visit(call, shadowed: frozenset[str]) -> None:
             function = call.child_by_field_name("function")
