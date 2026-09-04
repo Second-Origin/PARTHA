@@ -41,4 +41,6 @@ def test_assert_error_response_rejects_an_unexpected_envelope_field():
 
 def test_assert_error_response_rejects_a_request_id_mismatch():
     with pytest.raises(AssertionError, match="request_id must match"):
-        assert_error_response(_error_response(_valid_error_payload(), request_id="different-id"), 422, "validation_error")
+        assert_error_response(
+            _error_response(_valid_error_payload(), request_id="different-id"), 422, "validation_error"
+        )

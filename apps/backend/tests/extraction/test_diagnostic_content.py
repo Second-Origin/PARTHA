@@ -16,18 +16,18 @@ SECRET = "s3cr3t-token"
 # Sources that put a secret literal directly next to a construct that produces a
 # diagnostic, in each place an extractor is tempted to quote the source back.
 TYPESCRIPT_LEAK_CASES = [
-    ('decorator argument', f'class A {{\n  @sealed("{SECRET}")\n  x = 1;\n}}\n'),
-    ('decorator on class', f'@Injectable({{ key: "{SECRET}" }})\nclass B {{}}\n'),
-    ('namespace body', f'namespace N {{ const k = "{SECRET}"; }}\n'),
-    ('require argument', f'const c = require("{SECRET}");\n'),
-    ('dynamic import argument', f'const m = import("./{SECRET}");\n'),
+    ("decorator argument", f'class A {{\n  @sealed("{SECRET}")\n  x = 1;\n}}\n'),
+    ("decorator on class", f'@Injectable({{ key: "{SECRET}" }})\nclass B {{}}\n'),
+    ("namespace body", f'namespace N {{ const k = "{SECRET}"; }}\n'),
+    ("require argument", f'const c = require("{SECRET}");\n'),
+    ("dynamic import argument", f'const m = import("./{SECRET}");\n'),
 ]
 
 PYTHON_LEAK_CASES = [
-    ('star import', f'from {SECRET.replace("-", "_")} import *\n'),
-    ('metaclass', f'class A(metaclass={SECRET.replace("-", "_")}):\n    pass\n'),
-    ('reflection argument', f'x = getattr(o, "{SECRET}", None)\n'),
-    ('dynamic import argument', f'import importlib\nm = importlib.import_module("{SECRET}")\n'),
+    ("star import", f"from {SECRET.replace('-', '_')} import *\n"),
+    ("metaclass", f"class A(metaclass={SECRET.replace('-', '_')}):\n    pass\n"),
+    ("reflection argument", f'x = getattr(o, "{SECRET}", None)\n'),
+    ("dynamic import argument", f'import importlib\nm = importlib.import_module("{SECRET}")\n'),
 ]
 
 

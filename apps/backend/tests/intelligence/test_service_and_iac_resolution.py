@@ -165,9 +165,7 @@ def test_a_proven_call_resolves_to_the_service_node_for_its_origin(session):
     assert result.diagnostics_added == 0
     # Attributed to the symbol whose span contains the call, exactly like a
     # generic ``calls`` reference — not to the whole module.
-    assert _triples(session, snapshot) == {
-        ("app/client.py::load", "calls_service", "svc:https://api.example.com")
-    }
+    assert _triples(session, snapshot) == {("app/client.py::load", "calls_service", "svc:https://api.example.com")}
 
 
 def test_a_call_outside_any_symbol_is_attributed_to_its_module(session):
@@ -212,13 +210,9 @@ def test_a_resolved_service_edge_is_evidence_backed_and_derived_from_its_observa
     ).all()
     assert [(item.path, item.start_line, item.end_line) for item in evidence] == [("app/client.py", 5, 5)]
     derivations = session.scalars(
-        select(RiDerivation).where(
-            RiDerivation.snapshot_id == snapshot.snapshot_id, RiDerivation.edge_ref == edge.id
-        )
+        select(RiDerivation).where(RiDerivation.snapshot_id == snapshot.snapshot_id, RiDerivation.edge_ref == edge.id)
     ).all()
-    assert [(item.ref_kind, item.ref_identity) for item in derivations] == [
-        ("observation", observation.observation_id)
-    ]
+    assert [(item.ref_kind, item.ref_identity) for item in derivations] == [("observation", observation.observation_id)]
 
 
 def test_an_origin_with_no_service_node_stays_unresolved(session):
@@ -260,9 +254,7 @@ def test_a_malformed_destination_referent_is_never_repaired(session, referent):
     result = RelationshipResolver(store).resolve(snapshot)
 
     assert result.edges_added == 0
-    assert _diagnostics(session, snapshot) == [
-        (RI_RES_UNRESOLVED, "calls_service has no parsable destination")
-    ]
+    assert _diagnostics(session, snapshot) == [(RI_RES_UNRESOLVED, "calls_service has no parsable destination")]
 
 
 # --- declares ---------------------------------------------------------------
@@ -279,7 +271,11 @@ def test_a_declared_iac_resource_is_attached_to_the_repository(session):
         name="api",
         path="docker-compose.yml",
         line=2,
-        properties={"resource_type": "service", "manifest_format": "docker-compose", "manifest_path": "docker-compose.yml"},
+        properties={
+            "resource_type": "service",
+            "manifest_format": "docker-compose",
+            "manifest_path": "docker-compose.yml",
+        },
     )
     _observation(
         store,
@@ -295,9 +291,7 @@ def test_a_declared_iac_resource_is_attached_to_the_repository(session):
     result = RelationshipResolver(store).resolve(snapshot)
 
     assert result.edges_added == 1
-    assert _triples(session, snapshot) == {
-        ("repo:root", "declares", "iac:docker-compose.yml::service/api")
-    }
+    assert _triples(session, snapshot) == {("repo:root", "declares", "iac:docker-compose.yml::service/api")}
     edge = session.scalars(select(RiEdge).where(RiEdge.snapshot_id == snapshot.snapshot_id)).one()
     assert edge.truth_class == "resolved"
     assert edge.object_kind == "iac_resource"

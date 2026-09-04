@@ -43,10 +43,10 @@ _AUTH_SOURCES = {
         b"from fastapi import FastAPI, Depends\n"
         b"from src.dependencies import get_current_user, get_database\n\n"
         b"app = FastAPI()\n\n\n"
-        b"@app.get(\"/me\")\n"
+        b'@app.get("/me")\n'
         b"def read_me(user=Depends(get_current_user)):\n"
         b"    return user\n\n\n"
-        b"@app.get(\"/health\")\n"
+        b'@app.get("/health")\n'
         b"def health_check(db=Depends(get_database)):\n"
         b"    return {'status': 'ok'}\n"
     ),
@@ -92,7 +92,10 @@ def _persist_snapshot(repository_id: str, sources: dict[str, bytes]) -> str:
     runs = pipeline.run(sources)
     producer_version_set = sorted(
         {run.producer for run in runs}
-        | {f"{RelationshipResolver.name}@{RelationshipResolver.version}", f"{RoleClassifier.name}@{RoleClassifier.version}"}
+        | {
+            f"{RelationshipResolver.name}@{RelationshipResolver.version}",
+            f"{RoleClassifier.name}@{RoleClassifier.version}",
+        }
     )
 
     with SessionLocal() as session:
@@ -234,10 +237,10 @@ def test_authentication_explanation_keeps_shared_hops_in_every_chain(auth_client
             b"from fastapi import FastAPI, Depends\n"
             b"from src.dependencies import get_current_user\n\n"
             b"app = FastAPI()\n\n\n"
-            b"@app.get(\"/me\")\n"
+            b'@app.get("/me")\n'
             b"def read_me(user=Depends(get_current_user)):\n"
             b"    return user\n\n\n"
-            b"@app.get(\"/account\")\n"
+            b'@app.get("/account")\n'
             b"def read_account(user=Depends(get_current_user)):\n"
             b"    return user\n"
         ),
@@ -259,10 +262,7 @@ def test_authentication_explanation_keeps_shared_hops_in_every_chain(auth_client
             "calls",
         ]
 
-    relationship_keys = [
-        (item["subject"], item["predicate"], item["object"])
-        for item in body["relationships"]
-    ]
+    relationship_keys = [(item["subject"], item["predicate"], item["object"]) for item in body["relationships"]]
     assert relationship_keys.count(("get_current_user", "calls", "UserService")) == 1
     assert relationship_keys.count(("UserService", "calls", "UserModel")) == 1
 
@@ -317,7 +317,7 @@ def test_authentication_explanation_excludes_public_route_without_a_guard(auth_c
             b"from fastapi import FastAPI, Depends\n"
             b"from src.dependencies import get_database\n\n"
             b"app = FastAPI()\n\n\n"
-            b"@app.get(\"/health\")\n"
+            b'@app.get("/health")\n'
             b"def health_check(db=Depends(get_database)):\n"
             b"    return {'status': 'ok'}\n"
         ),
@@ -343,10 +343,7 @@ def test_authentication_explanation_excludes_public_route_without_a_guard(auth_c
         query_service = SnapshotQueryService(session, record.owner_id)
         facts = query_service.architecture_facts(record.id)
         assert facts is not None
-        assert any(
-            edge.predicate == "injects" and edge.object_key.endswith("get_database")
-            for edge in facts.edges
-        )
+        assert any(edge.predicate == "injects" and edge.object_key.endswith("get_database") for edge in facts.edges)
 
 
 def test_authentication_explanation_missing_snapshot_is_honest(auth_client):
@@ -391,7 +388,7 @@ def test_authentication_explanation_unresolved_dependency_is_a_visible_diagnosti
         "src/routes.py": (
             b"from fastapi import FastAPI, Depends\n\n"
             b"app = FastAPI()\n\n\n"
-            b"@app.get(\"/me\")\n"
+            b'@app.get("/me")\n'
             b"def read_me(user=Depends(get_current_user)):\n"
             b"    return user\n"
         ),
@@ -459,14 +456,8 @@ def test_authentication_explanation_evidence_fact_ids_resolve_to_real_facts(auth
         node_keys = {node.stable_key for node in facts.nodes}
         edge_ids = {edge.edge_id for edge in facts.edges}
         source_paths = {
-            evidence_item.path
-            for evidence_list in facts.node_evidence.values()
-            for evidence_item in evidence_list
-        } | {
-            evidence_item.path
-            for evidence_list in facts.edge_evidence.values()
-            for evidence_item in evidence_list
-        }
+            evidence_item.path for evidence_list in facts.node_evidence.values() for evidence_item in evidence_list
+        } | {evidence_item.path for evidence_list in facts.edge_evidence.values() for evidence_item in evidence_list}
 
     for claim in body["claims"]:
         for citation in claim["evidence"]:
@@ -489,15 +480,12 @@ _AUTH_SOURCES_WITH_TEST_FIXTURE = {
         b"def get_current_user(token: str) -> dict:\n"
         b"    return UserService(token)\n"
     ),
-    "tests/fixtures/services.py": (
-        b"def UserService(token: str) -> dict:\n"
-        b"    return {'token': token}\n"
-    ),
+    "tests/fixtures/services.py": (b"def UserService(token: str) -> dict:\n    return {'token': token}\n"),
     "tests/fixtures/routes.py": (
         b"from fastapi import FastAPI, Depends\n"
         b"from tests.fixtures.dependencies import get_current_user\n\n"
         b"app = FastAPI()\n\n\n"
-        b"@app.get(\"/me\")\n"
+        b'@app.get("/me")\n'
         b"def read_me(user=Depends(get_current_user)):\n"
         b"    return user\n"
     ),

@@ -23,9 +23,7 @@ def _migration_database_url(tmp_path: Path) -> Iterator[str]:
 
     admin_url = make_url(postgres_url)
     database_name = f"partha_migration_{uuid.uuid4().hex}"
-    migration_url = admin_url.set(database=database_name).render_as_string(
-        hide_password=False
-    )
+    migration_url = admin_url.set(database=database_name).render_as_string(hide_password=False)
     admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
     quoted_database_name = admin_engine.dialect.identifier_preparer.quote(database_name)
     database_created = False
@@ -38,9 +36,7 @@ def _migration_database_url(tmp_path: Path) -> Iterator[str]:
         try:
             if database_created:
                 with admin_engine.connect() as connection:
-                    connection.exec_driver_sql(
-                        f"DROP DATABASE IF EXISTS {quoted_database_name} WITH (FORCE)"
-                    )
+                    connection.exec_driver_sql(f"DROP DATABASE IF EXISTS {quoted_database_name} WITH (FORCE)")
         finally:
             admin_engine.dispose()
 
@@ -87,8 +83,7 @@ def test_migrations_upgrade_and_downgrade_run_clean(tmp_path, monkeypatch):
                 "config_hash",
             ]
             edge_indexes = {
-                index["name"]: index["column_names"]
-                for index in inspect(probe_engine).get_indexes("ri_edges")
+                index["name"]: index["column_names"] for index in inspect(probe_engine).get_indexes("ri_edges")
             }
             assert edge_indexes["ix_ri_edges_snapshot_subject_predicate"] == [
                 "snapshot_id",
@@ -149,9 +144,7 @@ def test_migrations_accept_percent_encoded_database_urls_online_and_offline(tmp_
         config.get_settings.cache_clear()
 
 
-def test_revision_backfill_classifies_exact_legacy_values_and_downgrade_preserves_metadata(
-    tmp_path, monkeypatch
-):
+def test_revision_backfill_classifies_exact_legacy_values_and_downgrade_preserves_metadata(tmp_path, monkeypatch):
     database_path = tmp_path / "migration-backfill.db"
     database_url = f"sqlite:///{database_path}"
     monkeypatch.setenv("DATABASE_URL", database_url)
@@ -267,9 +260,7 @@ def test_revision_backfill_classifies_exact_legacy_values_and_downgrade_preserve
         assert "revision_value" not in {column["name"] for column in inspect(engine).get_columns("repositories")}
         restored = Table("repositories", MetaData(), autoload_with=engine)
         with engine.connect() as connection:
-            metadata_after = connection.scalar(
-                select(restored.c.repo_metadata).where(restored.c.id == rows[0]["id"])
-            )
+            metadata_after = connection.scalar(select(restored.c.repo_metadata).where(restored.c.id == rows[0]["id"]))
         assert metadata_after["commitSha"] == "a" * 40
         assert metadata_after["intelligence"] == {"nodes": ["legacy"]}
     finally:

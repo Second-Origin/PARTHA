@@ -107,12 +107,12 @@ def test_requirements_declarations_stay_on_their_own_line():
 def test_manifest_declarations_retain_exact_version_type_and_workspace_provenance():
     result = _extract(
         "apps/frontend/package.json",
-        '''{
+        """{
   "devDependencies": {
     "vite": "^5"
   }
 }
-''',
+""",
     )
 
     node = result.nodes[0]

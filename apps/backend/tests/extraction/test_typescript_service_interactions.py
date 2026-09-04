@@ -79,9 +79,7 @@ def test_an_axios_named_object_from_another_module_is_not_the_client():
 
 
 def test_one_origin_is_one_service_with_a_language_neutral_record():
-    result = _extract(
-        'fetch("https://api.example.com/a");\nfetch("https://api.example.com/b");\n'
-    )
+    result = _extract('fetch("https://api.example.com/a");\nfetch("https://api.example.com/b");\n')
 
     services = [node for node in result.nodes if node.node_kind == "service"]
     assert _services(result) == ["svc:https://api.example.com"]
@@ -146,10 +144,7 @@ def test_an_unproven_call_site_is_disclosed_and_claims_nothing(call, message):
 
 def test_a_shadowed_fetch_binding_is_disclosed_rather_than_trusted():
     result = _extract(
-        "export function f() {\n"
-        "  const fetch = (u: string) => u;\n"
-        '  return fetch("https://api.example.com/v1");\n'
-        "}\n"
+        'export function f() {\n  const fetch = (u: string) => u;\n  return fetch("https://api.example.com/v1");\n}\n'
     )
 
     assert _http_calls(result) == []
@@ -177,7 +172,9 @@ def test_axios_call_forms_this_extractor_does_not_interpret_are_disclosed(call):
 
 
 def test_axios_create_is_not_mistaken_for_a_request():
-    result = _extract('import axios from "axios";\n\nconst client = axios.create({ baseURL: "https://a.example.com" });\n')
+    result = _extract(
+        'import axios from "axios";\n\nconst client = axios.create({ baseURL: "https://a.example.com" });\n'
+    )
 
     assert _http_calls(result) == []
     # A base URL is configuration, not a proven call destination.

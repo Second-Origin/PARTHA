@@ -184,9 +184,7 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
     import_edges = [
         edge
         for edge in architecture["edges"]
-        if edge["source"] == "module:alpha"
-        and edge["target"] == "module:beta"
-        and edge["predicate"] == "imports"
+        if edge["source"] == "module:alpha" and edge["target"] == "module:beta" and edge["predicate"] == "imports"
     ]
     assert len(import_edges) == 1
     edge = import_edges[0]
@@ -205,18 +203,14 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
     assert nodes["module:alpha"]["relationshipState"] == "connected"
     assert nodes["module:beta"]["relationshipState"] == "connected"
     assert any(
-        item["source"] == "module:alpha"
-        and item["target"] == "module:beta"
-        and item["predicate"] == "calls"
+        item["source"] == "module:alpha" and item["target"] == "module:beta" and item["predicate"] == "calls"
         for item in architecture["edges"]
     )
     assert not any(item["source"] == item["target"] for item in architecture["edges"])
     assert not any(item["code"] == "ARCH-REL-ENDPOINT-UNMAPPED" for item in architecture["diagnostics"])
 
     dependency_edges = [
-        item
-        for item in architecture["edges"]
-        if item["source"] == "module:alpha" and item["target"] == "dep:npm:react"
+        item for item in architecture["edges"] if item["source"] == "module:alpha" and item["target"] == "dep:npm:react"
     ]
     assert {item["predicate"] for item in dependency_edges} == {"imports", "depends_on"}
     assert not any(item["target"] == "dep:npm:lodash" for item in architecture["edges"])
@@ -225,9 +219,7 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
     root_scope_diagnostic = next(
         item
         for item in architecture["diagnostics"]
-        if item["code"] == "ARCH-REL-REPO-SCOPED"
-        and item["path"] == "package.json"
-        and item["severity"] == "info"
+        if item["code"] == "ARCH-REL-REPO-SCOPED" and item["path"] == "package.json" and item["severity"] == "info"
     )
     assert root_scope_diagnostic["nodeIds"] is None
     assert nodes["module:lonely"]["relationshipState"] == "no-observed-relationships"
@@ -235,7 +227,9 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
 
     diagnostics = architecture["diagnostics"]
     assert any(item["code"] == "RI-RES-AMBIGUOUS" and item["path"] == "src/ambiguous/index.ts" for item in diagnostics)
-    assert any(item["code"] == "RI-RES-UNRESOLVED" and item["path"] == "src/unresolved/index.ts" for item in diagnostics)
+    assert any(
+        item["code"] == "RI-RES-UNRESOLVED" and item["path"] == "src/unresolved/index.ts" for item in diagnostics
+    )
     assert nodes["module:ambiguous"]["relationshipState"] == "unresolved"
     assert nodes["module:unresolved"]["relationshipState"] == "unresolved"
     assert not any(edge["source"] == "module:ambiguous" for edge in architecture["edges"])
@@ -281,9 +275,7 @@ def test_architecture_maps_every_snapshot_file_to_a_module(auth_client):
     import_edges = [
         edge
         for edge in architecture["edges"]
-        if edge["source"] == "module:unmapped.ts"
-        and edge["target"] == "module:beta"
-        and edge["predicate"] == "imports"
+        if edge["source"] == "module:unmapped.ts" and edge["target"] == "module:beta" and edge["predicate"] == "imports"
     ]
     assert len(import_edges) == 1
     assert import_edges[0]["evidence"][0]["path"] == "unmapped.ts"
@@ -309,10 +301,7 @@ def test_architecture_fact_query_excludes_irrelevant_large_snapshot_records(auth
     }
     snapshot_sources = {
         **sources,
-        **{
-            f"src/generated/{index}.ts": f"export const generated{index} = {index};\n".encode()
-            for index in range(64)
-        },
+        **{f"src/generated/{index}.ts": f"export const generated{index} = {index};\n".encode() for index in range(64)},
     }
     repository = _upload(auth_client, sources)
     _persist_snapshot(
@@ -341,9 +330,7 @@ def test_architecture_fact_query_excludes_irrelevant_large_snapshot_records(auth
     # Symbol nodes are the bulk of a large snapshot and are loaded only when a
     # rendered edge references them.
     endpoint_keys = {key for edge in facts.edges for key in (edge.subject_key, edge.object_key)}
-    assert {
-        node.stable_key for node in facts.nodes if node.node_kind == "symbol"
-    } <= endpoint_keys
+    assert {node.stable_key for node in facts.nodes if node.node_kind == "symbol"} <= endpoint_keys
 
     assert set(facts.node_evidence) <= {node.id for node in facts.nodes}
     assert set(facts.edge_evidence) == {edge.id for edge in facts.edges}
@@ -365,8 +352,7 @@ def test_architecture_fact_query_batches_relevant_evidence_ids(auth_client):
         "src/target.ts": b"export const target = 1;\n",
         **{
             f"src/importers/{index}.ts": (
-                b"import { target } from '../target';\n"
-                + f"export const importer{index} = target;\n".encode()
+                b"import { target } from '../target';\n" + f"export const importer{index} = target;\n".encode()
             )
             for index in range(ARCHITECTURE_EVIDENCE_BATCH_SIZE + 1)
         },
@@ -406,10 +392,7 @@ def test_architecture_fact_query_batches_relevant_evidence_ids(auth_client):
     # ids. Exact remainders depend on how many nodes the snapshot holds, so the
     # bound is asserted rather than a hardcoded shape.
     assert len(evidence_query_parameter_counts) == 4
-    assert (
-        sorted(evidence_query_parameter_counts)[-2:]
-        == [ARCHITECTURE_EVIDENCE_BATCH_SIZE + 1] * 2
-    )
+    assert sorted(evidence_query_parameter_counts)[-2:] == [ARCHITECTURE_EVIDENCE_BATCH_SIZE + 1] * 2
     assert max(evidence_query_parameter_counts) <= ARCHITECTURE_EVIDENCE_BATCH_SIZE + 1
 
 
@@ -419,9 +402,7 @@ def test_architecture_without_a_sealed_snapshot_returns_404(auth_client):
     # otherwise reaches only in the window before the worker runs. Architecture must
     # 404 the same way Dependencies/Review/Insights already do (#217) rather than
     # falling back to a graph built from unsealed repository metadata.
-    repository = _upload(
-        auth_client, {"src/lonely/index.ts": b"export const lonely = 1;\n"}, analyse=False
-    )
+    repository = _upload(auth_client, {"src/lonely/index.ts": b"export const lonely = 1;\n"}, analyse=False)
 
     response = auth_client.get(f"/analysis/{repository['id']}/architecture")
 

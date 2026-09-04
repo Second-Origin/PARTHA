@@ -11,13 +11,7 @@ def _keys(source: str):
 def test_class_methods_and_function_qualified_names():
     # Two methods prove the traversal reaches every method_definition inside
     # class_body, not just the class declaration itself.
-    keys, _ = _keys(
-        "export class AuthService {\n"
-        "  login() {}\n"
-        "  logout() {}\n"
-        "}\n"
-        "export function issueToken() {}\n"
-    )
+    keys, _ = _keys("export class AuthService {\n  login() {}\n  logout() {}\n}\nexport function issueToken() {}\n")
     assert "src/auth/service.ts::AuthService" in keys
     assert "src/auth/service.ts::AuthService.login" in keys
     assert "src/auth/service.ts::AuthService.logout" in keys
@@ -25,11 +19,7 @@ def test_class_methods_and_function_qualified_names():
 
 
 def test_interface_type_enum_are_symbols():
-    keys, _ = _keys(
-        "export interface Session {}\n"
-        "export type Id = string;\n"
-        "export enum Role { Admin }\n"
-    )
+    keys, _ = _keys("export interface Session {}\nexport type Id = string;\nexport enum Role { Admin }\n")
     assert "src/auth/service.ts::Session" in keys
     assert "src/auth/service.ts::Id" in keys
     assert "src/auth/service.ts::Role" in keys
@@ -47,10 +37,7 @@ def test_duplicate_overloads_get_discriminator():
 
 
 def test_top_level_const_becomes_symbol_with_exported_flag():
-    keys, result = _keys(
-        "export const router = createBrowserRouter([]);\n"
-        "const helper = 1;\n"
-    )
+    keys, result = _keys("export const router = createBrowserRouter([]);\nconst helper = 1;\n")
     assert "src/auth/service.ts::router" in keys
     assert "src/auth/service.ts::helper" in keys
     router = next(n for n in result.nodes if n.stable_key == "src/auth/service.ts::router")
@@ -61,18 +48,13 @@ def test_top_level_const_becomes_symbol_with_exported_flag():
 
 def test_exported_function_carries_exported_property():
     _, result = _keys("export function issueToken() {}\n")
-    token = next(
-        n for n in result.nodes if n.stable_key == "src/auth/service.ts::issueToken"
-    )
+    token = next(n for n in result.nodes if n.stable_key == "src/auth/service.ts::issueToken")
     assert token.properties is not None and token.properties.get("exported") is True
 
 
 def test_default_export_identity_is_preserved_for_declarations_and_aliases():
     _, declaration_result = _keys("export default function Primary() {}\n")
-    _, alias_result = _keys(
-        "const Secondary = () => null;\n"
-        "export default Secondary;\n"
-    )
+    _, alias_result = _keys("const Secondary = () => null;\nexport default Secondary;\n")
     default_exports = {
         node.stable_key
         for result in (declaration_result, alias_result)
@@ -96,10 +78,7 @@ def test_direct_implements_clause_becomes_a_resolver_observation():
 
 
 def test_abstract_generic_implements_records_the_base_reference():
-    _, result = _keys(
-        "interface Worker<T> {}\n"
-        "abstract class Runner implements Worker<string> {}\n"
-    )
+    _, result = _keys("interface Worker<T> {}\nabstract class Runner implements Worker<string> {}\n")
     observations = [
         (observation.subject_key, observation.referent_text)
         for observation in result.observations
@@ -109,13 +88,8 @@ def test_abstract_generic_implements_records_the_base_reference():
 
 
 def test_parameter_shadowing_is_recorded_at_the_call_site():
-    _, result = _keys(
-        "function target() { return 1; }\n"
-        "function caller(target: () => number) { return target(); }\n"
-    )
+    _, result = _keys("function target() { return 1; }\nfunction caller(target: () => number) { return target(); }\n")
     shadowed = [
-        observation.referent_text
-        for observation in result.observations
-        if observation.observed_kind == "call_shadowed"
+        observation.referent_text for observation in result.observations if observation.observed_kind == "call_shadowed"
     ]
     assert shadowed == ["target"]

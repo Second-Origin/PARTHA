@@ -10,12 +10,7 @@ def _keys(source: str):
 
 def test_class_method_and_nested_function_qualified_names():
     keys, _ = _keys(
-        "class AuthController:\n"
-        "    def login(self):\n"
-        "        pass\n"
-        "def outer():\n"
-        "    def _inner():\n"
-        "        pass\n"
+        "class AuthController:\n    def login(self):\n        pass\ndef outer():\n    def _inner():\n        pass\n"
     )
     assert "app/api/auth.py::AuthController" in keys
     assert "app/api/auth.py::AuthController.login" in keys

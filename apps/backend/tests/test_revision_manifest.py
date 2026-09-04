@@ -21,9 +21,7 @@ from tests.analysis_helpers import run_analysis_jobs
 _SOURCES = {
     "README.md": b"# manifest fixture\n",
     "package.json": b'{\n  "dependencies": {\n    "react": "18.3.0"\n  }\n}\n',
-    "src/alpha/index.ts": (
-        b"import { beta } from '../beta';\nexport const alpha = beta();\n"
-    ),
+    "src/alpha/index.ts": (b"import { beta } from '../beta';\nexport const alpha = beta();\n"),
     "src/beta/index.ts": b"export function beta() { return 1; }\n",
 }
 
@@ -301,9 +299,7 @@ def test_another_owner_cannot_retrieve_or_verify_the_manifest(auth_client, make_
 
 
 def test_manifest_requires_authentication(client):
-    unauthenticated = client.get(
-        "/analysis/11111111-1111-1111-1111-111111111111/revision-manifest"
-    )
+    unauthenticated = client.get("/analysis/11111111-1111-1111-1111-111111111111/revision-manifest")
     assert unauthenticated.status_code == 401
 
 
@@ -321,11 +317,7 @@ def test_citations_reference_the_revision_the_manifest_names(auth_client):
     architecture = auth_client.get(f"/analysis/{repository['id']}/architecture").json()
     assert architecture["relationshipSnapshotId"] == manifest["snapshotId"]
 
-    cited = [
-        evidence
-        for edge in architecture["edges"]
-        for evidence in edge.get("evidence", [])
-    ]
+    cited = [evidence for edge in architecture["edges"] for evidence in edge.get("evidence", [])]
     assert cited, "expected at least one evidence-backed architecture edge"
 
     for evidence in cited:

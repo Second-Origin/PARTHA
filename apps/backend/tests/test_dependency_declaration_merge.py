@@ -27,13 +27,17 @@ from tests.analysis_helpers import run_analysis_jobs
 _PRODUCER = ("dependency-manifest", "1.2.0")
 
 
-def _node(stable_key: str, *, name: str, manifest_path: str, version: str, dependency_type: str = "production", line: int = 1) -> ExtractedNode:
+def _node(
+    stable_key: str, *, name: str, manifest_path: str, version: str, dependency_type: str = "production", line: int = 1
+) -> ExtractedNode:
     return ExtractedNode(
         node_kind="dependency",
         stable_key=stable_key,
         name=name,
         language=None,
-        evidence=(ExtractedEvidence(path=manifest_path, start_line=line, end_line=line, logical_line_count=max(line, 1)),),
+        evidence=(
+            ExtractedEvidence(path=manifest_path, start_line=line, end_line=line, logical_line_count=max(line, 1)),
+        ),
         properties={
             "ecosystem": stable_key.split(":")[1],
             "version": version,
@@ -72,8 +76,14 @@ def test_merge_combines_declarations_from_two_manifests():
 
 def test_merge_preserves_conflicting_versions_rather_than_dropping_one():
     produced = (
-        _produced(_node("dep:pypi:requests", name="requests", manifest_path="apps/backend/pyproject.toml", version="==2.31.0")),
-        _produced(_node("dep:pypi:requests", name="requests", manifest_path="services/worker/requirements.txt", version=">=2.32")),
+        _produced(
+            _node("dep:pypi:requests", name="requests", manifest_path="apps/backend/pyproject.toml", version="==2.31.0")
+        ),
+        _produced(
+            _node(
+                "dep:pypi:requests", name="requests", manifest_path="services/worker/requirements.txt", version=">=2.32"
+            )
+        ),
     )
 
     merged = AnalysisWorker._merge_dependency_declarations(produced)
@@ -86,8 +96,21 @@ def test_merge_preserves_conflicting_versions_rather_than_dropping_one():
 def test_merge_combines_two_sections_of_the_same_manifest_file():
     produced = (
         _produced(
-            _node("dep:npm:lodash", name="lodash", manifest_path="package.json", version="^4.17.21", dependency_type="production"),
-            _node("dep:npm:lodash", name="lodash", manifest_path="package.json", version="^4.17.21", dependency_type="development", line=2),
+            _node(
+                "dep:npm:lodash",
+                name="lodash",
+                manifest_path="package.json",
+                version="^4.17.21",
+                dependency_type="production",
+            ),
+            _node(
+                "dep:npm:lodash",
+                name="lodash",
+                manifest_path="package.json",
+                version="^4.17.21",
+                dependency_type="development",
+                line=2,
+            ),
         ),
     )
 

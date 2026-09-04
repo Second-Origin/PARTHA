@@ -48,9 +48,7 @@ SOURCES: dict[str, bytes] = {
         b"services:\n  api:\n    image: python:3.13-slim\n  worker:\n    image: ${TAG}\nvolumes:\n  pgdata:\n"
     ),
     "app/client.py": (
-        b"import requests\n\n\n"
-        b"def load_users():\n"
-        b'    return requests.get("https://api.example.com/v1/users")\n'
+        b'import requests\n\n\ndef load_users():\n    return requests.get("https://api.example.com/v1/users")\n'
     ),
     "src/api.ts": b'export async function ping() {\n  return fetch("https://api.example.com/health");\n}\n',
 }
@@ -160,9 +158,7 @@ def test_each_producer_is_credited_only_with_the_spans_it_read(auth_client):
         evidence = {
             (item.extractor, item.path)
             for item in session.scalars(
-                select(RiEvidence).where(
-                    RiEvidence.snapshot_id == snapshot.snapshot_id, RiEvidence.node_ref == node.id
-                )
+                select(RiEvidence).where(RiEvidence.snapshot_id == snapshot.snapshot_id, RiEvidence.node_ref == node.id)
             )
         }
 
@@ -228,18 +224,14 @@ def test_iac_resources_are_declared_by_the_repository_with_exact_spans(auth_clie
         }
         assert resources["iac:docker-compose.yml::service/api"].properties["image"] == "python:3.13-slim"
         assert "image" not in resources["iac:docker-compose.yml::service/worker"].properties
-        assert _triples(session, snapshot, "declares") == {
-            ("repo:root", key) for key in resources
-        }
+        assert _triples(session, snapshot, "declares") == {("repo:root", key) for key in resources}
         api_evidence = session.scalars(
             select(RiEvidence).where(
                 RiEvidence.snapshot_id == snapshot.snapshot_id,
                 RiEvidence.node_ref == resources["iac:docker-compose.yml::service/api"].id,
             )
         ).all()
-        assert [(item.path, item.start_line, item.end_line) for item in api_evidence] == [
-            ("docker-compose.yml", 2, 2)
-        ]
+        assert [(item.path, item.start_line, item.end_line) for item in api_evidence] == [("docker-compose.yml", 2, 2)]
 
 
 def test_a_templated_iac_value_is_disclosed_at_the_resource_it_belongs_to(auth_client):

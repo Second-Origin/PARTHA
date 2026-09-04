@@ -104,7 +104,7 @@ def test_a_declaration_and_a_resolution_share_one_node_without_replacing_each_ot
 
 
 def test_a_dependency_with_no_lockfile_pin_reports_an_empty_resolution_list():
-    """"Not resolved" and "never looked at" must not be indistinguishable."""
+    """ "Not resolved" and "never looked at" must not be indistinguishable."""
 
     produced = (
         _produced(

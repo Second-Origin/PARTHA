@@ -40,9 +40,24 @@ def _architecture() -> ArchitectureResponse:
         ],
         edges=[],
         modules=[
-            ArchModule(id="module:services", name="Services", layer="business-logic", node_ids=["module:services"], description="Services module.", file_count=2)
+            ArchModule(
+                id="module:services",
+                name="Services",
+                layer="business-logic",
+                node_ids=["module:services"],
+                description="Services module.",
+                file_count=2,
+            )
         ],
-        request_flow=[RequestFlowStep(id="service", name="Service Layer", type="service", description="Business logic executes.", details=["Transform data"])],
+        request_flow=[
+            RequestFlowStep(
+                id="service",
+                name="Service Layer",
+                type="service",
+                description="Business logic executes.",
+                details=["Transform data"],
+            )
+        ],
         summary=ArchitectureSummary(
             language="Python",
             framework="FastAPI",

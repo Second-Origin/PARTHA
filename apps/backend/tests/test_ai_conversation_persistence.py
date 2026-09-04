@@ -114,12 +114,18 @@ def test_conversation_is_isolated_per_repository(auth_client):
         second_repository = _analysed_repository(auth_client, auth_client.headers, b"export const second = 2;\n")
         _configure_provider(auth_client, auth_client.headers)
 
-        assert auth_client.post(
-            "/ai/query", json={"repositoryId": first_repository, "query": "About repo one"}
-        ).status_code == 200
-        assert auth_client.post(
-            "/ai/query", json={"repositoryId": second_repository, "query": "About repo two"}
-        ).status_code == 200
+        assert (
+            auth_client.post(
+                "/ai/query", json={"repositoryId": first_repository, "query": "About repo one"}
+            ).status_code
+            == 200
+        )
+        assert (
+            auth_client.post(
+                "/ai/query", json={"repositoryId": second_repository, "query": "About repo two"}
+            ).status_code
+            == 200
+        )
 
         first_thread = auth_client.get("/ai/conversations", params={"repositoryId": first_repository}).json()
         second_thread = auth_client.get("/ai/conversations", params={"repositoryId": second_repository}).json()
@@ -142,11 +148,14 @@ def test_conversation_is_owner_scoped_and_returns_404_for_another_owner(client, 
     try:
         repository_id = _analysed_repository(client, alice["headers"])
         _configure_provider(client, alice["headers"])
-        assert client.post(
-            "/ai/query",
-            json={"repositoryId": repository_id, "query": "Hello"},
-            headers=alice["headers"],
-        ).status_code == 200
+        assert (
+            client.post(
+                "/ai/query",
+                json={"repositoryId": repository_id, "query": "Hello"},
+                headers=alice["headers"],
+            ).status_code
+            == 200
+        )
     finally:
         client.app.dependency_overrides.pop(get_provider_registry, None)
 
@@ -175,9 +184,9 @@ def test_deleting_repository_removes_its_conversation_turns(auth_client):
     try:
         repository_id = _analysed_repository(auth_client, auth_client.headers)
         _configure_provider(auth_client, auth_client.headers)
-        assert auth_client.post(
-            "/ai/query", json={"repositoryId": repository_id, "query": "Keep me"}
-        ).status_code == 200
+        assert (
+            auth_client.post("/ai/query", json={"repositoryId": repository_id, "query": "Keep me"}).status_code == 200
+        )
 
         # The conversation turns exist before deletion.
         thread = auth_client.get("/ai/conversations", params={"repositoryId": repository_id})
@@ -190,9 +199,7 @@ def test_deleting_repository_removes_its_conversation_turns(auth_client):
         assert delete.status_code == 204, delete.text
 
         # The thread is gone with the repository.
-        assert auth_client.get(
-            "/ai/conversations", params={"repositoryId": repository_id}
-        ).status_code == 404
+        assert auth_client.get("/ai/conversations", params={"repositoryId": repository_id}).status_code == 404
     finally:
         auth_client.app.dependency_overrides.pop(get_provider_registry, None)
 
@@ -231,9 +238,7 @@ def test_concurrent_queries_do_not_interleave_turns(auth_client):
 
         assert not errors, [str(e) for e in errors]
 
-        conversation = auth_client.get(
-            "/ai/conversations", params={"repositoryId": repository_id}
-        )
+        conversation = auth_client.get("/ai/conversations", params={"repositoryId": repository_id})
         assert conversation.status_code == 200
         messages = conversation.json()["messages"]
         # Five queries => ten turns, alternating user/assistant, all distinct

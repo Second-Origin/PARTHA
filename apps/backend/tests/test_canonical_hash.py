@@ -13,10 +13,13 @@ def test_rfc_identity_and_config_vectors_are_reproduced_exactly():
     assert canonical.compute_config_hash({}) == (
         "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
     )
-    assert canonical.compute_config_hash(
-        config,
-        set_array_keys=frozenset({"extractors", "resolvers", "classifiers"}),
-    ) == "sha256:48e96ba328a03db38556f22d2831d171b82e1ce9287c575328de4bc249da1abe"
+    assert (
+        canonical.compute_config_hash(
+            config,
+            set_array_keys=frozenset({"extractors", "resolvers", "classifiers"}),
+        )
+        == "sha256:48e96ba328a03db38556f22d2831d171b82e1ce9287c575328de4bc249da1abe"
+    )
 
     edge_id = canonical.compute_edge_id(
         "src/auth/service.ts::AuthService.login",
@@ -60,9 +63,7 @@ def test_rfc_identity_and_config_vectors_are_reproduced_exactly():
             {"kind": "node", "stable_key": "mod:app/services"},
         ],
     )
-    assert assertion_id == (
-        "assertion:sha256:c081743f9923c3f5036ebda30de9be443deb58002b6bfa1102f388e64a024d57"
-    )
+    assert assertion_id == ("assertion:sha256:c081743f9923c3f5036ebda30de9be443deb58002b6bfa1102f388e64a024d57")
 
 
 def test_config_arrays_preserve_order_unless_explicitly_declared_as_sets():
@@ -91,9 +92,7 @@ def test_config_arrays_preserve_order_unless_explicitly_declared_as_sets():
 def test_paths_unicode_and_unsupported_numbers_are_normalized_or_rejected():
     assert canonical.normalize_repo_path(r"src\.\auth\..\main.py") == "src/main.py"
     assert canonical.normalize_stable_key("file", "file:src/./main.py") == "file:src/main.py"
-    assert canonical.canonical_json_bytes({"name": "e\u0301"}) == canonical.canonical_json_bytes(
-        {"name": "\u00e9"}
-    )
+    assert canonical.canonical_json_bytes({"name": "e\u0301"}) == canonical.canonical_json_bytes({"name": "\u00e9"})
     with pytest.raises(canonical.PathEscapeError):
         canonical.normalize_repo_path("../../etc/passwd")
     with pytest.raises(canonical.PathEscapeError):
@@ -109,9 +108,7 @@ def test_paths_unicode_and_unsupported_numbers_are_normalized_or_rejected():
 def test_jcs_object_keys_use_utf16_code_unit_order():
     # U+1F600 sorts before U+E000 under JCS UTF-16 ordering (D83D < E000),
     # although Python code-point ordering would place U+E000 first.
-    assert canonical.canonical_json_bytes({"\ue000": 1, "\U0001f600": 2}) == (
-        '{"\U0001f600":2,"\ue000":1}'.encode()
-    )
+    assert canonical.canonical_json_bytes({"\ue000": 1, "\U0001f600": 2}) == ('{"\U0001f600":2,"\ue000":1}'.encode())
 
 
 def test_canonical_graph_hash_is_independent_of_insertion_order_and_volatile_fields():

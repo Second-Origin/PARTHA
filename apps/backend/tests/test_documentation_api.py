@@ -122,8 +122,7 @@ def test_documentation_architecture_groups_modules_into_layers_from_snapshot_fac
         auth_client,
         {
             "src/controllers/user_controller.ts": (
-                "import { getUser } from '../services/user_service';\n"
-                "export const handler = () => getUser();\n"
+                "import { getUser } from '../services/user_service';\nexport const handler = () => getUser();\n"
             ),
             "src/services/user_service.ts": "export function getUser() { return 1; }\n",
         },
@@ -187,17 +186,17 @@ def test_documentation_api_section_excludes_test_fixture_routes(auth_client):
             "src/routes.py": (
                 "from fastapi import FastAPI\n\n"
                 "app = FastAPI()\n\n\n"
-                "@app.get(\"/users\")\n"
+                '@app.get("/users")\n'
                 "def list_users():\n"
                 "    return []\n"
             ),
             "tests/fixtures/routes.py": (
                 "from fastapi import FastAPI\n\n"
                 "app = FastAPI()\n\n\n"
-                "@app.get(\"/config\")\n"
+                '@app.get("/config")\n'
                 "def config():\n"
                 "    return {}\n\n\n"
-                "@app.get(\"/test\")\n"
+                '@app.get("/test")\n'
                 "def test_route():\n"
                 "    return {}\n"
             ),

@@ -129,7 +129,9 @@ def test_import_module_parameter_and_rebinding_are_not_dynamic_imports():
 
 
 def test_unrelated_import_module_method_is_not_a_dynamic_import():
-    codes, _ = _codes("class Loader:\n    def import_module(self, name):\n        return name\n\nLoader().import_module('local')\n")
+    codes, _ = _codes(
+        "class Loader:\n    def import_module(self, name):\n        return name\n\nLoader().import_module('local')\n"
+    )
     assert "RI-EXT-UNSUPPORTED" not in codes
 
 

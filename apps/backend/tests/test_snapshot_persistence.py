@@ -206,13 +206,16 @@ def test_semantic_identity_reuse_new_inputs_and_failed_attempts(db):
     )
     assert reused_config is False and changed_config.state == "building"
     store.mark_failed(changed_config, code="RI-INT-FAILURE")
-    assert store.find_completed(
-        repository_id=repository.id,
-        revision_value=UPLOAD_REVISION,
-        schema_version="ri.v1",
-        producer_version_set=PRODUCERS,
-        config_hash=changed_config.config_hash,
-    ) is None
+    assert (
+        store.find_completed(
+            repository_id=repository.id,
+            revision_value=UPLOAD_REVISION,
+            schema_version="ri.v1",
+            producer_version_set=PRODUCERS,
+            config_hash=changed_config.config_hash,
+        )
+        is None
+    )
 
     changed_producers = _begin(store, repository, producer_version_set=PRODUCERS + ["new@2.0.0"])
     changed_schema = _begin(store, repository, schema_version="ri.v2")
@@ -262,14 +265,17 @@ def test_revision_must_match_repository_and_owner_scoped_accessors_hide_cross_ow
     assert store.get_for_owner(sealed.snapshot_id, owner.id) is not None
     assert store.get_for_owner(sealed.snapshot_id, other.id) is None
     assert store.get_for_owner("snap_missing", owner.id) is None
-    assert store.find_completed_for_owner(
-        owner_id=other.id,
-        repository_id=repository.id,
-        revision_value=repository.revision_value,
-        schema_version=sealed.schema_version,
-        producer_version_set=sealed.producer_version_set,
-        config_hash=sealed.config_hash,
-    ) is None
+    assert (
+        store.find_completed_for_owner(
+            owner_id=other.id,
+            repository_id=repository.id,
+            revision_value=repository.revision_value,
+            schema_version=sealed.schema_version,
+            producer_version_set=sealed.producer_version_set,
+            config_hash=sealed.config_hash,
+        )
+        is None
+    )
 
 
 def test_repository_revision_identity_is_constrained_and_immutable(db):
@@ -458,9 +464,7 @@ def test_diagnostics_only_real_extraction_emits_root_and_seals(db):
 
     session, _ = db
     repository = _repository(session, _owner(session))
-    runs = ExtractionPipeline((PythonExtractor(),)).run(
-        {"src/broken.py": b"def broken(:\n    return\n"}
-    )
+    runs = ExtractionPipeline((PythonExtractor(),)).run({"src/broken.py": b"def broken(:\n    return\n"})
     producers = [run.producer for run in runs]
     store = SnapshotStore(session)
     snapshot = _begin(store, repository, producer_version_set=producers)
@@ -570,7 +574,9 @@ def test_database_uniqueness_foreign_keys_and_same_snapshot_provenance(db):
     node_two = store.add_node(second, node_kind="repository", stable_key="repo:root", evidence=[_evidence("README.md")])
     session.commit()
 
-    session.add(RiNode(snapshot_id=first.snapshot_id, stable_key="repo:root", node_kind="repository", truth_class="observed"))
+    session.add(
+        RiNode(snapshot_id=first.snapshot_id, stable_key="repo:root", node_kind="repository", truth_class="observed")
+    )
     with pytest.raises(IntegrityError):
         session.commit()
     session.rollback()
@@ -625,9 +631,7 @@ def test_equivalent_concurrent_attempts_allow_only_one_completed_snapshot(db):
     with pytest.raises(SnapshotAlreadySealedError) as error:
         store.seal(second)
     assert error.value.existing.snapshot_id == sealed.snapshot_id
-    assert session.scalar(
-        select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")
-    ) == 1
+    assert session.scalar(select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")) == 1
 
 
 def test_duplicate_semantic_edges_collapse_and_union_normalized_provenance(db):
@@ -685,15 +689,14 @@ def test_duplicate_semantic_edges_collapse_and_union_normalized_provenance(db):
         derived_from=[observation_ref(second_observation.observation_id)],
     )
     assert first_edge.id == second_edge.id
-    assert session.scalar(
-        select(func.count()).select_from(RiEdge).where(RiEdge.snapshot_id == snapshot.snapshot_id)
-    ) == 1
-    assert session.scalar(
-        select(func.count()).select_from(RiEvidence).where(RiEvidence.edge_ref == first_edge.id)
-    ) == 2
-    assert session.scalar(
-        select(func.count()).select_from(RiDerivation).where(RiDerivation.edge_ref == first_edge.id)
-    ) == 2
+    assert (
+        session.scalar(select(func.count()).select_from(RiEdge).where(RiEdge.snapshot_id == snapshot.snapshot_id)) == 1
+    )
+    assert session.scalar(select(func.count()).select_from(RiEvidence).where(RiEvidence.edge_ref == first_edge.id)) == 2
+    assert (
+        session.scalar(select(func.count()).select_from(RiDerivation).where(RiDerivation.edge_ref == first_edge.id))
+        == 2
+    )
     assert store.seal(snapshot).state == "completed"
 
 
@@ -720,9 +723,9 @@ def test_legacy_regex_metadata_is_not_promoted_into_ri_v1_facts(db):
         metadata={"intelligence": {"nodes": [{"id": "regex-node"}], "relationships": []}},
     )
     snapshot = _begin(SnapshotStore(session), repository)
-    assert session.scalar(
-        select(func.count()).select_from(RiNode).where(RiNode.snapshot_id == snapshot.snapshot_id)
-    ) == 0
+    assert (
+        session.scalar(select(func.count()).select_from(RiNode).where(RiNode.snapshot_id == snapshot.snapshot_id)) == 0
+    )
     assert repository.repo_metadata["intelligence"]["nodes"][0]["id"] == "regex-node"
 
 
@@ -743,9 +746,7 @@ def test_store_rejects_writes_after_failed_snapshot(db):
 
 
 def _single_evidence(session: Session, snapshot: RiSnapshot) -> RiEvidence:
-    return session.scalars(
-        select(RiEvidence).where(RiEvidence.snapshot_id == snapshot.snapshot_id)
-    ).one()
+    return session.scalars(select(RiEvidence).where(RiEvidence.snapshot_id == snapshot.snapshot_id)).one()
 
 
 def test_post_insert_span_mutation_beyond_logical_lines_cannot_seal_and_fails(db):
@@ -766,9 +767,7 @@ def test_post_insert_span_mutation_beyond_logical_lines_cannot_seal_and_fails(db
         store.seal(snapshot)
 
     assert snapshot.state == "failed"
-    assert session.scalar(
-        select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")
-    ) == 0
+    assert session.scalar(select(func.count()).select_from(RiSnapshot).where(RiSnapshot.state == "completed")) == 0
     # The rejected mutation never reached the persisted row.
     assert _single_evidence(session, snapshot).end_line == 1
 

@@ -8,16 +8,8 @@ def _extract(source: str):
 
 
 def test_decorators_are_recorded_as_a_symbol_property():
-    result = _extract(
-        "import functools\n"
-        "@functools.cache\n"
-        "def compute():\n"
-        "    pass\n"
-    )
-    compute = next(
-        n for n in result.nodes
-        if n.stable_key == "app/api/auth.py::compute"
-    )
+    result = _extract("import functools\n@functools.cache\ndef compute():\n    pass\n")
+    compute = next(n for n in result.nodes if n.stable_key == "app/api/auth.py::compute")
     assert compute.properties is not None
     assert "functools.cache" in compute.properties["decorators"]
 
@@ -25,12 +17,7 @@ def test_decorators_are_recorded_as_a_symbol_property():
 def test_decorator_observation_carries_the_decorator_own_span():
     # The symbol's evidence starts at `def`, so a decorator on an earlier line is
     # outside it. Each decorator needs provenance for its own source lines (#90).
-    result = _extract(
-        "@router.post('/login')\n"
-        "@requires_auth\n"
-        "def login():\n"
-        "    pass\n"
-    )
+    result = _extract("@router.post('/login')\n@requires_auth\ndef login():\n    pass\n")
     decorators = [o for o in result.observations if o.observed_kind == "decorator"]
     assert [(o.referent_text, o.evidence.start_line, o.evidence.end_line) for o in decorators] == [
         ("router.post", 1, 1),
@@ -53,12 +40,7 @@ def test_class_decorators_are_observed():
 
 
 def test_fastapi_route_decorator_yields_literal_path_observation():
-    result = _extract(
-        "router = APIRouter(prefix='/auth')\n"
-        "@router.post('/login')\n"
-        "def login():\n"
-        "    pass\n"
-    )
+    result = _extract("router = APIRouter(prefix='/auth')\n@router.post('/login')\ndef login():\n    pass\n")
     routes = [o for o in result.observations if o.observed_kind == "route"]
     assert len(routes) == 1
     # literal decorator string only; no /auth prefix joined (that is #91)

@@ -60,6 +60,7 @@ def _import_sample(client) -> str:
     assert response.status_code == 201
     return response.json()["id"]
 
+
 RATE_ENV = {
     "RATE_LIMIT_DEFAULT_PER_MINUTE": "3",
     "RATE_LIMIT_HEAVY_PER_MINUTE": "2",
@@ -88,7 +89,9 @@ def limited_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator
     database.settings = settings
     database.engine.dispose()
     database.connect_args = {"check_same_thread": False}
-    database.engine = database.create_engine(settings.database_url, pool_pre_ping=True, connect_args=database.connect_args)
+    database.engine = database.create_engine(
+        settings.database_url, pool_pre_ping=True, connect_args=database.connect_args
+    )
     database.SessionLocal.configure(bind=database.engine)
 
     from app.core.schema_sync import stamp_head

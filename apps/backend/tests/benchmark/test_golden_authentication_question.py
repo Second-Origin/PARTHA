@@ -71,19 +71,14 @@ _CONNECTED = AuthQuestionFixture(
             b"    return UserService(token)\n"
         ),
         "src/services.py": (
-            b"from src.models import UserModel\n\n\n"
-            b"def UserService(token: str) -> dict:\n"
-            b"    return UserModel(token)\n"
+            b"from src.models import UserModel\n\n\ndef UserService(token: str) -> dict:\n    return UserModel(token)\n"
         ),
-        "src/models.py": (
-            b"def UserModel(token: str) -> dict:\n"
-            b"    return {'token': token}\n"
-        ),
+        "src/models.py": (b"def UserModel(token: str) -> dict:\n    return {'token': token}\n"),
         "src/routes.py": (
             b"from fastapi import FastAPI, Depends\n"
             b"from src.dependencies import get_current_user\n\n"
             b"app = FastAPI()\n\n\n"
-            b"@app.get(\"/me\")\n"
+            b'@app.get("/me")\n'
             b"def read_me(user=Depends(get_current_user)):\n"
             b"    return user\n"
         ),
@@ -129,10 +124,10 @@ _UNRELATED_NOISE = AuthQuestionFixture(
             b"from fastapi import FastAPI, Depends\n"
             b"from src.dependencies import get_current_user, get_database\n\n"
             b"app = FastAPI()\n\n\n"
-            b"@app.get(\"/me\")\n"
+            b'@app.get("/me")\n'
             b"def read_me(user=Depends(get_current_user)):\n"
             b"    return user\n\n\n"
-            b"@app.get(\"/health\")\n"
+            b'@app.get("/health")\n'
             b"def health_check(db=Depends(get_database)):\n"
             b"    return {'status': 'ok'}\n"
         ),
@@ -160,7 +155,7 @@ _GENERIC_DEPENDENCY_ONLY = AuthQuestionFixture(
             b"from fastapi import FastAPI, Depends\n"
             b"from src.dependencies import get_database\n\n"
             b"app = FastAPI()\n\n\n"
-            b"@app.get(\"/health\")\n"
+            b'@app.get("/health")\n'
             b"def health_check(db=Depends(get_database)):\n"
             b"    return {'status': 'ok'}\n"
         ),
@@ -181,10 +176,10 @@ _UNRESOLVED_AND_AMBIGUOUS = AuthQuestionFixture(
             b"from .shared import get_current_user\n"
             b"from src.dependencies import missing_guard\n\n"
             b"app = FastAPI()\n\n\n"
-            b"@app.get(\"/me\")\n"
+            b'@app.get("/me")\n'
             b"def read_me(user=Depends(get_current_user)):\n"
             b"    return user\n\n\n"
-            b"@app.get(\"/profile\")\n"
+            b'@app.get("/profile")\n'
             b"def read_profile(user=Depends(missing_guard)):\n"
             b"    return user\n"
         ),
@@ -192,20 +187,14 @@ _UNRESOLVED_AND_AMBIGUOUS = AuthQuestionFixture(
         # resolves to both candidate files, so the reference stays a
         # deterministic RI-RES-AMBIGUOUS diagnostic rather than guessing.
         "src/shared.py": b"def get_current_user(token: str) -> str:\n    return token\n",
-        "src/shared.ts": (
-            b"export function get_current_user(token: string): string {\n"
-            b"  return token;\n"
-            b"}\n"
-        ),
+        "src/shared.ts": (b"export function get_current_user(token: string): string {\n  return token;\n}\n"),
     },
     expected_routes=frozenset(),
     expected_middleware=frozenset(),
     expected_services=frozenset(),
     expected_models=frozenset(),
     expected_relationship_pairs=frozenset(),
-    forbidden_names=frozenset(
-        {"/me", "/profile", "read_me", "read_profile", "get_current_user", "missing_guard"}
-    ),
+    forbidden_names=frozenset({"/me", "/profile", "read_me", "read_profile", "get_current_user", "missing_guard"}),
     expected_diagnostic_codes=frozenset({"RI-RES-UNRESOLVED", "RI-RES-AMBIGUOUS"}),
 )
 
@@ -294,9 +283,7 @@ def _seal_sources(db_path, sources: dict[str, bytes]) -> tuple[Session, str, str
                 language=node.language,
                 properties=node.properties,
                 set_array_keys=(
-                    frozenset({"decorators"})
-                    if node.properties and "decorators" in node.properties
-                    else frozenset()
+                    frozenset({"decorators"}) if node.properties and "decorators" in node.properties else frozenset()
                 ),
                 evidence=[_evidence(item, produced) for item in node.evidence],
             )
@@ -413,9 +400,7 @@ def test_golden_authentication_question_is_deterministic(fixture: AuthQuestionFi
             return (
                 response.status,
                 frozenset((claim.kind, claim.name, claim.confidence) for claim in response.claims),
-                frozenset(
-                    (item.subject, item.predicate, item.object) for item in response.relationships
-                ),
+                frozenset((item.subject, item.predicate, item.object) for item in response.relationships),
                 frozenset(
                     (diagnostic.code, diagnostic.path, diagnostic.start_line, diagnostic.end_line)
                     for diagnostic in response.diagnostics

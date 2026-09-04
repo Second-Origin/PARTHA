@@ -42,7 +42,9 @@ def _diagnostic(code: str, subject: str) -> Fact:
     return Fact(fact_type="diagnostic", kind=code, subject=subject, severity="info", producer="python-ast@1.0.0")
 
 
-def _labeled(fact: Fact, *, language: str = "python", fixture_class: str = "minimal", fixture_id: str = "fx") -> LabeledFact:
+def _labeled(
+    fact: Fact, *, language: str = "python", fixture_class: str = "minimal", fixture_id: str = "fx"
+) -> LabeledFact:
     return LabeledFact(fact=fact, language=language, fixture_class=fixture_class, fixture_id=fixture_id)
 
 
@@ -169,7 +171,7 @@ def test_empty_expected_with_invented_facts_is_zero_precision_not_perfect():
     assert report.overall.true_positives == 0
     assert report.overall.false_positives == 1
     assert report.overall.precision == Fraction(0)  # NOT a manufactured 1.0
-    assert report.overall.recall == Fraction(1)      # nothing was expected
+    assert report.overall.recall == Fraction(1)  # nothing was expected
 
 
 def test_empty_expected_and_empty_actual_is_defined_as_perfect():

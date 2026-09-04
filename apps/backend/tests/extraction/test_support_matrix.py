@@ -30,7 +30,10 @@ TYPESCRIPT_BLIND_SPOTS = {
     "namespace": ("src/a.ts", "namespace N { export const a = 1; }\n"),
     "commonjs-require": ("src/a.ts", "const fs = require('fs');\n"),
     "ambient-module": ("src/a.ts", "declare module 'foo' { }\n"),
-    "http-dynamic-destination": ("src/a.ts", "export function f(host: string) {\n  return fetch(`https://${host}/v1`);\n}\n"),
+    "http-dynamic-destination": (
+        "src/a.ts",
+        "export function f(host: string) {\n  return fetch(`https://${host}/v1`);\n}\n",
+    ),
 }
 
 

@@ -70,9 +70,9 @@ changing it requires restarting the dev server.
 python -m pytest
 
 # Backend static analysis (needs apps/backend/requirements-dev.txt installed first)
-ruff check app
-ruff format --check app
-mypy app
+ruff check app scripts tests
+ruff format --check app scripts tests
+mypy app scripts
 
 # Frontend, from the repository root
 npm --prefix apps/frontend run test    # vitest

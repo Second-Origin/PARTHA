@@ -114,7 +114,7 @@ def score(expected: list[LabeledFact], actual: list[LabeledFact]) -> ScoreReport
         exps = sorted(expected_by_key.get(key, []), key=lambda item: item.fixture_id)
         acts = sorted(actual_by_key.get(key, []), key=lambda item: item.fixture_id)
         matched = min(len(exps), len(acts))
-        true_positives.extend(exps[:matched])   # attribute matches to the golden side
+        true_positives.extend(exps[:matched])  # attribute matches to the golden side
         false_negatives.extend(exps[matched:])  # expected facts never produced
         false_positives.extend(acts[matched:])  # surplus / invented actual facts
 

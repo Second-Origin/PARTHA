@@ -103,15 +103,9 @@ def _seal_real_graph(
     ordered_runs = list(reversed(runs)) if reverse else list(runs)
     nodes = [(produced, node) for produced in ordered_runs for node in produced.result.nodes]
     observations = [
-        (produced, observation)
-        for produced in ordered_runs
-        for observation in produced.result.observations
+        (produced, observation) for produced in ordered_runs for observation in produced.result.observations
     ]
-    diagnostics = [
-        (produced, diagnostic)
-        for produced in ordered_runs
-        for diagnostic in produced.result.diagnostics
-    ]
+    diagnostics = [(produced, diagnostic) for produced in ordered_runs for diagnostic in produced.result.diagnostics]
     if reverse:
         nodes.reverse()
         observations.reverse()
@@ -216,9 +210,7 @@ def _pure_real_hash(
             else:
                 for key in ("node_kind", "truth_class", "name", "language", "properties"):
                     if existing[key] != record[key]:
-                        raise AssertionError(
-                            f"conflicting real node output for {node.stable_key!r}"
-                        )
+                        raise AssertionError(f"conflicting real node output for {node.stable_key!r}")
                 existing["evidence"] = [*existing["evidence"], *evidence]
 
         for observation in produced.result.observations:
@@ -280,9 +272,7 @@ def _pure_real_hash(
         revision_kind="upload",
         revision_value=fixture.revision_value(),
         producer_version_set=list(fixture.producer_version_set),
-        config_hash=canonical.compute_config_hash(
-            {"max_source_bytes": fixture.max_source_bytes}
-        ),
+        config_hash=canonical.compute_config_hash({"max_source_bytes": fixture.max_source_bytes}),
         nodes=nodes,
         edges=[],
         assertions=[],

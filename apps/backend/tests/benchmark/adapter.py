@@ -60,11 +60,7 @@ class RealExtractionAdapter:
                     name=node.name or "",
                     language=node.language or "",
                     truth_class="observed",
-                    value=(
-                        canonical_value(dict(node.properties))
-                        if node.properties is not None
-                        else ""
-                    ),
+                    value=(canonical_value(dict(node.properties)) if node.properties is not None else ""),
                     evidence=self._evidence(node.evidence, produced),
                     details={"properties": dict(node.properties or {})},
                 )

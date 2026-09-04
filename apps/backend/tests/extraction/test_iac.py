@@ -101,9 +101,7 @@ def test_a_literal_image_is_recorded_and_a_templated_one_is_disclosed():
     # were the image that actually runs.
     assert "image" not in nodes["iac:deploy/docker-compose.yml::service/worker"].properties
     templated = [
-        diagnostic
-        for diagnostic in result.diagnostics
-        if diagnostic.message == "templated IaC value is unsupported"
+        diagnostic for diagnostic in result.diagnostics if diagnostic.message == "templated IaC value is unsupported"
     ]
     assert len(templated) == 1
     assert templated[0].code == RI_EXT_UNSUPPORTED

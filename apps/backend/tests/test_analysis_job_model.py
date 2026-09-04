@@ -1,4 +1,5 @@
 """Test analysis_job model and constraints."""
+
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -82,9 +83,7 @@ def test_analysis_job_basic_insert(db):
     session.commit()
 
     # Verify it was inserted
-    result = session.execute(
-        select(AnalysisJob).where(AnalysisJob.id == job.id)
-    ).scalar_one()
+    result = session.execute(select(AnalysisJob).where(AnalysisJob.id == job.id)).scalar_one()
     assert result.status == "queued"
     assert result.progress == 0
     assert result.attempt == 0
@@ -112,9 +111,7 @@ def test_analysis_job_status_constraint_valid(db):
         session.commit()
 
         # Verify it was inserted
-        result = session.execute(
-            select(AnalysisJob).where(AnalysisJob.id == job.id)
-        ).scalar_one()
+        result = session.execute(select(AnalysisJob).where(AnalysisJob.id == job.id)).scalar_one()
         assert result.status == status
 
 
@@ -288,7 +285,5 @@ def test_analysis_job_effective_identity_allows_retry_after_unsuccessful_termina
     )
     session.commit()
 
-    statuses = session.scalars(
-        select(AnalysisJob.status).where(AnalysisJob.repository_id == repo.id)
-    ).all()
+    statuses = session.scalars(select(AnalysisJob.status).where(AnalysisJob.repository_id == repo.id)).all()
     assert set(statuses) == {terminal_status, "queued"}
