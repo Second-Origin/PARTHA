@@ -17,6 +17,7 @@ import re
 from sqlalchemy import select
 
 from app.extraction.http import parse_referent
+from app.extraction.naming import package_root
 from app.intelligence.snapshot_store import Evidence, SnapshotStateError, SnapshotStore
 from app.models.snapshot import RiEvidence, RiNode, RiObservation, RiSnapshot
 
@@ -460,7 +461,7 @@ class RelationshipResolver:
         if files:
             return files
 
-        package = self._package_root(specifier, source_path)
+        package = package_root(specifier, source_path)
         normalized_python = re.sub(r"[-_.]+", "-", package).lower()
         return [
             node
@@ -511,14 +512,6 @@ class RelationshipResolver:
     def _python_absolute_file_candidates(specifier: str) -> set[str]:
         root = specifier.replace(".", "/")
         return {f"{root}.py", f"{root}/__init__.py"}
-
-    @staticmethod
-    def _package_root(specifier: str, source_path: str) -> str:
-        if source_path.endswith(".py"):
-            return specifier.split(".", 1)[0]
-        if specifier.startswith("@"):
-            return "/".join(specifier.split("/")[:2])
-        return specifier.split("/", 1)[0]
 
     def _reference_candidates(
         self,
