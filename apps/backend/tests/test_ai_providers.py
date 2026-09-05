@@ -31,6 +31,29 @@ class RecordingSender:
         return httpx.Response(200, json=self.payload, request=httpx.Request("POST", "https://provider.example"))
 
 
+class ConcurrencyTrackingSender:
+    """Records how many `post()` calls were ever in flight at once (#414).
+
+    Holds each call open for `delay` seconds before returning, so several
+    calls fired at the same time genuinely have a window to overlap if
+    nothing is gating them -- a delay of 0 would let every call finish
+    before the next even starts, defeating the point of the test.
+    """
+
+    def __init__(self, payload: dict[str, Any], *, delay: float = 0.05) -> None:
+        self.payload = payload
+        self.delay = delay
+        self.current = 0
+        self.max_concurrent = 0
+
+    async def post(self, config: AiProviderConfig, url: str, **kwargs: object) -> httpx.Response:
+        self.current += 1
+        self.max_concurrent = max(self.max_concurrent, self.current)
+        await asyncio.sleep(self.delay)
+        self.current -= 1
+        return httpx.Response(200, json=self.payload, request=httpx.Request("POST", "https://provider.example"))
+
+
 def _provider_cases():
     return [
         (
@@ -199,3 +222,78 @@ def test_default_registry_contains_only_dedicated_secure_provider_implementation
     assert isinstance(registry.get("gemini"), GeminiProvider)
     assert isinstance(registry.get("openrouter"), OpenRouterProvider)
     assert isinstance(registry.get("ollama"), OllamaProvider)
+
+
+# --- Ollama concurrency limit (#414) -----------------------------------------
+#
+# Ollama runs inference on the same machine PARTHA runs on, so an unbounded
+# number of concurrent requests competes with the user's own machine for CPU
+# and memory -- unlike the four hosted providers above, which each call a
+# fixed remote URL with their own server-side infrastructure. See the linked
+# issue for the real reproduction (measured CPU/memory) that motivated this.
+
+
+def test_ollama_never_sends_more_than_one_request_at_a_time():
+    sender = ConcurrencyTrackingSender({"message": {"content": "ok"}})
+    provider = OllamaProvider(sender)
+    config = AiProviderConfig(provider="ollama", base_url="http://provider.example:11434")
+
+    async def fire_five():
+        await asyncio.gather(*(provider.complete(config, PROMPT) for _ in range(5)))
+
+    asyncio.run(fire_five())
+
+    assert sender.max_concurrent == 1
+
+
+def test_ollama_still_serves_every_request_it_just_serializes_them():
+    sender = ConcurrencyTrackingSender({"message": {"content": "ok"}})
+    provider = OllamaProvider(sender)
+    config = AiProviderConfig(provider="ollama", base_url="http://provider.example:11434")
+
+    async def fire_five():
+        return await asyncio.gather(*(provider.complete(config, PROMPT) for _ in range(5)))
+
+    responses = asyncio.run(fire_five())
+
+    # Queued and served, never dropped or errored -- this is resource
+    # management, not a rate limit.
+    assert len(responses) == 5
+    assert all(response.content == "ok" for response in responses)
+
+
+def test_a_second_ollama_provider_instance_shares_the_same_limit():
+    """The registry constructs a fresh OllamaProvider per request (#414) --
+    the limit has to live above any single instance or it would do nothing.
+    """
+
+    sender = ConcurrencyTrackingSender({"message": {"content": "ok"}})
+    config = AiProviderConfig(provider="ollama", base_url="http://provider.example:11434")
+
+    async def fire_from_two_instances():
+        first = OllamaProvider(sender)
+        second = OllamaProvider(sender)
+        await asyncio.gather(
+            *(first.complete(config, PROMPT) for _ in range(3)),
+            *(second.complete(config, PROMPT) for _ in range(3)),
+        )
+
+    asyncio.run(fire_from_two_instances())
+
+    assert sender.max_concurrent == 1
+
+
+def test_the_ollama_limit_does_not_apply_to_a_hosted_provider():
+    """A hosted provider has its own remote infrastructure, not the user's
+    machine, behind it -- it must never be throttled by Ollama's limit."""
+
+    sender = ConcurrencyTrackingSender({"choices": [{"message": {"content": "ok"}}]})
+    provider = OpenAIProvider(sender)
+    config = AiProviderConfig(provider="openai", api_key="key")
+
+    async def fire_five():
+        await asyncio.gather(*(provider.complete(config, PROMPT) for _ in range(5)))
+
+    asyncio.run(fire_five())
+
+    assert sender.max_concurrent == 5
