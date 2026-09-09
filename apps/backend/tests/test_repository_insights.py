@@ -104,7 +104,10 @@ def test_seeded_insights_totals_are_exact_and_not_scores(auth_client):
     # manifest extractors; drift requires an intentional contract update.
     assert metrics["nodes.files.total"]["value"] == 4
     assert metrics["nodes.dependencies.total"]["value"] == 1
+    # ./absent (relative import) and absent() (bound to it) are genuine in-repo
+    # gaps; nothing in this fixture references external code.
     assert metrics["diagnostics.relationships.unresolved"]["value"] >= 1
+    assert metrics["diagnostics.relationships.external-references"]["value"] == 0
     assert metrics["evidence.records.total"]["value"] > 0
     assert metrics["assessment.vulnerability-scanning"]["value"] is None
     assert metrics["assessment.vulnerability-scanning"]["assessmentState"] == "not_assessed"
@@ -121,6 +124,33 @@ def test_seeded_insights_totals_are_exact_and_not_scores(auth_client):
     }
     labels = " ".join(metric["label"].lower() for metric in body["metrics"])
     assert all(term not in labels for term in prohibited)
+
+
+def test_unresolved_relationships_split_external_refs_from_in_repo_gaps(auth_client):
+    files = {
+        "README.md": b"# split fixture\n",
+        "package.json": b'{"dependencies":{"react":"18.3.0"}}\n',
+        "src/app.ts": (
+            b"import { useState } from 'react';\n"
+            b"import { helper } from './helper';\n"
+            b"export const value = useState() + helper() + missingLocal();\n"
+        ),
+        "src/helper.ts": b"export function helper() { return 1; }\n",
+    }
+    repository = _upload(auth_client, files)
+    body = auth_client.get(f"/analysis/{repository['id']}/insights").json()
+    metrics = {metric["id"]: metric for metric in body["metrics"]}
+    by_code = {item["key"]: item["value"] for item in body["diagnosticsByCode"]}
+
+    external = metrics["diagnostics.relationships.external-references"]["value"]
+    in_repo = metrics["diagnostics.relationships.unresolved"]["value"]
+
+    # useState() is bound to the declared 'react' dependency -> external.
+    assert external >= 1
+    # missingLocal() has no binding and is not a platform name -> genuine gap.
+    assert in_repo >= 1
+    # Every raw RI-RES-UNRESOLVED diagnostic lands in exactly one bucket.
+    assert external + in_repo == by_code["RI-RES-UNRESOLVED"]
 
 
 def test_insights_never_falls_back_to_mutable_legacy_metadata(auth_client):
