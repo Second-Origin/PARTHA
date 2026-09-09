@@ -248,8 +248,9 @@ versioned Alembic migration sequence (per the existing
 
 This section defines the design-level outcome. Revision boundaries, DDL ordering, deterministic ID
 construction, verification queries, interruption recovery, and downgrade mechanics belong to the
-separately reviewed migration plan. #322 must supply the repeatable rehearsal and rollback evidence
-before the #299 implementation PR merges.
+separately reviewed migration plan. #322 supplied the repeatable rehearsal and rollback evidence
+that gated the #299 implementation PR; #299 merged in
+[#372](https://github.com/Second-Origin/PARTHA/pull/372).
 
 ## 7. Out of scope
 
@@ -325,8 +326,8 @@ Owner sign-off: confirmed
 Open questions: 5/5 resolved
 Tracking issue: Second-Origin/PARTHA#298
 PR #328 architecture amendment: explicitly approved by owner on 2026-08-19
-#299 implementation: authorized for writing and testing; not yet implemented
-#322 operational evidence: required before the #299 implementation PR merges
+#299 implementation: implemented and merged in #372 (migrations 0013_lineage_expand / 0014_lineage_constraints)
+#322 operational evidence: supplied as the merge gate for #299
 ```
 
 ## Ratification waiver (owner decision, 2026-08-11)

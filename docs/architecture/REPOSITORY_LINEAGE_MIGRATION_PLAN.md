@@ -8,11 +8,13 @@
 | Purpose | Specify the proposed migration mechanics, backfill, integrity rules, and validation for #299 |
 | Runtime changes in this document | None |
 | Authorization status | **PR #328 amendment approved; #299 authorized for implementation** |
+| Implementation status | **Implemented and merged** in [#299](https://github.com/Second-Origin/PARTHA/pull/372) — migrations `0013_lineage_expand` / `0014_lineage_constraints`, with the read API and Lineage History UI following. This document is retained as the plan the migration was built and tested against. |
 
 This document is an implementation-grade plan, not an implementation. It does not create an
 Alembic revision, change an ORM model, change `RepositoryService`, or alter an API/frontend
-contract. It records the current schema and specifies a safe migration and backfill. RFC-0002 is the
-architecture contract; this plan defines the migration and test mechanics without extending it.
+contract. It records the pre-implementation schema and specifies a safe migration and backfill.
+RFC-0002 is the architecture contract; this plan defines the migration and test mechanics without
+extending it.
 
 ## 1. Executive verdict
 
@@ -28,10 +30,10 @@ The migration can now be written and tested against these two implementation-cri
    `repository_lineages.next_sequence`, 1-based ordinals, transactional allocation, valid deletion
    gaps, and preservation of empty lineages.
 
-This authorization does not mean #299 has been implemented. The #322 rehearsal and recovery
-process remains required against the eventual migration before the #299 implementation PR merges,
-but it does not block writing or testing that implementation. No runtime or migration
-implementation is present here.
+This plan predates the implementation. #299 has since been implemented and merged (migrations
+`0013_lineage_expand` / `0014_lineage_constraints`); the [#322](https://github.com/Second-Origin/PARTHA/issues/322)
+rehearsal and recovery process was the merge gate for that change. No runtime or migration
+implementation lives in this document itself.
 
 ## 2. Current-state data model
 
@@ -573,10 +575,11 @@ incremental analysis, new snapshot contracts, or manual upload linking.
 
 ## 12. Authorization gate
 
-PR #328 does not implement #299. The owner's explicit approval authorizes writing and testing the
-#299 implementation against this plan. It does not remove the separate requirement to complete the
-[#322](https://github.com/Second-Origin/PARTHA/issues/322) rehearsal and recovery process against
-the eventual migration before the #299 implementation PR merges.
+PR #328 authorized writing and testing the #299 implementation against this plan; the
+[#322](https://github.com/Second-Origin/PARTHA/issues/322) rehearsal and recovery process was the
+separate merge gate. Both are now satisfied — #299 merged in
+[#372](https://github.com/Second-Origin/PARTHA/pull/372). This section is retained as a record of the
+gate that applied.
 
 ## 13. Test matrix for implementation
 
