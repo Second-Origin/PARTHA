@@ -1,94 +1,92 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Outlet } from 'react-router-dom';
 import { MainLayout } from '@/shared/components/layout/MainLayout';
+import { RequireAuth } from './RequireAuth';
+import { RootHydrateFallback } from './RootHydrateFallback';
+import { productSurfaceRoutes } from './productSurfaces';
 
-export const router = createBrowserRouter([
-  {
-    element: <MainLayout />,
-    children: [
-      {
-        path: '/',
-        lazy: async () => {
-          const { DashboardPage } = await import('@/app/pages/DashboardPage');
-          return { Component: DashboardPage };
+export function createAppRouter() {
+  return createBrowserRouter([
+    {
+      Component: Outlet,
+      HydrateFallback: RootHydrateFallback,
+      children: [
+        {
+          path: '/',
+          lazy: async () => {
+            const { LandingPage } = await import('@/app/pages/LandingPage');
+            return { Component: LandingPage };
+          },
         },
-      },
-      {
-        path: '/repositories',
-        lazy: async () => {
-          const { RepositoriesPage } = await import('@/app/pages/RepositoriesPage');
-          return { Component: RepositoriesPage };
+        {
+          path: '/login',
+          lazy: async () => {
+            const { LoginPage } = await import('@/app/pages/LoginPage');
+            return { Component: LoginPage };
+          },
         },
-      },
-      {
-        path: '/repositories/:id',
-        lazy: async () => {
-          const { RepositoryDetailPage } = await import('@/app/pages/RepositoryDetailPage');
-          return { Component: RepositoryDetailPage };
+        {
+          path: '/register',
+          lazy: async () => {
+            const { RegisterPage } = await import('@/app/pages/RegisterPage');
+            return { Component: RegisterPage };
+          },
         },
-      },
-      {
-        path: '/upload',
-        lazy: async () => {
-          const { UploadPage } = await import('@/app/pages/UploadPage');
-          return { Component: UploadPage };
+        {
+          // Landing point for every OAuth provider redirect (#288). Public and
+          // outside RequireAuth: the browser lands here straight from Google/
+          // GitHub, before this tab has any access token in memory.
+          path: '/oauth/complete',
+          lazy: async () => {
+            const { OAuthCompletePage } = await import('@/app/pages/OAuthCompletePage');
+            return { Component: OAuthCompletePage };
+          },
         },
-      },
-      {
-        path: '/analysis/:id',
-        lazy: async () => {
-          const { AnalysisPipelinePage } = await import('@/app/pages/AnalysisPipelinePage');
-          return { Component: AnalysisPipelinePage };
+        {
+          element: <RequireAuth />,
+          children: [
+            {
+              element: <MainLayout />,
+              children: [
+                {
+                  path: '/repositories/:id',
+                  lazy: async () => {
+                    const { RepositoryDetailPage } = await import('@/app/pages/RepositoryDetailPage');
+                    return { Component: RepositoryDetailPage };
+                  },
+                },
+                {
+                  path: '/analysis/:id',
+                  lazy: async () => {
+                    const { AnalysisPipelinePage } = await import('@/app/pages/AnalysisPipelinePage');
+                    return { Component: AnalysisPipelinePage };
+                  },
+                },
+                {
+                  path: '/analysis/:id/architecture',
+                  lazy: async () => {
+                    const { AnalysisArchitectureRedirect } = await import('@/app/pages/AnalysisArchitectureRedirect');
+                    return { Component: AnalysisArchitectureRedirect };
+                  },
+                },
+                ...productSurfaceRoutes,
+                {
+                  // Catch-all: an unmatched path previously fell through to react-router's
+                  // default error boundary ("Unexpected Application Error! 404 Not Found")
+                  // instead of a page. This still sits behind RequireAuth, so an
+                  // unauthenticated visitor to a bogus path is redirected to /login first.
+                  path: '*',
+                  lazy: async () => {
+                    const { NotFoundPage } = await import('@/app/pages/NotFoundPage');
+                    return { Component: NotFoundPage };
+                  },
+                },
+              ],
+            },
+          ],
         },
-      },
-      {
-        path: '/architecture',
-        lazy: async () => {
-          const { ArchitecturePage } = await import('@/app/pages/ArchitecturePage');
-          return { Component: ArchitecturePage };
-        },
-      },
-      {
-        path: '/dependencies',
-        lazy: async () => {
-          const { DependenciesPage } = await import('@/app/pages/DependenciesPage');
-          return { Component: DependenciesPage };
-        },
-      },
-      {
-        path: '/review',
-        lazy: async () => {
-          const { EngineeringReviewPage } = await import('@/app/pages/EngineeringReviewPage');
-          return { Component: EngineeringReviewPage };
-        },
-      },
-      {
-        path: '/ai-workspace',
-        lazy: async () => {
-          const { AIWorkspacePage } = await import('@/app/pages/AIWorkspacePage');
-          return { Component: AIWorkspacePage };
-        },
-      },
-      {
-        path: '/documentation',
-        lazy: async () => {
-          const { DocumentationPage } = await import('@/app/pages/DocumentationPage');
-          return { Component: DocumentationPage };
-        },
-      },
-      {
-        path: '/insights',
-        lazy: async () => {
-          const { InsightsPage } = await import('@/app/pages/InsightsPage');
-          return { Component: InsightsPage };
-        },
-      },
-      {
-        path: '/settings',
-        lazy: async () => {
-          const { SettingsPage } = await import('@/app/pages/SettingsPage');
-          return { Component: SettingsPage };
-        },
-      },
-    ],
-  },
-]);
+      ],
+    },
+  ]);
+}
+
+export const router = createAppRouter();

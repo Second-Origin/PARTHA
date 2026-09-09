@@ -1,0 +1,11 @@
+{
+  "$comment": [
+    "Reviewed exceptions for scripts/dependency-audit.mjs.",
+    "An entry needs a reason a reviewer can check and a reviewBy date.",
+    "The build fails if the acceptance expires, if the advisory or package identity stops",
+    "matching, if the accepted package version changes without review, or if the affected",
+    "functionality becomes reachable in our own source. Removing the vulnerable dependency",
+    "also requires removing its entry: a stale acknowledgement fails the build too."
+  ],
+  "acknowledged": []
+}

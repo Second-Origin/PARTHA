@@ -1,4 +1,6 @@
 import base64
+import hashlib
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
@@ -9,19 +11,27 @@ from fastapi import UploadFile
 from app.core.config import Settings
 from app.core.exceptions import ConflictServiceError, NotFoundError, ServiceError, ValidationServiceError
 from app.github.client import GitHubClient
-from app.intelligence.engine import RepositoryIntelligenceEngine
 from app.models.repository import RepositoryRecord
-from app.parsers.repository_parser import RepositoryParser
-from app.repositories.repository_repository import RepositoryRepository
+from app.parsers.repository_parser import RepositoryFileLimitExceeded, RepositoryParser, UnsafeRepositoryPath
+from app.repositories.repository_repository import LineageDuplicateRevision, RepositoryRepository
 from app.schemas.repository import (
+    FileTreeNode,
     GitHubImportRequest,
     RepositoryFileResponse,
+    RepositoryLineageEntry,
+    RepositoryLineageResponse,
     RepositoryListResponse,
+    RepositoryMeta,
     RepositoryResponse,
+    RepositoryRevision,
 )
 from app.storage.local import LocalStorage
 
 MAX_FILE_PREVIEW_BYTES = 512 * 1024
+
+# A git object name is a 40-character lowercase hex SHA-1 (RFC §3.2). ri.v1
+# targets the SHA-1 default git produces today.
+GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 IMAGE_MEDIA_TYPES = {
     ".png": "image/png",
@@ -42,88 +52,185 @@ class RepositoryService:
         storage: LocalStorage,
         github: GitHubClient,
         parser: RepositoryParser,
-        intelligence: RepositoryIntelligenceEngine,
         settings: Settings,
+        owner_id: str,
     ) -> None:
         self.repository = repository
         self.storage = storage
         self.github = github
         self.parser = parser
-        self.intelligence = intelligence
         self.settings = settings
+        self.owner_id = owner_id
 
     def list_repositories(self) -> RepositoryListResponse:
-        records = self.repository.list()
+        records = self.repository.list_for_owner(self.owner_id)
         return RepositoryListResponse(data=[self.to_response(record) for record in records], total=len(records))
 
     def get_repository(self, repository_id: str) -> RepositoryResponse:
         return self.to_response(self._get_record(repository_id))
 
+    def get_lineage(self, repository_id: str) -> RepositoryLineageResponse:
+        """The history behind `repository_id` (#299, RFC-0002; #400).
+
+        A standalone import (an upload, or a GitHub import whose ref never
+        resolved -- RFC §4.3/§6) has no lineage row to read: this returns
+        `is_lineaged=False` and a one-entry history containing only the
+        requested repository, rather than fabricating a lineage or a 404.
+        """
+
+        record = self._get_record(repository_id)
+        if record.lineage_id is None:
+            return RepositoryLineageResponse(
+                is_lineaged=False,
+                entries=[self._lineage_entry(record, current_id=repository_id)],
+            )
+        lineage = self.repository.get_lineage_for_owner(record.lineage_id, self.owner_id)
+        # Defensive only: a repository's lineage_id always names a lineage row
+        # owned by that same repository's owner (the DB-level composite FK
+        # ties them together), so this is never actually None in production.
+        assert lineage is not None
+        members = self.repository.list_lineage_members(record.lineage_id, self.owner_id)
+        return RepositoryLineageResponse(
+            is_lineaged=True,
+            lineage_id=lineage.id,
+            canonical_source_key=lineage.canonical_source_key,
+            canonical_branch=lineage.canonical_branch,
+            entries=[self._lineage_entry(member, current_id=repository_id) for member in members],
+        )
+
+    def _lineage_entry(self, record: RepositoryRecord, *, current_id: str) -> RepositoryLineageEntry:
+        revision = None
+        if record.revision_kind and record.revision_value:
+            revision = RepositoryRevision(
+                kind=record.revision_kind, value=record.revision_value, ref=record.revision_ref
+            )
+        return RepositoryLineageEntry(
+            repository_id=record.id,
+            sequence=record.sequence,
+            name=record.name,
+            status=record.status,
+            revision=revision,
+            uploaded_at=record.uploaded_at,
+            is_current=record.id == current_id,
+        )
+
     def delete_repository(self, repository_id: str) -> None:
         record = self._get_record(repository_id)
-        self.storage.delete_repository(record.local_path)
-        self.repository.delete(record)
+        local_path = record.local_path
+        # DB transaction (including any lineage latest-pointer rollback, #299
+        # §8.3) commits before the filesystem path is removed, so a DB
+        # failure can never leave a database row whose source directory has
+        # already vanished.
+        self.repository.delete_with_lineage_update(record)
+        self.storage.delete_repository(local_path)
 
     def import_github_repository(self, request: GitHubImportRequest) -> RepositoryResponse:
         repository_id = str(uuid4())
         url = self.github.validate_public_url(str(request.url))
         branch = self.github.validate_branch(request.branch)
-        existing = self.repository.find_by_source(url, branch)
-        if existing:
-            raise ConflictServiceError(
-                "Repository has already been imported.",
-                {"repositoryId": existing.id, "name": existing.name},
-            )
 
+        # A new commit is a new revision, so duplicate detection is keyed on the
+        # resolved commit SHA rather than URL+branch (#87). That requires cloning
+        # first: URL+branch is only a fallback when git identity is unavailable,
+        # and it must never block importing a genuinely new revision. Duplicate
+        # detection itself happens later, transactionally, scoped to the
+        # resolved ref's lineage (#299 §5.2) -- not here, and deliberately not
+        # by (source_url, revision_value, owner) alone, since that would also
+        # reject the same commit legitimately re-imported under a different
+        # branch (#299 §8.1), which must succeed.
         destination = self.storage.reset_repository_path(repository_id)
         try:
             self.github.clone_public_repository(url, destination, branch)
             root = self._resolve_repository_root(destination)
-            tree, meta, total_size = self.parser.parse(root)
+            commit_sha = self.github.read_head_commit(destination)
+            revision_kind, revision_value, revision_ref = self._git_revision(destination, commit_sha, branch)
+            tree, meta, total_size = self._parse_repository(root)
             self._validate_parsed_repository(meta.total_files)
-            repository_intelligence = self.intelligence.build(repository_id, self.github.repository_name(url), root, tree, meta, total_size)
         except Exception:
             self.storage.delete_repository_id(repository_id)
             raise
 
         now = datetime.now(UTC)
+        name = self.github.repository_name(url)
         record = RepositoryRecord(
             id=repository_id,
-            name=self.github.repository_name(url),
+            owner_id=self.owner_id,
+            name=name,
             description=None,
             source="github",
             source_url=url,
             branch=branch,
+            revision_kind=revision_kind,
+            revision_value=revision_value,
+            revision_ref=revision_ref,
             local_path=str(root),
             size=total_size,
             file_count=meta.total_files,
             status="analysing",
-            data_source="real",
             analysis_stage="building-file-tree",
             analysis_progress=70,
             uploaded_at=now,
             analysed_at=None,
-            repo_metadata=self._metadata_with_intelligence(meta, repository_intelligence),
+            repo_metadata=meta.model_dump(mode="json", by_alias=True),
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
-        return self.to_response(self.repository.add(record))
+        # A resolved ref is guaranteed here (`_git_revision` above raises
+        # otherwise), so every live GitHub import always gets a canonical
+        # pair and therefore a lineage (#299 §8.1) -- unlineaged standalone
+        # GitHub rows are only a backfill-time legacy case, never live.
+        try:
+            persisted = self.repository.add_with_lineage(
+                record,
+                owner_id=self.owner_id,
+                canonical_source_key=self._canonical_github_source(url),
+                canonical_branch=revision_ref,
+                display_name=name,
+            )
+        except LineageDuplicateRevision as exc:
+            self.storage.delete_repository_id(repository_id)
+            raise ConflictServiceError(
+                "Repository has already been imported.",
+                {"repositoryId": exc.existing.id, "name": exc.existing.name},
+            ) from exc
+        except Exception:
+            self.storage.delete_repository_id(repository_id)
+            raise
+        return self.to_response(persisted)
+
+    def _canonical_github_source(self, url: str) -> str:
+        """Owner-scoped lineage grouping key for an already-validated live URL.
+
+        `url` is already normalized by `GitHubClient.validate_public_url` to
+        exactly ``https://github.com/<owner>/<repo>`` (no trailing slash or
+        ``.git``); only case-folding the owner/repo remains (#299 §8.1). This
+        is deliberately simpler than the migration's own backfill parser,
+        which must additionally accept looser historical forms -- the two are
+        intentionally not shared code, so a future change to this live parser
+        can never silently change what the frozen backfill migration does.
+        """
+        owner, repo = url.removeprefix("https://github.com/").split("/", 1)
+        return f"github.com/{owner.lower()}/{repo.lower()}"
 
     async def import_uploaded_repository(self, file: UploadFile) -> RepositoryResponse:
         repository_id = str(uuid4())
         repository_name = self._repository_name_from_archive(file.filename or repository_id)
-        existing = self.repository.find_by_name(repository_name)
-        if existing:
-            raise ConflictServiceError(
-                "Repository has already been imported.",
-                {"repositoryId": existing.id, "name": existing.name},
-            )
 
         archive_path = await self.storage.save_upload(repository_id, file, self.settings.max_upload_size_bytes)
         try:
+            # Uploads have no git history, so the immutable content hash is the
+            # revision. Duplicate detection is keyed on that content hash (#87),
+            # not the filename: a genuinely new archive is a new revision even
+            # if it is uploaded under a previously-used name.
+            content_hash = self._content_hash_for_upload(archive_path)
+            existing = self.repository.find_by_revision_for_owner(content_hash, self.owner_id)
+            if existing:
+                raise ConflictServiceError(
+                    "Repository has already been imported.",
+                    {"repositoryId": existing.id, "name": existing.name},
+                )
             root = self.storage.extract_archive(archive_path, repository_id)
-            tree, meta, total_size = self.parser.parse(root)
+            tree, meta, total_size = self._parse_repository(root)
             self._validate_parsed_repository(meta.total_files)
-            repository_intelligence = self.intelligence.build(repository_id, repository_name, root, tree, meta, total_size)
         except Exception:
             self.storage.delete_upload(archive_path)
             self.storage.delete_repository_id(repository_id)
@@ -131,23 +238,30 @@ class RepositoryService:
         self.storage.delete_upload(archive_path)
 
         now = datetime.now(UTC)
+        # No lineage_id/sequence set (both stay null): uploads are always
+        # unlineaged standalone imports (#299 §8.2/§4.3) -- nothing here
+        # proves two archives are revisions of the same logical repository,
+        # so this never creates or searches a lineage.
         record = RepositoryRecord(
             id=repository_id,
+            owner_id=self.owner_id,
             name=repository_name,
             description=None,
             source="upload",
             source_url=None,
             branch=None,
+            revision_kind="upload",
+            revision_value=content_hash,
+            revision_ref=None,
             local_path=str(root),
             size=total_size,
             file_count=meta.total_files,
             status="analysing",
-            data_source="real",
             analysis_stage="building-file-tree",
             analysis_progress=70,
             uploaded_at=now,
             analysed_at=None,
-            repo_metadata=self._metadata_with_intelligence(meta, repository_intelligence),
+            repo_metadata=meta.model_dump(mode="json", by_alias=True),
             file_tree=[node.model_dump(mode="json", by_alias=True, exclude_none=True) for node in tree],
         )
         return self.to_response(self.repository.add(record))
@@ -219,6 +333,13 @@ class RepositoryService:
         raise ServiceError("Unable to read file preview.", {"path": path}) from exc
 
     def to_response(self, record: RepositoryRecord) -> RepositoryResponse:
+        revision = None
+        if record.revision_kind and record.revision_value:
+            revision = RepositoryRevision(
+                kind=record.revision_kind,
+                value=record.revision_value,
+                ref=record.revision_ref,
+            )
         return RepositoryResponse(
             id=record.id,
             name=record.name,
@@ -229,18 +350,24 @@ class RepositoryService:
             size=record.size,
             file_count=record.file_count,
             status=record.status,
-            data_source=record.data_source,
             analysis_stage=record.analysis_stage,
             analysis_progress=record.analysis_progress,
             uploaded_at=record.uploaded_at,
             analysed_at=record.analysed_at,
             error_message=record.error_message,
+            revision=revision,
+            # Revision identity now comes from the first-class column, not the
+            # mutable metadata blob (#87). ``commit_sha`` is a compatibility alias.
+            commit_sha=record.revision_value,
             meta=record.repo_metadata,
             file_tree=record.file_tree,
         )
 
     def _get_record(self, repository_id: str) -> RepositoryRecord:
-        record = self.repository.get(repository_id)
+        # get_for_owner returns None both when the repository does not exist and
+        # when it belongs to another user, so a cross-user request gets the same
+        # 404 as a missing one and never learns the resource exists.
+        record = self.repository.get_for_owner(repository_id, self.owner_id)
         if not record:
             raise NotFoundError("Repository not found.", {"repositoryId": repository_id})
         return record
@@ -255,13 +382,54 @@ class RepositoryService:
         if total_files == 0:
             raise ValidationServiceError("Repository archive does not contain any readable files.")
 
+    def _parse_repository(self, root: Path) -> tuple[list[FileTreeNode], RepositoryMeta, int]:
+        try:
+            return self.parser.parse(root, max_file_count=self.settings.max_file_count)
+        except RepositoryFileLimitExceeded as exc:
+            raise ValidationServiceError(
+                "Repository exceeds the configured maximum file count.",
+                {"maxFileCount": exc.max_file_count, "fileCount": exc.file_count},
+            ) from exc
+        except UnsafeRepositoryPath as exc:
+            # Matches the archive-upload posture (storage/local.py rejects any
+            # symlink/link/device member in a TAR before extraction): a
+            # GitHub-cloned checkout containing a symlink is rejected outright
+            # rather than partially imported, since a symlink here can point
+            # outside the checkout entirely (issue: unguarded symlink follow
+            # in the file-tree walk).
+            raise ValidationServiceError(
+                "Repository contains a symlink, which is not supported.",
+                {"path": exc.relative_path},
+            ) from exc
+
     def _repository_name_from_archive(self, filename: str) -> str:
         for suffix in (".tar.gz", ".tgz", ".zip", ".tar", ".gz"):
             if filename.lower().endswith(suffix):
                 return filename[: -len(suffix)]
         return Path(filename).stem
 
-    def _metadata_with_intelligence(self, meta, intelligence) -> dict:
-        metadata = meta.model_dump(mode="json", by_alias=True)
-        metadata["intelligence"] = intelligence.model_dump(mode="json", by_alias=True)
-        return metadata
+    def _git_revision(
+        self,
+        destination: Path,
+        commit_sha: str | None,
+        requested_ref: str | None,
+    ) -> tuple[str, str, str]:
+        """Return ``(kind, value, ref)`` for a GitHub import (RFC §3.2).
+
+        New imports must always have both the immutable commit and the resolved
+        ref. Missing legacy identity is handled only by the migration; silently
+        creating a new repository without identity would violate RFC §3.2.
+        """
+        if not commit_sha or not GIT_SHA_RE.fullmatch(commit_sha):
+            raise ServiceError("Unable to determine an immutable Git commit for the imported repository.")
+        resolved_ref = self.github.read_head_ref(destination, requested_ref)
+        if not resolved_ref or not resolved_ref.startswith("refs/"):
+            raise ServiceError("Unable to determine the resolved Git ref for the imported repository.")
+        return "git", commit_sha, resolved_ref
+
+    def _content_hash_for_upload(self, archive_path: Path) -> str:
+        digest = hashlib.sha256()
+        with archive_path.open("rb") as handle:
+            while chunk := handle.read(1024 * 1024):
+                digest.update(chunk)
+        return f"sha256:{digest.hexdigest()}"

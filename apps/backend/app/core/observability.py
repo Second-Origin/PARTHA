@@ -46,6 +46,8 @@ class RuntimeMetrics:
         self._request_duration_seconds = 0.0
         self._status_counts: Counter[str] = Counter()
         self._route_counts: Counter[tuple[str, str, str]] = Counter()
+        self._rate_limited_total = 0
+        self._rate_limit_degraded_total = 0
 
     def record_request(self, method: str, route: str, status_code: int, duration_seconds: float) -> None:
         status_family = f"{status_code // 100}xx"
@@ -54,6 +56,20 @@ class RuntimeMetrics:
             self._request_duration_seconds += duration_seconds
             self._status_counts[status_family] += 1
             self._route_counts[(method, route, str(status_code))] += 1
+
+    def record_rate_limited(self) -> None:
+        with self._lock:
+            self._rate_limited_total += 1
+
+    def record_rate_limit_degraded(self) -> None:
+        """Count requests allowed through because the rate-limit store failed."""
+        with self._lock:
+            self._rate_limit_degraded_total += 1
+
+    @property
+    def rate_limit_degraded_total(self) -> int:
+        with self._lock:
+            return self._rate_limit_degraded_total
 
     def render_prometheus(self) -> str:
         with self._lock:
@@ -81,6 +97,17 @@ class RuntimeMetrics:
                     "partha_http_requests_by_route_total"
                     f'{{method="{method}",route="{route}",status_code="{status_code}"}} {count}'
                 )
+
+            lines.extend(
+                [
+                    "# HELP partha_rate_limited_requests_total Requests rejected with 429 by the rate limiter.",
+                    "# TYPE partha_rate_limited_requests_total counter",
+                    f"partha_rate_limited_requests_total {self._rate_limited_total}",
+                    "# HELP partha_rate_limit_degraded_total Requests allowed through because the rate-limit store was unavailable.",
+                    "# TYPE partha_rate_limit_degraded_total counter",
+                    f"partha_rate_limit_degraded_total {self._rate_limit_degraded_total}",
+                ]
+            )
             return "\n".join(lines) + "\n"
 
 

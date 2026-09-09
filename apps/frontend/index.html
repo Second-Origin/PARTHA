@@ -1,15 +1,33 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <title>PARTHA - Understand Any Codebase in Minutes</title>
+    <title>PARTHA — Repository Intelligence</title>
+    <style>
+      /* Prevents a white flash behind the landing artwork before React
+         mounts and the LandingPage component takes over via its own
+         scoped .landing-dark class. Never applies outside "/" and never
+         touches any token other than the raw background paint. */
+      html[data-landing-theme-boot='dark'] body {
+        background: #000;
+      }
+    </style>
+    <script>
+      (function () {
+        try {
+          if (window.location.pathname !== '/') return;
+          var stored = window.localStorage.getItem('partha-landing-theme');
+          var dark = stored === 'dark' || ((stored === 'system' || !stored) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.setAttribute('data-landing-theme-boot', 'dark');
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="dark">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/app/main.tsx"></script>
   </body>

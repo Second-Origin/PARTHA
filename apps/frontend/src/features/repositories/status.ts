@@ -4,5 +4,6 @@ export const repositoryStatusVariant: Record<Repository['status'], 'info' | 'war
   uploading: 'info',
   analysing: 'warning',
   completed: 'success',
+  cancelled: 'warning',
   error: 'error',
 };

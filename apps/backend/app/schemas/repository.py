@@ -6,8 +6,7 @@ from pydantic import Field, HttpUrl
 from app.schemas.base import CamelModel
 
 RepositorySource = Literal["upload", "github"]
-RepositoryStatus = Literal["uploading", "analysing", "completed", "error"]
-DataSource = Literal["real"]
+RepositoryStatus = Literal["uploading", "analysing", "completed", "cancelled", "error"]
 AnalysisStage = Literal[
     "uploading",
     "extracting",
@@ -46,6 +45,20 @@ class RepositoryMeta(CamelModel):
     license_name: str | None
 
 
+class RepositoryRevision(CamelModel):
+    """First-class repository revision identity (#87, RFC §3.2).
+
+    ``value`` is the immutable identity: a 40-char lowercase git commit SHA for
+    GitHub imports, or a ``sha256:<hex>`` archive content hash for uploads.
+    ``ref`` (e.g. ``refs/heads/main``) is a moving pointer — descriptive
+    metadata only, never identity, and always ``null`` for uploads.
+    """
+
+    kind: Literal["git", "upload"]
+    value: str
+    ref: str | None = None
+
+
 class RepositoryResponse(CamelModel):
     id: str
     name: str
@@ -56,12 +69,16 @@ class RepositoryResponse(CamelModel):
     size: int
     file_count: int
     status: RepositoryStatus
-    data_source: DataSource
     analysis_stage: AnalysisStage | None = None
     analysis_progress: int
     uploaded_at: datetime
     analysed_at: datetime | None = None
     error_message: str | None = None
+    # First-class revision identity, sourced from indexed immutable columns and
+    # no longer from the mutable ``repo_metadata`` blob (#87). ``commit_sha`` is
+    # retained as a backward-compatible alias of ``revision.value``.
+    revision: RepositoryRevision | None = None
+    commit_sha: str | None = None
     meta: RepositoryMeta | None = None
     file_tree: list[FileTreeNode] = Field(default_factory=list)
 
@@ -84,3 +101,32 @@ class RepositoryFileResponse(CamelModel):
     is_binary: bool = False
     is_image: bool = False
     media_type: str | None = None
+
+
+class RepositoryLineageEntry(CamelModel):
+    """One repository row belonging to a lineage (#299, RFC-0002), or the
+    lone entry for a standalone (unlineaged) repository."""
+
+    repository_id: str
+    sequence: int | None = None
+    name: str
+    status: RepositoryStatus
+    revision: RepositoryRevision | None = None
+    uploaded_at: datetime
+    is_current: bool
+
+
+class RepositoryLineageResponse(CamelModel):
+    """History for the repository requested, most recent import first.
+
+    An unlineaged repository (an upload, or a GitHub import whose ref never
+    resolved -- RFC §4.3/§6) is never fabricated a lineage: ``is_lineaged`` is
+    ``false``, ``lineage_id``/``canonical_source_key``/``canonical_branch``
+    stay ``null``, and ``entries`` holds exactly the one requested repository.
+    """
+
+    is_lineaged: bool
+    lineage_id: str | None = None
+    canonical_source_key: str | None = None
+    canonical_branch: str | None = None
+    entries: list[RepositoryLineageEntry]

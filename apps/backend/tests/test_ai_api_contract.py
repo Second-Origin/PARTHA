@@ -4,6 +4,8 @@ import zipfile
 from app.ai.providers.registry import ProviderRegistry
 from app.ai.types import AiProviderConfig, AiProviderResponse, PromptBundle
 from app.api.deps import get_provider_registry
+from tests.analysis_helpers import run_analysis_jobs
+from tests.api_assertions import assert_error_response
 
 
 def _zip_bytes(files: dict[str, bytes]) -> bytes:
@@ -22,14 +24,54 @@ class ContractProvider:
         return AiProviderResponse(content="Repository summary from test provider.")
 
 
-def test_ai_query_endpoint_preserves_public_response_contract(client):
+class ConnectionTestProvider:
+    async def complete(self, config: AiProviderConfig, prompt: PromptBundle) -> AiProviderResponse:
+        assert config.provider == "openai"
+        assert config.api_key == "test-key"
+        assert config.model == "test-model"
+        assert prompt.system_prompt == "Reply with the single word: ok"
+        assert prompt.user_prompt == "Connection test."
+        return AiProviderResponse(content="ok")
+
+
+def test_ai_test_endpoint_checks_the_saved_provider_without_external_network(auth_client):
+    registry = ProviderRegistry()
+    registry.register("openai", ConnectionTestProvider())
+    auth_client.app.dependency_overrides[get_provider_registry] = lambda: registry
+
+    try:
+        configured = auth_client.put(
+            "/ai/config",
+            json={"provider": "openai", "apiKey": "test-key", "model": "test-model"},
+        )
+        assert configured.status_code == 200
+
+        response = auth_client.post("/ai/test", json={"provider": "openai"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["ok"] is True
+        assert body["message"] == "openai connection succeeded."
+        assert body["checkedAt"]
+    finally:
+        auth_client.app.dependency_overrides.pop(get_provider_registry, None)
+
+
+def test_ai_test_endpoint_returns_the_standard_error_without_a_provider(auth_client):
+    response = auth_client.post("/ai/test", json={})
+
+    error = assert_error_response(response, 422, "validation_error")
+    assert "choose an ai provider" in error.message.lower()
+
+
+def test_ai_query_endpoint_preserves_public_response_contract(auth_client):
     provider = ContractProvider()
     registry = ProviderRegistry()
     registry.register("openai", provider)
-    client.app.dependency_overrides[get_provider_registry] = lambda: registry
+    auth_client.app.dependency_overrides[get_provider_registry] = lambda: registry
 
     try:
-        upload_response = client.post(
+        upload_response = auth_client.post(
             "/repositories/upload",
             files={
                 "file": (
@@ -46,44 +88,93 @@ def test_ai_query_endpoint_preserves_public_response_contract(client):
         )
         assert upload_response.status_code == 201
         repository_id = upload_response.json()["id"]
+        assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+        assert run_analysis_jobs() == 1
 
-        config_response = client.put(
+        config_response = auth_client.put(
             "/ai/config",
             json={"provider": "openai", "apiKey": "test-key", "model": "test-model"},
         )
         assert config_response.status_code == 200
 
-        response = client.post(
+        response = auth_client.post(
             "/ai/query",
             json={
                 "repositoryId": repository_id,
                 "query": "Summarize this repository",
-                "context": {"selectedFile": "/src/app.ts"},
+                "context": {"selectedFile": "src/app.ts"},
             },
         )
 
         assert response.status_code == 200
         body = response.json()
         assert set(body) == {"message", "suggestions"}
-        assert body["suggestions"] == [
-            "Explain the main architecture boundaries.",
-            "What files should I read first?",
-            "What are the highest-risk engineering issues?",
-        ]
+        assert body["suggestions"] == []
 
         message = body["message"]
         assert set(message) == {"role", "content", "timestamp", "citations"}
         assert message["role"] == "assistant"
         assert message["content"] == "Repository summary from test provider."
         assert isinstance(message["timestamp"], str)
-        assert isinstance(message["citations"], list)
-        assert message["citations"]
-
-        citation = message["citations"][0]
-        assert set(citation) == {"file", "startLine", "endLine", "content"}
-        assert citation["file"] == "/src/app.ts"
-        assert citation["startLine"] == 1
-        assert citation["endLine"] == 1
-        assert citation["content"] == "Repository file path included in analysis context."
+        # Fabricated 1:1 placeholder citations were removed (F4/F5). The field is
+        # still present in the contract but is null until graph-grounded citations exist.
+        assert message["citations"] is None
     finally:
-        client.app.dependency_overrides.pop(get_provider_registry, None)
+        auth_client.app.dependency_overrides.pop(get_provider_registry, None)
+
+
+def test_ai_query_resolves_snapshot_before_provider_configuration(auth_client):
+    upload = auth_client.post(
+        "/repositories/upload",
+        files={
+            "file": (
+                "no-snapshot.zip",
+                _zip_bytes({"sample/src/app.ts": b"export const answer = 42;\n"}),
+                "application/octet-stream",
+            )
+        },
+    )
+    repository_id = upload.json()["id"]
+
+    before_analysis = auth_client.post(
+        "/ai/query",
+        json={"repositoryId": repository_id, "query": "Summarize"},
+    )
+    assert_error_response(before_analysis, 404, "not_found")
+
+    assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+    assert run_analysis_jobs() == 1
+    after_analysis = auth_client.post(
+        "/ai/query",
+        json={"repositoryId": repository_id, "query": "Summarize"},
+    )
+    error = assert_error_response(after_analysis, 422, "validation_error")
+    assert "provider is not configured" in error.message.lower()
+
+
+def test_ai_query_rejects_a_selected_file_absent_from_the_snapshot(auth_client):
+    upload = auth_client.post(
+        "/repositories/upload",
+        files={
+            "file": (
+                "selected-file.zip",
+                _zip_bytes({"sample/src/app.ts": b"export const answer = 42;\n"}),
+                "application/octet-stream",
+            )
+        },
+    )
+    repository_id = upload.json()["id"]
+    assert auth_client.post(f"/analysis/{repository_id}/start").status_code == 200
+    assert run_analysis_jobs() == 1
+
+    response = auth_client.post(
+        "/ai/query",
+        json={
+            "repositoryId": repository_id,
+            "query": "Explain it",
+            "context": {"selectedFile": "src/missing.ts"},
+        },
+    )
+
+    error = assert_error_response(response, 422, "validation_error")
+    assert error.details["selectedFile"] == "src/missing.ts"

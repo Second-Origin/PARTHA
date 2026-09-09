@@ -1,13 +1,23 @@
-import type { DataSource } from '@/shared/types';
-import { Badge } from './Badge';
+import type { RepositorySource } from '@/shared/types';
+
+const REPOSITORY_SOURCE_LABELS = {
+  upload: 'Uploaded archive',
+  github: 'GitHub repository',
+} satisfies Record<RepositorySource, string>;
 
 interface DataSourceBadgeProps {
-  source: DataSource | null | undefined;
+  source: RepositorySource | null | undefined;
 }
 
 export function DataSourceBadge({ source }: DataSourceBadgeProps) {
   if (!source) return null;
+
+  const label = REPOSITORY_SOURCE_LABELS[source];
+  if (!label) return null;
+
   return (
-    <Badge variant="success">Real data</Badge>
+    <span className="text-xs text-muted-foreground" data-testid="repository-source">
+      {label}
+    </span>
   );
 }

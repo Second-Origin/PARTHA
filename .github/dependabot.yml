@@ -1,0 +1,139 @@
+# Dependabot configuration for the PARTHA monorepo.
+#
+# Part of the dependency, secret, and code scanning baseline. Branch protection
+# is already enabled on dev/main; Dependabot doesn't produce a status check of
+# its own to require -- the PRs it opens go through the normal CI gate (ci.yml)
+# like any other PR.
+#
+# Two ecosystems, one per app: npm for the React/TS frontend, pip for the
+# FastAPI backend.
+#
+# Grouping policy
+# ---------------
+# The default "one PR per package" behaviour produces PRs that cannot go green,
+# because several of our dependencies are only installable in lockstep:
+#
+#   * `pydantic` pins `pydantic-core` exactly. Bumping the core alone yields
+#     `ResolutionImpossible` at `pip install`, before a single test runs.
+#   * `react` and `react-dom` must move together, and both are peer dependencies
+#     of `@testing-library/react` and `@xyflow/react`. Bumping either alone
+#     yields an ERESOLVE failure at `npm ci`.
+#
+# Those PRs are not review load, they are noise: no reviewer action can make
+# them pass. The groups below force each cohort into a single PR so the
+# resolver has a consistent set to work with, and the lockstep majors are
+# ignored outright so they are raised as deliberate migration work instead of
+# an unmergeable weekly bump.
+version: 2
+
+updates:
+  # ---------------------------------------------------------------------------
+  # Frontend — npm (apps/frontend)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: npm
+    directory: /apps/frontend
+    # `dev` is the real trunk and is now the repository default branch, so both
+    # version updates and security updates land here. CONTRIBUTING.md requires
+    # all PRs to target `dev`.
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    commit-message:
+      # Produces `chore(deps): ...` — Conventional Commits, per CONTRIBUTING.md.
+      prefix: chore
+      include: scope
+    groups:
+      # React and everything that peer-depends on it. Keeping these in one PR is
+      # what makes a React major reviewable at all: split across PRs, each half
+      # fails `npm ci` and none of them can be merged first.
+      react-ecosystem:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+          - "@testing-library/react"
+        update-types:
+          - minor
+          - patch
+      frontend-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # React 19 is a coordinated migration, not a dependency bump: it moves
+      # react + react-dom + both `@types` packages and requires a
+      # v19-compatible `@testing-library/react`, with `@xyflow/react`,
+      # `framer-motion` and `react-dropzone` all re-verified. Dependabot raised
+      # it as two independent PRs (#249, #203); neither could install, so both
+      # sat red for twelve days. Track it as an issue and drop this ignore when
+      # the migration is scheduled.
+      - dependency-name: react
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-dom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      # lucide-react v1 removed every brand icon, including `Github`, which
+      # PARTHA imports in four components. The bump therefore requires an icon
+      # migration in the same change and cannot be applied mechanically (#250).
+      - dependency-name: lucide-react
+        update-types: ["version-update:semver-major"]
+
+  # ---------------------------------------------------------------------------
+  # Backend — pip (apps/backend)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: pip
+    directory: /apps/backend
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # `pydantic` pins `pydantic-core` to an exact version, so the two must
+      # appear in the same PR or the group is uninstallable. This is what broke
+      # #266: `pydantic-core` moved to 2.47.0 while `pydantic` stayed at 2.13.4,
+      # which requires `pydantic-core==2.46.4`.
+      pydantic-stack:
+        patterns:
+          - pydantic
+          - pydantic-core
+          - pydantic_core
+          - pydantic-settings
+        update-types:
+          - minor
+          - patch
+      backend-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # `pydantic-core` is not a direct dependency: pyproject.toml declares
+      # `pydantic`, and requirements.txt is `pip freeze` output, so the core
+      # only appears there as a resolved transitive pin. `pydantic` pins it to
+      # an exact version, so it has no independent upgrade path — the correct
+      # version is always whatever the installed `pydantic` asks for.
+      #
+      # Grouping alone does not stop this. A group only forms when one of its
+      # members actually has an update; with `pydantic` already at the latest
+      # release, a lone `pydantic-core` bump falls through to the catch-all
+      # `backend-minor-and-patch` group and breaks the build exactly as before
+      # (#266, then #277 again after the groups landed). Ignoring it outright
+      # is the only thing that holds: it now moves only when `pydantic` moves
+      # and drags it along.
+      - dependency-name: pydantic-core
+      - dependency-name: pydantic_core

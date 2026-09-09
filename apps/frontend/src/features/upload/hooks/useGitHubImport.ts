@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { DataSource, Repository } from '@/shared/types';
+import type { Repository } from '@/shared/types';
 import { backendService } from '@/shared/services/backend';
 import { getErrorMessage } from '@/shared/services/api';
 import { useAppStore } from '@/app/store/useAppStore';
@@ -21,8 +21,6 @@ export function useGitHubImport() {
   const [githubUrl, setGithubUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const dataSource: DataSource = 'real';
 
   const repositoryNames = useMemo(
     () => new Set(repositories.map((repo) => repo.name.toLowerCase())),
@@ -89,7 +87,7 @@ export function useGitHubImport() {
     error,
     empty: githubUrl.trim().length === 0,
     success: isValidGithubUrl(githubUrl),
-    source: dataSource,
+    source: 'github' as const,
     previewName: isValidGithubUrl(githubUrl) ? extractRepoName(githubUrl) : null,
     analyseGithub,
     retry: clearError,

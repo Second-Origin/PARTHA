@@ -42,8 +42,8 @@ export function GraphToolbar({
   } = useArchitectureStore();
 
   return (
-    <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between gap-3 pointer-events-none">
-      <div className="flex items-center gap-2 pointer-events-auto">
+    <div className="pointer-events-none absolute left-3 right-3 top-3 z-10 flex items-start justify-between gap-3">
+      <div className="pointer-events-auto hidden items-center gap-2 md:flex">
         <ToolbarButton
           icon={explorerOpen ? PanelLeftClose : PanelLeftOpen}
           onClick={() => setExplorerOpen(!explorerOpen)}
@@ -61,7 +61,7 @@ export function GraphToolbar({
         </div>
       </div>
 
-      <div className="flex items-center gap-1 pointer-events-auto">
+      <div className="pointer-events-auto ml-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-md">
         <ToolbarButton icon={ZoomIn} onClick={onZoomIn} title="Zoom In" />
         <ToolbarButton icon={ZoomOut} onClick={onZoomOut} title="Zoom Out" />
         <ToolbarButton icon={Maximize2} onClick={onFitView} title="Fit View" />
@@ -112,6 +112,8 @@ function ToolbarButton({
 }) {
   return (
     <button
+      type="button"
+      aria-label={title}
       onClick={onClick}
       title={title}
       className={cn(
@@ -136,6 +138,8 @@ function ExportDropdown({
   return (
     <div className="relative">
       <button
+        type="button"
+        aria-label="Export graph image"
         onClick={() => setOpen(!open)}
         title="Export graph image"
         className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card/90 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"

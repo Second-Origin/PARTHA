@@ -1,78 +1,43 @@
-from datetime import UTC, datetime
-
 from app.analysis.architecture import ArchitectureAnalyzer
+from app.analysis.authentication import AuthenticationExplanationService
 from app.graph.dependency_graph import DependencyGraphBuilder
-from app.intelligence.engine import RepositoryIntelligenceEngine
+from app.insights.service import RepositoryInsightsBuilder
 from app.repositories.repository_repository import RepositoryRepository
 from app.review.review_service import EngineeringReviewBuilder
-from app.schemas.analysis import AnalysisStartResponse, AnalysisStatusResponse
 from app.schemas.architecture import ArchitectureResponse
+from app.schemas.authentication import AuthenticationExplanationResponse
 from app.schemas.dependencies import DependencyGraphResponse
-from app.schemas.review import EngineeringReviewResponse
-from app.core.exceptions import NotFoundError, ServiceError
+from app.schemas.insights import RepositoryInsightsResponse
+from app.schemas.review import EngineeringReviewResponse, ReviewCategoryId, ReviewSeverity
+from app.core.exceptions import NotFoundError
 
 
 class AnalysisService:
+    """Read-model builder for a repository's persisted analysis (#93).
+
+    Enqueue/status/cancel of the durable analysis lifecycle now live in
+    ``AnalysisJobService``; this service only builds the architecture, dependency,
+    review, and authentication-explanation read models from already-persisted
+    intelligence, which the export service also reuses.
+    """
+
     def __init__(
         self,
         repository: RepositoryRepository,
         architecture: ArchitectureAnalyzer,
         dependencies: DependencyGraphBuilder,
         review: EngineeringReviewBuilder,
-        intelligence: RepositoryIntelligenceEngine,
+        insights: RepositoryInsightsBuilder,
+        authentication: AuthenticationExplanationService,
+        owner_id: str,
     ) -> None:
         self.repository = repository
         self.architecture = architecture
         self.dependencies = dependencies
         self.review = review
-        self.intelligence = intelligence
-
-    def start(self, repository_id: str) -> AnalysisStartResponse:
-        record = self._get_record(repository_id)
-        if record.status == "completed":
-            return AnalysisStartResponse(repository_id=record.id, status="completed")
-        if record.status == "error":
-            return AnalysisStartResponse(repository_id=record.id, status="failed")
-
-        record.status = "analysing"
-        record.analysis_stage = "preparing-architecture"
-        record.analysis_progress = 80
-        self.repository.save(record)
-        try:
-            repository_intelligence = self.intelligence.from_record(record)
-            self.intelligence.persist(record, repository_intelligence)
-            self.repository.save(record)
-            self.architecture.build_architecture(record)
-            self.dependencies.build(record)
-            self.review.build(record)
-        except Exception as exc:
-            record.status = "error"
-            record.analysis_stage = None
-            record.analysis_progress = 0
-            record.error_message = "Repository analysis failed."
-            self.repository.save(record)
-            raise ServiceError("Repository analysis failed.", {"repositoryId": record.id}) from exc
-
-        record.status = "completed"
-        record.analysis_stage = "completed"
-        record.analysis_progress = 100
-        record.error_message = None
-        record.analysed_at = datetime.now(UTC)
-        self.repository.save(record)
-        return AnalysisStartResponse(repository_id=record.id, status="completed")
-
-    def status(self, repository_id: str) -> AnalysisStatusResponse:
-        record = self._get_record(repository_id)
-        status = "failed" if record.status == "error" else "completed" if record.status == "completed" else "processing"
-        return AnalysisStatusResponse(
-            repository_id=record.id,
-            status=status,
-            stage=record.analysis_stage,
-            progress=record.analysis_progress,
-            started_at=record.uploaded_at,
-            completed_at=record.analysed_at,
-            error=record.error_message,
-        )
+        self.insights = insights
+        self.authentication = authentication
+        self.owner_id = owner_id
 
     def architecture_model(self, repository_id: str) -> ArchitectureResponse:
         return self.architecture.build_architecture(self._get_record(repository_id))
@@ -80,11 +45,36 @@ class AnalysisService:
     def dependency_graph(self, repository_id: str) -> DependencyGraphResponse:
         return self.dependencies.build(self._get_record(repository_id))
 
-    def engineering_review(self, repository_id: str) -> EngineeringReviewResponse:
-        return self.review.build(self._get_record(repository_id))
+    def engineering_review(
+        self,
+        repository_id: str,
+        *,
+        category: ReviewCategoryId | None = None,
+        severity: ReviewSeverity | None = None,
+        diagnostic_code: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+    ) -> EngineeringReviewResponse:
+        return self.review.build(
+            self._get_record(repository_id),
+            category=category,
+            severity=severity,
+            diagnostic_code=diagnostic_code,
+            offset=offset,
+            limit=limit,
+        )
+
+    def repository_insights(self, repository_id: str) -> RepositoryInsightsResponse:
+        return self.insights.build(self._get_record(repository_id))
+
+    def authentication_explanation(self, repository_id: str) -> AuthenticationExplanationResponse:
+        return self.authentication.explain(self._get_record(repository_id))
 
     def _get_record(self, repository_id: str):
-        record = self.repository.get(repository_id)
+        # Owner-scoped: get_for_owner returns None for both a missing repository
+        # and one owned by another user, so a cross-user request gets the same
+        # 404 as a missing one and never learns the resource exists.
+        record = self.repository.get_for_owner(repository_id, self.owner_id)
         if not record:
             raise NotFoundError("Repository not found.", {"repositoryId": repository_id})
         return record

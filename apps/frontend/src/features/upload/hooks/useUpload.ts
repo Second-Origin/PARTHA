@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { DataSource, Repository, UploadFile } from '@/shared/types';
+import type { Repository, UploadFile } from '@/shared/types';
 import { backendService } from '@/shared/services/backend';
 import { getErrorMessage } from '@/shared/services/api';
 import { formatFileSize } from '@/shared/utils/cn';
@@ -12,13 +12,13 @@ export const ACCEPTED_ARCHIVE_TYPES: Record<string, string[]> = {
   'application/zip': ['.zip'],
   'application/x-zip-compressed': ['.zip'],
   'application/x-tar': ['.tar'],
-  'application/gzip': ['.gz', '.tar.gz'],
-  'application/x-gzip': ['.gz', '.tar.gz'],
-  'application/x-compressed-tar': ['.tar.gz'],
+  'application/gzip': ['.tar.gz', '.tgz'],
+  'application/x-gzip': ['.tar.gz', '.tgz'],
+  'application/x-compressed-tar': ['.tar.gz', '.tgz'],
 };
 
 function getRepositoryNameFromArchive(fileName: string): string {
-  return fileName.replace(/\.(zip|tar\.gz|tar|tgz|gz)$/i, '');
+  return fileName.replace(/\.(zip|tar\.gz|tar|tgz)$/i, '');
 }
 
 export function useUpload() {
@@ -27,8 +27,6 @@ export function useUpload() {
   const [uploadFile, setUploadFile] = useState<UploadFile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const dataSource: DataSource = 'real';
 
   const repositoryNames = useMemo(
     () => new Set(repositories.map((repo) => repo.name.toLowerCase())),
@@ -42,12 +40,14 @@ export function useUpload() {
       if (!file) return;
 
       if (file.size > MAX_FILE_SIZE) {
+        setUploadFile(null);
         setError(`File too large. Maximum size is ${formatFileSize(MAX_FILE_SIZE)}.`);
         return;
       }
 
       const repoName = getRepositoryNameFromArchive(file.name);
       if (repositoryNames.has(repoName.toLowerCase())) {
+        setUploadFile(null);
         setError(`A repository named "${repoName}" already exists.`);
         return;
       }
@@ -64,7 +64,8 @@ export function useUpload() {
   );
 
   const rejectFile = useCallback(() => {
-    setError('Invalid file type. Please upload a ZIP or TAR.GZ file.');
+    setUploadFile(null);
+    setError('Invalid file type. Please upload a ZIP, TAR, TAR.GZ, or TGZ file.');
   }, []);
 
   const removeFile = useCallback(() => {
@@ -112,7 +113,7 @@ export function useUpload() {
     error,
     empty: !uploadFile,
     success: Boolean(uploadFile),
-    source: dataSource,
+    source: 'upload' as const,
     selectFile,
     rejectFile,
     removeFile,

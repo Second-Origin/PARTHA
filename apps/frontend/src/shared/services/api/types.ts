@@ -1,7 +1,8 @@
-import type { DataSource, FileTreeNode, RepositoryMeta, AnalysisStage } from '@/shared/types';
-import type { ArchitectureModel } from '@/shared/types/architecture';
-import type { EngineeringReview } from '@/shared/types/review';
+import type { components } from './generated';
 
+type WithGeneratedDefaults<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
+
+/** Transport helpers retained for non-schema-wrapped legacy endpoints. */
 export interface ApiResponse<T> {
   data: T;
   meta?: {
@@ -21,194 +22,106 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// Repository
-export interface RepositoryResponse {
-  id: string;
-  name: string;
-  description: string | null;
-  source: 'upload' | 'github';
-  sourceUrl: string | null;
-  branch?: string | null;
-  size: number;
-  fileCount: number;
-  status: 'uploading' | 'analysing' | 'completed' | 'error';
-  dataSource: DataSource;
-  analysisStage: AnalysisStage | null;
-  analysisProgress: number;
-  uploadedAt: string;
-  analysedAt: string | null;
-  errorMessage: string | null;
-  meta: RepositoryMeta | null;
-  fileTree: FileTreeNode[];
-}
+// The aliases below are compatibility names for the existing service/UI
+// modules. Their shapes are owned by the generated OpenAPI components; this
+// file intentionally contains no hand-maintained DTO fields.
+export type RepositoryRevision = components['schemas']['RepositoryRevision'];
+export type RepositoryResponse = components['schemas']['RepositoryResponse'];
+export type ImportGithubRequest = components['schemas']['GitHubImportRequest'];
+export type RepositoryListResponse = components['schemas']['RepositoryListResponse'];
+export type RepositoryFileResponse = components['schemas']['RepositoryFileResponse'];
+export type RepositoryLineageResponse = components['schemas']['RepositoryLineageResponse'];
+export type RepositoryLineageEntry = components['schemas']['RepositoryLineageEntry'];
 
-export interface CreateRepositoryRequest {
-  name: string;
-  description?: string;
-  source: 'upload' | 'github';
-  sourceUrl?: string;
-}
+export type RiSchemaVersion = components['schemas']['RiEvidenceResponse']['schemaVersion'];
+export type RiPagination = components['schemas']['RiPagination'];
+export type RiEvidence = components['schemas']['RiEvidenceResponse'];
+export type RiNode = components['schemas']['RiNodeResponse'];
+export type RiEdge = components['schemas']['RiEdgeResponse'];
+export type RiAssertion = components['schemas']['RiAssertionResponse'];
+export type RiSnapshotMetadata = components['schemas']['RiSnapshotMetadataResponse'];
+export type RiCollectionResponse<T> = Omit<components['schemas']['RiSymbolsResponse'], 'data'> & { data: T[] };
+export type RiPath = components['schemas']['RiPathResponse'];
+export type RiNeighboursResponse = components['schemas']['RiNeighboursResponse'];
 
-export interface ImportGithubRequest {
-  url: string;
-  branch?: string;
-}
+export type AnalysisJobStatus = components['schemas']['AnalysisStartResponse']['status'];
+export type AnalysisStartResponse = components['schemas']['AnalysisStartResponse'];
+export type AnalysisStatusResponse = components['schemas']['AnalysisStatusResponse'];
 
-export interface RepositoryListResponse {
-  data: RepositoryResponse[];
-  total: number;
-}
+export type ArchitectureResponse = WithGeneratedDefaults<components['schemas']['ArchitectureResponse'], 'diagnostics'>;
 
-export interface RepositoryFileResponse {
-  path: string;
-  content: string;
-  size: number;
-  truncated: boolean;
-  isBinary: boolean;
-  isImage: boolean;
-  mediaType: string | null;
-}
+export type AuthSchemaVersion = components['schemas']['AuthenticationExplanationResponse']['schemaVersion'];
+export type AuthClaimKind = components['schemas']['AuthClaim']['kind'];
+export type AuthRelationshipNodeKind = components['schemas']['AuthRelationship']['subjectKind'];
+export type AuthConfidence = components['schemas']['AuthClaim']['confidence'];
+export type AuthStatus = components['schemas']['AuthenticationExplanationResponse']['status'];
+export type AuthEvidenceRef = components['schemas']['AuthEvidenceRef'];
+export type AuthClaim = components['schemas']['AuthClaim'];
+export type AuthRelationship = components['schemas']['AuthRelationship'];
+export type AuthChain = components['schemas']['AuthChain'];
+export type AuthenticationDiagnostic = components['schemas']['AuthenticationDiagnostic'];
+export type AuthenticationExplanationResponse = WithGeneratedDefaults<
+  components['schemas']['AuthenticationExplanationResponse'],
+  'claims' | 'relationships' | 'chains' | 'diagnostics'
+>;
 
-// Analysis
-export interface AnalysisStartResponse {
+export type EvidenceSchemaVersion = components['schemas']['EvidenceSourceResponse']['schemaVersion'];
+export type EvidenceSourceStatus = components['schemas']['EvidenceSourceResponse']['status'];
+export type EvidenceSourceResponse = components['schemas']['EvidenceSourceResponse'];
+
+export type DependencyNode = components['schemas']['DependencyNode'];
+export type DependencyDeclaration = components['schemas']['DependencyDeclaration'];
+export type DependencyDiagnostic = components['schemas']['DependencyDiagnostic'];
+export type DependencyEdge = components['schemas']['DependencyEdge'];
+export type DependencyAssessment = components['schemas']['DependencyAssessment'];
+export type DependencyProvenance = components['schemas']['DependencyProvenance'];
+export type DependencyGraphResponse = WithGeneratedDefaults<components['schemas']['DependencyGraphResponse'], 'diagnostics'>;
+
+export type ReviewResponse = WithGeneratedDefaults<
+  components['schemas']['EngineeringReviewResponse'],
+  'categories' | 'findings'
+>;
+
+export type AiQueryRequest = components['schemas']['AiQueryRequest'];
+export type AiMessage = components['schemas']['AiMessage'];
+export type AiCitation = components['schemas']['AiCitation'];
+export type AiQueryResponse = components['schemas']['AiQueryResponse'];
+export type AiProvider = components['schemas']['AiProviderConfig']['provider'];
+export type AiProviderConfig = components['schemas']['AiProviderConfig'];
+export type AiProviderPublicConfig = components['schemas']['AiProviderPublicConfig'];
+export type AiProviderTestRequest = components['schemas']['AiProviderTestRequest'];
+export type AiProviderTestResponse = components['schemas']['AiProviderTestResponse'];
+export type AiProviderCapability = components['schemas']['AiProviderCapability'];
+export type AiProviderCapabilitiesResponse = components['schemas']['AiProviderCapabilitiesResponse'];
+export interface AiConversationResponse {
   repositoryId: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  messages: AiMessage[];
 }
 
-export interface AnalysisStatusResponse {
-  repositoryId: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
-  stage: AnalysisStage | null;
-  progress: number;
-  startedAt: string | null;
-  completedAt: string | null;
-  error: string | null;
-}
+export type GenerateDocRequest = components['schemas']['GenerateDocRequest'];
+export type GenerateDocResponse = components['schemas']['GenerateDocResponse'];
 
-// Architecture
-export type ArchitectureResponse = ArchitectureModel;
+export type UserResponse = components['schemas']['UserResponse'];
+export type AuthResponse = components['schemas']['AuthResponse'];
+export type LoginRequest = components['schemas']['LoginRequest'];
+export type RegisterRequest = components['schemas']['RegisterRequest'];
+export type AccountDeletionRequest = components['schemas']['AccountDeletionRequest'];
 
-// Dependency Graph
-export interface DependencyNode {
-  id: string;
-  name: string;
-  version: string;
-  type: 'production' | 'development' | 'peer' | 'optional';
-  hasVulnerabilities: boolean;
-  isOutdated: boolean;
-  size: number | null;
-}
+export type OAuthProvider = 'google' | 'github';
+export type OAuthProvidersResponse = components['schemas']['OAuthProvidersResponse'];
+export type OAuthStartResponse = components['schemas']['OAuthStartResponse'];
+export type OAuthLinkedIdentity = components['schemas']['OAuthLinkedIdentity'];
+export type OAuthLinkedIdentitiesResponse = components['schemas']['OAuthLinkedIdentitiesResponse'];
+export type OAuthLinkConfirmRequest = components['schemas']['OAuthLinkConfirmRequest'];
 
-export interface DependencyEdge {
-  source: string;
-  target: string;
-  type: 'depends-on' | 'peer' | 'optional';
-}
+export type WaitlistSignupRequest = components['schemas']['WaitlistSignupRequest'];
+export type WaitlistSignupResponse = components['schemas']['WaitlistSignupResponse'];
 
-export interface DependencyGraphResponse {
-  repositoryId: string;
-  nodes: DependencyNode[];
-  edges: DependencyEdge[];
-  totalDependencies: number;
-  vulnerabilities: number;
-  outdated: number;
-}
+export type ExportFormat = components['schemas']['ExportRequest']['format'];
+export type ExportTarget = components['schemas']['ExportRequest']['target'];
+export type ExportRequest = components['schemas']['ExportRequest'];
+export type ExportResponse = components['schemas']['ExportResponse'];
 
-// Review
-export type ReviewResponse = EngineeringReview;
-
-// AI
-export interface AiQueryRequest {
-  repositoryId: string;
-  query: string;
-  context?: {
-    selectedNodeId?: string;
-    selectedFile?: string;
-    conversationHistory?: AiMessage[];
-  };
-}
-
-export interface AiMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
-  citations?: AiCitation[];
-}
-
-export interface AiCitation {
-  file: string;
-  startLine: number;
-  endLine: number;
-  content: string;
-}
-
-export interface AiQueryResponse {
-  message: AiMessage;
-  suggestions?: string[];
-}
-
-export interface AiStreamChunk {
-  type: 'content' | 'citation' | 'done' | 'error';
-  content?: string;
-  citation?: AiCitation;
-  error?: string;
-}
-
-export type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'openrouter' | 'ollama';
-
-export interface AiProviderConfig {
-  provider: AiProvider;
-  apiKey?: string;
-  model?: string;
-  baseUrl?: string;
-}
-
-export interface AiProviderPublicConfig {
-  provider: AiProvider | null;
-  model: string | null;
-  baseUrl: string | null;
-  hasApiKey: boolean;
-}
-
-export interface AiProviderTestRequest {
-  provider?: AiProvider;
-  apiKey?: string;
-  model?: string;
-  baseUrl?: string;
-}
-
-export interface AiProviderTestResponse {
-  ok: boolean;
-  message: string;
-  checkedAt: string;
-}
-
-// Documentation
-export interface GenerateDocRequest {
-  repositoryId: string;
-  format: 'markdown' | 'html';
-  sections?: string[];
-}
-
-export interface GenerateDocResponse {
-  content: string;
-  format: 'markdown' | 'html';
-  generatedAt: string;
-}
-
-// Export
-export type ExportFormat = 'json' | 'markdown' | 'html' | 'pdf';
-export type ExportTarget = 'review' | 'documentation' | 'architecture' | 'dependencies';
-
-export interface ExportRequest {
-  repositoryId: string;
-  target: ExportTarget;
-  format: ExportFormat;
-}
-
-export interface ExportResponse {
-  filename: string;
-  mediaType: string;
-  encoding: 'utf-8' | 'base64';
-  content: string;
-}
+export type ManifestExtractor = components['schemas']['ManifestExtractor'];
+export type RevisionManifest = components['schemas']['RevisionManifest'];
+export type RevisionManifestResponse = components['schemas']['RevisionManifestResponse'];

@@ -10,19 +10,36 @@ requires-python = ">=3.12,<3.14"
 dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.0",
-  "pydantic>=2.8.0",
+  "pydantic[email]>=2.8.0",
   "pydantic-settings>=2.4.0",
+  "PyJWT>=2.9.0",
+  "argon2-cffi>=23.1.0",
+  "cryptography>=42.0.0",
   "SQLAlchemy>=2.0.0",
   "alembic>=1.13.0",
   "psycopg[binary]>=3.2.0",
   "redis>=5.0.0",
-  "GitPython>=3.1.43",
   "tree-sitter>=0.22.0",
-  "networkx>=3.3",
+  "tree-sitter-typescript>=0.23.0",
   "python-multipart>=0.0.9",
-  "httpx>=0.27.0",
-  "xhtml2pdf>=0.2.16",
-  "pytest>=8.3.0"
+  "anyio>=4.0.0",
+  # The sender relies directly on httpcore's documented sni_hostname request
+  # extension while connecting to an IP-pinned URL.
+  "httpcore>=1.0.9,<2.0.0",
+  "httpx>=0.27.0,<1.0.0",
+  # The IaC extractor uses yaml.compose(), whose node marks are what make an
+  # exact one-based declaration span possible for a Compose manifest.
+  "PyYAML>=6.0",
+  "xhtml2pdf>=0.2.16"
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.3.0",
+]
+dev = [
+  "mypy==2.3.1",
+  "ruff==0.16.4",
 ]
 
 [tool.setuptools.packages.find]
@@ -32,3 +49,69 @@ include = ["app*"]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["app", "scripts", "tests"]
+# Deliberately malformed/adversarial Python source used as golden-benchmark
+# fixture *input* (Issue #94), not our own code -- e.g. adv-py-malformed's
+# broken.py exists to prove the extractor reports a parse failure instead of
+# crashing. Linting it as if it were a real module is a category error.
+extend-exclude = ["tests/benchmark/fixtures"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+# AiProviderConfig is a backwards-compatible re-export from app.ai.types.
+per-file-ignores = { "app/ai/types.py" = ["F401"] }
+
+[tool.mypy]
+files = ["app", "scripts"]
+python_version = "3.12"
+show_error_codes = true
+warn_unused_configs = true
+warn_unused_ignores = true
+
+# Existing type debt is isolated to the listed modules. The rest of the
+# production package remains checked, so each entry can be removed as its
+# annotations are repaired without weakening the global baseline.
+# PyYAML ships no inline types and the stub package is not a runtime dependency.
+# Only the IaC extractor imports it, and it wraps every yaml call in its own
+# typed helpers, so the untyped boundary stops at that module.
+[[tool.mypy.overrides]]
+module = ["yaml"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+  "app.ai.providers.config_store",
+  "app.ai.providers.http",
+  "app.analysis.architecture",
+  "app.analysis.authentication",
+  "app.api.routes.ai",
+  "app.api.routes.analysis",
+  "app.api.routes.auth",
+  "app.api.routes.documentation",
+  "app.api.routes.intelligence",
+  "app.api.routes.repositories",
+  "app.api.routes.reports",
+  "app.auth.service",
+  "app.core.ai_egress",
+  "app.core.observability",
+  "app.extraction.manifests",
+  "app.extraction.python",
+  "app.extraction.typescript",
+  "app.graph.dependency_graph",
+  "app.insights.service",
+  "app.intelligence.query_service",
+  "app.intelligence.resolution",
+  "app.intelligence.snapshot_store",
+  "app.main",
+  "app.reports.renderers",
+  "app.review.review_service",
+  "app.services.analysis_job_service",
+  "app.services.documentation_service",
+  "app.services.repository_service",
+  "app.workers.analysis_worker",
+]
+ignore_errors = true

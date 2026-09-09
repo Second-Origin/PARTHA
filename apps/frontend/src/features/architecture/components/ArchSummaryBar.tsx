@@ -1,11 +1,11 @@
 import { Code2, Layers, Box, FileCode, Route, Cpu } from 'lucide-react';
-import type { DataSource } from '@/shared/types';
+import type { RepositorySource } from '@/shared/types';
 import type { ArchitectureModel } from '@/shared/types/architecture';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 
 interface ArchSummaryBarProps {
   model: ArchitectureModel;
-  source?: DataSource | null;
+  source?: RepositorySource | null;
 }
 
 export function ArchSummaryBar({ model, source }: ArchSummaryBarProps) {

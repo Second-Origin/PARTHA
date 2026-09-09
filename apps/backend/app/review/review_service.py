@@ -1,249 +1,610 @@
-from datetime import UTC, datetime
+"""Deterministic, revision-bound Engineering Review generation (#154).
 
-from app.intelligence.engine import RepositoryIntelligenceEngine
+The legacy implementation subtracted arbitrary severity costs from 100 and
+generated generic recommendations from mutable repository metadata.  This
+builder deliberately has no dependency on a mutable compatibility read model.
+It emits only sealed ``ri.v1`` diagnostics that have an authentic supporting
+evidence span in the same snapshot.
+"""
+
+from __future__ import annotations
+
+import hashlib
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+
+from sqlalchemy import func, select
+
+from app.analysis.manifest import build_manifest, manifest_digest
+from app.intelligence.canonical import canonical_json_bytes
+from app.intelligence.query_service import SnapshotQueryService, batched_ids
 from app.models.repository import RepositoryRecord
-from app.schemas.review import EngineeringReviewResponse, ImprovementStep, ReviewFinding, ReviewScore, ReviewSummary
+from app.models.snapshot import RiDiagnostic, RiEvidence, RiNode, RiObservation
+from app.review.import_dispositions import is_recognized_external_import
+from app.schemas.review import (
+    AssessmentState,
+    EngineeringReviewResponse,
+    ReviewCategoryAssessment,
+    ReviewCategoryId,
+    ReviewEvidenceReference,
+    ReviewFinding,
+    ReviewPagination,
+    ReviewProvenance,
+    ReviewSeverity,
+    ReviewSeverityCounts,
+    ReviewSummary,
+    ReviewSupportStatus,
+)
 
-LARGE_FILE_BYTES = 40_000
-LARGE_SOURCE_SURFACE = 300
-SEVERITY_PRIORITY = {"critical": 1, "high": 2, "medium": 3, "low": 4}
-SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-EFFORT_BY_SEVERITY = {"critical": "1 sprint", "high": "1 sprint", "medium": "a few days", "low": "a few hours"}
+# Stored extractor severity -> product finding severity.  This is the complete,
+# documented mapping; no language model or score calculation is involved.
+DIAGNOSTIC_SEVERITY_MAPPING: dict[str, ReviewSeverity] = {
+    "fatal": "critical",
+    "error": "high",
+    "warning": "medium",
+    "info": "info",
+}
+
+_RULES: dict[str, tuple[ReviewCategoryId, str, str]] = {
+    "RI-RES-UNRESOLVED": (
+        "relationship_resolution",
+        "Unresolved relationship",
+        "Inspect the referenced name at this source span and make its target explicit or add extractor support for the construct.",
+    ),
+    "RI-RES-AMBIGUOUS": (
+        "relationship_resolution",
+        "Ambiguous relationship",
+        "Disambiguate the referenced name at this source span so it resolves to one target.",
+    ),
+    "RI-EXT-UNSUPPORTED": (
+        "source_extraction",
+        "Unsupported source construct",
+        "Rewrite the recorded construct into a supported form or extend the named extractor before relying on it for repository relationships.",
+    ),
+    "RI-SRC-MALFORMED": (
+        "source_extraction",
+        "Malformed source",
+        "Store this source as valid UTF-8 before attempting line-addressed semantic extraction.",
+    ),
+    "RI-LIMIT-SKIP": (
+        "source_extraction",
+        "Source excluded by extraction limit",
+        "Reduce the file below the configured extraction limit or raise the documented limit and rerun analysis.",
+    ),
+}
+
+#: Codes whose category is source extraction, used to state that category's
+#: assessment from extraction evidence rather than from unrelated diagnostics.
+_SOURCE_EXTRACTION_CODES = frozenset(code for code, rule in _RULES.items() if rule[0] == "source_extraction")
+
+_CATEGORY_LABELS: dict[ReviewCategoryId, str] = {
+    "architecture_boundaries": "Architecture and boundaries",
+    "relationship_resolution": "Relationship resolution",
+    "source_extraction": "Source extraction",
+    "dependency_declarations": "Dependency declarations",
+    "security_vulnerability_scanning": "Security vulnerability scanning",
+    "authentication_evidence": "Authentication evidence",
+    "repository_structure": "Repository structure",
+    "analysis_integrity": "Analysis integrity",
+}
+
+
+@dataclass(frozen=True)
+class _SupportedEvidence:
+    fact_id: str
+    evidence: RiEvidence
+    #: ``supported`` means the evidence span is the diagnostic's own recorded
+    #: span. ``file_scoped`` means the diagnostic named a file but no span, so
+    #: the finding is honestly scoped to the whole file and says so.
+    support_status: ReviewSupportStatus
+
+
+def _stable_id(prefix: str, payload: dict[str, object]) -> str:
+    digest = hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
+    return f"{prefix}:{digest}"
+
+
+def _overall_assessment_status(states: Counter[AssessmentState]) -> AssessmentState:
+    """Summarise the category states instead of asserting a fixed status.
+
+    A constant here would claim a coverage level the categories may not support,
+    which is the same class of unearned claim the v2 contract removed.
+    """
+
+    if states["assessed"] and not (
+        states["partially_assessed"] or states["not_assessed"] or states["insufficient_evidence"]
+    ):
+        return "assessed"
+    if states["assessed"] or states["partially_assessed"]:
+        return "partially_assessed"
+    if states["insufficient_evidence"]:
+        return "insufficient_evidence"
+    return "not_assessed"
 
 
 class EngineeringReviewBuilder:
-    def __init__(self, intelligence: RepositoryIntelligenceEngine | None = None) -> None:
-        self.intelligence = intelligence or RepositoryIntelligenceEngine()
+    """Build the public review solely from an owner-scoped sealed snapshot."""
 
-    def build(self, record: RepositoryRecord) -> EngineeringReviewResponse:
-        repository_intelligence = self.intelligence.from_record(record)
-        findings = self._findings(repository_intelligence)
-        scores = self._scores(findings)
-        summary = self._summary(findings, scores)
-        roadmap = self._roadmap(findings)
+    def __init__(self, snapshots: SnapshotQueryService) -> None:
+        self.snapshots = snapshots
+
+    def build(
+        self,
+        record: RepositoryRecord,
+        *,
+        category: ReviewCategoryId | None = None,
+        severity: ReviewSeverity | None = None,
+        diagnostic_code: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+    ) -> EngineeringReviewResponse:
+        snapshot = self.snapshots.require_sealed_snapshot_for_current_revision(record.id)
+
+        # Only diagnostics with a rule can become findings, so only those are
+        # hydrated. Diagnostics without a rule are counted in SQL instead: a
+        # snapshot can hold far more diagnostic rows than a review will ever
+        # publish, and loading all of them to discard most was unbounded.
+        diagnostics = list(
+            self.snapshots.db.scalars(
+                select(RiDiagnostic)
+                .where(
+                    RiDiagnostic.snapshot_id == snapshot.snapshot_id,
+                    RiDiagnostic.code.in_(_RULES),
+                )
+                .order_by(
+                    RiDiagnostic.code,
+                    RiDiagnostic.path,
+                    RiDiagnostic.span_start_line,
+                    RiDiagnostic.span_end_line,
+                    RiDiagnostic.producer,
+                    RiDiagnostic.message,
+                    RiDiagnostic.id,
+                )
+            ).all()
+        )
+        omitted_without_rule = (
+            self.snapshots.db.scalar(
+                select(func.count(RiDiagnostic.id)).where(
+                    RiDiagnostic.snapshot_id == snapshot.snapshot_id,
+                    RiDiagnostic.code.not_in(_RULES),
+                )
+            )
+            or 0
+        )
+        evidence_by_fact = self._evidence_by_fact(snapshot.snapshot_id, diagnostics)
+        import_specifiers = self._unresolved_import_specifiers(snapshot.snapshot_id, diagnostics)
+        declared_dependency_keys = (
+            self._declared_dependency_keys(snapshot.snapshot_id) if import_specifiers else frozenset[str]()
+        )
+        provenance = ReviewProvenance(
+            snapshot_id=snapshot.snapshot_id,
+            snapshot_schema_version=snapshot.schema_version,
+            canonical_graph_hash=snapshot.canonical_graph_hash,
+        )
+
+        findings: list[ReviewFinding] = []
+        omitted = omitted_without_rule
+        for diagnostic in diagnostics:
+            rule = _RULES.get(diagnostic.code)
+            supported = self._support_for(diagnostic, evidence_by_fact)
+            if rule is None or supported is None:
+                omitted += 1
+                continue
+            if self._is_suppressed_import(diagnostic, import_specifiers, declared_dependency_keys):
+                omitted += 1
+                continue
+            category, title, remediation = rule
+            evidence = supported.evidence
+            evidence_id = _stable_id(
+                "evidence",
+                {
+                    "snapshotId": snapshot.snapshot_id,
+                    "factId": supported.fact_id,
+                    "path": evidence.path,
+                    "startLine": evidence.start_line,
+                    "endLine": evidence.end_line,
+                    "extractor": evidence.extractor,
+                    "extractorVersion": evidence.extractor_version,
+                },
+            )
+            finding_id = _stable_id(
+                "finding",
+                {
+                    "snapshotId": snapshot.snapshot_id,
+                    "code": diagnostic.code,
+                    "producer": diagnostic.producer,
+                    "message": diagnostic.message,
+                    "factId": supported.fact_id,
+                    "evidenceId": evidence_id,
+                },
+            )
+            findings.append(
+                ReviewFinding(
+                    id=finding_id,
+                    category=category,
+                    severity=DIAGNOSTIC_SEVERITY_MAPPING[diagnostic.severity],
+                    title=title,
+                    explanation=diagnostic.message,
+                    path=evidence.path,
+                    start_line=evidence.start_line,
+                    end_line=evidence.end_line,
+                    snapshot_id=snapshot.snapshot_id,
+                    fact_id=supported.fact_id,
+                    evidence_id=evidence_id,
+                    extractor_name=evidence.extractor,
+                    extractor_version=evidence.extractor_version,
+                    diagnostic_code=diagnostic.code,
+                    rule_id=f"engineering-review.v2/{diagnostic.code}",
+                    remediation_guidance=remediation,
+                    support_status=supported.support_status,
+                    provenance=provenance,
+                    evidence=ReviewEvidenceReference(
+                        evidence_id=evidence_id,
+                        snapshot_id=snapshot.snapshot_id,
+                        fact_id=supported.fact_id,
+                        path=evidence.path,
+                        start_line=evidence.start_line,
+                        end_line=evidence.end_line,
+                        extractor_name=evidence.extractor,
+                        extractor_version=evidence.extractor_version,
+                    ),
+                )
+            )
+
+        severity_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        findings.sort(
+            key=lambda item: (
+                severity_rank[item.severity],
+                item.category,
+                item.path,
+                item.start_line,
+                item.diagnostic_code,
+                item.id,
+            )
+        )
+
+        # Assessment matrix, severity chips, and the summary message always
+        # describe the whole sealed snapshot -- filtering/pagination below
+        # narrows only which findings are returned in this response page, the
+        # same split the frontend's own client-side filters already made.
+        categories = self._categories(snapshot.snapshot_id, findings, diagnostics)
+        states = Counter(category.state for category in categories)
+        severities = Counter(finding.severity for finding in findings)
+        count = len(findings)
+        file_scoped = sum(1 for finding in findings if finding.support_status == "file_scoped")
+        message = (
+            f"{count} evidence-backed finding{' was' if count == 1 else 's were'} identified in this revision. "
+            "Security vulnerability scanning was not performed."
+        )
+        manifest = build_manifest(snapshot)
+
+        matched = [
+            finding
+            for finding in findings
+            if (category is None or finding.category == category)
+            and (severity is None or finding.severity == severity)
+            and (diagnostic_code is None or finding.diagnostic_code == diagnostic_code)
+        ]
+        total_matched = len(matched)
+        # offset/limit are None only for the internal (non-API) callers that
+        # need the complete matched set in one call -- the PDF/JSON export
+        # path (#154), and the SQL-batching test that calls _evidence_by_fact
+        # directly. Every HTTP request supplies both explicitly (see the
+        # /analysis/{repository_id}/review route), so a real client always
+        # gets a bounded page.
+        page_offset = 0 if offset is None else offset
+        page_limit = total_matched if limit is None else limit
+        page_findings = matched[page_offset : page_offset + page_limit]
+        pagination = ReviewPagination(offset=page_offset, limit=page_limit, total=total_matched)
         return EngineeringReviewResponse(
             repository_id=record.id,
             repository_name=record.name,
-            generated_at=datetime.now(UTC),
-            summary=summary,
-            scores=scores,
-            findings=findings,
-            roadmap=roadmap,
+            revision_kind=snapshot.revision_kind,  # type: ignore[arg-type]
+            revision_value=snapshot.revision_value,
+            snapshot_id=snapshot.snapshot_id,
+            snapshot_schema_version=snapshot.schema_version,
+            canonical_graph_hash=snapshot.canonical_graph_hash,
+            manifest_digest=manifest_digest(manifest),
+            provenance=provenance,
+            generated_at=snapshot.sealed_at,
+            assessment_status=_overall_assessment_status(states),
+            categories=categories,
+            findings=page_findings,
+            pagination=pagination,
+            summary=ReviewSummary(
+                message=message,
+                findings_by_severity=ReviewSeverityCounts(
+                    info=severities["info"],
+                    low=severities["low"],
+                    medium=severities["medium"],
+                    high=severities["high"],
+                    critical=severities["critical"],
+                ),
+                assessed_categories=states["assessed"],
+                partially_assessed_categories=states["partially_assessed"],
+                not_assessed_categories=states["not_assessed"],
+                insufficient_evidence_categories=states["insufficient_evidence"],
+                evidence_backed_finding_count=count,
+                file_scoped_finding_count=file_scoped,
+                omitted_unsupported_diagnostic_count=omitted,
+            ),
         )
 
-    def _findings(self, intelligence) -> list[ReviewFinding]:
-        discovery = intelligence.discovery
-        statistics = discovery.statistics
-        files = intelligence.files
-        findings: list[ReviewFinding] = []
-
-        if not intelligence.metadata.has_readme:
-            findings.append(
-                self._finding(
-                    "doc-no-readme",
-                    "Missing README",
-                    "documentation",
-                    "high",
-                    problem=f"No README file was detected among {statistics.documentation_files} documentation file(s).",
-                    impact="Contributors and reviewers lack setup, architecture, and usage guidance, which slows onboarding and increases misuse.",
-                    recommendation="Add a README covering setup, architecture, and contribution guidance.",
-                    affected_files=[],
-                    affected_modules=["documentation"],
-                )
-            )
-        if not intelligence.metadata.has_license:
-            findings.append(
-                self._finding(
-                    "doc-no-license",
-                    "Missing License",
-                    "documentation",
-                    "medium",
-                    problem="No license file or explicit license declaration was detected.",
-                    impact="Without a declared license the code's usage and distribution rights are ambiguous, blocking adoption and reuse.",
-                    recommendation="Add an explicit open-source license or a proprietary notice.",
-                    affected_files=[],
-                    affected_modules=["documentation"],
-                )
-            )
-        if statistics.test_files == 0:
-            findings.append(
-                self._finding(
-                    "test-missing",
-                    "No Tests Detected",
-                    "testing",
-                    "high",
-                    problem=f"No test files were detected among {statistics.source_files} source file(s).",
-                    impact="Changes cannot be validated automatically, so regressions can reach production undetected.",
-                    recommendation="Add automated unit and integration tests for critical paths.",
-                    affected_files=[],
-                    affected_modules=["tests"],
-                )
-            )
-        if discovery.environment_files:
-            findings.append(
-                self._finding(
-                    "env-file-present",
-                    "Environment File Present",
-                    "security",
-                    "critical",
-                    problem=f"Committed environment file(s) that may contain secrets: {', '.join(discovery.environment_files[:5])}.",
-                    impact="Secrets committed to version control can be leaked and abused, and remain recoverable from history.",
-                    recommendation="Remove committed secret-bearing environment files, rotate exposed secrets, and ignore them going forward.",
-                    affected_files=discovery.environment_files,
-                    affected_modules=["configuration"],
-                )
-            )
-        if statistics.source_files > LARGE_SOURCE_SURFACE:
-            findings.append(
-                self._finding(
-                    "large-codebase",
-                    "Large Source Surface",
-                    "architecture",
-                    "medium",
-                    problem=f"The repository has {statistics.source_files} source files, a large surface to keep coherent.",
-                    impact="A large undivided surface makes ownership, change impact, and public interfaces hard to reason about.",
-                    recommendation="Define module boundaries and public interfaces to contain change impact.",
-                    affected_files=[file.path for file in files[:25]],
-                )
-            )
-        large_files = sorted(
-            (file for file in files if file.role != "documentation" and file.size > LARGE_FILE_BYTES),
-            key=lambda file: file.size,
-            reverse=True,
-        )
-        if large_files:
-            findings.append(
-                self._finding(
-                    "large-files",
-                    "Oversized Source Files",
-                    "maintainability",
-                    "medium",
-                    problem=f"{len(large_files)} file(s) exceed {LARGE_FILE_BYTES // 1000} KB, a sign of low cohesion or god-files.",
-                    impact="Oversized files are harder to review, test, and refactor safely, concentrating risk in a few places.",
-                    recommendation="Split large files along clear responsibilities and extract cohesive units.",
-                    affected_files=[file.path for file in large_files[:10]],
-                )
-            )
-        if not discovery.ci_files:
-            findings.append(
-                self._finding(
-                    "ci-missing",
-                    "No CI Workflow Detected",
-                    "code-quality",
-                    "medium",
-                    problem="No continuous-integration workflow configuration was detected.",
-                    impact="Build, lint, and test checks are not enforced on changes, letting regressions merge unnoticed.",
-                    recommendation="Add CI to run build, lint, and test checks on pull requests.",
-                    affected_files=[],
-                    affected_modules=["configuration"],
-                )
-            )
-        if not findings:
-            findings.append(
-                self._finding(
-                    "baseline-review",
-                    "Baseline Review Complete",
-                    "maintainability",
-                    "low",
-                    problem="No blocking issues were detected by the current repository intelligence checks.",
-                    impact="The repository meets the baseline checks; continued discipline keeps quality high.",
-                    recommendation="Keep quality gates active as repository intelligence deepens.",
-                    affected_files=[],
-                )
-            )
-        return findings
-
-    def _finding(
+    def _evidence_by_fact(
         self,
-        finding_id: str,
-        title: str,
-        category: str,
-        severity: str,
-        problem: str,
-        impact: str,
-        recommendation: str,
-        affected_files: list[str],
-        affected_modules: list[str] | None = None,
-    ) -> ReviewFinding:
-        return ReviewFinding(
-            id=finding_id,
-            title=title,
-            category=category,  # type: ignore[arg-type]
-            severity=severity,  # type: ignore[arg-type]
-            status="open",
-            problem=problem,
-            impact=impact,
-            recommendation=recommendation,
-            priority=SEVERITY_PRIORITY[severity],
-            estimated_effort="small" if severity in {"low", "medium"} else "medium",
-            affected_files=affected_files,
-            affected_modules=affected_modules or ["repository"],
-            tags=[category],
-        )
+        snapshot_id: str,
+        diagnostics: list[RiDiagnostic],
+    ) -> dict[str, list[RiEvidence]]:
+        observation_ids = {
+            value
+            for diagnostic in diagnostics
+            for value in [(diagnostic.details or {}).get("observation_id")]
+            if isinstance(value, str)
+        }
+        node_keys = {
+            value
+            for diagnostic in diagnostics
+            for value in (diagnostic.subject_key, diagnostic.object_key)
+            if value is not None
+        }
+        node_keys.update(f"file:{diagnostic.path}" for diagnostic in diagnostics if diagnostic.path)
 
-    def _scores(self, findings: list[ReviewFinding]) -> list[ReviewScore]:
-        categories = ["architecture", "security", "performance", "maintainability", "scalability", "code-quality", "documentation", "testing", "dependency-health", "configuration"]
-        severity_cost = {"critical": 35, "high": 20, "medium": 10, "low": 5}
-        scores: list[ReviewScore] = []
-        for index, category in enumerate(categories, start=1):
-            category_findings = [finding for finding in findings if finding.category == category]
-            score = max(0, 100 - sum(severity_cost[finding.severity] for finding in category_findings))
-            risk = "critical" if score < 40 else "high" if score < 65 else "medium" if score < 85 else "low"
-            scores.append(
-                ReviewScore(
-                    category=category,  # type: ignore[arg-type]
-                    score=score,
-                    trend="stable",
-                    risk_level=risk,  # type: ignore[arg-type]
-                    priority=index,
-                    findings_count=len(category_findings),
+        # Every id set below grows with repository size, so each read is split
+        # into bounded batches. Binding them in one statement exceeded SQLite's
+        # per-statement parameter cap on large snapshots, turning a review into
+        # a 500 rather than a bounded set of queries.
+        observation_identity: dict[int, str] = {}
+        for batch in batched_ids(sorted(observation_ids)):
+            observation_identity.update(
+                {
+                    item.id: item.observation_id
+                    for item in self.snapshots.db.scalars(
+                        select(RiObservation).where(
+                            RiObservation.snapshot_id == snapshot_id,
+                            RiObservation.observation_id.in_(batch),
+                        )
+                    ).all()
+                }
+            )
+        node_identity: dict[int, str] = {}
+        for batch in batched_ids(sorted(node_keys)):
+            node_identity.update(
+                {
+                    item.id: item.stable_key
+                    for item in self.snapshots.db.scalars(
+                        select(RiNode).where(
+                            RiNode.snapshot_id == snapshot_id,
+                            RiNode.stable_key.in_(batch),
+                        )
+                    ).all()
+                }
+            )
+
+        if not observation_identity and not node_identity:
+            return {}
+        grouped: dict[str, list[RiEvidence]] = defaultdict(list)
+        for column, identity in (
+            (RiEvidence.observation_ref, observation_identity),
+            (RiEvidence.node_ref, node_identity),
+        ):
+            for batch in batched_ids(sorted(identity)):
+                rows = self.snapshots.db.scalars(
+                    select(RiEvidence)
+                    .where(RiEvidence.snapshot_id == snapshot_id, column.in_(batch))
+                    .order_by(
+                        RiEvidence.path,
+                        RiEvidence.start_line,
+                        RiEvidence.end_line,
+                        RiEvidence.extractor,
+                        RiEvidence.extractor_version,
+                        RiEvidence.id,
+                    )
+                ).all()
+                for evidence in rows:
+                    fact_id = identity.get(
+                        evidence.observation_ref if column is RiEvidence.observation_ref else evidence.node_ref
+                    )
+                    if fact_id is not None:
+                        grouped[fact_id].append(evidence)
+        # Batching splits the ordered read, so restore the documented ordering
+        # per fact: support selection must not depend on batch boundaries.
+        for rows in grouped.values():
+            rows.sort(
+                key=lambda evidence: (
+                    evidence.path,
+                    evidence.start_line,
+                    evidence.end_line,
+                    evidence.extractor,
+                    evidence.extractor_version,
+                    evidence.id,
                 )
             )
-        return scores
+        return dict(grouped)
 
-    def _summary(self, findings: list[ReviewFinding], scores: list[ReviewScore]) -> ReviewSummary:
-        return ReviewSummary(
-            overall_score=round(sum(score.score for score in scores) / max(len(scores), 1)),
-            overall_trend="stable",
-            critical_count=len([finding for finding in findings if finding.severity == "critical"]),
-            high_count=len([finding for finding in findings if finding.severity == "high"]),
-            medium_count=len([finding for finding in findings if finding.severity == "medium"]),
-            low_count=len([finding for finding in findings if finding.severity == "low"]),
-            total_findings=len(findings),
+    def _unresolved_import_specifiers(
+        self,
+        snapshot_id: str,
+        diagnostics: list[RiDiagnostic],
+    ) -> dict[str, str]:
+        """``observation_id`` -> the import specifier it named, for every
+        unresolved ``import``-kind diagnostic only.
+
+        Used solely to decide whether an unresolved import's target is a
+        recognized external dependency (never surfaced in a finding's own
+        text -- the diagnostic's message stays generic per RFC §13).
+        """
+
+        observation_ids = {
+            value
+            for diagnostic in diagnostics
+            if diagnostic.code == "RI-RES-UNRESOLVED"
+            for value in [(diagnostic.details or {}).get("observation_id")]
+            if isinstance(value, str)
+        }
+        if not observation_ids:
+            return {}
+        specifiers: dict[str, str] = {}
+        for batch in batched_ids(sorted(observation_ids)):
+            rows = self.snapshots.db.scalars(
+                select(RiObservation).where(
+                    RiObservation.snapshot_id == snapshot_id,
+                    RiObservation.observation_id.in_(batch),
+                    RiObservation.observed_kind == "import",
+                )
+            ).all()
+            for row in rows:
+                if row.referent_text:
+                    specifiers[row.observation_id] = row.referent_text
+        return specifiers
+
+    def _declared_dependency_keys(self, snapshot_id: str) -> frozenset[str]:
+        return frozenset(
+            self.snapshots.db.scalars(
+                select(RiNode.stable_key).where(
+                    RiNode.snapshot_id == snapshot_id,
+                    RiNode.node_kind == "dependency",
+                )
+            ).all()
         )
 
-    def _roadmap(self, findings: list[ReviewFinding]) -> list[ImprovementStep]:
-        actionable = [finding for finding in findings if finding.id != "baseline-review"]
-        if not actionable:
-            return [
-                ImprovementStep(
-                    id="maintain-quality-gates",
-                    title="Maintain Quality Gates",
-                    description="Keep linting, type checking, tests, and dependency scanning active as the repository grows.",
-                    priority="low",
-                    estimated_effort="ongoing",
-                    category="code-quality",
-                    related_findings=[finding.id for finding in findings],
-                )
-            ]
+    @staticmethod
+    def _is_suppressed_import(
+        diagnostic: RiDiagnostic,
+        import_specifiers: dict[str, str],
+        declared_dependency_keys: frozenset[str],
+    ) -> bool:
+        """True only for an unresolved *import* whose target is stdlib/a
+        Node builtin, or a package the repository's own manifest declares.
 
-        grouped: dict[str, list[ReviewFinding]] = {}
-        for finding in actionable:
-            grouped.setdefault(finding.category, []).append(finding)
+        A relative import, or a bare specifier that matches neither, still
+        looks like a same-repo reference the resolver genuinely couldn't
+        find -- a real gap, not noise -- and this returns False for it.
+        """
 
-        steps: list[ImprovementStep] = []
-        for category, group in grouped.items():
-            top_severity = min((finding.severity for finding in group), key=lambda severity: SEVERITY_RANK[severity])
-            steps.append(
-                ImprovementStep(
-                    id=f"roadmap-{category}",
-                    title=f"Address {category.replace('-', ' ')} findings",
-                    description="; ".join(dict.fromkeys(finding.recommendation for finding in group)),
-                    priority=top_severity,  # type: ignore[arg-type]
-                    estimated_effort=EFFORT_BY_SEVERITY[top_severity],
-                    category=category,  # type: ignore[arg-type]
-                    related_findings=[finding.id for finding in group],
-                )
+        if diagnostic.code != "RI-RES-UNRESOLVED" or not diagnostic.path:
+            return False
+        observation_id = (diagnostic.details or {}).get("observation_id")
+        specifier = import_specifiers.get(observation_id) if isinstance(observation_id, str) else None
+        if specifier is None:
+            return False
+        return is_recognized_external_import(specifier, diagnostic.path, declared_dependency_keys)
+
+    @staticmethod
+    def _support_for(
+        diagnostic: RiDiagnostic,
+        evidence_by_fact: dict[str, list[RiEvidence]],
+    ) -> _SupportedEvidence | None:
+        """Find evidence that genuinely addresses this diagnostic, or nothing.
+
+        A finding's ``path``/``startLine``/``endLine`` are presented to a user as
+        the location of the problem, so they may only come from evidence that
+        actually addresses the diagnostic:
+
+        * A diagnostic that recorded a span is supported only by evidence at
+          exactly that path and span.
+        * A diagnostic that recorded a path but no span (``RI-SRC-MALFORMED``
+          and ``RI-LIMIT-SKIP`` are file-level by construction) is supported
+          only by file-granularity evidence for that same path, and the result
+          is marked ``file_scoped`` so the whole-file span is never presented as
+          a line-addressed finding.
+        * A diagnostic with neither is unsupported. Borrowing whichever span
+          sorted first would fabricate a location, which is the exact failure
+          this contract exists to prevent.
+        """
+
+        observation_id = (diagnostic.details or {}).get("observation_id")
+        candidates = [
+            value
+            for value in (
+                observation_id if isinstance(observation_id, str) else None,
+                diagnostic.subject_key,
+                diagnostic.object_key,
+                f"file:{diagnostic.path}" if diagnostic.path else None,
             )
-        steps.sort(key=lambda step: SEVERITY_RANK[step.priority])
-        return steps
+            if value is not None
+        ]
+        if diagnostic.path is None:
+            return None
+
+        has_span = diagnostic.span_start_line is not None
+        for fact_id in candidates:
+            for evidence in evidence_by_fact.get(fact_id, []):
+                if evidence.path != diagnostic.path:
+                    continue
+                if has_span:
+                    if (
+                        evidence.start_line != diagnostic.span_start_line
+                        or evidence.end_line != diagnostic.span_end_line
+                    ):
+                        continue
+                    return _SupportedEvidence(fact_id=fact_id, evidence=evidence, support_status="supported")
+                if evidence.granularity != "file":
+                    continue
+                return _SupportedEvidence(fact_id=fact_id, evidence=evidence, support_status="file_scoped")
+        return None
+
+    def _categories(
+        self,
+        snapshot_id: str,
+        findings: list[ReviewFinding],
+        diagnostics: list[RiDiagnostic],
+    ) -> list[ReviewCategoryAssessment]:
+        finding_counts = Counter(finding.category for finding in findings)
+        has_extraction_diagnostics = any(diagnostic.code in _SOURCE_EXTRACTION_CODES for diagnostic in diagnostics)
+        has_dependency_nodes = (
+            self.snapshots.db.scalar(
+                select(RiNode.id).where(RiNode.snapshot_id == snapshot_id, RiNode.node_kind == "dependency").limit(1)
+            )
+            is not None
+        )
+        has_file_nodes = (
+            self.snapshots.db.scalar(
+                select(RiNode.id).where(RiNode.snapshot_id == snapshot_id, RiNode.node_kind == "file").limit(1)
+            )
+            is not None
+        )
+
+        states: dict[ReviewCategoryId, tuple[AssessmentState, str]] = {
+            "architecture_boundaries": (
+                "partially_assessed",
+                "Observed nodes and resolved relationships are available; no architectural boundary rating is produced.",
+            ),
+            "relationship_resolution": (
+                "assessed",
+                "Resolver diagnostics were assessed and only same-snapshot evidence-backed diagnostics became findings.",
+            ),
+            "source_extraction": (
+                "partially_assessed" if has_extraction_diagnostics else "assessed",
+                "Extractor diagnostics were assessed; diagnostics without an authentic line-addressed evidence span remain omitted.",
+            ),
+            "dependency_declarations": (
+                "partially_assessed" if has_dependency_nodes else "insufficient_evidence",
+                "Declared dependencies are inventoried when present. Vulnerability and outdated-version assessments were not performed.",
+            ),
+            "security_vulnerability_scanning": (
+                "not_assessed",
+                "No vulnerability database, advisory feed, lockfile audit, or exploitability scanner was run for this revision.",
+            ),
+            "authentication_evidence": (
+                "partially_assessed",
+                "Authentication-relevant observed facts are available, but exploitability and security posture were not assessed.",
+            ),
+            "repository_structure": (
+                "partially_assessed" if has_file_nodes else "insufficient_evidence",
+                "The sealed file inventory is available; maintainability and code quality were not inferred from filenames or size.",
+            ),
+            "analysis_integrity": (
+                "assessed",
+                "The selected snapshot is sealed, revision-bound, and has a canonical graph hash.",
+            ),
+        }
+        return [
+            ReviewCategoryAssessment(
+                id=category_id,
+                label=_CATEGORY_LABELS[category_id],
+                state=states[category_id][0],
+                explanation=states[category_id][1],
+                finding_count=finding_counts[category_id],
+            )
+            for category_id in _CATEGORY_LABELS
+        ]

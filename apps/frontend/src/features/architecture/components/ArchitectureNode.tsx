@@ -3,14 +3,15 @@ import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import {
   Monitor, Server, Waypoints, Route, Cog, Database, Settings,
   Shield, Layers, Wrench, Box, Globe, Library, CloudCog,
-  ListTodo, Zap,
+  ListTodo, Zap, Play,
 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
-import type { ArchNodeType } from '@/shared/types/architecture';
+import type { ArchNodeType, RelationshipState } from '@/shared/types/architecture';
 
 const nodeConfig: Record<ArchNodeType, { icon: typeof Monitor; color: string; bg: string }> = {
   frontend: { icon: Monitor, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30' },
   backend: { icon: Server, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' },
+  entrypoint: { icon: Play, color: 'text-lime-400', bg: 'bg-lime-500/10 border-lime-500/30' },
   controller: { icon: Waypoints, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
   route: { icon: Route, color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/30' },
   service: { icon: Cog, color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/30' },
@@ -31,9 +32,13 @@ const nodeConfig: Record<ArchNodeType, { icon: typeof Monitor; color: string; bg
 export interface ArchNodeData {
   label: string;
   nodeType: ArchNodeType;
+  layer: string;
+  relationshipState: RelationshipState;
   description: string;
   filesCount: number;
-  complexity: 'low' | 'medium' | 'high';
+  // No producer measures complexity today (#217); 'not_computed' must never
+  // render as if it were a real "low/medium/high" assessment.
+  complexity: 'low' | 'medium' | 'high' | 'not_computed';
   isSelected?: boolean;
   isHighlighted?: boolean;
   heatmapIntensity?: number;
@@ -42,6 +47,17 @@ export interface ArchNodeData {
 }
 
 export type ArchFlowNode = Node<ArchNodeData, 'architectureNode'>;
+
+const relationshipStateConfig: Record<RelationshipState, { label: string; className: string }> = {
+  connected: { label: 'Connected', className: 'bg-success/10 text-success' },
+  'no-observed-relationships': { label: 'No observed', className: 'bg-warning/10 text-warning' },
+  unresolved: { label: 'Unresolved', className: 'bg-destructive/10 text-destructive' },
+  'not-extracted': { label: 'Not extracted', className: 'bg-muted text-muted-foreground' },
+};
+
+function formatLabel(value: string): string {
+  return value.replace(/[-_]/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export const ArchitectureNode = memo(({ data }: NodeProps<ArchFlowNode>) => {
   const config = nodeConfig[data.nodeType] || nodeConfig.utilities;
@@ -56,10 +72,29 @@ export const ArchitectureNode = memo(({ data }: NodeProps<ArchFlowNode>) => {
         : 'ring-1 ring-yellow-500/30'
     : '';
 
+  // Card text is truncated to keep node dimensions stable, so the full label,
+  // classification and description are also exposed as the node's accessible
+  // name and native tooltip. A truncated label must stay recoverable without
+  // zooming (#112).
+  const accessibleName = [
+    data.label,
+    `${formatLabel(data.nodeType)}, ${formatLabel(data.layer)}`,
+    data.description,
+    data.filesCount > 0 ? `${data.filesCount} files` : null,
+    data.complexity !== 'not_computed' ? `${data.complexity} complexity` : null,
+    relationshipStateConfig[data.relationshipState].label,
+  ]
+    .filter(Boolean)
+    .join('. ');
+
   return (
     <div
+      role="group"
+      aria-label={accessibleName}
+      aria-current={data.isSelected ? 'true' : undefined}
+      title={accessibleName}
       className={cn(
-        'relative rounded-lg border px-4 py-3 min-w-[160px] max-w-[200px] shadow-sm transition-all duration-200',
+        'relative h-[112px] w-[220px] rounded-lg border px-4 py-3 shadow-sm transition-all duration-200',
         config.bg,
         data.isSelected && 'ring-2 ring-primary shadow-lg scale-105',
         data.isHighlighted && !data.isSelected && 'ring-1 ring-primary/50 shadow-md',
@@ -68,7 +103,7 @@ export const ArchitectureNode = memo(({ data }: NodeProps<ArchFlowNode>) => {
     >
       <Handle
         type="target"
-        position={Position.Top}
+        position={Position.Left}
         className="!w-2 !h-2 !bg-muted-foreground/50 !border-0"
       />
       <div className="flex items-start gap-2.5">
@@ -77,32 +112,40 @@ export const ArchitectureNode = memo(({ data }: NodeProps<ArchFlowNode>) => {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
-            <p className="text-xs font-medium text-foreground truncate">{data.label}</p>
+            <p data-testid="architecture-node-label" className="truncate text-sm font-semibold text-foreground">{data.label}</p>
             {data.isBookmarked && (
               <span className="text-amber-400 text-[10px]">*</span>
             )}
           </div>
-          <p className="text-2xs text-muted-foreground mt-0.5 line-clamp-1">{data.description}</p>
-          <div className="flex items-center gap-2 mt-1.5">
+          <p data-testid="architecture-node-type" className="mt-0.5 truncate text-xs text-muted-foreground">
+            {formatLabel(data.nodeType)} · {formatLabel(data.layer)}
+          </p>
+          <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{data.description}</p>
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
             {data.filesCount > 0 && (
-              <span className="text-2xs text-muted-foreground">{data.filesCount} files</span>
+              <span className="text-xs text-muted-foreground">{data.filesCount} files</span>
             )}
-            <span
-              className={cn(
-                'text-2xs px-1 py-0.5 rounded',
-                data.complexity === 'high' && 'bg-destructive/10 text-destructive',
-                data.complexity === 'medium' && 'bg-warning/10 text-warning',
-                data.complexity === 'low' && 'bg-success/10 text-success'
-              )}
-            >
-              {data.complexity}
+            {data.complexity !== 'not_computed' && (
+              <span
+                className={cn(
+                  'rounded px-1 py-0.5 text-xs',
+                  data.complexity === 'high' && 'bg-destructive/10 text-destructive',
+                  data.complexity === 'medium' && 'bg-warning/10 text-warning',
+                  data.complexity === 'low' && 'bg-success/10 text-success'
+                )}
+              >
+                {data.complexity}
+              </span>
+            )}
+            <span data-testid="architecture-node-trust" className={cn('rounded px-1 py-0.5 text-xs', relationshipStateConfig[data.relationshipState].className)}>
+              {relationshipStateConfig[data.relationshipState].label}
             </span>
           </div>
         </div>
       </div>
       <Handle
         type="source"
-        position={Position.Bottom}
+        position={Position.Right}
         className="!w-2 !h-2 !bg-muted-foreground/50 !border-0"
       />
     </div>

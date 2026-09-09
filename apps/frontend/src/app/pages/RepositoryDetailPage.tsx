@@ -1,5 +1,7 @@
-import { Navigate, useParams, useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
+import { Navigate, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { parseEvidenceCitation } from '@/features/explorer/fileUtils';
 import {
   ArrowLeft,
   FolderGit2,
@@ -13,6 +15,9 @@ import {
   Scale,
   Settings2,
   FolderTree,
+  GitBranch,
+  GitCommitHorizontal,
+  Fingerprint,
   Layers,
 } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
@@ -20,6 +25,8 @@ import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { Badge } from '@/shared/components/ui/Badge';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 import { RepositoryExplorer } from '@/features/explorer/components/RepositoryExplorer';
+import { RepositoryLineageHistory } from '@/features/repositories/components/RepositoryLineageHistory';
+import { RepositoryOutcomeSummary } from '@/features/repositories/components/RepositoryOutcomeSummary';
 import { useRepositoryDetail } from '@/features/repositories/hooks/useRepositoryDetail';
 import { useRepositoryTree } from '@/features/repositories/hooks/useRepositoryTree';
 import { repositoryStatusVariant } from '@/features/repositories/status';
@@ -29,8 +36,12 @@ import { cn } from '@/shared/utils/cn';
 export function RepositoryDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { repository: repo, tabs, activeTab, setActiveTab, redirectToAnalysis } = useRepositoryDetail(id);
   const repositoryTree = useRepositoryTree(repo);
+
+  const citation = useMemo(() => parseEvidenceCitation(searchParams), [searchParams]);
+  const initialFilePath = searchParams.get('path');
 
   if (!repo) {
     return (
@@ -80,13 +91,15 @@ export function RepositoryDetailPage() {
         </div>
       ) : repo.status === 'completed' && repo.meta ? (
         <>
-          <div className="flex items-center gap-1 border-b border-border mb-6">
+          <RepositoryOutcomeSummary repository={repo} />
+
+          <div className="mb-6 flex items-center gap-1 border-b border-primary/15">
             {tabs.map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={cn(
-                  'px-4 py-2.5 text-sm font-medium transition-colors relative',
+                  'relative rounded-t-xl px-4 py-3 text-sm font-semibold transition-colors',
                   activeTab === tab ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
@@ -115,8 +128,8 @@ export function RepositoryDetailPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-xl border border-border bg-card p-5">
-                  <h3 className="text-sm font-medium text-foreground mb-4">Repository Information</h3>
+                <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+                  <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">Repository</p><h2 className="mt-1 text-lg font-semibold text-foreground mb-4">Repository Information</h2>
                   <div className="space-y-3">
                     <InfoRow icon={FolderGit2} label="Name" value={repo.name} />
                     <InfoRow
@@ -131,14 +144,33 @@ export function RepositoryDetailPage() {
                     {repo.analysedAt && (
                       <InfoRow icon={Clock} label="Analysed" value={new Date(repo.analysedAt).toLocaleString()} />
                     )}
+                    {/* The exact source this repository was analysed at (#87). Shown in
+                        full, not abbreviated: this is the page you open to answer
+                        "which code is this?", and a shortened prefix is not an identity. */}
+                    {repo.revision && (
+                      <InfoRow
+                        icon={repo.revision.kind === 'git' ? GitCommitHorizontal : Fingerprint}
+                        label={repo.revision.kind === 'git' ? 'Commit' : 'Content hash'}
+                        value={repo.revision.value}
+                        mono
+                      />
+                    )}
+                    {repo.revision?.ref && (
+                      <InfoRow
+                        icon={GitBranch}
+                        label="Branch"
+                        value={repo.revision.ref.replace(/^refs\/heads\//, '')}
+                        mono
+                      />
+                    )}
                     {repo.size > 0 && (
                       <InfoRow icon={Package} label="Size" value={formatFileSize(repo.size)} />
                     )}
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-border bg-card p-5">
-                  <h3 className="text-sm font-medium text-foreground mb-4">Detected Configuration</h3>
+                <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+                  <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">Evidence</p><h2 className="mt-1 text-lg font-semibold text-foreground mb-4">Detected Configuration</h2>
                   <div className="space-y-3">
                     {repo.meta.entryPoint && (
                       <InfoRow icon={FileCode} label="Entry Point" value={repo.meta.entryPoint} mono />
@@ -158,7 +190,7 @@ export function RepositoryDetailPage() {
                     />
                   </div>
                   {repo.meta.configFiles.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-border">
+                    <div className="mt-4 border-t border-primary/15 pt-4">
                       <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                         <Settings2 className="h-3.5 w-3.5" />
                         Configuration Files
@@ -167,7 +199,7 @@ export function RepositoryDetailPage() {
                         {repo.meta.configFiles.map((file) => (
                           <span
                             key={file}
-                            className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground"
+                            className="inline-flex items-center rounded-lg bg-accent px-2.5 py-1 text-xs font-mono text-muted-foreground"
                           >
                             {file}
                           </span>
@@ -182,7 +214,18 @@ export function RepositoryDetailPage() {
 
           {activeTab === 'Explorer' && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-              <RepositoryExplorer fileTree={repositoryTree.fileTree} repositoryId={repo.id} />
+              <RepositoryExplorer
+                fileTree={repositoryTree.fileTree}
+                repositoryId={repo.id}
+                initialPath={initialFilePath}
+                citation={citation}
+              />
+            </motion.div>
+          )}
+
+          {activeTab === 'History' && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <RepositoryLineageHistory repositoryId={repo.id} />
             </motion.div>
           )}
         </>
@@ -193,10 +236,10 @@ export function RepositoryDetailPage() {
 
 function InfoCard({ icon: Icon, label, value }: { icon: typeof Code2; label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="rounded-2xl border border-primary/20 bg-card p-4 shadow-[0_10px_24px_hsl(var(--foreground)/0.03)]">
       <div className="flex items-center gap-2 mb-2">
         <Icon className="h-4 w-4 text-muted-foreground" />
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+        <span className="text-2xs font-semibold text-primary uppercase tracking-[0.12em]">{label}</span>
       </div>
       <p className="text-lg font-semibold text-foreground">{value}</p>
     </div>

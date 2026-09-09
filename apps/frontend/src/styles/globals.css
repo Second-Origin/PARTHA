@@ -4,67 +4,58 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71% 4%;
+    --background: 38 27% 94%;
+    --foreground: 258 19% 13%;
     --card: 0 0% 100%;
-    --card-foreground: 224 71% 4%;
+    --card-foreground: 258 19% 13%;
     --popover: 0 0% 100%;
-    --popover-foreground: 224 71% 4%;
-    --primary: 220 90% 56%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 220 9% 46%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
-    --accent: 220 14% 96%;
-    --accent-foreground: 224 71% 4%;
+    --popover-foreground: 258 19% 13%;
+    /* The product orange remains recognisable while providing AA contrast
+       against white for normal-size button and link text. */
+    --primary: 18 99% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 198 39% 85%;
+    --secondary-foreground: 260 10% 34%;
+    --muted: 38 25% 92%;
+    --muted-foreground: 263 8% 43%;
+    --accent: 18 100% 94%;
+    --accent-foreground: 258 19% 13%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-    --success: 142 76% 36%;
+    --success: 142 76% 26%;
     --success-foreground: 210 40% 98%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 224 71% 4%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 220 90% 56%;
-    --radius: 0.5rem;
-    --sidebar: 0 0% 98%;
-    --sidebar-foreground: 224 71% 4%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-accent: 220 14% 96%;
-    --sidebar-accent-foreground: 224 71% 4%;
+    --warning: 38 92% 29%;
+    --warning-foreground: 258 19% 13%;
+    --border: 18 66% 76%;
+    --input: 18 42% 84%;
+    --ring: 17 91% 50%;
+    --radius: 1rem;
+    --sidebar: 38 27% 94%;
+    --sidebar-foreground: 258 19% 13%;
+    --sidebar-border: 18 50% 86%;
+    --sidebar-accent: 18 99% 38%;
+    --sidebar-accent-foreground: 0 0% 100%;
   }
 
-  .dark {
-    --background: 224 71% 4%;
-    --foreground: 213 31% 91%;
-    --card: 222 47% 7%;
-    --card-foreground: 213 31% 91%;
-    --popover: 222 47% 7%;
-    --popover-foreground: 213 31% 91%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 7%;
-    --secondary: 222 47% 11%;
-    --secondary-foreground: 215 20% 65%;
-    --muted: 223 47% 11%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 216 34% 17%;
-    --accent-foreground: 213 31% 91%;
-    --destructive: 0 63% 51%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 142 71% 45%;
-    --success-foreground: 222 47% 7%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 222 47% 7%;
-    --border: 216 34% 17%;
-    --input: 216 34% 17%;
-    --ring: 217 91% 60%;
-    --radius: 0.5rem;
-    --sidebar: 222 47% 5%;
-    --sidebar-foreground: 213 31% 91%;
-    --sidebar-border: 216 34% 17%;
-    --sidebar-accent: 216 34% 12%;
-    --sidebar-accent-foreground: 213 31% 91%;
+  /* Scoped to the landing page's own root element only (never applied to
+     <html> or any authenticated-app ancestor) -- see LandingPage.tsx and
+     useLandingTheme.ts. Values match the Figma dark-landing reference
+     exactly (pure black, not the muted plum the app used to use), so this
+     is intentionally a different palette from a former app-wide .dark
+     block, not a revival of it. */
+  .landing-dark {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 2% 10%;
+    --card-foreground: 0 0% 100%;
+    --primary: 18 99% 49%;
+    --primary-foreground: 0 0% 100%;
+    --muted-foreground: 0 0% 48%;
+    --accent: 0 0% 16%;
+    --accent-foreground: 0 0% 100%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 18 99% 49%;
   }
 }
 
@@ -74,12 +65,35 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    min-width: 320px;
+  }
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+}
+
+@layer components {
+  .partha-surface {
+    @apply rounded-2xl border border-border bg-card shadow-[0_12px_24px_hsl(var(--foreground)/0.04)];
+  }
+
+  .partha-input {
+    @apply rounded-xl border border-input bg-card text-foreground placeholder:text-muted-foreground;
   }
 }
 
 @layer utilities {
   .react-flow__node {
     font-family: inherit;
+  }
+  .react-flow__node:focus-visible {
+    outline: 3px solid hsl(var(--primary));
+    outline-offset: 4px;
+    box-shadow: 0 0 0 7px hsl(var(--background) / 0.92);
   }
   .react-flow__minimap {
     border-radius: 0.5rem;
@@ -103,5 +117,13 @@
   }
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--muted-foreground));
+  }
+  .citation-highlight-line {
+    background-color: hsl(var(--primary) / 0.16);
+  }
+  .citation-highlight-margin {
+    background-color: hsl(var(--primary) / 0.4);
+    width: 3px !important;
+    margin-left: 3px;
   }
 }

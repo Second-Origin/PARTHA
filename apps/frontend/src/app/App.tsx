@@ -1,11 +1,18 @@
+import { useEffect } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { router } from '@/app/routes/router';
-import { RepositoryProvider } from '@/features/repositories/context/RepositoryProvider';
+import { useAuthStore } from '@/app/store/useAuthStore';
 
 export function App() {
+  const bootstrap = useAuthStore((state) => state.bootstrap);
+
+  useEffect(() => {
+    void bootstrap();
+  }, [bootstrap]);
+
   return (
-    <RepositoryProvider>
+    <>
       <RouterProvider router={router} />
       <Toaster
         position="bottom-right"
@@ -17,6 +24,6 @@ export function App() {
           },
         }}
       />
-    </RepositoryProvider>
+    </>
   );
 }

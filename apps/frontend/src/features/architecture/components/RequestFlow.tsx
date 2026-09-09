@@ -29,7 +29,7 @@ export function RequestFlow({ steps }: RequestFlowProps) {
 
   return (
     <div className="flex flex-col items-center py-6">
-      <h3 className="text-sm font-medium text-foreground mb-6">Request Flow</h3>
+      <h2 className="text-sm font-medium text-foreground mb-6">Request Flow</h2>
       <div className="space-y-0">
         {steps.map((step, index) => {
           const Icon = stepIcons[step.type] || Cog;

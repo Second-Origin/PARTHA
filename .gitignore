@@ -21,6 +21,8 @@ env/
 .coverage
 .coverage.*
 htmlcov/
+apps/backend/coverage.xml
+apps/backend/junit.xml
 
 # Databases
 *.db
@@ -71,6 +73,22 @@ apps/backend/.env
 !apps/frontend/.env.example
 !apps/backend/.env.example
 
+# Vercel CLI project-link metadata (apps/marketing, #382) -- not secret, but
+# machine-local and not meant to be committed.
+apps/marketing/.vercel
+
+# ==========================================
+# Local-only strategy / roadmap docs (never commit)
+# The Market-Fit Roadmap is the single source of truth for product direction,
+# but it must stay local-only (not published to the public repo).
+# ==========================================
+
+PARTHA_Market_Fit_Product_Roadmap.html
+PARTHA_Defensible_Repository_Intelligence_Roadmap_2026_2027.html
+
+# Local Hermes agent state (desktop attachments, sessions, caches)
+.hermes/
+
 # ==========================================
 # IDE
 # ==========================================
@@ -112,12 +130,6 @@ temp/
 .cache/
 
 # ==========================================
-# Docker
-# ==========================================
-
-docker-compose.override.yml
-
-# ==========================================
 # Misc
 # ==========================================
 
@@ -136,9 +148,24 @@ docker-compose.override.yml
 coverage/
 .nyc_output/
 
+# Repository Intelligence golden benchmark reports (generated; never commit —
+# CI writes them to a temporary directory, developers to a throwaway dir)
+apps/backend/.ri-benchmark/
+ri-benchmark-report/
+
 # ==========================================
 # OS generated
 # ==========================================
 
 .fseventsd
 .Trashesg
+
+PARTHA_Defensible_Repository_Intelligence_Roadmap_2026_2027.html
+
+/confidential/
+
+# Playwright browser-review artifacts (reports, traces, failure shots).
+# Keep generated visual evidence out of the public documentation tree.
+apps/frontend/test-results/
+apps/frontend/e2e-report/
+apps/frontend/playwright-report/

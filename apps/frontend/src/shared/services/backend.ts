@@ -1,13 +1,23 @@
 import type { Repository } from '@/shared/types';
 import type { ArchitectureModel } from '@/shared/types/architecture';
 import type { EngineeringReview } from '@/shared/types/review';
-import type { AnalysisStartResponse, AnalysisStatusResponse, DependencyGraphResponse, RepositoryResponse } from './api/types';
+import type { RepositoryInsights } from '@/shared/types/insights';
+import type {
+  AnalysisStartResponse,
+  AnalysisStatusResponse,
+  AuthenticationExplanationResponse,
+  DependencyGraphResponse,
+  RepositoryLineageResponse,
+  RepositoryResponse,
+} from './api/types';
 import { repositoryService } from './api/repositories';
 import { uploadService } from './api/upload';
 import { analysisService } from './api/analysis';
 import { architectureService } from './api/architecture';
 import { reviewService } from './api/review';
+import type { ReviewQuery } from './api/review';
 import { dependencyService } from './api/dependencies';
+import { insightsService } from './api/insights';
 
 const USE_BACKEND = true;
 
@@ -24,6 +34,13 @@ export const backendService = {
     if (!USE_BACKEND) return null;
     const response = await repositoryService.getById(id);
     return mapRepositoryResponse(response);
+  },
+
+  async fetchRepositoryLineage(id: string): Promise<RepositoryLineageResponse> {
+    if (!USE_BACKEND) {
+      throw new Error('Backend API is not configured.');
+    }
+    return repositoryService.getLineage(id);
   },
 
   async uploadRepository(
@@ -54,6 +71,11 @@ export const backendService = {
     return analysisService.getStatus(repositoryId);
   },
 
+  async cancelAnalysis(repositoryId: string): Promise<AnalysisStatusResponse | null> {
+    if (!USE_BACKEND) return null;
+    return analysisService.cancel(repositoryId);
+  },
+
   async fetchArchitecture(repository: Repository): Promise<ArchitectureModel> {
     if (!USE_BACKEND) {
       throw new Error('Backend API is not configured.');
@@ -61,11 +83,25 @@ export const backendService = {
     return architectureService.getArchitecture(repository.id);
   },
 
-  async fetchReview(repository: Repository): Promise<EngineeringReview> {
+  async fetchAuthenticationExplanation(repository: Repository): Promise<AuthenticationExplanationResponse> {
     if (!USE_BACKEND) {
       throw new Error('Backend API is not configured.');
     }
-    return reviewService.getReview(repository.id);
+    return architectureService.getAuthenticationExplanation(repository.id);
+  },
+
+  async fetchReview(repository: Repository, query?: ReviewQuery): Promise<EngineeringReview> {
+    if (!USE_BACKEND) {
+      throw new Error('Backend API is not configured.');
+    }
+    return reviewService.getReview(repository.id, query);
+  },
+
+  async fetchInsights(repository: Repository): Promise<RepositoryInsights> {
+    if (!USE_BACKEND) {
+      throw new Error('Backend API is not configured.');
+    }
+    return insightsService.getInsights(repository.id);
   },
 
   async fetchDependencyGraph(repositoryId: string): Promise<DependencyGraphResponse | null> {
@@ -90,13 +126,14 @@ function mapRepositoryResponse(response: RepositoryResponse): Repository {
     size: response.size,
     fileCount: response.fileCount,
     status: response.status,
-    dataSource: response.dataSource,
-    analysisStage: response.analysisStage,
+    analysisStage: response.analysisStage ?? null,
     analysisProgress: response.analysisProgress,
     uploadedAt: response.uploadedAt,
     analysedAt: response.analysedAt || undefined,
     errorMessage: response.errorMessage || undefined,
-    meta: response.meta,
-    fileTree: response.fileTree,
+    revision: response.revision ? { ...response.revision, ref: response.revision.ref ?? null } : null,
+    commitSha: response.commitSha ?? null,
+    meta: response.meta ?? null,
+    fileTree: response.fileTree ?? [],
   };
 }

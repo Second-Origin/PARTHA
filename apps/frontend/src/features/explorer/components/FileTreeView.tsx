@@ -151,7 +151,7 @@ function TreeItem({ node, depth, searchQuery }: TreeItemProps) {
         )}>
           {node.name}
         </span>
-        {node.size !== undefined && node.type === 'file' && (
+        {node.size != null && node.type === 'file' && (
           <span className="ml-auto text-[10px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
             {formatSize(node.size)}
           </span>

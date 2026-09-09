@@ -1,0 +1,573 @@
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useAppStore } from '@/app/store/useAppStore';
+import { backendService } from '@/shared/services/backend';
+import { ApiError, NetworkError, TimeoutError } from '@/shared/services/api';
+import type { AnalysisStartResponse } from '@/shared/services/api/types';
+import type { Repository } from '@/shared/types';
+import { getNetworkRetryDelayMs, MAX_RATE_LIMIT_AUTO_RETRIES, useAnalysisPipeline } from './useAnalysisPipeline';
+
+function rateLimitedError(retryAfterSeconds: number): ApiError {
+  return new ApiError(
+    429,
+    'Too Many Requests',
+    { code: 'rate_limited', message: 'Too many requests.', details: { retryAfterSeconds } },
+    '/analysis/repo-1/status',
+    String(retryAfterSeconds),
+  );
+}
+
+const repositoryState = vi.hoisted(() => ({ repositories: [] as Repository[] }));
+
+vi.mock('@/features/repositories/hooks/useRepository', () => ({
+  useRepository: () => ({ repositories: repositoryState.repositories }),
+}));
+
+const repository: Repository = {
+  id: 'repo-1',
+  name: 'sample',
+  source: 'upload',
+  size: 10,
+  fileCount: 1,
+  status: 'analysing',
+  analysisStage: 'reading-structure',
+  analysisProgress: 25,
+  uploadedAt: '2026-07-22T08:00:00Z',
+  meta: null,
+  fileTree: [],
+};
+
+describe('useAnalysisPipeline', () => {
+  beforeEach(() => {
+    repositoryState.repositories = [repository];
+    useAppStore.setState({ repositories: [repository], analysisRunning: true });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('requests server cancellation and stops in the cancelled terminal state', async () => {
+    const start = vi.spyOn(backendService, 'startAnalysis');
+    vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
+      repositoryId: repository.id,
+      status: 'running',
+      jobId: 'job-1',
+      stage: 'reading-structure',
+      progress: 25,
+      startedAt: '2026-07-22T08:00:01Z',
+      completedAt: null,
+      error: null,
+    });
+    const cancel = vi.spyOn(backendService, 'cancelAnalysis').mockResolvedValue({
+      repositoryId: repository.id,
+      status: 'cancelled',
+      jobId: 'job-1',
+      stage: 'reading-structure',
+      progress: 25,
+      startedAt: '2026-07-22T08:00:01Z',
+      completedAt: '2026-07-22T08:00:02Z',
+      error: null,
+    });
+
+    const hook = renderHook(() => useAnalysisPipeline(repository.id));
+    await waitFor(() => expect(hook.result.current.jobStatus).toBe('running'));
+    expect(hook.result.current.canCancel).toBe(true);
+
+    await act(async () => {
+      await hook.result.current.cancel();
+    });
+
+    expect(cancel).toHaveBeenCalledWith(repository.id);
+    expect(hook.result.current.jobStatus).toBe('cancelled');
+    expect(hook.result.current.cancelled).toBe(true);
+    expect(hook.result.current.canCancel).toBe(false);
+    expect(useAppStore.getState().analysisRunning).toBe(false);
+    expect(useAppStore.getState().repositories[0].status).toBe('cancelled');
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('restarts a cancelled repository without another upload', async () => {
+    vi.spyOn(backendService, 'fetchAnalysisStatus')
+      .mockResolvedValueOnce({
+        repositoryId: repository.id,
+        status: 'cancelled',
+        jobId: 'job-1',
+        stage: 'reading-structure',
+        progress: 25,
+        startedAt: '2026-07-22T08:00:01Z',
+        completedAt: '2026-07-22T08:00:02Z',
+        error: null,
+      })
+      .mockResolvedValue({
+        repositoryId: repository.id,
+        status: 'queued',
+        jobId: 'job-2',
+        stage: null,
+        progress: 0,
+        startedAt: null,
+        completedAt: null,
+        error: null,
+      });
+    const start = vi.spyOn(backendService, 'startAnalysis').mockResolvedValue({
+      repositoryId: repository.id,
+      status: 'queued',
+      jobId: 'job-2',
+    });
+    const hook = renderHook(() => useAnalysisPipeline(repository.id));
+    await waitFor(() => expect(hook.result.current.cancelled).toBe(true));
+
+    await act(async () => {
+      await hook.result.current.restart();
+    });
+
+    expect(start).toHaveBeenCalledWith(repository.id);
+    expect(hook.result.current.jobStatus).toBe('queued');
+    expect(useAppStore.getState().repositories[0].status).toBe('analysing');
+  });
+
+  it('does not restart a cancelled durable job after remount', async () => {
+    const start = vi.spyOn(backendService, 'startAnalysis');
+    vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
+      repositoryId: repository.id,
+      status: 'cancelled',
+      jobId: 'job-1',
+      stage: 'reading-structure',
+      progress: 25,
+      startedAt: '2026-07-22T08:00:01Z',
+      completedAt: '2026-07-22T08:00:02Z',
+      error: null,
+    });
+
+    const first = renderHook(() => useAnalysisPipeline(repository.id));
+    await waitFor(() => expect(first.result.current.cancelled).toBe(true));
+    first.unmount();
+
+    const remounted = renderHook(() => useAnalysisPipeline(repository.id));
+    await waitFor(() => expect(remounted.result.current.cancelled).toBe(true));
+
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed submission and reaches a terminal state without reloading', async () => {
+    const start = vi
+      .spyOn(backendService, 'startAnalysis')
+      .mockRejectedValueOnce(new Error('start failed before enqueue'))
+      .mockResolvedValue({
+        repositoryId: repository.id,
+        status: 'queued',
+        jobId: 'job-1',
+      });
+    const fetchStatus = vi.spyOn(backendService, 'fetchAnalysisStatus')
+      .mockResolvedValueOnce({
+        repositoryId: repository.id,
+        status: 'queued',
+        jobId: null,
+        stage: null,
+        progress: 0,
+        startedAt: null,
+        completedAt: null,
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        repositoryId: repository.id,
+        status: 'queued',
+        jobId: null,
+        stage: null,
+        progress: 0,
+        startedAt: null,
+        completedAt: null,
+        error: null,
+      })
+      .mockResolvedValue({
+        repositoryId: repository.id,
+        status: 'completed',
+        jobId: 'job-1',
+        stage: 'completed',
+        progress: 100,
+        startedAt: '2026-07-22T08:00:01Z',
+        completedAt: '2026-07-22T08:00:02Z',
+        error: null,
+      });
+
+    const hook = renderHook(() => useAnalysisPipeline(repository.id));
+    await waitFor(() => expect(hook.result.current.error).toBe('start failed before enqueue'));
+    expect(start).toHaveBeenCalledTimes(1);
+
+    act(() => hook.result.current.retry());
+
+    await waitFor(() => expect(hook.result.current.jobStatus).toBe('completed'));
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(fetchStatus.mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('submits a newly imported repository only after status confirms no durable job', async () => {
+    const start = vi.spyOn(backendService, 'startAnalysis').mockResolvedValue({
+      repositoryId: repository.id,
+      status: 'queued',
+      jobId: 'job-1',
+    });
+    const fetchStatus = vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
+      repositoryId: repository.id,
+      status: 'queued',
+      jobId: null,
+      stage: null,
+      progress: 0,
+      startedAt: null,
+      completedAt: null,
+      error: null,
+    });
+
+    renderHook(() => useAnalysisPipeline(repository.id));
+
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+    expect(fetchStatus.mock.invocationCallOrder[0]).toBeLessThan(start.mock.invocationCallOrder[0]);
+  });
+
+  it.each(['queued', 'running'] as const)(
+    'polls an existing %s job without submitting another one',
+    async (durableStatus) => {
+      const start = vi.spyOn(backendService, 'startAnalysis');
+      vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
+        repositoryId: repository.id,
+        status: durableStatus,
+        jobId: 'job-1',
+        stage: durableStatus === 'running' ? 'reading-structure' : null,
+        progress: durableStatus === 'running' ? 25 : 0,
+        startedAt: durableStatus === 'running' ? '2026-07-22T08:00:01Z' : null,
+        completedAt: null,
+        error: null,
+      });
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+      await waitFor(() => expect(hook.result.current.jobStatus).toBe(durableStatus));
+
+      expect(start).not.toHaveBeenCalled();
+    },
+  );
+
+  it('deduplicates overlapping start requests when the polling effect restarts', async () => {
+    let resolveStart: ((response: AnalysisStartResponse) => void) | undefined;
+    const pendingStart = new Promise<AnalysisStartResponse>((resolve) => {
+      resolveStart = resolve;
+    });
+    const start = vi.spyOn(backendService, 'startAnalysis').mockReturnValue(pendingStart);
+    vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
+      repositoryId: repository.id,
+      status: 'queued',
+      jobId: null,
+      stage: null,
+      progress: 0,
+      startedAt: null,
+      completedAt: null,
+      error: null,
+    });
+
+    const hook = renderHook(() => useAnalysisPipeline(repository.id));
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+
+    repositoryState.repositories = [{ ...repository }];
+    hook.rerender();
+    expect(start).toHaveBeenCalledTimes(1);
+
+    resolveStart?.({
+      repositoryId: repository.id,
+      status: 'queued',
+      jobId: 'job-1',
+    });
+    await waitFor(() => expect(hook.result.current.jobStatus).toBe('queued'));
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  describe('getNetworkRetryDelayMs', () => {
+    it('backs off exponentially from 1s, capped at 15s', () => {
+      expect(getNetworkRetryDelayMs(1)).toBe(1000);
+      expect(getNetworkRetryDelayMs(2)).toBe(2000);
+      expect(getNetworkRetryDelayMs(3)).toBe(4000);
+      expect(getNetworkRetryDelayMs(4)).toBe(8000);
+      expect(getNetworkRetryDelayMs(5)).toBe(15000);
+    });
+  });
+
+  describe('poll resilience', () => {
+    const runningResponse = {
+      repositoryId: repository.id,
+      status: 'running' as const,
+      jobId: 'job-1',
+      stage: 'reading-structure' as const,
+      progress: 25,
+      startedAt: '2026-07-22T08:00:01Z',
+      completedAt: null,
+      error: null,
+    };
+
+    it('retries a transient network error with backoff and recovers without ever reporting Analysis Failed', async () => {
+      vi.useFakeTimers();
+      const fetchStatus = vi
+        .spyOn(backendService, 'fetchAnalysisStatus')
+        .mockRejectedValueOnce(new NetworkError('/analysis/repo-1/status'))
+        .mockResolvedValue(runningResponse);
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.connectionStatus).toBe('retrying');
+      expect(hook.result.current.error).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+
+      expect(hook.result.current.connectionStatus).toBe('connected');
+      expect(hook.result.current.jobStatus).toBe('running');
+      // A successful poll updates the store, which recreates the polling
+      // effect (pre-existing "known limitation" in this hook) -- so recovery
+      // may fire one extra immediate poll beyond the failed + retried pair.
+      expect(fetchStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('stops auto-polling and reports a connectivity error distinct from job failure once retries are exhausted', async () => {
+      vi.useFakeTimers();
+      vi.spyOn(backendService, 'fetchAnalysisStatus').mockRejectedValue(
+        new TimeoutError('/analysis/repo-1/status', 10000),
+      );
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+
+      // Attempt 1 fails immediately; five backoff retries follow: 1s, 2s, 4s, 8s, 15s.
+      for (const delay of [0, 1000, 2000, 4000, 8000, 15000]) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(delay);
+        });
+      }
+
+      expect(hook.result.current.connectionLost).toBe(true);
+      expect(hook.result.current.error).toBeNull();
+      expect(hook.result.current.status).not.toBe('error');
+    });
+
+    it('resumes polling on a manual retry after connectivity is lost', async () => {
+      vi.useFakeTimers();
+      const fetchStatus = vi
+        .spyOn(backendService, 'fetchAnalysisStatus')
+        .mockRejectedValue(new NetworkError('/analysis/repo-1/status'));
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+      for (const delay of [0, 1000, 2000, 4000, 8000, 15000]) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(delay);
+        });
+      }
+      expect(hook.result.current.connectionLost).toBe(true);
+
+      fetchStatus.mockReset().mockResolvedValue(runningResponse);
+      await act(async () => {
+        hook.result.current.retry();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(hook.result.current.connectionStatus).toBe('connected');
+      expect(hook.result.current.jobStatus).toBe('running');
+    });
+
+    it('renders a real job failure reported by the API immediately, without retrying', async () => {
+      vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
+        repositoryId: repository.id,
+        status: 'failed',
+        jobId: 'job-1',
+        stage: 'reading-structure',
+        progress: 25,
+        startedAt: '2026-07-22T08:00:01Z',
+        completedAt: '2026-07-22T08:00:02Z',
+        error: 'Extraction crashed.',
+      });
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+
+      await waitFor(() => expect(hook.result.current.jobStatus).toBe('failed'));
+      expect(hook.result.current.status).toBe('error');
+      expect(hook.result.current.error).toBe('Extraction crashed.');
+      expect(hook.result.current.connectionStatus).toBe('connected');
+    });
+
+    it('stops polling once a terminal status is observed instead of scheduling another request', async () => {
+      vi.useFakeTimers();
+      const fetchStatus = vi.spyOn(backendService, 'fetchAnalysisStatus').mockResolvedValue({
+        repositoryId: repository.id,
+        status: 'completed',
+        jobId: 'job-1',
+        stage: 'completed',
+        progress: 100,
+        startedAt: '2026-07-22T08:00:01Z',
+        completedAt: '2026-07-22T08:00:02Z',
+        error: null,
+      });
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.jobStatus).toBe('completed');
+      const callsAtCompletion = fetchStatus.mock.calls.length;
+
+      // Advancing well past the poll interval must not trigger another
+      // request -- the loop stops itself on a terminal status rather than
+      // relying on the surrounding effect to tear it down.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500 * 5);
+      });
+      expect(fetchStatus.mock.calls.length).toBe(callsAtCompletion);
+    });
+
+  });
+
+  describe('rate limit resilience (#169)', () => {
+    const runningResponse = {
+      repositoryId: repository.id,
+      status: 'running' as const,
+      jobId: 'job-1',
+      stage: 'reading-structure' as const,
+      progress: 25,
+      startedAt: '2026-07-22T08:00:01Z',
+      completedAt: null,
+      error: null,
+    };
+
+    it('treats a 429 as transient, counts down using Retry-After, and recovers without ever reporting Analysis Failed', async () => {
+      vi.useFakeTimers();
+      const fetchStatus = vi
+        .spyOn(backendService, 'fetchAnalysisStatus')
+        .mockRejectedValueOnce(rateLimitedError(5))
+        .mockResolvedValue(runningResponse);
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.connectionStatus).toBe('rate-limited');
+      expect(hook.result.current.rateLimited).toBe(true);
+      expect(hook.result.current.rateLimitSecondsRemaining).toBe(5);
+      expect(hook.result.current.error).toBeNull();
+      expect(hook.result.current.status).not.toBe('error');
+
+      // Counts down second by second rather than jumping straight to retry.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(hook.result.current.rateLimitSecondsRemaining).toBe(4);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4000);
+      });
+
+      expect(hook.result.current.connectionStatus).toBe('connected');
+      expect(hook.result.current.rateLimited).toBe(false);
+      expect(hook.result.current.rateLimitSecondsRemaining).toBeNull();
+      expect(hook.result.current.jobStatus).toBe('running');
+      // The retry that recovers, plus (since 'running' isn't terminal) at
+      // least one regular poll scheduled after it -- never zero, never a gap.
+      expect(fetchStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('bounds automatic retries and never falls back to a terminal Analysis Failed state', async () => {
+      vi.useFakeTimers();
+      const fetchStatus = vi
+        .spyOn(backendService, 'fetchAnalysisStatus')
+        .mockRejectedValue(rateLimitedError(1));
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+
+      // Initial attempt + MAX_RATE_LIMIT_AUTO_RETRIES retries, each after a 1s cooldown.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      for (let attempt = 0; attempt < MAX_RATE_LIMIT_AUTO_RETRIES; attempt += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1000);
+        });
+      }
+
+      expect(fetchStatus).toHaveBeenCalledTimes(MAX_RATE_LIMIT_AUTO_RETRIES + 1);
+      expect(hook.result.current.rateLimited).toBe(true);
+      expect(hook.result.current.rateLimitSecondsRemaining).toBeNull();
+      // The retry budget is exhausted, but this was never a job failure --
+      // distinct from "Analysis Failed", exactly like connection-lost.
+      expect(hook.result.current.status).not.toBe('error');
+      expect(hook.result.current.error).toBeNull();
+
+      // No further automatic polling once the budget is exhausted.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      expect(fetchStatus).toHaveBeenCalledTimes(MAX_RATE_LIMIT_AUTO_RETRIES + 1);
+
+      // A manual retry() resumes it, same recovery path as connection-lost.
+      fetchStatus.mockReset().mockResolvedValue(runningResponse);
+      await act(async () => {
+        hook.result.current.retry();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.connectionStatus).toBe('connected');
+      expect(hook.result.current.jobStatus).toBe('running');
+    });
+
+    it('stops the countdown timer on unmount instead of leaking it', async () => {
+      vi.useFakeTimers();
+      const fetchStatus = vi
+        .spyOn(backendService, 'fetchAnalysisStatus')
+        .mockRejectedValue(rateLimitedError(30));
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.rateLimited).toBe(true);
+
+      hook.unmount();
+      const callsAtUnmount = fetchStatus.mock.calls.length;
+
+      // If the interval or the retry timeout leaked, this would fire another
+      // poll (or keep ticking) well after the component is gone.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(fetchStatus.mock.calls.length).toBe(callsAtUnmount);
+    });
+
+    it('clears the rate-limit cooldown once the job reaches a terminal status', async () => {
+      vi.useFakeTimers();
+      vi.spyOn(backendService, 'fetchAnalysisStatus')
+        .mockRejectedValueOnce(rateLimitedError(30))
+        .mockResolvedValue({
+          repositoryId: repository.id,
+          status: 'completed',
+          jobId: 'job-1',
+          stage: 'completed',
+          progress: 100,
+          startedAt: '2026-07-22T08:00:01Z',
+          completedAt: '2026-07-22T08:00:02Z',
+          error: null,
+        });
+
+      const hook = renderHook(() => useAnalysisPipeline(repository.id));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.rateLimited).toBe(true);
+
+      // The elapsed cooldown retries and this time the job is already
+      // complete -- the countdown must not keep counting down past that.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(hook.result.current.jobStatus).toBe('completed');
+      expect(hook.result.current.rateLimited).toBe(false);
+      expect(hook.result.current.rateLimitSecondsRemaining).toBeNull();
+    });
+  });
+});

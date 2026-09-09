@@ -1,0 +1,9 @@
+services:
+  api:
+    image: python:3.13-slim
+  worker:
+    image: ${WORKER_IMAGE}
+volumes:
+  pgdata:
+networks:
+  backend:

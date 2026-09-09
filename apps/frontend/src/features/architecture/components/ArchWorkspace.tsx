@@ -5,6 +5,7 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useNodesInitialized,
   useReactFlow,
   ReactFlowProvider,
   type Node,
@@ -15,6 +16,7 @@ import { toPng, toSvg } from 'html-to-image';
 import { AnimatePresence } from 'framer-motion';
 
 import { ArchitectureNode } from './ArchitectureNode';
+import { ArchitectureListView } from './ArchitectureListView';
 import { NodeInspector } from './NodeInspector';
 import { ModuleExplorer } from './ModuleExplorer';
 import { GraphToolbar } from './GraphToolbar';
@@ -26,14 +28,26 @@ import { RelationshipPanel } from './RelationshipPanel';
 import { getLayoutedElements } from '../layout';
 import { useArchitectureStore } from '../store';
 import { cn } from '@/shared/utils/cn';
-import type { DataSource } from '@/shared/types';
+import type { RepositorySource } from '@/shared/types';
 import type { ArchitectureModel } from '@/shared/types/architecture';
 
 const nodeTypes = { architectureNode: ArchitectureNode };
 
+/**
+ * Floor for fit-to-view (#112).
+ *
+ * Browser review of a dense repository (14 modules in a single layer, 260
+ * relationships) found fit-to-view scaling to roughly 0.15, which rendered
+ * every node at about 36x17px -- unreadable, the same symptom #112 was raised
+ * for. Fitting the whole graph and keeping nodes legible are in conflict once a
+ * graph is big enough, so legibility wins: the graph opens readable and the
+ * minimap plus pan/zoom handle the overview.
+ */
+export const READABLE_MIN_ZOOM = 0.85;
+
 interface ArchWorkspaceInnerProps {
   model: ArchitectureModel;
-  source?: DataSource | null;
+  source?: RepositorySource | null;
 }
 
 function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
@@ -57,36 +71,46 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
     heatmapMode,
     bookmarkedNodes,
     hiddenNodes,
+    collapsedLayers,
     showAllNodes,
+    showAllLayers,
     isolatedSubtree,
     setIsolatedSubtree,
     openContextMenu,
     closeContextMenu,
   } = useArchitectureStore();
 
-  const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => getLayoutedElements(model.nodes, model.edges, {
+  const layoutOptions = useMemo(() => ({
+      layers: model.detectedLayers,
       heatmapMode,
       bookmarks: bookmarkedNodes,
       hiddenNodes,
       isolatedSubtree,
-    }),
-    [model, heatmapMode, bookmarkedNodes, hiddenNodes, isolatedSubtree]
+      collapsedLayers,
+    }), [model.detectedLayers, heatmapMode, bookmarkedNodes, hiddenNodes, isolatedSubtree, collapsedLayers]);
+
+  const { nodes: initialNodes, edges: initialEdges } = useMemo(
+    () => getLayoutedElements(model.nodes, model.edges, layoutOptions),
+    [model.nodes, model.edges, layoutOptions]
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const nodesInitialized = useNodesInitialized();
 
   useEffect(() => {
-    const { nodes: newNodes, edges: newEdges } = getLayoutedElements(model.nodes, model.edges, {
-      heatmapMode,
-      bookmarks: bookmarkedNodes,
-      hiddenNodes,
-      isolatedSubtree,
-    });
+    const { nodes: newNodes, edges: newEdges } = getLayoutedElements(model.nodes, model.edges, layoutOptions);
     setNodes(newNodes);
     setEdges(newEdges);
-  }, [heatmapMode, bookmarkedNodes, hiddenNodes, isolatedSubtree, model, setNodes, setEdges]);
+  }, [layoutOptions, model.nodes, model.edges, setNodes, setEdges]);
+
+  useEffect(() => {
+    if (!nodesInitialized) return;
+    const frame = requestAnimationFrame(() =>
+      reactFlowInstance.fitView({ padding: 0.12, duration: 300, minZoom: READABLE_MIN_ZOOM }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [initialNodes, nodesInitialized, reactFlowInstance]);
 
   useEffect(() => {
     setNodes((nds) =>
@@ -176,8 +200,44 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
     closeContextMenu();
   }, [setSelectedNodeId, setInspectorOpen, closeContextMenu]);
 
+  const handleGraphKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Escape' && inspectorOpen) {
+        event.preventDefault();
+        setSelectedNodeId(null);
+        setInspectorOpen(false);
+        return;
+      }
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const active = document.activeElement as HTMLElement | null;
+      const focusedNode = active?.closest<HTMLElement>('.react-flow__node');
+      const nodeId = focusedNode?.dataset.id;
+      if (!nodeId) return;
+      event.preventDefault();
+      setSelectedNodeId(nodeId);
+      setInspectorOpen(true);
+    },
+    [inspectorOpen, setInspectorOpen, setSelectedNodeId],
+  );
+
+  const handleGraphFocus = useCallback(
+    (event: React.FocusEvent<HTMLDivElement>) => {
+      const focusedNode = (event.target as HTMLElement).closest<HTMLElement>('.react-flow__node');
+      const nodeId = focusedNode?.dataset.id;
+      if (!nodeId) return;
+      reactFlowInstance.fitView({
+        nodes: [{ id: nodeId }],
+        padding: 0.35,
+        minZoom: READABLE_MIN_ZOOM,
+        maxZoom: 1,
+        duration: 150,
+      });
+    },
+    [reactFlowInstance],
+  );
+
   const handleFitView = useCallback(() => {
-    reactFlowInstance.fitView({ padding: 0.2, duration: 300 });
+    reactFlowInstance.fitView({ padding: 0.2, duration: 300, minZoom: READABLE_MIN_ZOOM });
   }, [reactFlowInstance]);
 
   const handleZoomIn = useCallback(() => {
@@ -192,13 +252,18 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
     setIsolatedSubtree(null);
     showAllNodes();
     const { nodes: newNodes, edges: newEdges } = getLayoutedElements(model.nodes, model.edges, {
-      heatmapMode,
-      bookmarks: bookmarkedNodes,
+      ...layoutOptions,
+      hiddenNodes: new Set(),
+      collapsedLayers: new Set(),
     });
+    showAllLayers();
     setNodes(newNodes);
     setEdges(newEdges);
-    setTimeout(() => reactFlowInstance.fitView({ padding: 0.2, duration: 300 }), 50);
-  }, [model, setNodes, setEdges, reactFlowInstance, heatmapMode, bookmarkedNodes, setIsolatedSubtree, showAllNodes]);
+    setTimeout(
+      () => reactFlowInstance.fitView({ padding: 0.2, duration: 300, minZoom: READABLE_MIN_ZOOM }),
+      50,
+    );
+  }, [model, setNodes, setEdges, reactFlowInstance, layoutOptions, setIsolatedSubtree, showAllNodes, showAllLayers]);
 
   const handleExportPng = useCallback(() => {
     const el = document.querySelector('.react-flow') as HTMLElement;
@@ -245,11 +310,11 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
   );
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full bg-background">
+    <div ref={containerRef} className="flex h-full min-h-0 min-w-0 flex-col bg-background">
       <ArchSummaryBar model={model} source={source} />
 
-      <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-border">
-        <div className="flex items-center gap-1">
+      <div className="flex min-w-0 items-center justify-between gap-2 overflow-x-auto border-b border-border px-3 py-2 scrollbar-thin sm:px-4">
+        <div className="flex shrink-0 items-center gap-1">
           <TabButton active={activeTab === 'graph'} onClick={() => setActiveTab('graph')}>
             Architecture Graph
           </TabButton>
@@ -258,6 +323,9 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
           </TabButton>
           <TabButton active={activeTab === 'heatmap'} onClick={() => setActiveTab('heatmap')}>
             Heatmap
+          </TabButton>
+          <TabButton active={activeTab === 'list'} onClick={() => setActiveTab('list')}>
+            List View
           </TabButton>
         </div>
         {activeTab === 'heatmap' && <HeatmapControls />}
@@ -271,11 +339,19 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
         )}
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {explorerOpen && (activeTab === 'graph' || activeTab === 'heatmap') && <ModuleExplorer />}
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        {explorerOpen && (activeTab === 'graph' || activeTab === 'heatmap') && (
+          <div className="hidden md:block">
+            <ModuleExplorer />
+          </div>
+        )}
 
-        <div className="flex-1 relative flex flex-col">
-          <div className="flex-1 relative">
+        <div
+          className="relative flex min-w-0 flex-1 flex-col"
+          onKeyDown={handleGraphKeyDown}
+          onFocusCapture={handleGraphFocus}
+        >
+          <div className="relative min-h-0 min-w-0 flex-1">
             {(activeTab === 'graph' || activeTab === 'heatmap') ? (
               <>
                 <GraphToolbar
@@ -300,11 +376,16 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
                   onNodeMouseLeave={handleNodeMouseLeave}
                   onPaneClick={handlePaneClick}
                   nodeTypes={nodeTypes}
-                  fitView
-                  fitViewOptions={{ padding: 0.2 }}
-                  minZoom={0.1}
+                  minZoom={0.25}
                   maxZoom={3}
                   proOptions={{ hideAttribution: true }}
+                  // Keyboard access (#112): nodes are reachable with Tab and
+                  // the pane pans with arrow keys, so the graph is navigable
+                  // without a pointer.
+                  nodesFocusable
+                  edgesFocusable={false}
+                  panOnScroll
+                  aria-label="Architecture graph. Use Tab to move between modules and arrow keys to pan."
                 >
                   {showGrid && (
                     <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="hsl(var(--border))" />
@@ -319,10 +400,12 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
                   )}
                 </ReactFlow>
               </>
-            ) : (
+            ) : activeTab === 'request-flow' ? (
               <div className="flex-1 overflow-y-auto scrollbar-thin">
                 <RequestFlow steps={model.requestFlow} />
               </div>
+            ) : (
+              <ArchitectureListView />
             )}
           </div>
           <RelationshipPanel />
@@ -346,7 +429,7 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
   );
 }
 
-export function ArchWorkspace({ model, source }: { model: ArchitectureModel; source?: DataSource | null }) {
+export function ArchWorkspace({ model, source }: { model: ArchitectureModel; source?: RepositorySource | null }) {
   return (
     <ReactFlowProvider>
       <ArchWorkspaceInner model={model} source={source} />

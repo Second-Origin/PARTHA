@@ -1,9 +1,10 @@
-export { api, configureApiClient, getApiConfig, uploadFile, streamRequest } from './client';
+export { api, configureApiClient, getApiConfig, uploadFile, requestSharedRefresh } from './client';
 export type { RequestConfig, ApiClientConfig, HttpMethod } from './client';
 
-export { ApiError, NetworkError, TimeoutError, CancelledError, isApiError, isNetworkError, isTimeoutError, isCancelledError, getErrorMessage } from './errors';
+export { ApiError, NetworkError, TimeoutError, CancelledError, isApiError, isNetworkError, isTimeoutError, isCancelledError, isErrorResponse, getErrorMessage, getErrorDetail } from './errors';
 
-export { repositoryService } from './repositories';
+export { authService } from './auth';
+export { repositoryService, repositoryIntelligenceService } from './repositories';
 export { uploadService } from './upload';
 export { analysisService } from './analysis';
 export { architectureService } from './architecture';
@@ -11,5 +12,7 @@ export { reviewService } from './review';
 export { dependencyService } from './dependencies';
 export { aiService } from './ai';
 export { documentationService, exportService } from './documentation';
+export { waitlistService } from './waitlist';
 
 export type * from './types';
+export type * from './generated';

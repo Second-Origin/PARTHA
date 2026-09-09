@@ -6,19 +6,28 @@ import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 import { ExportMenu } from '@/shared/components/ui/ExportMenu';
 import { useDependencies } from '@/features/dependencies/hooks/useDependencies';
+import { RevisionManifestPanel } from '@/features/architecture/components/RevisionManifestPanel';
+import type { DependencyAssessment } from '@/shared/services/api/types';
 
 export function DependenciesPage() {
   const navigate = useNavigate();
   const dependencies = useDependencies();
   const activeRepository = dependencies.activeRepository;
   const [query, setQuery] = useState('');
+  const graph = dependencies.graph;
+  const hasSearchQuery = query.trim().length > 0;
+  const hasDependencies = (graph?.nodes.length ?? 0) > 0;
+  const blockingDiagnosticCount = graph?.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === 'error' || diagnostic.severity === 'fatal',
+  ).length ?? 0;
+  const hasBlockingExtractionDiagnostics = blockingDiagnosticCount > 0;
 
   const filteredNodes = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const nodes = dependencies.graph?.nodes || [];
+    const nodes = graph?.nodes || [];
     if (!q) return nodes;
     return nodes.filter((node) => node.name.toLowerCase().includes(q) || node.type.toLowerCase().includes(q));
-  }, [dependencies.graph?.nodes, query]);
+  }, [graph?.nodes, query]);
 
 
   if (dependencies.emptyReason === 'no-completed-repositories') {
@@ -54,7 +63,26 @@ export function DependenciesPage() {
         <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
           <DataSourceBadge source={dependencies.source} />
         </PageHeader>
-        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">Loading dependency graph...</div>
+        <div className="rounded-3xl border border-primary/20 bg-card p-8 text-sm text-muted-foreground">Loading dependency graph...</div>
+      </div>
+    );
+  }
+
+  // A repository can be analysed yet still have no sealed ri.v1 snapshot (#158,
+  // same 404 contract as Architecture/Review/Insights). That must read as "run
+  // analysis again", never as a silent, indistinguishable zero-dependency result.
+  if (dependencies.noSnapshot) {
+    return (
+      <div>
+        <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
+          <DataSourceBadge source={dependencies.source} />
+        </PageHeader>
+        <EmptyState
+          icon={GitBranch}
+          title="No sealed snapshot yet"
+          description="This repository has no sealed Repository Intelligence snapshot for its current revision. Analyse it again to generate one."
+          action={{ label: 'Run analysis', onClick: () => navigate('/upload') }}
+        />
       </div>
     );
   }
@@ -73,42 +101,93 @@ export function DependenciesPage() {
     );
   }
 
+  if (!graph) {
+    return (
+      <div>
+        <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
+          <DataSourceBadge source={dependencies.source} />
+        </PageHeader>
+        <EmptyState
+          icon={GitBranch}
+          title="Dependency inventory unavailable"
+          description="No dependency inventory is available for this repository yet. Analyse the repository again to generate dependency data."
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
         <DataSourceBadge source={dependencies.source} />
       </PageHeader>
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-        <Stat label="Dependencies" value={dependencies.graph?.totalDependencies ?? 0} />
-        <Stat label="Relations" value={dependencies.graph?.edges.length ?? 0} />
-        <Stat label="Vulnerable" value={dependencies.graph?.vulnerabilities ?? 0} />
-        <Stat label="Outdated" value={dependencies.graph?.outdated ?? 0} />
+
+      <div className="mb-6">
+        <RevisionManifestPanel repositoryId={activeRepository.id} />
       </div>
 
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border px-4 py-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+        <Stat label="Dependencies" value={graph.totalDependencies} />
+        <Stat label="Relations" value={graph.edges.length} />
+        <Stat
+          label="Vulnerability assessment"
+          value={assessmentLabel(graph.vulnerabilityAssessment)}
+        />
+        <Stat
+          label="Outdated-version assessment"
+          value={assessmentLabel(graph.outdatedAssessment)}
+        />
+      </div>
+      <p className="mb-6 rounded-2xl border border-primary/15 bg-accent px-4 py-3 text-sm text-muted-foreground">
+        Vulnerability and outdated-version assessments have not been run.
+      </p>
+
+      <div className="overflow-hidden rounded-3xl border border-primary/20 bg-card shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+        <div className="flex flex-col justify-between gap-3 border-b border-primary/15 px-5 py-4 sm:flex-row sm:items-center">
           <div className="relative max-w-sm flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search dependencies..."
-              className="w-full rounded-md border border-border bg-background pl-8 pr-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full rounded-xl border border-primary/25 bg-background py-2 pl-8 pr-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
-          <ExportMenu repositoryId={activeRepository.id} target="dependencies" disabled={!dependencies.graph} />
+          <ExportMenu repositoryId={activeRepository.id} target="dependencies" />
         </div>
-        {filteredNodes.length === 0 ? (
+        {hasBlockingExtractionDiagnostics && (
           <div className="p-8 text-center">
             <GitBranch className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No dependencies matched your search.</p>
+            <p className="text-sm text-muted-foreground">Dependency inventory may be incomplete.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {blockingDiagnosticCount} blocking extraction {blockingDiagnosticCount === 1 ? 'issue was' : 'issues were'} reported. Review the affected source files and analyse the repository again.
+            </p>
+            {!hasDependencies && dependencies.packageManager && (
+              <p className="mt-1 text-xs text-muted-foreground">Detected package manager: {dependencies.packageManager}.</p>
+            )}
+          </div>
+        )}
+        {!hasDependencies ? (
+          hasBlockingExtractionDiagnostics ? null : (
+            <div className="p-8 text-center">
+              <GitBranch className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">No dependencies were discovered.</p>
+              {dependencies.packageManager && (
+                <p className="mt-1 text-xs text-muted-foreground">Detected package manager: {dependencies.packageManager}.</p>
+              )}
+            </div>
+          )
+        ) : hasSearchQuery && filteredNodes.length === 0 ? (
+          <div className="p-8 text-center">
+            <GitBranch className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No dependencies match your search.</p>
           </div>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-primary/10">
             {filteredNodes.map((node) => (
-              <div key={node.id} className="flex items-center justify-between px-4 py-3">
+              <div key={node.id} className="flex items-center justify-between px-5 py-4 hover:bg-accent">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/15 bg-secondary">
                     <Package className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="min-w-0">
@@ -117,26 +196,31 @@ export function DependenciesPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground capitalize">{node.type}</span>
-                  {node.hasVulnerabilities && <span className="rounded-md bg-destructive/10 px-2 py-0.5 text-xs text-destructive">vulnerable</span>}
-                  {node.isOutdated && <span className="rounded-md bg-warning/10 px-2 py-0.5 text-xs text-warning">outdated</span>}
+                  <span className="rounded-lg bg-accent px-2.5 py-1 text-xs text-muted-foreground capitalize">{node.type}</span>
                 </div>
               </div>
             ))}
           </div>
         )}
-        <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          {dependencies.packageManager} detected. Dependency relationships are generated from backend package manifests.
+        <div className="border-t border-primary/15 px-5 py-4 text-xs text-muted-foreground">
+          {dependencies.packageManager
+            ? `Detected package manager: ${dependencies.packageManager}. `
+            : 'Package-manager information is unavailable for this repository. '}
+          Dependency data, when available, comes from the sealed repository-intelligence snapshot.
         </div>
       </div>
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function assessmentLabel(assessment: DependencyAssessment | undefined): string {
+  return assessment?.status === 'not_computed' ? 'Not computed' : 'Unavailable';
+}
+
+function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
+    <div className="rounded-2xl border border-primary/20 bg-card p-4 shadow-[0_10px_24px_hsl(var(--foreground)/0.03)]">
+      <p className="text-2xs font-semibold uppercase tracking-[0.12em] text-primary">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
     </div>
   );

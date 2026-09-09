@@ -1,191 +1,220 @@
 import asyncio
-from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
 import httpx
 import pytest
 
-from app.ai.orchestrator import AiOrchestrator
-from app.ai.prompt_builder import PromptBuilder
 from app.ai.providers.anthropic import AnthropicProvider
-from app.ai.providers.factory import ProviderFactory
 from app.ai.providers.gemini import GeminiProvider
-from app.ai.providers.legacy import LegacyProvider
 from app.ai.providers.ollama import OllamaProvider
 from app.ai.providers.openai import OpenAIProvider
 from app.ai.providers.openrouter import OpenRouterProvider
-from app.ai.providers.registry import ProviderRegistry
-from app.ai.repository_context import RepositoryContextBuilder
 from app.ai.types import AiProviderConfig, PromptBundle
 from app.api.deps import get_provider_registry
-from app.core.exceptions import ExternalServiceError, ValidationServiceError
-from app.schemas.ai import AiProviderTestRequest
+from app.core.exceptions import ExternalServiceError, TimeoutServiceError, ValidationServiceError
 
 
 PROMPT = PromptBundle(system_prompt="System prompt", user_prompt="User prompt")
 
 
-class FakeResponse:
-    def __init__(self, payload: dict[str, Any]) -> None:
+class RecordingSender:
+    def __init__(self, payload: dict[str, Any], error: Exception | None = None) -> None:
         self.payload = payload
+        self.error = error
+        self.calls: list[dict[str, Any]] = []
 
-    def raise_for_status(self) -> None:
-        return None
-
-    def json(self) -> dict[str, Any]:
-        return self.payload
-
-
-class RecordingAsyncClient:
-    calls: list[dict[str, Any]] = []
-    payload: dict[str, Any] = {}
-    exception: httpx.HTTPError | None = None
-
-    def __init__(self, timeout: int) -> None:
-        self.timeout = timeout
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, traceback) -> None:
-        return None
-
-    async def post(self, url: str, **kwargs):
-        self.calls.append({"timeout": self.timeout, "url": url, "kwargs": deepcopy(kwargs)})
-        if self.exception:
-            raise self.exception
-        return FakeResponse(deepcopy(self.payload))
+    async def post(self, config: AiProviderConfig, url: str, **kwargs: object) -> httpx.Response:
+        self.calls.append({"config": config, "url": url, "kwargs": deepcopy(kwargs)})
+        if self.error:
+            raise self.error
+        return httpx.Response(200, json=self.payload, request=httpx.Request("POST", "https://provider.example"))
 
 
-class StaticConfigStore:
-    def __init__(self, config: AiProviderConfig) -> None:
-        self.config = config
+class ConcurrencyTrackingSender:
+    """Records how many `post()` calls were ever in flight at once (#414).
 
-    def config_for_test(self, request: AiProviderTestRequest) -> AiProviderConfig:
-        return self.config
+    Holds each call open for `delay` seconds before returning, so several
+    calls fired at the same time genuinely have a window to overlap if
+    nothing is gating them -- a delay of 0 would let every call finish
+    before the next even starts, defeating the point of the test.
+    """
+
+    def __init__(self, payload: dict[str, Any], *, delay: float = 0.05) -> None:
+        self.payload = payload
+        self.delay = delay
+        self.current = 0
+        self.max_concurrent = 0
+
+    async def post(self, config: AiProviderConfig, url: str, **kwargs: object) -> httpx.Response:
+        self.current += 1
+        self.max_concurrent = max(self.max_concurrent, self.current)
+        await asyncio.sleep(self.delay)
+        self.current -= 1
+        return httpx.Response(200, json=self.payload, request=httpx.Request("POST", "https://provider.example"))
 
 
 def _provider_cases():
     return [
         (
-            "openai",
             OpenAIProvider,
             AiProviderConfig(provider="openai", api_key="key"),
             {"choices": [{"message": {"content": "OpenAI answer"}}]},
+            "https://api.openai.com/v1/chat/completions",
         ),
         (
-            "anthropic",
             AnthropicProvider,
             AiProviderConfig(provider="anthropic", api_key="key"),
-            {"content": [{"type": "text", "text": "Anthropic"}, {"type": "tool", "text": "ignored"}, {"type": "text", "text": "answer"}]},
+            {"content": [{"type": "text", "text": "Anthropic answer"}]},
+            "https://api.anthropic.com/v1/messages",
         ),
         (
-            "gemini",
             GeminiProvider,
             AiProviderConfig(provider="gemini", api_key="key"),
-            {"candidates": [{"content": {"parts": [{"text": "Gemini"}, {"text": "answer"}]}}]},
+            {"candidates": [{"content": {"parts": [{"text": "Gemini answer"}]}}]},
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
         ),
         (
-            "openrouter",
             OpenRouterProvider,
             AiProviderConfig(provider="openrouter", api_key="key"),
             {"choices": [{"message": {"content": "OpenRouter answer"}}]},
+            "https://openrouter.ai/api/v1/chat/completions",
         ),
         (
-            "ollama",
             OllamaProvider,
-            AiProviderConfig(provider="ollama", base_url="http://localhost:11434/"),
+            AiProviderConfig(provider="ollama", base_url="http://provider.example:11434"),
             {"message": {"content": "Ollama answer"}},
+            "http://provider.example:11434/api/chat",
         ),
     ]
 
 
-def _run_with_recording(provider, config: AiProviderConfig, payload: dict[str, Any], monkeypatch: pytest.MonkeyPatch):
-    RecordingAsyncClient.calls = []
-    RecordingAsyncClient.payload = payload
-    RecordingAsyncClient.exception = None
-    monkeypatch.setattr(httpx, "AsyncClient", RecordingAsyncClient)
-    response = asyncio.run(provider.complete(config, PROMPT))
-    return response, deepcopy(RecordingAsyncClient.calls)
+@pytest.mark.parametrize(("provider_class", "config", "payload", "expected_url"), _provider_cases())
+def test_each_registered_provider_uses_the_injected_central_sender(provider_class, config, payload, expected_url):
+    sender = RecordingSender(payload)
+
+    response = asyncio.run(provider_class(sender).complete(config, PROMPT))
+
+    assert response.content.endswith("answer")
+    assert len(sender.calls) == 1
+    assert sender.calls[0]["url"] == expected_url
+    assert sender.calls[0]["config"] is config
 
 
-def _malformed_payload(provider_name: str) -> dict[str, Any]:
-    if provider_name == "anthropic":
-        return {"content": None}
-    return {}
+def test_gemini_credential_is_sent_in_a_header_not_the_url():
+    sender = RecordingSender({"candidates": [{"content": {"parts": [{"text": "Gemini answer"}]}}]})
+    key = "gemini-secret-value"
 
+    asyncio.run(GeminiProvider(sender).complete(AiProviderConfig(provider="gemini", api_key=key), PROMPT))
 
-def _capture_exception(call: Callable[[], Any]) -> Exception:
-    try:
-        call()
-    except Exception as exc:
-        return exc
-    raise AssertionError("Expected provider call to fail.")
-
-
-@pytest.mark.parametrize(("provider_name", "provider_class", "config", "payload"), _provider_cases())
-def test_dedicated_provider_matches_legacy_success(provider_name, provider_class, config, payload, monkeypatch: pytest.MonkeyPatch):
-    legacy_response, legacy_calls = _run_with_recording(LegacyProvider(), config, payload, monkeypatch)
-    provider_response, provider_calls = _run_with_recording(provider_class(), config, payload, monkeypatch)
-
-    assert provider_response == legacy_response
-    assert provider_calls == legacy_calls
-    assert provider_calls[0]["timeout"] == 60
+    call = sender.calls[0]
+    assert key not in call["url"]
+    assert call["kwargs"]["headers"] == {"x-goog-api-key": key}
+    assert "params" not in call["kwargs"]
 
 
 @pytest.mark.parametrize(
-    ("provider_name", "provider_class", "config"),
+    ("provider_class", "config"),
     [
-        ("openai", OpenAIProvider, AiProviderConfig(provider="openai")),
-        ("anthropic", AnthropicProvider, AiProviderConfig(provider="anthropic")),
-        ("gemini", GeminiProvider, AiProviderConfig(provider="gemini")),
-        ("openrouter", OpenRouterProvider, AiProviderConfig(provider="openrouter")),
+        (OpenAIProvider, AiProviderConfig(provider="openai")),
+        (AnthropicProvider, AiProviderConfig(provider="anthropic")),
+        (GeminiProvider, AiProviderConfig(provider="gemini")),
+        (OpenRouterProvider, AiProviderConfig(provider="openrouter")),
     ],
 )
-def test_dedicated_provider_matches_legacy_authentication_failure(provider_name, provider_class, config):
-    legacy_error = _capture_exception(lambda: asyncio.run(LegacyProvider().complete(config, PROMPT)))
-    provider_error = _capture_exception(lambda: asyncio.run(provider_class().complete(config, PROMPT)))
+def test_cloud_providers_require_a_key_before_sending(provider_class, config):
+    sender = RecordingSender({})
 
-    assert type(provider_error) is type(legacy_error)
-    assert isinstance(provider_error, ValidationServiceError)
-    assert provider_error.message == legacy_error.message
-    assert provider_error.details == legacy_error.details
+    with pytest.raises(ValidationServiceError, match="API key is required"):
+        asyncio.run(provider_class(sender).complete(config, PROMPT))
 
-
-@pytest.mark.parametrize(("provider_name", "provider_class", "config", "payload"), _provider_cases())
-def test_dedicated_provider_matches_legacy_network_failure(provider_name, provider_class, config, payload, monkeypatch: pytest.MonkeyPatch):
-    request = httpx.Request("POST", "https://example.test")
-
-    def run(provider):
-        RecordingAsyncClient.calls = []
-        RecordingAsyncClient.payload = payload
-        RecordingAsyncClient.exception = httpx.ConnectError("network failed", request=request)
-        monkeypatch.setattr(httpx, "AsyncClient", RecordingAsyncClient)
-        return _capture_exception(lambda: asyncio.run(provider.complete(config, PROMPT)))
-
-    legacy_error = run(LegacyProvider())
-    provider_error = run(provider_class())
-
-    assert type(provider_error) is type(legacy_error)
-    assert isinstance(provider_error, ExternalServiceError)
-    assert provider_error.message == legacy_error.message
-    assert provider_error.details == legacy_error.details
+    assert sender.calls == []
 
 
-@pytest.mark.parametrize(("provider_name", "provider_class", "config", "payload"), _provider_cases())
-def test_dedicated_provider_matches_legacy_response_parsing_failure(provider_name, provider_class, config, payload, monkeypatch: pytest.MonkeyPatch):
-    malformed_payload = _malformed_payload(provider_name)
-    legacy_error = _capture_exception(lambda: _run_with_recording(LegacyProvider(), config, malformed_payload, monkeypatch))
-    provider_error = _capture_exception(lambda: _run_with_recording(provider_class(), config, malformed_payload, monkeypatch))
+def test_provider_connect_errors_get_an_honest_unreachable_message():
+    """#291: "unreachable Ollama" and "invalid base URL" surface identically
+    at the connection layer, so one honest message covers both rather than
+    guessing which one it was."""
 
-    assert type(provider_error) is type(legacy_error)
-    assert isinstance(provider_error, ExternalServiceError)
-    assert provider_error.message == legacy_error.message
-    assert provider_error.details == legacy_error.details
+    request = httpx.Request("POST", "https://provider.example")
+    sender = RecordingSender({}, httpx.ConnectError("network failed", request=request))
+
+    with pytest.raises(ExternalServiceError) as caught:
+        asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
+
+    assert "Could not reach the AI provider" in caught.value.message
+    assert caught.value.details == {"provider": "openai"}
 
 
-def test_registry_uses_dedicated_providers():
+def test_provider_connect_timeout_is_also_reported_as_unreachable():
+    """httpx.ConnectTimeout inherits from both ConnectError and
+    TimeoutException; a timeout during the connect phase itself should read
+    as unreachable, not as "the provider is just slow to answer"."""
+
+    request = httpx.Request("POST", "https://provider.example")
+    sender = RecordingSender({}, httpx.ConnectTimeout("connect timed out", request=request))
+
+    with pytest.raises(ExternalServiceError) as caught:
+        asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
+
+    assert "Could not reach the AI provider" in caught.value.message
+
+
+def test_provider_read_timeout_is_reported_as_a_timeout_not_unreachable():
+    request = httpx.Request("POST", "https://provider.example")
+    sender = RecordingSender({}, httpx.ReadTimeout("read timed out", request=request))
+
+    with pytest.raises(TimeoutServiceError) as caught:
+        asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
+
+    assert "did not respond in time" in caught.value.message
+
+
+@pytest.mark.parametrize("status_code", (401, 403))
+def test_provider_auth_rejection_explains_the_key_is_the_problem(status_code):
+    request = httpx.Request("POST", "https://provider.example")
+    response = httpx.Response(status_code, request=request)
+    sender = RecordingSender({}, httpx.HTTPStatusError("unauthorized", request=request, response=response))
+
+    with pytest.raises(ValidationServiceError) as caught:
+        asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
+
+    assert "rejected the API key" in caught.value.message
+
+
+def test_provider_rate_limit_is_explained_in_plain_language():
+    request = httpx.Request("POST", "https://provider.example")
+    response = httpx.Response(429, request=request)
+    sender = RecordingSender({}, httpx.HTTPStatusError("too many requests", request=request, response=response))
+
+    with pytest.raises(ExternalServiceError) as caught:
+        asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
+
+    assert "rate limit" in caught.value.message.lower()
+
+
+@pytest.mark.parametrize("status_code", (400, 404, 422))
+def test_provider_bad_request_is_explained_as_an_unsupported_model(status_code):
+    request = httpx.Request("POST", "https://provider.example")
+    response = httpx.Response(status_code, request=request)
+    sender = RecordingSender({}, httpx.HTTPStatusError("bad request", request=request, response=response))
+
+    with pytest.raises(ValidationServiceError) as caught:
+        asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
+
+    assert "unsupported model" in caught.value.message.lower()
+
+
+def test_provider_response_parsing_errors_remain_normalized():
+    sender = RecordingSender({})
+
+    with pytest.raises(ExternalServiceError) as caught:
+        asyncio.run(OpenAIProvider(sender).complete(AiProviderConfig(provider="openai", api_key="key"), PROMPT))
+
+    assert caught.value.message == "AI provider request failed."
+
+
+def test_default_registry_contains_only_dedicated_secure_provider_implementations():
     registry = get_provider_registry()
 
     assert isinstance(registry.get("openai"), OpenAIProvider)
@@ -193,41 +222,108 @@ def test_registry_uses_dedicated_providers():
     assert isinstance(registry.get("gemini"), GeminiProvider)
     assert isinstance(registry.get("openrouter"), OpenRouterProvider)
     assert isinstance(registry.get("ollama"), OllamaProvider)
-    assert not isinstance(registry.get("openai"), LegacyProvider)
 
 
-def test_factory_resolves_dedicated_provider():
-    registry = ProviderRegistry()
-    provider = OpenAIProvider()
-    registry.register("openai", provider)
+# --- Ollama concurrency limit (#414) -----------------------------------------
+#
+# Ollama runs inference on the same machine PARTHA runs on, so an unbounded
+# number of concurrent requests competes with the user's own machine for CPU
+# and memory -- unlike the four hosted providers above, which each call a
+# fixed remote URL with their own server-side infrastructure. See the linked
+# issue for the real reproduction (measured CPU/memory) that motivated this.
 
-    resolved = ProviderFactory(registry).resolve(AiProviderConfig(provider="openai", api_key="key"))
 
-    assert resolved is provider
+def test_ollama_never_sends_more_than_one_request_at_a_time():
+    sender = ConcurrencyTrackingSender({"message": {"content": "ok"}})
+    provider = OllamaProvider(sender)
+    config = AiProviderConfig(provider="ollama", base_url="http://provider.example:11434")
+
+    async def fire_five():
+        await asyncio.gather(*(provider.complete(config, PROMPT) for _ in range(5)))
+
+    asyncio.run(fire_five())
+
+    assert sender.max_concurrent == 1
 
 
-def test_connection_testing_uses_resolved_dedicated_provider(monkeypatch: pytest.MonkeyPatch):
+def test_ollama_still_serves_every_request_it_just_serializes_them():
+    sender = ConcurrencyTrackingSender({"message": {"content": "ok"}})
+    provider = OllamaProvider(sender)
+    config = AiProviderConfig(provider="ollama", base_url="http://provider.example:11434")
+
+    async def fire_five():
+        return await asyncio.gather(*(provider.complete(config, PROMPT) for _ in range(5)))
+
+    responses = asyncio.run(fire_five())
+
+    # Queued and served, never dropped or errored -- this is resource
+    # management, not a rate limit.
+    assert len(responses) == 5
+    assert all(response.content == "ok" for response in responses)
+
+
+def test_a_second_ollama_provider_instance_shares_the_same_limit():
+    """The registry constructs a fresh OllamaProvider per request (#414) --
+    the limit has to live above any single instance or it would do nothing.
+    """
+
+    sender = ConcurrencyTrackingSender({"message": {"content": "ok"}})
+    config = AiProviderConfig(provider="ollama", base_url="http://provider.example:11434")
+
+    async def fire_from_two_instances():
+        first = OllamaProvider(sender)
+        second = OllamaProvider(sender)
+        await asyncio.gather(
+            *(first.complete(config, PROMPT) for _ in range(3)),
+            *(second.complete(config, PROMPT) for _ in range(3)),
+        )
+
+    asyncio.run(fire_from_two_instances())
+
+    assert sender.max_concurrent == 1
+
+
+def test_the_ollama_limit_does_not_apply_to_a_hosted_provider():
+    """A hosted provider has its own remote infrastructure, not the user's
+    machine, behind it -- it must never be throttled by Ollama's limit."""
+
+    sender = ConcurrencyTrackingSender({"choices": [{"message": {"content": "ok"}}]})
+    provider = OpenAIProvider(sender)
     config = AiProviderConfig(provider="openai", api_key="key")
-    registry = ProviderRegistry()
-    registry.register("openai", OpenAIProvider())
-    orchestrator = AiOrchestrator(
-        repository=object(),  # type: ignore[arg-type]
-        config_store=StaticConfigStore(config),  # type: ignore[arg-type]
-        context_builder=RepositoryContextBuilder(object()),  # type: ignore[arg-type]
-        prompt_builder=PromptBuilder(),
-        provider_factory=ProviderFactory(registry),
-    )
 
-    RecordingAsyncClient.calls = []
-    RecordingAsyncClient.payload = {"choices": [{"message": {"content": "ok"}}]}
-    RecordingAsyncClient.exception = None
-    monkeypatch.setattr(httpx, "AsyncClient", RecordingAsyncClient)
+    async def fire_five():
+        await asyncio.gather(*(provider.complete(config, PROMPT) for _ in range(5)))
 
-    response = asyncio.run(orchestrator.test_connection(AiProviderTestRequest(provider="openai")))
+    asyncio.run(fire_five())
 
-    assert response.ok is True
-    assert response.message == "openai connection succeeded."
-    assert RecordingAsyncClient.calls[0]["kwargs"]["json"]["messages"] == [
-        {"role": "system", "content": "Reply with the single word: ok"},
-        {"role": "user", "content": "Connection test."},
-    ]
+    assert sender.max_concurrent == 5
+
+
+# --- Ollama local-inference timeout -----------------------------------------
+#
+# The shared sender defaults to 60s, which is right for a hosted API but cuts
+# off a local Ollama mid-generation (model load + CPU inference legitimately
+# runs longer). Ollama passes an explicit long read budget instead; hosted
+# providers keep the default.
+
+
+def test_ollama_requests_a_long_read_budget_for_local_generation():
+    sender = RecordingSender({"message": {"content": "ok"}})
+    config = AiProviderConfig(provider="ollama", base_url="http://provider.example:11434")
+
+    asyncio.run(OllamaProvider(sender).complete(config, PROMPT))
+
+    timeout = sender.calls[0]["kwargs"]["timeout"]
+    assert isinstance(timeout, httpx.Timeout)
+    assert timeout.read is not None and timeout.read >= 300
+    # The connect phase stays tight so a wrong/unreachable base URL fails fast.
+    assert timeout.connect is not None and timeout.connect <= 15
+
+
+def test_hosted_providers_keep_the_default_sender_timeout():
+    sender = RecordingSender({"choices": [{"message": {"content": "ok"}}]})
+    config = AiProviderConfig(provider="openai", api_key="key")
+
+    asyncio.run(OpenAIProvider(sender).complete(config, PROMPT))
+
+    assert sender.calls[0]["kwargs"]["timeout"] is None

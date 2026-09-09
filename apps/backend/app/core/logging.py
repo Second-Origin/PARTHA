@@ -7,6 +7,7 @@ from typing import Any
 from app.core.observability import get_request_id, redact_mapping
 
 LOG_RECORD_ATTRIBUTES = set(logging.makeLogRecord({}).__dict__)
+SENSITIVE_HTTP_LOGGERS = ("httpx", "httpcore")
 
 
 class JsonFormatter(logging.Formatter):
@@ -44,3 +45,9 @@ def configure_logging(level: str, log_format: str = "text") -> None:
         handlers=[handler],
         force=True,
     )
+    # HTTPX logs full outbound URLs at INFO and httpcore includes connection
+    # targets in DEBUG traces. Provider URLs may contain sensitive paths and
+    # pinned internal addresses, so application debug logging must not make
+    # those third-party request details visible.
+    for logger_name in SENSITIVE_HTTP_LOGGERS:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)

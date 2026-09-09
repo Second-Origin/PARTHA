@@ -9,7 +9,7 @@ def test_health_endpoint(client):
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert response.json()["environment"] == "development"
+    assert response.json()["environment"] == "test"
 
 
 def test_readiness_endpoint(client):
@@ -18,15 +18,15 @@ def test_readiness_endpoint(client):
     assert response.status_code == 200
     assert response.json() == {
         "status": "ready",
-        "environment": "development",
+        "environment": "test",
         "checks": {"database": "ok", "storage": "ok"},
     }
 
 
-def test_metrics_endpoint_exposes_request_counters(client):
-    client.get("/health")
+def test_metrics_endpoint_exposes_request_counters(auth_client):
+    auth_client.get("/health")
 
-    response = client.get("/metrics")
+    response = auth_client.get("/metrics")
 
     assert response.status_code == 200
     assert "text/plain" in response.headers["content-type"]
@@ -51,7 +51,7 @@ def test_readiness_endpoint_reports_database_failure(client, monkeypatch):
     assert response.status_code == 503
     assert response.json() == {
         "status": "not_ready",
-        "environment": "development",
+        "environment": "test",
         "checks": {"database": "error", "storage": "ok"},
     }
 
@@ -66,7 +66,7 @@ def test_readiness_endpoint_reports_storage_failure(client, monkeypatch):
     assert response.status_code == 503
     assert response.json() == {
         "status": "not_ready",
-        "environment": "development",
+        "environment": "test",
         "checks": {"database": "ok", "storage": "error"},
     }
 
@@ -93,8 +93,10 @@ def test_http_errors_use_standard_shape(client):
     }
 
 
-def test_request_validation_errors_use_standard_shape(client):
-    response = client.post("/repositories/github", json={})
+def test_request_validation_errors_use_standard_shape(auth_client):
+    # Authenticated so the request reaches body validation: /repositories is
+    # auth-guarded at the router level, and an anonymous call would 401 first.
+    response = auth_client.post("/repositories/github", json={})
 
     assert response.status_code == 422
     body = response.json()
@@ -125,6 +127,10 @@ def test_unhandled_errors_use_standard_shape():
         "details": None,
         "request_id": response.headers["X-Request-ID"],
     }
+    body = response.text.lower()
+    assert "boom" not in body
+    assert "runtimeerror" not in body
+    assert "traceback" not in body
 
 
 def test_json_logging_includes_structured_fields(capsys):
@@ -170,6 +176,24 @@ def test_settings_rejects_invalid_log_format():
 
     with pytest.raises(ValidationError):
         Settings(log_format="pretty")
+
+
+def test_production_analysis_worker_ids_are_unique_with_the_same_pid():
+    """Two workers in one process must be two distinct queue owners (#324).
+
+    Every control-plane ownership guard is ``worker_id`` equality, so a token
+    that collided between two workers in the same process would let each mutate
+    the other's job.
+    """
+
+    from app.workers.runner import new_worker_id
+
+    first = new_worker_id(pid=42)
+    second = new_worker_id(pid=42)
+
+    assert first != second
+    assert first.startswith("analysis-worker-42-")
+    assert len(first) <= 64
 
 
 def test_settings_rejects_invalid_database_url():

@@ -1,0 +1,298 @@
+# System Overview
+
+This document describes the system **as it exists today**. Where something is a placeholder, a constant, or a known gap, it says so. Nothing here is aspirational.
+
+Audience: contributors and maintainers who need to know what runs, where the boundaries are, and what they must not break.
+
+---
+
+## Shape of the system
+
+PARTHA is a monorepo: a React frontend, a FastAPI backend, and a local
+filesystem plus relational database for persistence. Durable analysis uses the
+database as its queue behind an explicit control-plane boundary, driven by a
+daemon worker thread inside the API process; there is no external message queue
+or separate analysis service.
+
+```mermaid
+flowchart LR
+    UI["<b>Frontend</b><br/>React 18 · Vite · TypeScript<br/>apps/frontend"]
+
+    subgraph Server["Backend — FastAPI · apps/backend"]
+        direction TB
+        MW["<b>Middleware</b><br/>rate limit · security headers<br/>CORS · request ID"]
+        Routes["<b>Routes</b><br/>app/api/routes/"]
+        Services["<b>Services</b><br/>app/services/"]
+        Queue["<b>Control plane</b><br/>app/workers/control_plane.py<br/>claim · lease · reclaim"]
+        Worker["<b>Analysis worker</b><br/>app/workers/ · daemon thread"]
+        Extract["<b>Extractors</b><br/>app/extraction/"]
+        RI["<b>Repository Intelligence</b><br/>app/intelligence/<br/>sealed read model"]
+        Consumers["<b>Consumers</b><br/>analysis · graph · review · insights<br/>documentation · ai · reports"]
+
+        MW --> Routes --> Services
+        Services -->|"enqueue"| Queue
+        Queue -->|"lease"| Worker
+        Worker --> Extract --> RI
+        Services --> Consumers
+        Consumers -->|"read only"| RI
+    end
+
+    subgraph Store["Persistence"]
+        direction TB
+        DB[("Relational DB<br/>SQLite local<br/>PostgreSQL configured")]
+        Disk[("Filesystem<br/>STORAGE_PATH")]
+    end
+
+    subgraph Ext["External"]
+        direction TB
+        GH["GitHub<br/>git clone over HTTPS"]
+        LLM["AI providers<br/>OpenAI · Anthropic · Gemini<br/>OpenRouter · Ollama"]
+    end
+
+    UI --> MW
+    RI --> DB
+    Queue --> DB
+    Worker --> DB
+    Services --> Disk
+    Services --> GH
+    Consumers --> LLM
+```
+
+---
+
+## Components and responsibilities
+
+### Frontend (`apps/frontend`)
+
+| Area | Responsibility |
+| --- | --- |
+| `src/app/` | Shell, router, pages, and global stores. Every application route sits behind the `RequireAuth` guard; only `/login` and `/register` are public. |
+| `src/features/` | Domain features with colocated hooks, components, and stores: repositories, upload, explorer, architecture, dependencies, review, documentation, AI workspace, insights, auth, settings. |
+| `src/shared/` | API clients, error mapping, feature-state helpers, reusable UI, config, and types. All backend calls go through the shared client, which owns access-token attachment and 401 handling. |
+
+### Backend (`apps/backend/app`)
+
+| Module | Responsibility | Must not do |
+| --- | --- | --- |
+| `api/` | HTTP boundary. Routes stay thin; `deps.py` wires every dependency. | Contain business logic. |
+| `services/` | Application services: repository import, analysis orchestration, documentation, AI. | Parse repository files directly. |
+| `intelligence/` | **The Repository Intelligence engine.** Builds, persists, and reloads reusable repository facts. | Render API response shapes. |
+| `parsers/` | `RepositoryParser` walks the extracted tree and produces the file tree plus basic metadata. Legacy ingestion still uses the parser's heuristic symbol path. | Produce feature-specific output. |
+| `extraction/` | The producer set behind the engine: syntax-aware `python.py` and `typescript.py`, dependency `manifests.py` and `lockfiles.py`, outbound service interactions (`http.py`), Docker Compose resources (`iac.py`), and the `support_matrix.py` that generates the public capability registry. | Persist snapshots or answer product queries. |
+| `analysis/` | Architecture model — modules, layers, edges, request-flow hints. **Consumer.** | Read the filesystem. |
+| `graph/` | Dependency graph response model. **Consumer.** | Re-read dependency manifests. |
+| `review/` | Deterministic `engineering-review.v2` findings and category assessment over one sealed snapshot. **Consumer.** | Read the legacy JSON model, invent scores/grades, or emit a finding without exact same-snapshot evidence. |
+| `insights/` | Defined `repository-insights.v1` metrics and breakdowns over one sealed snapshot. **Consumer.** | Read legacy metadata, infer trends without history, or publish undefined health metrics. |
+| `ai/` | Context builder, prompt builder, orchestrator, provider registry/factory, five provider implementations, and the central egress policy/pinned sender. **Consumer.** | Parse repositories, read source files, or let a tenant expand provider destinations. |
+| `reports/` | `ReportDocument` intermediate representation, builders, and JSON/Markdown/HTML/PDF renderers. **Second-order consumer** — renders analysis output that already exists. | Re-analyse a repository. |
+| `auth/` | Argon2 password hashing, HS256 access tokens, rotating refresh tokens with reuse detection. | — |
+| `core/` | Settings and validation, database engine, structured logging with redaction, request IDs, metrics, rate limiting, security headers. | — |
+| `storage/` | Local filesystem storage for uploads and extracted/cloned repositories. Enforces path safety on extraction. | — |
+| `workers/control_plane.py` | The queue boundary: which jobs are eligible, and who owns them — claiming, lease renewal, expiry, reclaim, and every ownership guard. | Analyse a repository, or read anything but `analysis_jobs`. |
+| `workers/runner.py` | The in-process runner: worker identity, the poll/sweep loop, and shutdown. The same loop a standalone worker process would run. | Contain queue policy of its own, or be imported by the API for anything but start/stop. |
+| `workers/analysis_worker.py` | Execution of an *already-claimed* job: the extraction pipeline, snapshot sealing, bounded retry, cancellation and stale-job reconciliation. | Decide who owns a job, or serve request-specific data. |
+
+---
+
+## Ingestion flow
+
+Both entry points converge on the same import path: land the source on disk,
+compute immutable revision identity, parse the bounded file tree, and persist the
+repository revision. A separate durable job then builds and seals the normalized
+`ri.v1` snapshot off the request path.
+
+```mermaid
+sequenceDiagram
+    participant UI as Frontend
+    participant API as FastAPI route
+    participant Repo as RepositoryService
+    participant Store as LocalStorage
+    participant Parser as RepositoryParser
+    participant Queue as Control plane
+    participant Worker as AnalysisWorker
+    participant RI as Extraction + Intelligence
+    participant DB as Database
+
+    UI->>API: POST /repositories/upload (archive)<br/>or POST /repositories/github (URL)
+    API->>Repo: import
+    Repo->>Store: save + extract archive, or shallow-clone
+    Note over Store: path traversal and symlink escape rejected on upload<br/>upload and clone size caps enforced
+    Store-->>Repo: repository root on disk
+    Repo->>Parser: parse(root)
+    Parser-->>Repo: FileTreeNode[] + RepositoryMeta + size
+    Repo->>DB: insert row (revision kind/value/ref + metadata + file_tree)
+    DB-->>UI: RepositoryResponse
+    UI->>API: POST /analysis/{id}/start
+    API->>DB: insert queued analysis_jobs row
+    API-->>UI: queued + job id
+    Worker->>Queue: claim
+    Queue->>DB: compare-and-swap queued -> running + lease
+    Queue-->>Worker: JobLease
+    Worker->>Queue: renew lease by stage (reports cancellation)
+    Worker->>RI: extract and resolve repository facts
+    Worker->>DB: persist and seal normalized ri.v1 snapshot
+```
+
+Clone/archive extraction and initial file-tree parsing run synchronously during
+import. `POST /analysis/{id}/start` durably enqueues the analysis and returns
+immediately. A daemon worker thread in the API process claims jobs *through the
+control plane*, reports progress at completed stage boundaries, seals the
+normalized snapshot, and serves every product consumer from that immutable read
+model.
+
+The API process hosts that worker but does not own the queue. Claiming, leases,
+expiry, reclaim and ownership guards live in `app/workers/control_plane.py`, and
+the poll/sweep loop lives in `app/workers/runner.py`, so the same components
+would drive a standalone worker process without changing the claim/lease
+contract. Running analysis in a separate process is not implemented today.
+
+---
+
+## Persistence boundaries
+
+| Store | Holds | Notes |
+| --- | --- | --- |
+| Relational DB | `users`, `refresh_tokens`, `repositories`, `analysis_jobs`, `ai_provider_configs`, `ai_conversation_messages`, and normalized `ri_*` snapshot tables | SQLite by default for local development; PostgreSQL is supported through `DATABASE_URL`. Analysis jobs and their worker leases are durable database state. |
+| `repositories.revision_kind`, `revision_value`, `revision_ref` | Exact imported source identity: Git commit + resolved ref, or upload archive hash. | `revision_value` is indexed and immutable; a moving branch name is metadata, never identity. |
+| `repositories.repo_metadata` (JSON column) | Import/parser metadata; historical rows may also retain a **legacy/unverified** `intelligence` value. | New analysis does not write the legacy value, and executable product consumers ignore it. New imports no longer stash `commitSha` here. |
+| `ri_snapshots`, `ri_nodes`, `ri_edges`, `ri_assertions`, `ri_observations`, `ri_evidence`, `ri_derivations`, `ri_diagnostics` | Revision-addressed normalized `ri.v1` artifacts, provenance, lifecycle state, and canonical hash. | Durable analysis runs the Python/TypeScript/manifest producers and resolver, then seals a snapshot. Architecture, authentication explanation, Dependencies, Engineering Review, Insights, Documentation, exports, and AI context consume it. |
+| `repositories.file_tree` (JSON column) | The parsed file tree. | Serves the explorer. |
+| `ai_provider_configs` | One row per user: provider, model, base URL, and the **Fernet-encrypted** API key plus its last four characters. | Owner-scoped; the plaintext key is never stored or returned. A stored endpoint remains unusable unless it satisfies the current deployment egress policy. |
+| `ai_conversation_messages` | One row per AI Workspace turn: role, content, optional citations, and an explicit `sequence`. | **The AI Workspace thread is durable, not ephemeral.** One ordered thread per owner per repository, so history survives navigating away and returning. `UNIQUE(owner_id, repository_id, sequence)` is the concurrency guard; the repository foreign key cascades, so deleting a repository deletes its turns. A cross-owner read resolves to the same 404 as a missing repository. |
+| Filesystem (`STORAGE_PATH`) | Extracted archives and cloned repositories; uploaded archives (deleted after extraction). | Repository source is read from here on demand for file preview. |
+
+AI provider configuration is **per-user and encrypted at rest**. Each user's API key is encrypted with a Fernet key from `AI_ENCRYPTION_KEY` (required outside `development`/`test`), decrypted only in-process at request time, and injected per request — so a query runs against the caller's own key and bill, never a shared one.
+
+---
+
+## Authentication and session flow
+
+```mermaid
+sequenceDiagram
+    participant UI as Frontend
+    participant API as /auth
+    participant Auth as AuthService
+    participant DB as Database
+
+    UI->>API: POST /auth/register or /auth/login
+    API->>Auth: verify (Argon2)
+    Auth->>DB: persist rotating refresh token (hashed)
+    API-->>UI: access token (HS256, in body)<br/>+ refresh token (httpOnly cookie, path=/auth)
+    Note over UI: access token held in memory,<br/>attached as Authorization: Bearer
+    UI->>API: POST /auth/refresh (cookie)
+    Note over Auth: reuse of a spent token revokes<br/>the entire token family
+    API-->>UI: new access token + rotated refresh cookie
+```
+
+The access token is short-lived (15 min default); the refresh token lasts 14 days and rotates on every use. Refresh-token reuse revokes the whole family. `AUTH_SECRET_KEY` is required and length-checked outside `development`/`test`; in dev it falls back to a fixed insecure value.
+
+**Cookie scope and the same-site deployment requirement.** The refresh cookie is `HttpOnly`, `Path=/auth`, `SameSite=Lax`, and `Secure` outside `development`/`test` (`_set_refresh_cookie` in `app/api/routes/auth.py`). `SameSite=Lax` is a deliberate CSRF control, and it means **the frontend and the API must be served from the same site** (same registrable domain) in any deployment — e.g. one origin behind a path prefix, or `app.example.com` + `api.example.com`. If they are cross-site, the browser withholds the cookie from the background `POST /auth/refresh`, so the session cannot be re-established and the user is bounced to login on every reload. Locally this only bites if the frontend origin and `VITE_API_URL` disagree on host (`localhost` vs `127.0.0.1`); keep both on the same host.
+
+**Enforcement.** Every non-public route requires a valid access token. The `/repositories`, `/analysis`, `/ai`, `/documentation`, and `/export` routers each apply `get_current_user` at the router level, so a request with no token — or an invalid one — is rejected with 401 before reaching a handler, and a newly added route under those prefixes is protected by default. The pre-auth `get_current_user_or_default` fallback and its `X-Dev-User` header were removed in E1.3; there is no anonymous seed-user bucket. Data is additionally owner-scoped in the service layer (below), so authentication and authorization are enforced independently.
+
+---
+
+## The Repository Intelligence boundary
+
+This is the one architectural invariant of the system.
+
+> **Repository Intelligence is the single repository-understanding boundary. Consumers must not independently parse repositories or construct a second source of repository truth.**
+
+The AI subsystem gets no exemption from this:
+
+> **AI is a consumer of Repository Intelligence and must not independently parse or reinterpret repositories.**
+
+Repository source is read only by the bounded import/analysis pipeline
+(`RepositoryParser` and `AnalysisWorker`) and by
+`RepositoryService.read_file`, which serves the explorer's path-checked preview
+and feeds no analysis.
+
+Every repository-derived consumer uses the owner-scoped `SnapshotQueryService`
+and requires a sealed snapshot for the current repository revision. Historical
+legacy JSON may remain stored but is ignored. See
+[REPOSITORY_INTELLIGENCE.md](REPOSITORY_INTELLIGENCE.md) for what each path
+extracts and what it does not.
+
+### Current consumers
+
+| Consumer | Reads | Produces |
+| --- | --- | --- |
+| `analysis/` | sealed `ri.v1` nodes, edges, assertions, diagnostics, evidence | Architecture nodes, edges, layers, request-flow hints |
+| `review/` | sealed `ri.v1` diagnostics plus exact evidence and manifest identity | Supported findings and assessed/not-assessed category matrix; no scores |
+| `insights/` | sealed `ri.v1` nodes, edges, diagnostics, evidence and extractor set | Defined counts, ratios and breakdowns; no inferred trends |
+| `graph/` | sealed dependency nodes, declarations, resolved edges, diagnostics, evidence | Direct dependency graph with explicit not-computed assessments |
+| `services/documentation_service.py` | shared sealed structural projection and snapshot/revision identity | Markdown / HTML documentation |
+| `ai/repository_context.py` | shared sealed structural projection, without source bytes, plus the recent turns of the stored conversation thread | Preview `RepositoryContext` → `PromptBundle` for a configured provider |
+| `reports/` | snapshot-backed analysis and documentation output | JSON / Markdown / HTML / PDF |
+
+---
+
+## External dependencies
+
+| Dependency | Used for | Failure mode |
+| --- | --- | --- |
+| `git` (system binary) | Shallow-cloning public GitHub repositories. | Import fails with a normalized external-service error; the partial clone is cleaned up. |
+| GitHub (HTTPS) | Source for public repository import. Only `https://github.com/owner/repo` URLs are accepted; no authentication, so no private repositories. | Timeout and size caps abort and clean up. |
+| AI providers | Answering repository questions. Configured per user with an encrypted API key; destinations are centrally policy-checked and DNS-pinned. | A missing, stale, or policy-denied configuration produces a normalized error; the rest of the system is unaffected. |
+| PostgreSQL, Redis | Optional configured services and CI integration. Redis backs the rate limiter when `RATE_LIMIT_BACKEND=redis`. | Local development uses SQLite and the in-memory rate limiter; neither service is required. |
+
+---
+
+## Trust boundaries
+
+```mermaid
+flowchart TB
+    subgraph Untrusted["Untrusted input"]
+        Archive["Uploaded archive"]
+        RepoURL["GitHub URL / branch"]
+        Source["Repository source content"]
+    end
+
+    subgraph Backend["Backend process — trusted"]
+        Validate["<b>Validation</b><br/>URL allowlist · branch charset · size caps<br/>path traversal + symlink rejection (upload)"]
+        Engine["<b>Parse + Repository Intelligence</b>"]
+        Thread[("Stored conversation<br/>ai_conversation_messages<br/>both turns of every query")]
+    end
+
+    subgraph Out["Egress"]
+        Providers["AI providers"]
+        Logs["Logs"]
+    end
+
+    Archive --> Validate
+    RepoURL --> Validate
+    Validate --> Engine
+    Source --> Engine
+    Engine -->|"structure + file paths only —<br/>never source content"| Providers
+    Engine -->|"redacted; never repository content"| Logs
+    Engine --> Thread
+    Thread -->|"recent turns replayed as context"| Providers
+```
+
+- **Uploaded archives and cloned repositories are untrusted input.** Upload extraction rejects path traversal and symlink escape; the GitHub clone tree walk rejects symlinked files and directories the same way (#182); upload and clone sizes are capped; only allowlisted archive suffixes are accepted. Repository *content* is never executed — it is only read as text.
+- **Repository source never leaves the process.** The AI context builder passes structure and metadata only: languages, frameworks, modules, dependency names, and file paths. No file contents and no line numbers are sent to any provider, and the system prompt explicitly tells the model not to claim line numbers or quote code it was not given.
+- **Conversation turns do leave the process, and are retained.** Alongside that structural context, the most recent turns of the AI Workspace thread are replayed to the provider so a follow-up question resolves. Those turns are user-authored text, not repository source, but they are egress and they are persisted in `ai_conversation_messages` rather than discarded at the end of a session. Interface copy must describe this accurately: the workspace does not forget, and telling a user otherwise would be a false privacy assurance.
+- **Logs are redacted.** Keys containing `api_key`, `apikey`, `authorization`, `password`, `secret`, or `token` are redacted from structured log extras. Repository contents and credentials must never be logged.
+- **The authenticated-user boundary is enforced.** Every non-public route requires a valid token, and every repository lookup is owner-scoped in the service layer, so a caller sees only their own data. Provider API keys are encrypted at rest and injected per user. Provider destinations are selected by a deployment-owned egress policy, not by a tenant: configured endpoints must match an exact allowlist, DNS answers are checked again immediately before the request and pinned to the connection, redirects are denied, and policy errors omit destination details. Rate-limit budgets are keyed on the validated user id for authenticated requests (falling back to the client IP otherwise), so one user cannot spend another's budget. See [AI provider egress policy](../security/AI_PROVIDER_EGRESS.md).
+
+---
+
+## Current architectural limitations
+
+These are properties of the system as built, not a wish list.
+
+1. **Production classification remains partly heuristic.** File roles, derived modules, and layers are inferred from observed path segments and filenames and are labelled as heuristic.
+2. **Line-level evidence is surface-dependent.** Syntax-aware Python and TypeScript facts can carry validated spans, but Documentation uses structural facts and free-form AI receives no source bytes, so provider answers have no automatic citations.
+3. **The graph store is the sole product read model.** Durable analysis
+   populates immutable normalized snapshots, and every product consumer
+   requires the latest owner-scoped snapshot matching the current revision.
+   Missing or stale snapshots return 404 without fallback.
+4. **Analysis is whole-repository, and its worker is still in-process.** It runs in a durable, cancellable background job with bounded retry and stale-worker recovery, claimed through an explicit control plane, but incremental re-analysis is not implemented and no standalone worker process is deployed — one API process runs one worker. Import extraction and file-tree parsing remain synchronous.
+5. **The rate limiter trusts only the direct socket peer for unauthenticated requests.** `X-Forwarded-For` is deliberately ignored, so behind a reverse proxy every unauthenticated client shares one IP budget until a trusted-proxy allowlist is designed. Authenticated requests are keyed per user and unaffected.
+6. **Dependency coverage is narrow.** Three manifest formats plus two lockfile formats (`package-lock.json`, `poetry.lock`), whose exact pins are recorded as resolutions on the same dependency identity rather than as direct edges. There is no transitive resolution and no vulnerability or outdated-version scanning. The API exposes explicit `not_computed` assessment statuses and does not emit a clean result or count without a scanner.
+7. **Frontend assurance remains focused.** Vitest covers shared and feature
+   behavior, and a disposable Playwright acceptance suite exercises the defined
+   Architecture, Engineering Review, and Insights browser journeys. This is
+   not comprehensive end-to-end product coverage.
+
+These are missing guarantees in the system as built. They are not scheduled work, and this document does not commit to when or whether any of them change.

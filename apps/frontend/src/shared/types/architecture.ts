@@ -1,89 +1,25 @@
-export type ArchNodeType =
-  | 'frontend'
-  | 'backend'
-  | 'controller'
-  | 'route'
-  | 'service'
-  | 'repository'
-  | 'database'
-  | 'configuration'
-  | 'authentication'
-  | 'middleware'
-  | 'utilities'
-  | 'models'
-  | 'external-api'
-  | 'shared-library'
-  | 'environment'
-  | 'queue'
-  | 'cache';
+import type { components } from '@/shared/services/api/generated';
 
-export type ArchEdgeType = 'dependency' | 'import' | 'api-call' | 'data-flow' | 'event' | 'reads' | 'writes' | 'calls' | 'config-usage';
+export type ArchNodeType = components['schemas']['ArchNode']['type'];
+export type ArchEdgeType = components['schemas']['ArchEdge']['type'];
+export type RelationshipState = components['schemas']['ArchNode']['relationshipState'];
+export type TruthClass = components['schemas']['ArchEdge']['truthClass'];
+export type ArchNode = components['schemas']['ArchNode'];
+export type ArchEvidence = components['schemas']['ArchEvidence'];
+export type ArchEdge = components['schemas']['ArchEdge'];
+export type ArchitectureDiagnostic = components['schemas']['ArchitectureDiagnostic'];
+export type ArchLayer = components['schemas']['ArchLayer'];
+export type ArchModule = components['schemas']['ArchModule'];
+export type RequestFlowStep = components['schemas']['RequestFlowStep'];
+export type ArchitectureSummary = components['schemas']['ArchitectureSummary'];
 
-export type HeatmapMode = 'none' | 'complexity' | 'usage' | 'size' | 'critical';
+// These fields have backend defaults, so the generated OpenAPI schema marks
+// them optional even though every successful response includes them.
+export type ArchitectureModel = components['schemas']['ArchitectureResponse'] &
+  Required<Pick<components['schemas']['ArchitectureResponse'], 'diagnostics'>>;
 
-export interface ArchNode {
-  id: string;
-  name: string;
-  type: ArchNodeType;
-  description: string;
-  responsibilities: string[];
-  files: string[];
-  dependencies: string[];
-  dependents: string[];
-  estimatedComplexity: 'low' | 'medium' | 'high';
-  estimatedLines: number;
-  tags: string[];
-  layer: string;
-  parentModule?: string;
-}
-
-export interface ArchEdge {
-  id: string;
-  source: string;
-  target: string;
-  label?: string;
-  type: ArchEdgeType;
-}
-
-export interface ArchLayer {
-  id: string;
-  name: string;
-  order: number;
-  nodes: string[];
-}
-
-export interface ArchModule {
-  id: string;
-  name: string;
-  layer: string;
-  nodeIds: string[];
-  description: string;
-  fileCount: number;
-}
-
-export interface RequestFlowStep {
-  id: string;
-  name: string;
-  type: ArchNodeType;
-  description: string;
-  details: string[];
-}
-
-export interface ArchitectureModel {
-  repositoryId: string;
-  repositoryName: string;
-  architectureType: string;
-  detectedLayers: ArchLayer[];
-  nodes: ArchNode[];
-  edges: ArchEdge[];
-  modules: ArchModule[];
-  requestFlow: RequestFlowStep[];
-  summary: {
-    language: string;
-    framework: string;
-    totalModules: number;
-    totalNodes: number;
-    entryPoint: string;
-    architecturePattern: string;
-  };
-}
+// 'complexity' and 'size' heatmap modes were removed with #217: no repository-
+// intelligence producer measures either today, so there was no real signal to
+// render. 'usage' (dependents count) and 'critical' are computed only from
+// real graph facts.
+export type HeatmapMode = 'none' | 'usage' | 'critical';

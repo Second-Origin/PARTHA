@@ -1,4 +1,4 @@
-import type { DataSource, FeatureStatus } from '@/shared/types';
+import type { RepositorySource, FeatureStatus } from '@/shared/types';
 
 export interface FeatureState<T> {
   data: T | null;
@@ -7,7 +7,7 @@ export interface FeatureState<T> {
   error: string | null;
   empty: boolean;
   success: boolean;
-  source: DataSource | null;
+  source: RepositorySource | null;
   retry: () => void;
   refresh: () => void;
 }
@@ -23,7 +23,7 @@ export function createFeatureState<T>({
   data: T | null;
   status: FeatureStatus;
   error?: string | null;
-  source?: DataSource | null;
+  source?: RepositorySource | null;
   retry: () => void;
   refresh: () => void;
 }): FeatureState<T> {

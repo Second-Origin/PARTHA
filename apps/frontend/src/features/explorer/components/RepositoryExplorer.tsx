@@ -4,21 +4,29 @@ import { cn } from '@/shared/utils/cn';
 import type { FileTreeNode } from '@/shared/types';
 import { useExplorerStore } from '../store';
 import { useResizable } from '../useResizable';
-import { deriveFileDetails } from '../fileUtils';
+import { deriveFileDetails, flattenTree, type ExplorerCitation } from '../fileUtils';
 import { FileTreeView } from './FileTreeView';
 import { ExplorerToolbar } from './ExplorerToolbar';
 import { FileDetailsPanel } from './FileDetailsPanel';
 import { CodePreview } from './CodePreview';
 import { Breadcrumbs } from './Breadcrumbs';
 
+export type { ExplorerCitation } from '../fileUtils';
+
+const normalizedPath = (path: string) => path.replace(/^\/+/, '');
+
 interface RepositoryExplorerProps {
   fileTree: FileTreeNode[];
   repositoryId: string;
+  /** File path selected outside Explorer, such as an authenticated global-search result. */
+  initialPath?: string | null;
+  /** Deep-link from an evidence citation: opens and highlights an exact span. */
+  citation?: ExplorerCitation | null;
 }
 
-export function RepositoryExplorer({ fileTree, repositoryId }: RepositoryExplorerProps) {
+export function RepositoryExplorer({ fileTree, repositoryId, initialPath, citation }: RepositoryExplorerProps) {
   const {
-    selectedNode, detailsTab, setDetailsTab, expandedFolders, expandFolder,
+    selectedNode, selectFile, clearSelection, detailsTab, setDetailsTab, expandedFolders, expandFolder,
   } = useExplorerStore();
 
   const { width: explorerWidth, onMouseDown } = useResizable({
@@ -36,6 +44,29 @@ export function RepositoryExplorer({ fileTree, repositoryId }: RepositoryExplore
       rootFolders.forEach((node) => expandFolder(node.id));
     }
   }, [expandedFolders.size, expandFolder, rootFolders]);
+
+  useEffect(() => {
+    const requestedPath = citation?.path ?? initialPath;
+    if (!requestedPath) return;
+    const match = flattenTree(fileTree).find(
+      (node) => node.type === 'file' && normalizedPath(node.path) === normalizedPath(requestedPath),
+    );
+    if (!match) {
+      clearSelection();
+      return;
+    }
+    selectFile(match);
+    setDetailsTab('preview');
+    const segments = match.path.split('/').slice(0, -1);
+    let prefix = '';
+    for (const segment of segments) {
+      prefix = prefix ? `${prefix}/${segment}` : segment;
+      const folder = flattenTree(fileTree).find(
+        (node) => node.type === 'folder' && normalizedPath(node.path) === normalizedPath(prefix),
+      );
+      if (folder) expandFolder(folder.id);
+    }
+  }, [citation, initialPath, fileTree, selectFile, clearSelection, setDetailsTab, expandFolder]);
 
   const fileDetails = useMemo(() => {
     if (!selectedNode || selectedNode.type === 'folder') return null;
@@ -110,7 +141,15 @@ export function RepositoryExplorer({ fileTree, repositoryId }: RepositoryExplore
               </p>
             </div>
           ) : detailsTab === 'preview' ? (
-            <CodePreview node={selectedNode} repositoryId={repositoryId} />
+            <CodePreview
+              node={selectedNode}
+              repositoryId={repositoryId}
+              citation={
+                citation && normalizedPath(citation.path) === normalizedPath(selectedNode.path)
+                  ? citation
+                  : null
+              }
+            />
           ) : fileDetails ? (
             <FileDetailsPanel details={fileDetails} />
           ) : null}

@@ -1,20 +1,11 @@
-export type AppStatus = 'empty' | 'repository-selected' | 'uploading' | 'analysing' | 'completed' | 'error';
+import type { components } from '@/shared/services/api/generated';
+
+export type AppStatus = 'empty' | 'repository-selected' | 'uploading' | 'analysing' | 'completed' | 'cancelled' | 'error';
 
 export type RepositorySource = 'upload' | 'github';
-export type DataSource = 'real';
 export type FeatureStatus = 'idle' | 'loading' | 'success' | 'error' | 'empty';
 
-export type AnalysisStage =
-  | 'uploading'
-  | 'extracting'
-  | 'reading-structure'
-  | 'detecting-languages'
-  | 'detecting-framework'
-  | 'building-file-tree'
-  | 'extracting-modules'
-  | 'building-dependency-graph'
-  | 'preparing-architecture'
-  | 'completed';
+export type AnalysisStage = NonNullable<components['schemas']['AnalysisStatusResponse']['stage']>;
 
 export const ANALYSIS_STAGES: { key: AnalysisStage; label: string }[] = [
   { key: 'uploading', label: 'Uploading Repository' },
@@ -29,29 +20,9 @@ export const ANALYSIS_STAGES: { key: AnalysisStage; label: string }[] = [
   { key: 'completed', label: 'Analysis Complete' },
 ];
 
-export interface FileTreeNode {
-  id: string;
-  name: string;
-  type: 'file' | 'folder';
-  path: string;
-  children?: FileTreeNode[];
-  size?: number;
-  extension?: string;
-  language?: string;
-}
-
-export interface RepositoryMeta {
-  language: string;
-  framework: string;
-  totalFiles: number;
-  totalFolders: number;
-  entryPoint: string | null;
-  configFiles: string[];
-  packageManager: string | null;
-  hasReadme: boolean;
-  hasLicense: boolean;
-  licenseName: string | null;
-}
+export type FileTreeNode = components['schemas']['FileTreeNode'];
+export type RepositoryMeta = components['schemas']['RepositoryMeta'];
+export type RepositoryRevision = components['schemas']['RepositoryRevision'];
 
 export interface Repository {
   id: string;
@@ -61,13 +32,14 @@ export interface Repository {
   sourceUrl?: string;
   size: number;
   fileCount: number;
-  status: 'uploading' | 'analysing' | 'completed' | 'error';
-  dataSource: DataSource;
+  status: 'uploading' | 'analysing' | 'completed' | 'cancelled' | 'error';
   analysisStage: AnalysisStage | null;
   analysisProgress: number;
   uploadedAt: string;
   analysedAt?: string;
   errorMessage?: string;
+  revision?: RepositoryRevision | null;
+  commitSha?: string | null;
   meta: RepositoryMeta | null;
   fileTree: FileTreeNode[];
 }

@@ -1,8 +1,8 @@
 """Turn existing analysis reports into downloadable JSON / Markdown / HTML / PDF.
 
 The service only consumes data from the existing analysis and documentation
-builders (which read the Repository Intelligence Engine); it never re-analyses a
-repository. Content is returned inline so the API stays JSON and is testable:
+builders (which read the current revision's sealed ``ri.v1`` snapshot); it
+never re-analyses a repository. Content is returned inline so the API stays JSON and is testable:
 text formats as UTF-8, PDF as base64.
 """
 
@@ -75,7 +75,9 @@ class ExportService:
             return build_architecture_document(self.analysis.architecture_model(request.repository_id))
         if request.target == "dependencies":
             graph = self.analysis.dependency_graph(request.repository_id)
-            record = self.analysis.repository.get(request.repository_id)
+            # Owner-scoped lookup for the report title; dependency_graph above
+            # already resolved (and thus authorised) the repository for this user.
+            record = self.analysis.repository.get_for_owner(request.repository_id, self.analysis.owner_id)
             return build_dependencies_document(graph, record.name if record else request.repository_id)
         return self.documentation.build_document(request.repository_id)
 

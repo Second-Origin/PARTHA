@@ -49,7 +49,7 @@ export function UploadPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="mx-auto w-full max-w-3xl">
       <PageHeader
         title="Upload Repository"
         description="Upload a repository archive or import from GitHub"
@@ -57,13 +57,17 @@ export function UploadPage() {
         <DataSourceBadge source={mode === 'file' ? upload.source : githubImport.source} />
       </PageHeader>
 
-      <div className="flex items-center gap-1 p-1 rounded-lg bg-muted mb-6 w-fit">
+      <div role="tablist" aria-label="Repository source" className="mb-8 grid w-full grid-cols-2 gap-1 rounded-2xl border border-primary/20 bg-accent p-1.5 sm:w-fit">
         <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'file'}
+          aria-controls="upload-file-panel"
           onClick={() => { setMode('file'); githubImport.retry(); }}
           className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
+            'flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all',
             mode === 'file'
-              ? 'bg-background text-foreground shadow-sm'
+              ? 'bg-card text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
@@ -71,11 +75,15 @@ export function UploadPage() {
           Upload File
         </button>
         <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'github'}
+          aria-controls="upload-github-panel"
           onClick={() => { setMode('github'); upload.retry(); }}
           className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all',
+            'flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all',
             mode === 'github'
-              ? 'bg-background text-foreground shadow-sm'
+              ? 'bg-card text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
@@ -87,6 +95,8 @@ export function UploadPage() {
       <AnimatePresence mode="wait">
         {mode === 'file' ? (
           <motion.div
+            id="upload-file-panel"
+            role="tabpanel"
             key="file"
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
@@ -96,19 +106,22 @@ export function UploadPage() {
             <div
               {...getRootProps()}
               className={cn(
-                'relative rounded-xl border-2 border-dashed p-12 text-center cursor-pointer transition-all duration-200',
+                'relative cursor-pointer rounded-3xl border-2 border-dashed p-7 text-center shadow-[0_14px_34px_hsl(var(--foreground)/0.04)] transition-all duration-200 sm:p-12',
                 isDragActive
                   ? 'border-primary bg-primary/5'
-                  : 'border-border hover:border-muted-foreground/50 hover:bg-accent/30',
+                  : 'border-primary/30 bg-card hover:border-primary hover:bg-accent',
                 upload.uploadFile && 'pointer-events-none opacity-50'
               )}
             >
-              <input {...getInputProps()} />
+              {/* react-dropzone renders a visually hidden file input. It is
+                  still reachable programmatically and by assistive tech, so it
+                  needs its own accessible name. */}
+              <input {...getInputProps()} aria-label="Choose a repository archive to upload" />
               <div className="flex flex-col items-center">
                 <div
                   className={cn(
-                    'flex h-14 w-14 items-center justify-center rounded-2xl mb-4 transition-colors',
-                    isDragActive ? 'bg-primary/10' : 'bg-muted'
+                    'mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/15 transition-colors',
+                    isDragActive ? 'bg-primary/10' : 'bg-secondary'
                   )}
                 >
                   <Upload
@@ -124,12 +137,12 @@ export function UploadPage() {
                     : 'Drag and drop your repository archive'}
                 </p>
                 <p className="text-xs text-muted-foreground mb-4">
-                  Supports ZIP and TAR.GZ files up to {formatFileSize(MAX_FILE_SIZE)}
+                  Supports ZIP, TAR, TAR.GZ, and TGZ files up to {formatFileSize(MAX_FILE_SIZE)}
                 </p>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); open(); }}
-                  className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+                  className="rounded-xl border border-primary/45 px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-accent transition-colors"
                 >
                   Browse Files
                 </button>
@@ -156,11 +169,11 @@ export function UploadPage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
-                  className="mt-4 rounded-xl border border-border bg-card p-4"
+                  className="mt-4 rounded-2xl border border-primary/20 bg-card p-5 shadow-[0_12px_26px_hsl(var(--foreground)/0.04)]"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
                         <File className="h-5 w-5 text-primary" />
                       </div>
                       <div>
@@ -199,7 +212,7 @@ export function UploadPage() {
                 <button
                   onClick={handleAnalyseFile}
                   disabled={upload.loading}
-                  className="flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                  className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
                 >
                   {upload.loading ? 'Starting Analysis...' : 'Analyse Repository'}
                   <ArrowRight className="h-4 w-4" />
@@ -209,22 +222,27 @@ export function UploadPage() {
           </motion.div>
         ) : (
           <motion.div
+            id="upload-github-panel"
+            role="tabpanel"
             key="github"
             initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -10 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="rounded-xl border border-border bg-card p-6">
+            <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
                   <Github className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-foreground">
+                  <p
+                    data-testid="github-import-title"
+                    className="text-sm font-medium text-foreground"
+                  >
                     Import from GitHub
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p data-testid="github-import-helper" className="text-xs text-muted-foreground">
                     Paste a public repository URL
                   </p>
                 </div>
@@ -232,10 +250,16 @@ export function UploadPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  <label
+                    htmlFor="github-import-url"
+                    data-testid="github-import-label"
+                    className="block text-xs font-medium text-muted-foreground mb-1.5"
+                  >
                     Repository URL
                   </label>
                   <input
+                    id="github-import-url"
+                    data-testid="github-import-url"
                     type="url"
                     value={githubImport.githubUrl}
                     onChange={(e) => githubImport.setGithubUrl(e.target.value)}

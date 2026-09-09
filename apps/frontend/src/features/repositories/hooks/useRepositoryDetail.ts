@@ -1,12 +1,25 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useRepository } from './useRepository';
 
-const tabs = ['Overview', 'Explorer'] as const;
+const tabs = ['Overview', 'Explorer', 'History'] as const;
 export type RepositoryDetailTab = (typeof tabs)[number];
+
+function isRepositoryDetailTab(value: string | null): value is RepositoryDetailTab {
+  return (tabs as readonly string[]).includes(value ?? '');
+}
 
 export function useRepositoryDetail(repositoryId: string | undefined) {
   const repositoryState = useRepository();
-  const [activeTab, setActiveTab] = useState<RepositoryDetailTab>('Overview');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<RepositoryDetailTab>(
+    isRepositoryDetailTab(searchParams.get('tab')) ? (searchParams.get('tab') as RepositoryDetailTab) : 'Overview',
+  );
+
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    setActiveTab(isRepositoryDetailTab(requestedTab) ? requestedTab : 'Overview');
+  }, [repositoryId, searchParams]);
 
   const repository = useMemo(
     () => repositoryState.repositories.find((repo) => repo.id === repositoryId) || null,
@@ -20,6 +33,9 @@ export function useRepositoryDetail(repositoryId: string | undefined) {
     activeTab,
     setActiveTab,
     notFound: !repository,
-    redirectToAnalysis: repository?.status === 'analysing' ? `/analysis/${repository.id}` : null,
+    redirectToAnalysis:
+      repository?.status === 'analysing' || repository?.status === 'cancelled'
+        ? `/analysis/${repository.id}`
+        : null,
   };
 }

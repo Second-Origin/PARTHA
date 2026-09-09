@@ -5,13 +5,87 @@ on:
   push:
     branches:
       - main
-      - master
       - dev
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  repository-hygiene:
+
+    name: Repository Hygiene
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+
+      - name: Checkout
+
+        uses: actions/checkout@v4
+
+      - name: Verify tracked generated files
+
+        run: |
+
+          matches=$(git ls-files | grep -E '(^|/)dist/|(^|/)\.env$|(^|/)\.env\.(local|development|production|test)$' || true)
+
+          if [ -n "$matches" ]; then
+
+            echo "Tracked generated or environment files detected:"
+
+            echo "$matches"
+
+            exit 1
+
+          fi
+
+          echo "Repository hygiene checks passed."
+
+  api-contract:
+    name: API Contract Drift
+    needs: repository-hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix apps/frontend
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install -r apps/backend/requirements-dev.txt
+          python -m pip install -e apps/backend --no-deps
+
+      - name: Check generated frontend API contract
+        run: npm --prefix apps/frontend run generate:api-contract -- --check
+
   frontend:
     name: Frontend
+    needs: repository-hygiene
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,15 +100,76 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefix apps/frontend
 
+      # Policy-aware, so a green build represents a reviewed dependency-risk
+      # posture rather than the absence of `npm audit`. Runtime exposure is
+      # gated harder than development-only exposure, and every exception needs
+      # a written reason and a review date that expires.
+      - name: Dependency audit policy tests
+        run: node --test scripts/dependency-audit.test.mjs
+
+      - name: Dependency audit
+        run: node scripts/dependency-audit.mjs
+
       - name: Lint
         run: npm --prefix apps/frontend run lint
+
+      - name: Test
+        run: npm --prefix apps/frontend run test
+
+      # Additive reporting only (#320): the Test step above is what fails the
+      # job. This just publishes what it already produced (junit.xml from the
+      # vitest.config.ts CI-only reporter, lcov/json-summary from the
+      # existing coverage config) so a maintainer can inspect results and
+      # coverage without re-running the suite locally.
+      - name: Upload frontend test results and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: |
+            apps/frontend/test-results/junit.xml
+            apps/frontend/coverage
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Build
         run: npm --prefix apps/frontend run build
 
   backend:
     name: Backend
+    needs: repository-hygiene
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Postgres validates the full migration round trip against the deployment
+    # dialect and lets the gated refresh-token concurrency test exercise its
+    # row-lock race. Redis lets the gated rate-limit tests exercise the real
+    # atomic script and TTL behaviour. Local runs retain SQLite and in-memory
+    # fallbacks where supported.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: partha
+          POSTGRES_PASSWORD: partha
+          POSTGRES_DB: partha_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U partha -d partha_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,44 +177,237 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: "3.13"
           cache: pip
 
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
       - name: Install dependencies
-        run: python -m pip install -e apps/backend
+        run: |
+          python -m pip install -r apps/backend/requirements-dev.txt
+          python -m pip install -e apps/backend --no-deps
+
+      - name: Static analysis
+        working-directory: apps/backend
+        run: |
+          ruff check app scripts tests
+          ruff format --check app scripts tests
+          mypy app scripts
+
+      - name: Validate capability registry and README
+        run: python scripts/check-capabilities.py
 
       - name: Test
         working-directory: apps/backend
-        run: python -m pytest
+        env:
+          PARTHA_TEST_PG_URL: postgresql+psycopg://partha:partha@localhost:5432/partha_test
+          PARTHA_TEST_REDIS_URL: redis://localhost:6379/0
+        run: >-
+          python -m pytest
+          --cov=app --cov-report=xml:coverage.xml --cov-report=html:htmlcov
+          --junitxml=junit.xml
 
-  docker-compose:
-    name: Docker Compose
+      # Additive reporting only (#320): the Test step above is what fails the
+      # job; this just publishes what it already produced so a maintainer can
+      # inspect results and coverage without re-running the suite locally.
+      - name: Upload backend test results and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            apps/backend/junit.xml
+            apps/backend/coverage.xml
+            apps/backend/htmlcov
+          if-no-files-found: warn
+          retention-days: 14
+
+      # This is intentionally separate from pytest: it executes the maintainer
+      # command itself on two fresh, UUID-named PostgreSQL databases, proving
+      # both rehearsal paths without ever targeting the service's partha_test
+      # database. The admin connection below points at the server's default
+      # "postgres" maintenance database, not partha_test, so CREATE/DROP
+      # DATABASE never runs against the database pytest uses. The script
+      # keeps the connection URL out of its output.
+      - name: Rehearse migrations on isolated PostgreSQL
+        working-directory: apps/backend
+        env:
+          PARTHA_MIGRATION_REHEARSAL_CONFIRM: disposable
+          PARTHA_MIGRATION_REHEARSAL_PG_URL: postgresql+psycopg://partha:partha@localhost:5432/postgres
+        run: python scripts/rehearse_migrations.py --postgres
+
+      # The pytest step above validates every benchmark invariant (including the
+      # failure paths). This step is the human-facing regression report and CI
+      # artifact: it runs the real benchmark command, writes Markdown + JSON to a
+      # temporary (never committed) directory, adds a summary to the job page, and
+      # its exit status is captured so the reports upload even on failure. A later
+      # step re-raises that status so a below-threshold benchmark fails the job.
+      - name: Run Repository Intelligence golden benchmark
+        id: ri_benchmark
+        working-directory: apps/backend
+        run: |
+          mkdir -p "$RUNNER_TEMP/ri-benchmark"
+          set +e
+          python tests/benchmark/run.py --report-dir "$RUNNER_TEMP/ri-benchmark"
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Validate benchmark report contract
+        if: always() && steps.ri_benchmark.outcome != 'skipped'
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report_path = Path(os.environ["RUNNER_TEMP"]) / "ri-benchmark" / "benchmark.json"
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          scoring = report.get("scoring", {})
+          if scoring.get("status") != "scored":
+              raise SystemExit("benchmark did not publish real precision/recall measurements")
+          if scoring.get("realExtractorProvenance") is None:
+              raise SystemExit("benchmark did not publish real-extractor citation validity")
+          rendered = json.dumps(report).lower()
+          if "deferred" in rendered or "unavailable" in rendered:
+              raise SystemExit("benchmark report contains a skipped live measurement")
+          PY
+
+      - name: Upload benchmark reports
+        if: always() && steps.ri_benchmark.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ri-golden-benchmark
+          path: ${{ runner.temp }}/ri-benchmark
+          if-no-files-found: error
+
+      - name: Enforce benchmark gate
+        if: always() && steps.ri_benchmark.outcome != 'skipped'
+        run: |
+          if [ "${{ steps.ri_benchmark.outputs.status }}" != "0" ]; then
+            echo "Repository Intelligence golden benchmark failed (exit ${{ steps.ri_benchmark.outputs.status }})."
+            exit 1
+          fi
+          echo "Repository Intelligence golden benchmark passed."
+
+  prototype-acceptance:
+    name: Prototype Browser Acceptance
+    needs:
+      - frontend
+      - backend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build backend image
-        run: docker build -t partha-backend:ci apps/backend
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
 
-      - name: Validate Compose configuration
-        run: docker compose config
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
 
-      - name: Run Compose stack
-        run: docker compose up --build -d
+      - name: Install frontend
+        run: npm ci --prefix apps/frontend
 
-      - name: Verify Compose API readiness
+      - name: Install backend
         run: |
-          for attempt in {1..30}; do
-            if curl -fsS http://127.0.0.1:8000/ready; then
+          python -m pip install -r apps/backend/requirements-dev.txt
+          python -m pip install -e apps/backend --no-deps
+
+      - name: Install Chromium
+        # `--with-deps` runs `apt-get update`, which fails the whole job when
+        # any configured source has a transient bad index. The runner image
+        # pre-registers dl.google.com/linux/chrome-stable (as .list and/or
+        # deb822 .sources), and that repo has a recurring Release/Packages
+        # hash-mismatch window. Playwright downloads its own bundled Chromium
+        # from its CDN, so that repo is not needed here -- strip every apt
+        # source that points at it before the update so a Google-side hiccup
+        # can't red the acceptance job.
+        run: |
+          sudo find /etc/apt/sources.list.d -type f \
+            \( -name '*.list' -o -name '*.sources' \) \
+            -exec grep -lE 'dl\.google\.com|packages\.microsoft\.com' {} + \
+            | sudo xargs -r rm -f || true
+          sudo sed -i '/dl\.google\.com/d;/packages\.microsoft\.com/d' /etc/apt/sources.list || true
+          npm --prefix apps/frontend exec -- playwright install --with-deps chromium
+
+      - name: Run disposable-fixture browser journeys
+        run: node scripts/run-e2e-acceptance.mjs
+
+      - name: Upload browser report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-acceptance-report
+          path: |
+            apps/frontend/e2e-report
+            apps/frontend/test-results
+          if-no-files-found: warn
+          retention-days: 14
+
+  docker-build:
+    name: Docker Build
+    needs: repository-hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Validates the single-service image (#340) actually builds and boots --
+    # the render.yaml Blueprint is only as trustworthy as this Dockerfile,
+    # and neither was exercised through Render itself to write it.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t partha:ci-check .
+
+      - name: Boot the image with a production-shaped config
+        run: |
+          fernet_key=$(python3 -c "import base64,hashlib; print(base64.urlsafe_b64encode(hashlib.sha256(b'ci-check').digest()).decode())")
+          docker run -d --name partha-ci-check \
+            -p 8000:8000 \
+            -e DATABASE_URL=sqlite:////tmp/partha-ci-check.db \
+            -e STORAGE_PATH=/tmp/partha-ci-check-storage \
+            -e AUTH_SECRET_KEY=ci-check-secret-key-at-least-32-characters-long \
+            -e AI_ENCRYPTION_KEY="$fernet_key" \
+            -e APP_ENV=production \
+            -e CORS_ORIGINS=https://ci-check.example.com \
+            -e ANALYSIS_WORKER_AUTOSTART=false \
+            partha:ci-check
+
+      - name: Wait for readiness
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then
               exit 0
             fi
-            docker compose ps
-            sleep 2
+            sleep 1
           done
-          docker compose logs api postgres redis
+          echo "Service never became healthy"
+          docker logs partha-ci-check
           exit 1
 
-      - name: Stop Compose stack
+      - name: Verify the API and the mounted frontend both respond
+        run: |
+          curl -sf http://127.0.0.1:8000/health
+          curl -sf http://127.0.0.1:8000/ready
+          # A client-side route (not just "/") must resolve to the SPA shell,
+          # not a 404 -- this is the whole point of the catch-all in app.main.
+          curl -sf http://127.0.0.1:8000/dashboard | grep -qi "<!doctype html" \
+            || (echo "Frontend was not served for a client-side route" && exit 1)
+
+      - name: Container logs
         if: always()
-        run: docker compose down -v
+        run: docker logs partha-ci-check || true
+
+      - name: Stop container
+        if: always()
+        run: docker rm -f partha-ci-check || true

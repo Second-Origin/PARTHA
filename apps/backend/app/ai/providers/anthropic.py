@@ -1,9 +1,12 @@
-from app.ai.providers.http import post, require_api_key
+from app.ai.providers.http import ProviderHttpSender, post, require_api_key
 from app.ai.types import DEFAULT_MODELS, AiProviderConfig, AiProviderResponse, PromptBundle
 from app.core.exceptions import ExternalServiceError
 
 
 class AnthropicProvider:
+    def __init__(self, sender: ProviderHttpSender | None = None) -> None:
+        self.sender = sender
+
     async def complete(self, config: AiProviderConfig, prompt: PromptBundle) -> AiProviderResponse:
         require_api_key(config)
         payload = {
@@ -15,6 +18,7 @@ class AnthropicProvider:
         response = await post(
             config,
             "https://api.anthropic.com/v1/messages",
+            sender=self.sender,
             headers={"x-api-key": config.api_key or "", "anthropic-version": "2023-06-01"},
             json=payload,
         )

@@ -1,9 +1,10 @@
-import { api, streamRequest } from './client';
+import { api } from './client';
 import type { RequestConfig } from './client';
 import type {
+  AiConversationResponse,
   AiQueryRequest,
   AiQueryResponse,
-  AiStreamChunk,
+  AiProviderCapabilitiesResponse,
   AiProviderConfig,
   AiProviderPublicConfig,
   AiProviderTestRequest,
@@ -11,6 +12,10 @@ import type {
 } from './types';
 
 export const aiService = {
+  getProviders(config?: RequestConfig): Promise<AiProviderCapabilitiesResponse> {
+    return api.get('/ai/providers', config);
+  },
+
   getConfig(config?: RequestConfig): Promise<AiProviderPublicConfig> {
     return api.get('/ai/config', config);
   },
@@ -27,26 +32,8 @@ export const aiService = {
     return api.post('/ai/query', request, config);
   },
 
-  streamQuery(
-    request: AiQueryRequest,
-    onChunk: (chunk: AiStreamChunk) => void,
-    config?: RequestConfig,
-  ): Promise<void> {
-    return streamRequest(
-      '/ai/stream',
-      request,
-      (rawChunk) => {
-        const lines = rawChunk.split('\n').filter((l) => l.startsWith('data: '));
-        for (const line of lines) {
-          try {
-            const data = JSON.parse(line.slice(6)) as AiStreamChunk;
-            onChunk(data);
-          } catch {
-            onChunk({ type: 'content', content: line.slice(6) });
-          }
-        }
-      },
-      config,
-    );
+  listConversations(repositoryId: string, config?: RequestConfig): Promise<AiConversationResponse> {
+    return api.get(`/ai/conversations?repositoryId=${encodeURIComponent(repositoryId)}`, config);
   },
+
 };

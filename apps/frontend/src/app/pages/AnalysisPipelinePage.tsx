@@ -1,6 +1,6 @@
 import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Check, Loader2, Circle, XCircle, ArrowLeft } from 'lucide-react';
+import { Check, Loader2, Circle, XCircle, ArrowLeft, Ban, WifiOff, Clock } from 'lucide-react';
 import { PageHeader } from '@/shared/components/ui/PageHeader';
 import { DataSourceBadge } from '@/shared/components/ui/DataSourceBadge';
 import { useAnalysisPipeline } from '@/features/analysis/hooks/useAnalysisPipeline';
@@ -11,11 +11,6 @@ export function AnalysisPipelinePage() {
   const navigate = useNavigate();
   const analysis = useAnalysisPipeline(id);
   const repo = analysis.repository;
-
-  const handleCancel = () => {
-    analysis.cancel();
-    navigate('/repositories');
-  };
 
   if (!repo) {
     return (
@@ -44,16 +39,16 @@ export function AnalysisPipelinePage() {
         <DataSourceBadge source={analysis.source} />
       </PageHeader>
 
-      <div className="rounded-xl border border-border bg-card p-6 mb-6">
+      <div className="mb-6 rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <span className="text-2xs font-semibold text-primary uppercase tracking-[0.14em]">
             Progress
           </span>
           <span className="text-sm font-semibold text-foreground">
             {repo.analysisProgress}%
           </span>
         </div>
-        <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <div className="h-2.5 overflow-hidden rounded-full bg-accent">
           <motion.div
             className="h-full rounded-full bg-primary"
             initial={{ width: 0 }}
@@ -63,7 +58,7 @@ export function AnalysisPipelinePage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-6">
+      <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
         <div className="space-y-0">
           {analysis.stages.map((stage, index) => {
             const isCompleted = index < analysis.currentStageIndex;
@@ -79,16 +74,16 @@ export function AnalysisPipelinePage() {
                       <motion.div
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
-                        className="flex h-6 w-6 items-center justify-center rounded-full bg-success/20"
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-success/20"
                       >
                         <Check className="h-3.5 w-3.5 text-success" />
                       </motion.div>
                     ) : isCurrent ? (
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/15">
                         <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
                       </div>
                     ) : (
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent">
                         <Circle className="h-3 w-3 text-muted-foreground" />
                       </div>
                     )}
@@ -107,7 +102,7 @@ export function AnalysisPipelinePage() {
                 {!isLast && (
                   <div
                     className={cn(
-                      'absolute left-[11px] top-[34px] w-[2px] h-[14px]',
+                      'absolute left-[13px] top-[37px] w-[2px] h-[14px]',
                       isCompleted ? 'bg-success/30' : 'bg-border'
                     )}
                   />
@@ -117,6 +112,84 @@ export function AnalysisPipelinePage() {
           })}
         </div>
       </div>
+
+      {analysis.retryingConnection && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-4 rounded-xl border border-warning/50 bg-warning/5 p-4 flex items-start gap-3"
+          role="status"
+        >
+          <WifiOff className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-warning">Connection lost — retrying…</p>
+            <p className="text-xs text-warning/80 mt-0.5">
+              Analysis is still running. Reconnecting to check its progress.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
+      {analysis.connectionLost && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-4 rounded-xl border border-warning/50 bg-warning/5 p-4 flex items-start gap-3"
+          role="alert"
+        >
+          <WifiOff className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-warning">Connection lost</p>
+            <p className="text-xs text-warning/80 mt-0.5">
+              Cannot reach the PARTHA backend. The analysis job itself keeps running on the server — this
+              only affects checking its progress here.
+            </p>
+            <button
+              type="button"
+              onClick={() => analysis.retry()}
+              className="mt-2 text-xs text-primary hover:underline"
+            >
+              Retry connection
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Suppressed once cancelled: the disabled, countdown-labelled Restart
+          button below already communicates the same cooldown, and showing
+          both at once would be a redundant, slightly confusing double banner. */}
+      {analysis.rateLimited && !analysis.cancelled && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-4 rounded-xl border border-warning/50 bg-warning/5 p-4 flex items-start gap-3"
+          role="status"
+        >
+          <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-warning">
+              {analysis.rateLimitSecondsRemaining !== null
+                ? `Too many requests — retrying automatically in ${analysis.rateLimitSecondsRemaining}s`
+                : 'Still rate limited'}
+            </p>
+            <p className="text-xs text-warning/80 mt-0.5">
+              Analysis is still running server-side. This is a temporary rate limit, not a failure —
+              {analysis.rateLimitSecondsRemaining !== null
+                ? ' checking progress will resume automatically.'
+                : ' automatic retries were exhausted. Try again once the limit clears.'}
+            </p>
+            {analysis.rateLimitSecondsRemaining === null && (
+              <button
+                type="button"
+                onClick={() => analysis.retry()}
+                className="mt-2 text-xs text-primary hover:underline"
+              >
+                Retry now
+              </button>
+            )}
+          </div>
+        </motion.div>
+      )}
 
       {(repo.status === 'error' || analysis.error) && (
         <motion.div
@@ -140,14 +213,56 @@ export function AnalysisPipelinePage() {
         </motion.div>
       )}
 
-      <div className="mt-6 flex justify-start">
+      {analysis.cancelled && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-4 rounded-xl border border-border bg-muted/40 p-4 flex items-start gap-3"
+          role="status"
+        >
+          <Ban className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-foreground">Analysis cancelled</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              No further analysis work will run for this job.
+            </p>
+            <button
+              type="button"
+              onClick={() => void analysis.restart()}
+              disabled={analysis.rateLimitSecondsRemaining !== null}
+              className="mt-2 text-xs text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
+            >
+              {analysis.rateLimitSecondsRemaining !== null
+                ? `Restart analysis (wait ${analysis.rateLimitSecondsRemaining}s)`
+                : 'Restart analysis'}
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      <div className="mt-6 flex items-center justify-between gap-4">
         <button
-          onClick={handleCancel}
+          onClick={() => navigate('/repositories')}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to repositories
         </button>
+        {analysis.canCancel && (
+          <button
+            type="button"
+            onClick={() => void analysis.cancel()}
+            disabled={analysis.cancelling}
+            className="inline-flex items-center gap-2 rounded-xl border border-destructive/40 px-4 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {analysis.cancelling ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Ban className="h-4 w-4" />
+            )}
+            {analysis.cancelling ? 'Cancelling…' : 'Cancel analysis'}
+          </button>
+        )}
       </div>
     </div>
   );

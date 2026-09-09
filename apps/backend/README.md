@@ -1,44 +1,295 @@
 # PARTHA Backend
 
-FastAPI backend for repository ingestion, parsing, architecture analysis, dependency graphing, and engineering review.
+FastAPI backend for repository ingestion, Repository Intelligence, architecture and dependency analysis, engineering review, documentation generation, exports, and AI orchestration.
 
-This app lives at `apps/backend` in the PARTHA monorepo.
+All repository-derived product reads resolve an owner-scoped sealed `ri.v1`
+snapshot matching the repository's current revision. Documentation, exports,
+and free-form AI context do not read legacy JSON or rebuild from repository
+files. A missing or stale snapshot is unavailable (404), with no fallback.
+Historical `repo_metadata["intelligence"]` values may remain stored but are
+ignored. Free-form AI additionally requires a configured provider and receives
+no source-file contents.
 
-## Local Development
+This app lives at `apps/backend` in the PARTHA monorepo. For contributor workflow and engineering rules, see the root [CONTRIBUTING.md](../../CONTRIBUTING.md). For what the engine actually extracts, see [Repository Intelligence](../../docs/architecture/REPOSITORY_INTELLIGENCE.md). For a full local-setup walkthrough and troubleshooting, see [docs/DEVELOPMENT.md](../../docs/DEVELOPMENT.md).
+
+## Local development
+
+Requires Python 3.12 or 3.13 (`>=3.12,<3.14`).
 
 ```bash
 cd apps/backend
-python3.12 -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-python -m uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload --reload-dir app
 ```
 
-By default, local development uses SQLite at `.local/partha.db` and storage at `.local/storage` so the app can start without services. Docker Compose injects PostgreSQL, Redis, and container storage settings separately.
+Or from the repository root: `npm run dev:backend` (prefers `apps/backend/.venv`, falls back to `python`).
 
-Useful system endpoints:
+`--reload-dir app` restricts the reload watcher to backend source. Without it, uvicorn watches the whole `apps/backend` working directory, including `.local/storage` — the local filesystem storage the app itself writes to during ingestion and analysis — so an in-progress analysis job's own writes could trigger a server restart and drop open requests (#161). Migration files under `alembic/` are applied with an explicit `alembic upgrade` command, not hot-reloaded, so they are intentionally not watched.
+
+Local development defaults to SQLite at `.local/partha.db` and storage at `.local/storage`, so the app starts with no PostgreSQL and no Redis. **No `.env` file is required** — every setting has a working default. Copy `.env.example` to `.env` only to change one.
+
+### SQLite concurrency (development only)
+
+The durable analysis worker (a background thread) and API request handlers read and write the same SQLite file concurrently. Every SQLite connection is opened with `PRAGMA journal_mode=WAL` and a 5-second `PRAGMA busy_timeout` (`app/core/database.py`, a no-op on PostgreSQL): WAL lets a reader always see the last committed snapshot without waiting on an in-progress writer, and the busy timeout bounds the remaining writer-vs-writer wait instead of failing immediately (#162). This does not extend to multiple *processes* sharing one SQLite file; multi-process deployments should use PostgreSQL. The analysis worker's own per-stage transaction boundaries (why a stage's facts are flushed but not committed until the stage checkpoint) are documented directly in `app/workers/analysis_worker.py`'s module docstring and were deliberately left unchanged — restructuring them risks the job-recovery guarantees (leases, retries, stale-worker takeover) that same docstring exists to protect, and WAL removes the actual reader-blocking symptom without needing to.
+
+`AUTH_SECRET_KEY` falls back to a fixed insecure value when `APP_ENV` is `development` or `test`. Outside those environments the app **refuses to start** without an explicit secret of at least 32 characters:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+
+## Tests
+
+```bash
+python -m pytest          # from apps/backend
+npm run test:backend      # from the repository root
+```
+
+Tests use per-test SQLite and the in-memory rate limiter by default. When `PARTHA_TEST_PG_URL` is set, the migration round trip runs against a fresh temporary PostgreSQL database and the PostgreSQL refresh-token concurrency test is enabled; without it, migrations fall back to SQLite and the concurrency test skips. Redis integration tests skip unless `PARTHA_TEST_REDIS_URL` is set. CI provides both services.
+
+## Static analysis
+
+The runtime lockfile deliberately excludes development tooling. Install the
+pinned development toolchain before running the backend static-analysis gates:
+
+```bash
+cd apps/backend
+python -m pip install -r requirements-dev.txt
+python -m pip install -e . --no-deps
+ruff check app
+ruff format --check app
+mypy app
+```
+
+Ruff targets the production package and Python 3.12, the project's minimum
+supported Python version. Run `ruff format app` to apply the repository's
+formatter, then review the resulting diff before committing.
+
+## Migrations
+
+```bash
+alembic upgrade head
+alembic downgrade -1
+```
+
+`AUTO_CREATE_TABLES` defaults to true in `development`/`test` and false elsewhere, so non-dev environments rely on migrations rather than `create_all`. Every migration must downgrade cleanly — `tests/test_migrations.py` enforces it.
+
+Before a schema release, run the disposable [migration rehearsal](../../docs/operations/DATABASE_MIGRATION_REHEARSAL.md):
+
+```bash
+python scripts/rehearse_migrations.py
+```
+
+This validates the clean chain and the supported `0004_ai_provider_configs` baseline without touching the local or configured application database. It does not make every downgrade a data-preserving production rollback; the runbook defines the backup/restore decision path.
+
+### Local database schema drift (development/test only)
+
+`create_all` creates any table missing from the database but never alters an existing one and never advances the `alembic_version` stamp, so an existing local database can silently drift from the code after a schema-changing merge — without a check, that surfaces later as an opaque `IntegrityError`/`OperationalError` on whatever request happens to touch the drifted column or table, not as a clear migration error.
+
+To prevent that, startup in `development`/`test` compares the database's Alembic revision against head (`app/core/schema_sync.py`, wired into `app.main`'s lifespan):
+
+- **Up to date** — no action.
+- **Behind head, no physical conflict** — upgrades the database automatically (`alembic upgrade head`, run through the same in-process API `tests/test_migrations.py` uses, not the CLI) and logs exactly what it did. This is the common case after pulling a schema-changing merge.
+- **Behind head, but a pending migration's table already exists physically** — refuses to start rather than attempt an upgrade that would crash with "table already exists". This happens when `AUTO_CREATE_TABLES` built a table without ever advancing the stamp. The startup error names the conflicting table(s) and the exact recovery:
+
+  ```bash
+  cd apps/backend && .venv/bin/alembic stamp <revision>   # mark migrations already reflected physically as applied
+  cd apps/backend && .venv/bin/alembic upgrade head        # apply whatever genuinely remains pending
+  ```
+
+- **A brand-new, empty database** — `create_all` builds every table directly from the current models (by definition already head's shape), then the database is stamped at head directly; no migration body runs and no drift check is needed.
+
+Production/staging are unaffected: this check is a no-op outside `development`/`test`, so those environments keep relying on an operator running migrations explicitly.
+
+## System endpoints
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /health` | Lightweight liveness check with the current environment label. |
-| `GET /ready` | Readiness check for database connectivity and configured storage writability. |
-| `GET /metrics` | Plain-text runtime counters for request volume, status families, routes, and cumulative duration. |
+| `GET /health` | Process liveness, with the current environment label. |
+| `GET /ready` | Readiness: database connectivity and writable storage. Returns 503 when a check fails. |
+| `GET /metrics` | Plain-text counters: request volume, status families, routes, cumulative duration, rate-limit counters. |
+| `GET /docs` | OpenAPI / Swagger UI. |
 
-Backend logs default to human-readable text. Set `LOG_FORMAT=json` for structured logs in containers or hosted environments. Every request receives an `X-Request-ID` response header; pass `X-Request-ID` on inbound requests to preserve an upstream trace identifier.
+Logs default to human-readable text; set `LOG_FORMAT=json` for structured logs. Structured-log extras are redacted for keys containing `api_key`, `apikey`, `authorization`, `password`, `secret`, or `token`. Every response carries `X-Request-ID`; an inbound `X-Request-ID` is preserved.
 
-## Docker
+## Authentication
 
-```bash
-cd ../..
-docker compose up --build
-```
+`/auth` provides register, login, refresh, logout, and `/auth/me`. Passwords are hashed with Argon2; access tokens are HS256; refresh tokens rotate on every use, live in an httpOnly cookie, and reuse of a spent token revokes the whole family.
 
-Swagger UI is available at `http://localhost:8000/docs`.
+Every non-public API route requires a valid Bearer token. Repository resolution is
+owner-scoped in the service layer across analysis and all product consumers, so
+one account cannot query another account's repository or snapshots.
 
-## First Import Flow
+## AI Workspace endpoints
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /ai/providers` | Static, non-secret setup metadata for every supported provider — display name, whether it needs an API key and/or a base URL, its default model, an official setup link, and a short ordered setup checklist. Backs the frontend's provider picker so it never hardcodes provider requirements. |
+| `GET`/`PUT /ai/config` | Read or replace the caller's provider configuration. The API key is Fernet-encrypted at rest; only its last four characters are ever returned. |
+| `POST /ai/test` | Validate a configuration against the provider without storing an answer. |
+| `POST /ai/query` | Ask a question. Receives sealed-snapshot structural facts and observed paths — never source bytes or line spans — so answers carry no automatic citations. |
+| `GET /ai/conversations?repositoryId=…` | The persisted thread for one repository, oldest turn first. |
+
+Requests to a self-hosted Ollama endpoint (`/ai/test` and `/ai/query`) get a
+longer read budget (10 minutes) than the 60s applied to hosted providers: local
+model loading and CPU generation legitimately take longer, and cutting the
+connection off surfaced as "hung, then failed". A wrong or unreachable base URL
+still fails within a 10s connect timeout, and PARTHA holds Ollama to one
+in-flight request at a time (#414) since a local box has no spare parallel
+headroom.
+
+**Conversation turns are durable.** Both the question and the answer are written
+to `ai_conversation_messages`, one ordered thread per owner per repository, so
+the workspace restores its history when a user navigates away and returns
+(#231). The most recent turns are replayed to the provider as context, which is
+what makes a follow-up question resolve. Two consequences worth stating plainly:
+this is real egress of user-authored text alongside the structural context, and
+**there is no delete endpoint** — a user cannot yet clear their own thread, and
+history is removed only when the repository itself is deleted, which cascades.
+Any interface built on these routes must describe retention accurately rather
+than implying the workspace forgets.
+
+## AI provider egress
+
+AI provider traffic is centrally checked at configuration save time and again
+immediately before every outbound request. `AI_EGRESS_MODE=hosted` is the safe
+default: fixed cloud providers retain their code-owned HTTPS origins and no
+tenant-configurable endpoint is enabled. To use a trusted local or internal
+Ollama endpoint, a deployment administrator must set `AI_EGRESS_MODE=self_hosted`
+and provide both an exact `AI_EGRESS_ALLOWED_BASE_URLS` entry and matching
+`AI_EGRESS_ALLOWED_CIDRS` entry. These are not tenant settings.
+
+The sender validates every DNS answer, pins the HTTP connection to a validated
+IP while preserving the original Host/SNI name, ignores ambient proxy settings,
+and rejects redirects. A shared or hosted environment still needs an independent
+firewall, egress proxy, cloud egress rule, or mesh policy. See
+[AI provider egress policy](../../docs/security/AI_PROVIDER_EGRESS.md)
+for configuration, rollout, and migration details.
+
+For the end-to-end setup path — the Settings flow, the `ai/*` calls, the
+per-provider requirements table, and Ollama's slow-first-request behaviour —
+see [Connecting an AI provider](../../docs/operations/AI_PROVIDER_SETUP.md).
+
+## First import
 
 ```bash
 curl -X POST http://localhost:8000/repositories/github \
+  -H "Authorization: Bearer <access-token>" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://github.com/octocat/Hello-World"}'
 ```
+
+Only public GitHub HTTPS URLs are accepted. Clone/archive extraction and initial
+file-tree parsing finish before the import response. Submit analysis separately;
+the start endpoint returns immediately after durably enqueueing the work:
+
+```bash
+curl -X POST http://localhost:8000/analysis/<repository-id>/start \
+  -H "Authorization: Bearer <access-token>"
+```
+
+### Analysis job lifecycle
+
+Analysis jobs have exactly five observable states: `queued`, `running`,
+`completed`, `failed`, and `cancelled`. The API-process lifespan starts a daemon
+worker thread; no separate worker deployment is required. Progress advances only
+at completed pipeline stages. Failed work retries with bounded exponential
+backoff up to the job's attempt limit, then becomes `failed`.
+
+`POST /analysis/{repository_id}/cancel` cancels queued work immediately and
+requests cooperative cancellation of running work. Workers renew a guarded
+database lease periodically during stages as well as at stage boundaries, so
+long-running analysis remains owned and cancellation is noticed promptly.
+Startup and periodic stale job sweeps reclaim expired leases, fail orphaned
+building snapshots, and either
+requeue or fail the job within its attempt budget. If a process dies after a
+snapshot was sealed but before the job completion commit, the sweep reconciles
+the job to `completed` without producing a duplicate snapshot.
+
+Operational settings are `ANALYSIS_WORKER_AUTOSTART`,
+`ANALYSIS_JOB_POLL_INTERVAL_SECONDS`, and `ANALYSIS_JOB_LEASE_SECONDS`.
+Each job also fails closed when it exceeds
+`ANALYSIS_MAX_REPOSITORY_SOURCE_BYTES`, `ANALYSIS_MAX_PROCESS_RSS_BYTES`, or
+`ANALYSIS_MAX_DURATION_SECONDS`. Resource breaches are terminal
+`resource_exceeded` failures rather than retries, because replaying the same
+repository under the same limits cannot succeed.
+
+Repository responses include first-class source identity:
+
+```json
+{
+  "revision": {
+    "kind": "git",
+    "value": "0123456789abcdef0123456789abcdef01234567",
+    "ref": "refs/heads/main"
+  },
+  "commitSha": "0123456789abcdef0123456789abcdef01234567"
+}
+```
+
+For uploads, `kind` is `upload`, `value` is `sha256:<64 lowercase hex>`, and `ref` is `null`. `commitSha` remains a compatibility alias of `revision.value`; authoritative identity lives in the indexed revision columns, not `repo_metadata`. Re-importing the same source at a new commit or a changed archive creates a new repository revision.
+
+## Snapshot-backed product endpoints
+
+Architecture, Engineering Review, and Insights resolve the authenticated
+owner's latest sealed `ri.v1` snapshot and bind every response to its exact
+repository revision and snapshot identity.
+
+- `GET /analysis/{repository_id}/architecture` returns the normalized graph and
+  provenance manifest.
+- `GET /analysis/{repository_id}/review` returns
+  `engineering-review.v2`: deterministic, evidence-linked findings and explicit
+  assessed/not-assessed category states. It emits no score, grade, or invented
+  metric.
+- `GET /analysis/{repository_id}/insights` returns `repository-insights.v1`:
+  defined snapshot counts, breakdowns, diagnostics, extractor coverage, and
+  provenance. Change history is explicitly unavailable until comparable
+  snapshots are implemented.
+- `GET /analysis/{repository_id}/dependencies` returns `dependency-graph.v2`:
+  sealed-snapshot dependency nodes, declarations (with manifest path and line
+  span merged across manifests, #156), and resolved `depends_on` edges. It
+  does not provide vulnerability or outdated-package scanning.
+- `GET /analysis/{repository_id}/architecture/authentication` returns the cited
+  authentication subgraph. Coverage is limited to supported Python/FastAPI
+  patterns.
+- `GET /analysis/{repository_id}/evidence` returns the stored evidence for a
+  fact in the current snapshot, which is what lets a UI prove a citation
+  instead of asserting one.
+- `GET /analysis/{repository_id}/revision-manifest` and its `/verify` companion
+  expose the snapshot's revision identity and canonical graph hash. The digest
+  detects content differences inside this deployment; it is **not** a signature
+  or a proof of authorship.
+
+## Repository and job endpoints
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /repositories/upload`, `POST /repositories/github` | Import an archive or a public GitHub URL. Extraction and file-tree parsing complete before the response. |
+| `GET /repositories`, `GET /repositories/{id}` | Owner-scoped listing and detail. The list is not paginated: it returns every repository the caller owns. |
+| `GET /repositories/{id}/file` | Path-checked bounded preview for the explorer. Feeds no analysis. |
+| `GET /repositories/{id}/lineage` | Ordered repository-lineage history (RFC-0002). A standalone (unlineaged) repository returns `isLineaged: false` and itself as the only entry. |
+| `DELETE /repositories/{id}` | Deletes the repository and cascades to its snapshots and conversation turns. |
+| `POST /analysis/{id}/start`, `POST /analysis/{id}/cancel`, `GET /analysis/{id}/status` | Durable job lifecycle, described above. |
+| `POST /documentation/generate` | Structural documentation from the sealed snapshot. |
+| `POST /export` | One JSON/Markdown/HTML/PDF pipeline over output that already exists; it never re-analyses. |
+
+## Repository Intelligence query API
+
+`/intelligence/v1/snapshots/{snapshot_id}` is the versioned read API over a
+sealed snapshot, addressed by snapshot rather than by repository, and
+owner-scoped like every other route. It is the interface a consumer should
+build on rather than reaching into `ri_*` tables directly — storage and indexes
+are implementation details, the API is the contract.
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /{snapshot_id}` | Snapshot metadata: revision identity, schema version, producer version set, config hash, canonical graph hash. |
+| `GET /{snapshot_id}/symbols` | Paginated nodes. |
+| `GET /{snapshot_id}/neighbours` | Adjacent nodes across resolved edges. |
+| `GET /{snapshot_id}/references` | Where a node is referenced. |
+| `GET /{snapshot_id}/paths` | Resolved paths between nodes. |
+| `GET /{snapshot_id}/impact` | Directional traversal over resolved import and dependency edges. It does **not** compare revisions or calculate churn — this is reachability within one snapshot, not change impact over time. |
+| `GET /{snapshot_id}/assertions` | Inferred assertions, kept separate from observed facts, each with its derivation chain. |
+| `GET /{snapshot_id}/evidence` | Stored evidence for a fact, with its exact span in the stored revision. |

@@ -1,0 +1,41 @@
+{
+  "schemaVersion":"ri-benchmark.v1","fixtureId":"real-ts-http-clients","fixtureClass":"realistic","language":"typescript",
+  "title":"Realistic TypeScript — fetch and axios call sites","description":"fetch and a default-imported axios client with literal absolute URLs resolve to one service identity, while a template literal with a substitution stays a diagnostic and keeps only its generic call observation.",
+  "sourceRoot":".","revisionIdentity":"upload-sha256","producerVersionSet":["repository-inventory@1.1.0","typescript-ast@1.2.0"],
+  "constructsCovered":["ts.module","ts.directory_module","ts.async_function","ts.import","ts.export","ts.http_fetch","ts.http_axios","ts.http_dynamic"],"deterministic":true,
+  "expected":{"nodes":[
+    {"nodeKind":"repository","stableKey":"repo:root","name":"repository","evidence":[{"path":"src/api.ts","startLine":1,"endLine":1,"extractor":"repository-inventory","extractorVersion":"1.1.0"}]},
+    {"nodeKind":"file","stableKey":"file:src/api.ts","properties":{"content_sha256":"sha256:7f1e915ddddf2ddacd7184f115fa0c7d92b1a8b41c67f82844fdd76391c67e4f"},"name":"api.ts","language":"typescript","constructs":["ts.module"],"evidence":[{"path":"src/api.ts","startLine":1,"endLine":18,"granularity":"file","extractor":"typescript-ast","extractorVersion":"1.2.0"}]},
+    {"nodeKind":"module","stableKey":"mod:src","name":"src","constructs":["ts.directory_module"],"evidence":[{"path":"src/api.ts","startLine":1,"endLine":18,"granularity":"file","extractor":"typescript-ast","extractorVersion":"1.2.0"}]},
+    {"nodeKind":"symbol","stableKey":"src/api.ts::listUsers","name":"listUsers","language":"typescript","properties":{"exported":true},"constructs":["ts.async_function","ts.export"],"evidence":[{"path":"src/api.ts","startLine":3,"endLine":5,"extractor":"typescript-ast","extractorVersion":"1.2.0"}]},
+    {"nodeKind":"symbol","stableKey":"src/api.ts::createUser","name":"createUser","language":"typescript","properties":{"exported":true},"constructs":["ts.async_function","ts.export"],"evidence":[{"path":"src/api.ts","startLine":7,"endLine":9,"extractor":"typescript-ast","extractorVersion":"1.2.0"}]},
+    {"nodeKind":"symbol","stableKey":"src/api.ts::deleteUser","name":"deleteUser","language":"typescript","properties":{"exported":true},"constructs":["ts.async_function","ts.export"],"evidence":[{"path":"src/api.ts","startLine":11,"endLine":13,"extractor":"typescript-ast","extractorVersion":"1.2.0"}]},
+    {"nodeKind":"symbol","stableKey":"src/api.ts::probe","name":"probe","language":"typescript","properties":{"exported":true},"constructs":["ts.async_function","ts.export"],"evidence":[{"path":"src/api.ts","startLine":15,"endLine":17,"extractor":"typescript-ast","extractorVersion":"1.2.0"}]},
+
+    {"comment":"The same origin the Python fixture observes, proving the service identity is language-neutral: no language field, and one node for three call sites.",
+     "nodeKind":"service","stableKey":"svc:https://api.example.com","name":"https://api.example.com","properties":{"origin":"https://api.example.com"},"constructs":["ts.http_fetch","ts.http_axios"],"evidence":[
+      {"path":"src/api.ts","startLine":4,"endLine":4,"extractor":"typescript-ast","extractorVersion":"1.2.0"},
+      {"path":"src/api.ts","startLine":8,"endLine":8,"extractor":"typescript-ast","extractorVersion":"1.2.0"},
+      {"path":"src/api.ts","startLine":12,"endLine":12,"extractor":"typescript-ast","extractorVersion":"1.2.0"}]}
+  ],"edges":[],"observations":[
+    {"observedKind":"import","subjectKind":"file","subjectKey":"file:src/api.ts","referentText":"axios","ordinal":1,"constructs":["ts.import"],"evidence":{"path":"src/api.ts","startLine":1,"endLine":1,"extractor":"typescript-ast","extractorVersion":"1.2.0"}},
+    {"observedKind":"import_binding","subjectKind":"file","subjectKey":"file:src/api.ts","referentText":"axios|default|client","ordinal":1,"constructs":["ts.import"],"evidence":{"path":"src/api.ts","startLine":1,"endLine":1,"extractor":"typescript-ast","extractorVersion":"1.2.0"}},
+    {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/api.ts::listUsers","ordinal":1,"constructs":["ts.async_function"],"evidence":{"path":"src/api.ts","startLine":3,"endLine":5,"extractor":"typescript-ast","extractorVersion":"1.2.0"}},
+    {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/api.ts::createUser","ordinal":1,"constructs":["ts.async_function"],"evidence":{"path":"src/api.ts","startLine":7,"endLine":9,"extractor":"typescript-ast","extractorVersion":"1.2.0"}},
+    {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/api.ts::deleteUser","ordinal":1,"constructs":["ts.async_function"],"evidence":{"path":"src/api.ts","startLine":11,"endLine":13,"extractor":"typescript-ast","extractorVersion":"1.2.0"}},
+    {"observedKind":"definition","subjectKind":"symbol","subjectKey":"src/api.ts::probe","ordinal":1,"constructs":["ts.async_function"],"evidence":{"path":"src/api.ts","startLine":15,"endLine":17,"extractor":"typescript-ast","extractorVersion":"1.2.0"}},
+
+    {"comment":"fetch(input) with no init is a GET by specification, so the method is proven by the call shape rather than assumed.",
+     "observedKind":"http_call","subjectKind":"file","subjectKey":"file:src/api.ts","referentText":"GET|https://api.example.com|/v1/users","ordinal":1,"constructs":["ts.http_fetch"],"evidence":{"path":"src/api.ts","startLine":4,"endLine":4,"extractor":"typescript-ast","extractorVersion":"1.2.0"}},
+    {"comment":"A literal method in an inline init object overrides the GET default.",
+     "observedKind":"http_call","subjectKind":"file","subjectKey":"file:src/api.ts","referentText":"POST|https://api.example.com|/v1/users","ordinal":1,"constructs":["ts.http_fetch"],"evidence":{"path":"src/api.ts","startLine":8,"endLine":8,"extractor":"typescript-ast","extractorVersion":"1.2.0"}},
+    {"comment":"axios reached through the local name its default import bound.",
+     "observedKind":"http_call","subjectKind":"file","subjectKey":"file:src/api.ts","referentText":"DELETE|https://api.example.com|/v1/users/1","ordinal":1,"constructs":["ts.http_axios"],"evidence":{"path":"src/api.ts","startLine":12,"endLine":12,"extractor":"typescript-ast","extractorVersion":"1.2.0"}},
+
+    {"comment":"Only the unproven call site keeps a generic call observation. The three proven fetch/axios sites above emit an http_call instead, so no line is counted twice.",
+     "observedKind":"call","subjectKind":"file","subjectKey":"file:src/api.ts","referentText":"fetch","ordinal":1,"constructs":["ts.http_dynamic"],"evidence":{"path":"src/api.ts","startLine":16,"endLine":16,"extractor":"typescript-ast","extractorVersion":"1.2.0"}}
+  ],"assertions":[],"diagnostics":[
+    {"comment":"A template literal with a substitution is not a literal destination.",
+     "code":"RI-EXT-UNSUPPORTED","category":"unsupported construct","severity":"info","message":"dynamic HTTP destination is unsupported","producer":"typescript-ast@1.2.0","path":"src/api.ts","span":{"startLine":16,"endLine":16},"subject":"file:src/api.ts","constructs":["ts.http_dynamic"]}
+  ]}
+}
