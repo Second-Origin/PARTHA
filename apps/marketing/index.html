@@ -11,14 +11,18 @@
     <title>PARTHA — Repository Intelligence</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- Brand foundations v1: Montserrat Alternates = display / headings /
+         buttons, Proza Libre = all reading text, Cormorant Upright = one
+         editorial accent. The handoff treats fallback rendering as a failure
+         for approved marketing output, so the real weights are loaded here. -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat+Alternates:wght@500;600;700&family=Proza+Libre:ital,wght@0,400;0,500;1,400&family=Cormorant+Upright:ital,wght@0,400;0,500;0,600;1,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <style>
       /* Ported from apps/frontend/index.html (#382): prevents a white flash
          behind the landing artwork before React mounts and App's own
          scoped .landing-dark class takes over. This whole site is the
          landing page, so unlike the real app there's no pathname check. */
       html[data-landing-theme-boot='dark'] body {
-        background: #000;
+        background: #150b12;
       }
     </style>
     <script>

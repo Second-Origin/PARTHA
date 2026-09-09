@@ -69,7 +69,7 @@ export function DemoModal({ onClose }: { onClose: () => void }) {
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-accent px-3 py-1 text-2xs font-semibold uppercase tracking-[0.14em] text-primary">
             Scripted simulation · sample repository
           </div>
-          <h2 id="demo-modal-title" className="text-2xl font-semibold text-foreground">
+          <h2 id="demo-modal-title" className="font-display text-2xl font-semibold text-foreground">
             See what a PARTHA analysis produces
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">

@@ -32,7 +32,7 @@ export function RunItYourselfModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-start justify-between gap-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Run it yourself</p>
-            <h2 id="run-it-yourself-title" className="mt-2 text-xl font-semibold text-foreground">
+            <h2 id="run-it-yourself-title" className="font-display mt-2 text-xl font-semibold text-foreground">
               Analyze your own repository
             </h2>
           </div>

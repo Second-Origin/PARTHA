@@ -52,6 +52,8 @@ export default {
           DEFAULT: 'hsl(var(--popover))',
           foreground: 'hsl(var(--popover-foreground))',
         },
+        // Foundations v1: Burnt Orange for selective secondary emphasis.
+        'burnt-orange': 'hsl(var(--burnt-orange))',
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -59,8 +61,14 @@ export default {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        // Foundations v1 typography roles. `sans` is the default body/reading
+        // family (Proza Libre); `display` is the brand/heading/button family
+        // (Montserrat Alternates); `accent` is Cormorant Upright, for a single
+        // expressive landing phrase only.
+        sans: ['"Proza Libre"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['"Montserrat Alternates"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        accent: ['"Cormorant Upright"', 'ui-serif', 'Georgia', 'serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       fontSize: {
         '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
