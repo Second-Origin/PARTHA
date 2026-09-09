@@ -22,6 +22,29 @@ Warnings remain in a completed snapshot. They are part of the canonical graph
 hash and make missing knowledge visible; they are never replaced by a guessed
 edge.
 
+### How read consumers present unresolved warnings
+
+The sealed warnings are never edited, but the read models classify them before
+display so a healthy analysis does not read as broken. An `RI-RES-UNRESOLVED`
+whose target is the standard library / language platform (a builtin call, a
+`pathlib` import) or a package the repository declares as a dependency
+(`jsonify` from Flask, `useState` from React) is an *expected* reference into
+code outside the analysed repository, not a coverage gap:
+
+- **Repository Insights** counts those as
+  `diagnostics.relationships.external-references`; the headline
+  `diagnostics.relationships.unresolved` is then only the genuine in-repo gaps
+  (a relative import that matched no file, a bare name with no binding and no
+  same-file definition). The raw `RI-RES-UNRESOLVED` total stays visible under
+  "Diagnostics by code", and the two buckets always sum to it.
+- **Architecture** does not mark a module `unresolved` for those references and
+  omits them from its diagnostics list. `RI-RES-AMBIGUOUS` and in-repo
+  `RI-RES-UNRESOLVED` gaps still flag the module.
+
+The classifier is `app/insights/relationship_diagnostics.py`, shared by both
+consumers; it reuses the review layer's `import_dispositions` judgment (#412)
+and reads sealed rows only.
+
 ## Stored observation contract
 
 | Observation | Extracted input | Resolved predicate |

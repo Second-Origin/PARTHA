@@ -132,6 +132,14 @@ one account cannot query another account's repository or snapshots.
 | `POST /ai/query` | Ask a question. Receives sealed-snapshot structural facts and observed paths — never source bytes or line spans — so answers carry no automatic citations. |
 | `GET /ai/conversations?repositoryId=…` | The persisted thread for one repository, oldest turn first. |
 
+Requests to a self-hosted Ollama endpoint (`/ai/test` and `/ai/query`) get a
+longer read budget (10 minutes) than the 60s applied to hosted providers: local
+model loading and CPU generation legitimately take longer, and cutting the
+connection off surfaced as "hung, then failed". A wrong or unreachable base URL
+still fails within a 10s connect timeout, and PARTHA holds Ollama to one
+in-flight request at a time (#414) since a local box has no spare parallel
+headroom.
+
 **Conversation turns are durable.** Both the question and the answer are written
 to `ai_conversation_messages`, one ordered thread per owner per repository, so
 the workspace restores its history when a user navigates away and returns
@@ -159,6 +167,10 @@ and rejects redirects. A shared or hosted environment still needs an independent
 firewall, egress proxy, cloud egress rule, or mesh policy. See
 [AI provider egress policy](../../docs/security/AI_PROVIDER_EGRESS.md)
 for configuration, rollout, and migration details.
+
+For the end-to-end setup path — the Settings flow, the `ai/*` calls, the
+per-provider requirements table, and Ollama's slow-first-request behaviour —
+see [Connecting an AI provider](../../docs/operations/AI_PROVIDER_SETUP.md).
 
 ## First import
 

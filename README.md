@@ -242,6 +242,7 @@ Do not expose the development configuration directly to the public internet. Rev
 - [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) — extraction, snapshot, consumer, and evidence rules.
 - [Accepted `ri.v1` RFC](docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md) — the versioned snapshot contract.
 - [Repository Lineage RFC](docs/architecture/REPOSITORY_LINEAGE_RFC.md) — accepted design (RFC-0002) for grouping repeated imports of the same repository into a durable lineage, implemented per [#299](https://github.com/Second-Origin/PARTHA/issues/299): the `repository_lineages` table, owner-scoped grouping, and duplicate-revision detection all exist and run on every import. No read API or UI surface exists yet — see [#400](https://github.com/Second-Origin/PARTHA/issues/400).
+- [Connecting an AI provider](docs/operations/AI_PROVIDER_SETUP.md) — the Settings and `ai/*` API setup path, per-provider requirements, the egress-policy prerequisite for a local Ollama endpoint, and Ollama's slow-first-request behaviour.
 - [Backend guide](apps/backend/README.md) and [frontend guide](apps/frontend/README.md) — area-specific setup and commands.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — fork-first workflow, issue claiming, branch conventions, validation, and pull-request requirements.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — expected conduct.

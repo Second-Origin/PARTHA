@@ -230,10 +230,10 @@ speculative edges.
 
 | Consumer | Module | Reads |
 | --- | --- | --- |
-| Architecture | `app/analysis/architecture.py` | exclusively the sealed snapshot query layer — nodes, resolved edges, `classified_as` assertions, diagnostics, and evidence. No legacy `repo_metadata['intelligence']` read. |
+| Architecture | `app/analysis/architecture.py` | exclusively the sealed snapshot query layer — nodes, resolved edges, `classified_as` assertions, diagnostics, and evidence. An `RI-RES-UNRESOLVED` whose target is a declared dependency or the language platform is not treated as a module relationship gap. No legacy `repo_metadata['intelligence']` read. |
 | Authentication explanation (#95) | `app/analysis/authentication.py` | exclusively the sealed snapshot query layer — routes, `routes_to`/`injects`/`calls` edges, `classified_as` assertions, diagnostics. No legacy read. |
 | Engineering review | `app/review/` | exclusively one sealed snapshot — diagnostics promoted only when an exact same-snapshot fact and evidence span exist; manifest identity; no legacy read and no scores. |
-| Repository insights | `app/insights/` | exclusively one sealed snapshot — defined node, relationship, evidence, diagnostic, language, coverage, and extractor counts; no legacy read. |
+| Repository insights | `app/insights/` | exclusively one sealed snapshot — defined node, relationship, evidence, diagnostic, language, coverage, and extractor counts, with unresolved relationships split into genuine in-repo gaps and expected external references; no legacy read. |
 | Dependency graph (#158) | `app/graph/` | exclusively one sealed snapshot — `dependency` nodes and resolved `depends_on` edges, with declarations merged across manifests (#156) and lockfile resolutions merged onto the same identity (#209); no legacy read. |
 | Documentation | `app/services/documentation_service.py` | current-revision sealed projection: observed paths/languages, heuristic roles/modules, routes, dependencies/declarations, diagnostics, and snapshot identity |
 | AI | `app/ai/repository_context.py` | the same sealed projection; structural facts only, with no source-file contents or fabricated citations |
