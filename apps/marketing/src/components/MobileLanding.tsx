@@ -1,33 +1,31 @@
 import type { ReactNode } from 'react';
-import {
-  ArrowRight,
-  BarChart3,
-  Boxes,
-  ClipboardCheck,
-  ExternalLink,
-  FileText,
-  Network,
-  Play,
-  Plus,
-  Sparkles,
-} from 'lucide-react';
+import { ArrowRight, ExternalLink, Play, Plus } from 'lucide-react';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { cn } from '@/utils/cn';
 import type { useLandingTheme } from '@/hooks/useLandingTheme';
 import { faqAnswers, faqQuestions } from '@/data/faq';
 import { DISCORD_URL, FOOTER_COLUMNS } from '@/data/site';
 import parthaLogo from '@/assets/partha-logo.svg';
+import heroVisual from '@/assets/landing/mobile-hero-visual.svg';
+import accentStar from '@/assets/landing/mobile-accent-star.svg';
+import blob from '@/assets/landing/mobile-blob.svg';
+import storySystem from '@/assets/landing/mobile-story-system.svg';
+import storyEvidence from '@/assets/landing/mobile-story-evidence.svg';
+import storyLimits from '@/assets/landing/mobile-story-limits.svg';
+import step1 from '@/assets/landing/mobile-step-1.svg';
+import step2 from '@/assets/landing/mobile-step-2.svg';
+import step3 from '@/assets/landing/mobile-step-3.svg';
 
 /**
  * Phone / tablet layout for the landing page (< 1024px). The authored 1728-wide
- * design canvas only shrinks on a narrow screen, so below `lg` App.tsx renders
- * this instead. It follows PARTHA Foundations v1: Montserrat Alternates
- * (`font-display`) for headings and buttons, Proza Libre (`font-sans`) for all
+ * design canvas only shrinks on a narrow screen, so App.tsx renders this below
+ * `lg`. It follows PARTHA Foundations v1 -- Montserrat Alternates
+ * (`font-display`) for headings and buttons, Proza Libre (`font-sans`) for
  * reading text, Cormorant Upright (`font-accent`) for one expressive phrase,
- * and the four brand colours in their assigned roles -- Signal Orange for the
- * CTA and focus moments only, Deep Blue for architecture / technical, Deep Plum
- * for headlines and body, on ~70% neutral surface. Same content and dialogs as
- * desktop; the 3.3 MB design SVG never loads here.
+ * the four brand colours in their roles, ~70% neutral surface -- and composes
+ * the designer's own illustration assets (hero visual, product-story graphics,
+ * how-it-works steps). Same content and dialogs as desktop; the 3.3 MB design
+ * SVG never loads here.
  */
 interface MobileLandingProps {
   theme: ReturnType<typeof useLandingTheme>;
@@ -41,38 +39,56 @@ const STORY_CARDS = [
     label: 'System view',
     title: 'See how the system fits together',
     body: 'Modules, dependencies, routes, and relationships, mapped from one repository model rather than a parser per feature.',
+    art: storySystem,
+    artAlt: 'A resolved graph of services — database, web service, auth service, API gateway — connected by dependency edges.',
   },
   {
     tone: 'orange' as const,
     label: 'Source evidence',
     title: 'Know where every finding came from',
     body: 'Every supported fact traces to the exact file, symbol, line span, and revision it was extracted from.',
+    art: storyEvidence,
+    artAlt: 'An AuthService finding linked to auth.service.ts, the login() symbol, lines 12–19, at a specific revision.',
   },
   {
     tone: 'neutral' as const,
     label: 'Honest by default',
     title: 'Honest about its limits',
     body: 'The same revision always seals the same snapshot, and anything that could not be assessed stays visibly unassessed.',
+    art: storyLimits,
+    artAlt: 'An assessment summary: items extracted, items partially assessed, and items explicitly not assessed.',
   },
 ];
 
 const STEPS = [
-  { title: 'Add a repository', body: 'Upload a ZIP/TAR archive or import a public GitHub repository over HTTPS.' },
-  { title: 'Run analysis', body: 'A durable background job seals an immutable snapshot for that exact revision.' },
+  {
+    title: 'Add a repository',
+    body: 'Upload a ZIP/TAR archive or import a public GitHub repository over HTTPS.',
+    art: step1,
+    artAlt: 'A repository and a revision resolving into one sealed snapshot.',
+  },
+  {
+    title: 'Run analysis',
+    body: 'A durable background job extracts files, symbols, dependencies, and relationships, then seals an immutable snapshot for that exact revision.',
+    art: step2,
+    artAlt: 'Files, symbols, dependencies, and relationships extracted into the repository model.',
+  },
   {
     title: 'Inspect it from every angle',
     body: 'Architecture, Dependencies, Engineering Review, Insights, and Documentation all read that one shared model.',
+    art: step3,
+    artAlt: 'A finding traced through the model to its evidence in source.',
   },
 ];
 
 const CAPABILITIES = [
-  { icon: Network, title: 'Architecture', body: 'A snapshot-backed module and relationship graph. Heuristic layers are labelled as heuristic.' },
-  { icon: Boxes, title: 'Dependency Graph', body: 'Direct declarations from three manifest formats and pins from two lockfiles, on one identity.' },
-  { icon: ClipboardCheck, title: 'Engineering Review', body: 'Evidence-addressed findings only. No overall score, grade, or health percentage.' },
-  { icon: BarChart3, title: 'Repository Insights', body: 'Defined counts, ratios, diagnostics, and extraction coverage from one sealed snapshot.' },
-  { icon: FileText, title: 'Documentation & exports', body: 'Structural docs plus JSON, Markdown, HTML, and PDF exports from the shared model.' },
-  { icon: Sparkles, title: 'Optional AI', body: 'A provider you configure receives structural facts only — never source bytes or line spans.' },
-];
+  ['Architecture', 'A snapshot-backed module and relationship graph. Heuristic layers are labelled as heuristic.'],
+  ['Dependency Graph', 'Direct declarations from three manifest formats and pins from two lockfiles, on one identity.'],
+  ['Engineering Review', 'Evidence-addressed findings only. No overall score, grade, or health percentage.'],
+  ['Repository Insights', 'Defined counts, ratios, diagnostics, and extraction coverage from one sealed snapshot.'],
+  ['Documentation & exports', 'Structural docs plus JSON, Markdown, HTML, and PDF exports from the shared model.'],
+  ['Optional AI', 'A provider you configure receives structural facts only — never source bytes or line spans.'],
+] as const;
 
 const BTN_BASE =
   'inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-display text-sm font-semibold transition-colors';
@@ -106,7 +122,7 @@ function SecondaryButton({ children, onClick, href }: { children: ReactNode; onC
   );
 }
 
-function SectionHeading({ children, id }: { children: ReactNode; id: string }) {
+function SectionHeading({ id, children }: { id: string; children: ReactNode }) {
   return (
     <h3
       id={id}
@@ -114,6 +130,16 @@ function SectionHeading({ children, id }: { children: ReactNode; id: string }) {
     >
       {children}
     </h3>
+  );
+}
+
+/** Wraps a designer illustration so the (light-surfaced) art keeps a consistent
+ * frame in both themes without fighting its own internal background. */
+function Illustration({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  return (
+    <div className="mt-5 flex justify-center rounded-2xl bg-foreground/[0.03] p-4">
+      <img src={src} alt={alt} loading="lazy" className={cn('h-auto w-full max-w-xs', className)} />
+    </div>
   );
 }
 
@@ -135,10 +161,15 @@ export function MobileLanding({ theme, onOpenDemo, onOpenRunItYourself }: Mobile
       </header>
 
       {/* Hero */}
-      <section id="top" className="relative isolate pt-14 sm:pt-20">
-        <div aria-hidden="true" className="absolute -left-24 -top-8 -z-10 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+      <section id="top" className="relative isolate -mx-5 overflow-hidden px-5 pt-14 sm:pt-20">
+        <img
+          src={heroVisual}
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-20 -top-6 -z-10 w-[22rem] max-w-none opacity-90"
+        />
         <span className="inline-flex items-center gap-2 rounded-full border border-foreground/15 px-3 py-1 font-sans text-2xs font-medium uppercase tracking-[0.16em] text-burnt-orange">
-          <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+          <img src={accentStar} alt="" aria-hidden="true" className="h-3 w-3" />
           Repository intelligence system
         </span>
         <h2 className="mt-5 font-display text-[2.5rem] font-bold leading-[1.08] tracking-tight text-foreground sm:text-[3.25rem]">
@@ -167,13 +198,13 @@ export function MobileLanding({ theme, onOpenDemo, onOpenRunItYourself }: Mobile
           Meet <span className="font-accent text-[2.6rem] font-medium italic leading-none text-primary">Partha</span>
         </p>
 
-        <div className="mt-8 space-y-4">
+        <div className="mt-8 space-y-5">
           {STORY_CARDS.map((card) => (
             <article
               key={card.label}
               className={cn(
                 'rounded-3xl border p-6',
-                card.tone === 'blue' && 'border-secondary/25 bg-secondary/[0.08]',
+                card.tone === 'blue' && 'border-secondary/25 bg-secondary/[0.07]',
                 card.tone === 'orange' && 'border-primary/20 bg-accent',
                 card.tone === 'neutral' && 'border-border bg-card',
               )}
@@ -188,6 +219,7 @@ export function MobileLanding({ theme, onOpenDemo, onOpenRunItYourself }: Mobile
               </p>
               <h4 className="mt-2 font-display text-xl font-semibold leading-snug text-foreground">{card.title}</h4>
               <p className="mt-2 font-sans text-sm leading-[1.55] text-muted-foreground">{card.body}</p>
+              <Illustration src={card.art} alt={card.artAlt} />
             </article>
           ))}
         </div>
@@ -198,14 +230,17 @@ export function MobileLanding({ theme, onOpenDemo, onOpenRunItYourself }: Mobile
         <SectionHeading id="how-it-works">How it works</SectionHeading>
         <ol className="mt-6 space-y-4">
           {STEPS.map((step, index) => (
-            <li key={step.title} className="flex gap-4 rounded-2xl border border-border bg-card p-5">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary/12 font-display text-sm font-bold text-secondary">
-                {index + 1}
-              </span>
-              <div>
-                <p className="font-display text-base font-semibold text-foreground">{step.title}</p>
-                <p className="mt-1 font-sans text-sm leading-[1.55] text-muted-foreground">{step.body}</p>
+            <li key={step.title} className="rounded-2xl border border-border bg-card p-5">
+              <div className="flex gap-4">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary/12 font-display text-sm font-bold text-secondary">
+                  {index + 1}
+                </span>
+                <div>
+                  <p className="font-display text-base font-semibold text-foreground">{step.title}</p>
+                  <p className="mt-1 font-sans text-sm leading-[1.55] text-muted-foreground">{step.body}</p>
+                </div>
               </div>
+              <Illustration src={step.art} alt={step.artAlt} className="max-w-[15rem]" />
             </li>
           ))}
         </ol>
@@ -214,17 +249,14 @@ export function MobileLanding({ theme, onOpenDemo, onOpenRunItYourself }: Mobile
       {/* Capabilities */}
       <section className="mt-16">
         <SectionHeading id="capabilities">Capabilities</SectionHeading>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          {CAPABILITIES.map(({ icon: Icon, title, body }) => (
-            <div key={title} className="rounded-2xl border border-border bg-card p-5">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/10 text-secondary">
-                <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
-              </span>
-              <p className="mt-3 font-display text-base font-semibold text-foreground">{title}</p>
+        <ul className="mt-6 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+          {CAPABILITIES.map(([title, body]) => (
+            <li key={title} className="p-5">
+              <p className="font-display text-base font-semibold text-foreground">{title}</p>
               <p className="mt-1 font-sans text-sm leading-[1.55] text-muted-foreground">{body}</p>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
 
       {/* FAQ */}
@@ -247,7 +279,13 @@ export function MobileLanding({ theme, onOpenDemo, onOpenRunItYourself }: Mobile
       </section>
 
       {/* CTA */}
-      <section className="mt-16 rounded-[2rem] border border-primary/20 bg-accent p-7">
+      <section className="relative isolate mt-16 overflow-hidden rounded-[2rem] border border-primary/20 bg-accent p-7">
+        <img
+          src={blob}
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-10 -right-8 -z-10 w-40 opacity-[0.08]"
+        />
         <h3 className="font-display text-2xl font-semibold tracking-tight text-foreground">Run PARTHA on your own code</h3>
         <p className="mt-2 font-sans text-sm leading-[1.6] text-muted-foreground">
           It&apos;s open source and self-hosted — no waitlist, no hosted service. Fork it, run it locally, and point it
