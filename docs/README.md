@@ -26,8 +26,9 @@ are point-in-time evidence, not current-state documentation.
 | [Repository Lineage RFC](architecture/REPOSITORY_LINEAGE_RFC.md) | Contributors on the intelligence track | **Accepted design, implemented** (RFC-0002, tracking [#298](https://github.com/Second-Origin/PARTHA/issues/298)) for owner-scoped repository lineage identity, unlineaged standalone imports, 1-based never-reused sequence allocation, deletion behavior, and database-enforced membership integrity. Landed in [#299](https://github.com/Second-Origin/PARTHA/pull/372) (migrations `0013_lineage_expand` / `0014_lineage_constraints`); the `GET /repositories/{id}/lineage` read API ([#400](https://github.com/Second-Origin/PARTHA/pull/407)) and the repository-detail Lineage History UI followed. Refresh and cross-revision comparison on top of a lineage are not built. Revision identity remains governed by RFC-0001 §3. |
 | [Repository Lineage migration plan](architecture/REPOSITORY_LINEAGE_MIGRATION_PLAN.md) | Anyone auditing the lineage migration | The implementation-grade plan the [#299](https://github.com/Second-Origin/PARTHA/pull/372) migration was built and tested against: current-state schema, Alembic/backfill, ownership, deletion, concurrency, validation, and rollback. RFC-0002 owns the architecture decisions; this document is the migration and test record and contains no runtime change. |
 | [Repository Intelligence golden benchmark](../apps/backend/tests/benchmark/README.md) | Contributors on the intelligence track | The versioned golden fixture corpus, independently authored expected facts, explicit mapping to the production support matrices, real-extractor precision/recall and citation validation, repeated-extraction canonical-hash determinism checks, and CI reports for Issue [#94](https://github.com/Second-Origin/PARTHA/issues/94). |
-| [Backend README](../apps/backend/README.md) | Backend contributors | Running the backend, endpoints, configuration, tests. |
+| [Backend README](../apps/backend/README.md) | Backend contributors | Running the backend, the full endpoint surface (including OAuth and the one public write route), configuration, tests. |
 | [Frontend README](../apps/frontend/README.md) | Frontend contributors | Running the frontend, structure, commands, tests. |
+| [Marketing site README](../apps/marketing/README.md) | Anyone touching the public landing page | The standalone static marketing site: the 1024px split between the authored desktop canvas and the purpose-built mobile layout, the two demo surfaces, Vercel deployment, and the fact that this package has **no CI coverage**. |
 | [Scripts README](../scripts/README.md) | All contributors | What each helper script does. |
 
 ## Reading paths
@@ -52,4 +53,10 @@ what was checked on a given date and is left unedited so it stays usable as
 evidence. Where the product has since changed, the record says so at the top
 rather than being rewritten.
 
-- Internal point-in-time QA notes are preserved in the repository but are not maintained contributor documentation.
+| Record | Date | What it captures |
+| --- | --- | --- |
+| [Iteration 1 design QA](qa/ITERATION_1_DESIGN_QA.md) | Iteration 1 | One QA pass of the implemented interface against the Iteration 1 Figma reference. The interface has since changed; the record's own header says how. |
+| [Iteration 1 engineer feedback](qa/ITERATION_1_ENGINEER_FEEDBACK.md) | Iteration 1 | Setup and validation feedback collected from an engineer working through the repository. |
+
+For current behaviour, read the [README capability registry](../README.md#what-works-today)
+and [System Overview](architecture/SYSTEM_OVERVIEW.md) instead of any record above.

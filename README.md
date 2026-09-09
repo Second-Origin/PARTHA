@@ -21,6 +21,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Second-Origin/PARTHA/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Second-Origin/PARTHA?label=release"></a>
   <img alt="Apache 2.0 license" src="https://img.shields.io/github/license/Second-Origin/PARTHA">
   <img alt="Python 3.12–3.13" src="https://img.shields.io/badge/Python-3.12--3.13-3776AB?logo=python&logoColor=white">
   <img alt="Node.js 22" src="https://img.shields.io/badge/Node.js-22-5FA04E?logo=nodedotjs&logoColor=white">
@@ -72,14 +73,14 @@ Across those surfaces, PARTHA keeps the repository revision, snapshot identity, 
 
 ## What works today
 
-Statuses describe executable behaviour on the current `dev` branch:
+This table is generated from the capability registry in `apps/backend/app/extraction/support_matrix.py` and validated in CI, so it cannot drift from the code silently. Statuses describe behaviour that is executable in the branch you are reading: [`main`](https://github.com/Second-Origin/PARTHA/tree/main) carries the latest tagged release, `dev` carries active development.
 
 <!-- BEGIN GENERATED CAPABILITY REGISTRY -->
 | Capability | Status | Current boundary |
 | --- | --- | --- |
 | Archive upload and public GitHub import | **Implemented** | ZIP/TAR-family archives and shallow public GitHub HTTPS clones; size and path-safety limits apply. Private GitHub cloning and other repository hosts are not supported. |
 | Repository explorer | **Implemented** | Owner-scoped file tree plus bounded text/image preview, binary detection, and truncation. |
-| Authentication and owner isolation | **Implemented** | Email/password, Argon2, short-lived access tokens, rotating refresh tokens with reuse detection. Protected resources are owner-scoped; non-owner access returns 404. |
+| Authentication and owner isolation | **Implemented** | Email/password, Argon2, short-lived access tokens, rotating refresh tokens with reuse detection. Google and GitHub OAuth sign-in and account linking are implemented but inert until provider credentials are configured, and never create an account. Registration is gated by an admin-managed email allowlist in every environment, except the first account on an empty instance. Protected resources are owner-scoped; non-owner access returns 404. |
 | Analysis lifecycle | **Implemented** | Database-backed, cancellable job with progress, bounded retry, lease renewal, and stale-worker recovery. |
 | Repository Intelligence | **Implemented with disclosed limits** | Immutable, revision-addressed `ri.v1` snapshots with normalized facts, evidence, query APIs, and a total canonical graph hash. Semantic extraction is strongest for supported Python and TypeScript/JavaScript constructs. |
 | Repository lineage | **Implemented with disclosed limits** | Repeated imports of the same repository and branch are grouped into a durable, owner-scoped lineage with duplicate-revision detection (RFC-0002). `GET /repositories/{id}/lineage` returns the ordered history and the repository detail page renders it. Refresh and cross-revision comparison on top of a lineage are not built. |
@@ -233,6 +234,20 @@ Outside `development` and `test`, the backend requires:
 Registration is gated by an admin-managed email allowlist, in every environment. On a genuinely fresh instance — an empty database, nobody pre-approved — the first account anyone registers (password or OAuth) is auto-approved automatically and becomes that instance's owner; this is what lets a self-hoster actually use their own deployment. Every registration after that first one needs an existing account holder to approve the email first, with `apps/backend/scripts/approve_email.py`.
 
 Do not expose the development configuration directly to the public internet. Review [SECURITY.md](SECURITY.md) and the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md) before any shared deployment. Report vulnerabilities privately—never in a public issue.
+
+## Releases and branches
+
+| Branch | What it is |
+| --- | --- |
+| [`main`](https://github.com/Second-Origin/PARTHA/tree/main) | The latest tagged release. Use this if you want the version that was validated and published. |
+| `dev` | Active development, and the target of every pull request. It moves constantly and is not a release. |
+
+Releases are tagged `vMAJOR.MINOR.PATCH`. Pushing a `v*` tag runs
+[`.github/workflows/release.yml`](.github/workflows/release.yml), which validates the
+candidate against PostgreSQL and Redis before publishing the GitHub Release. PARTHA is
+pre-1.0: minor versions may still change behaviour, and each release's notes state what
+moved. See [all releases](https://github.com/Second-Origin/PARTHA/releases) and
+[CONTRIBUTING § Releases](CONTRIBUTING.md#14-releases).
 
 ## Documentation and contributing
 

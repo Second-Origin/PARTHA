@@ -463,7 +463,47 @@ Work is complete only when:
 
 ---
 
-## 14. Conduct and licensing
+## 14. Releases
+
+Releases are cut by maintainers. Contributors do not tag, and no contributor pull
+request should change a version string — the release commit does that.
+
+**The two long-lived branches.**
+
+| Branch | Role |
+| --- | --- |
+| `dev` | Active development, and the target of every pull request. It moves constantly and is never itself a release. |
+| `main` | The latest tagged release. Updated only by promoting `dev` at a release point. |
+
+Both are protected by repository rulesets: a pull request with one approving review and
+code-owner review, passing required status checks, and no deletion or force-push.
+
+**Cutting a release.**
+
+1. Bump the version in `package.json`, `apps/frontend/package.json`,
+   `apps/marketing/package.json`, `apps/backend/pyproject.toml`, and the FastAPI
+   `version=` in `apps/backend/app/main.py`, together with any documentation that
+   is genuinely out of date. Merge that to `dev` like any other change.
+2. Open a `dev` → `main` pull request and merge it once checks are green.
+3. Tag the release commit `vMAJOR.MINOR.PATCH` and push the tag.
+
+Pushing a `v*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml):
+a `validate` job re-runs the release-relevant frontend and backend checks against real
+PostgreSQL and Redis, and only if that passes does a `github-release` job publish the
+GitHub Release. Release notes are then written by hand — grouped by area, stating what
+changed and what is still not built — rather than left as a raw list of merged pull
+requests.
+
+`main` is only ever a pull-request **target**. Never open a pull request whose *source*
+branch is `main`: merged head branches are deleted automatically, which would delete
+`main` itself.
+
+PARTHA is pre-1.0. Minor versions may change behaviour; the release notes say so when
+they do.
+
+---
+
+## 15. Conduct and licensing
 
 All participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
 

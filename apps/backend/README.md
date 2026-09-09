@@ -116,11 +116,56 @@ Logs default to human-readable text; set `LOG_FORMAT=json` for structured logs. 
 
 ## Authentication
 
-`/auth` provides register, login, refresh, logout, and `/auth/me`. Passwords are hashed with Argon2; access tokens are HS256; refresh tokens rotate on every use, live in an httpOnly cookie, and reuse of a spent token revokes the whole family.
+`/auth` provides register, login, refresh, logout, `GET /auth/me`, and `DELETE /auth/me`
+(verified account deletion). Passwords are hashed with Argon2; access tokens are HS256;
+refresh tokens rotate on every use, live in an httpOnly cookie, and reuse of a spent token
+revokes the whole family.
 
 Every non-public API route requires a valid Bearer token. Repository resolution is
 owner-scoped in the service layer across analysis and all product consumers, so
 one account cannot query another account's repository or snapshots.
+
+The refresh cookie is `SameSite=Lax`, which means **the frontend and the API must be served
+from the same site** in any deployment. See
+[System Overview § Authentication and session flow](../../docs/architecture/SYSTEM_OVERVIEW.md#authentication-and-session-flow).
+
+### OAuth sign-in and account linking
+
+Google and GitHub OAuth are implemented under `/auth/oauth`. They are **inert until
+credentials are configured**: `GET /auth/oauth/providers` returns only providers that
+have a real client id and secret, so an unconfigured deployment simply offers none and
+the password flow is unaffected.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /auth/oauth/providers` | Provider names that have real credentials configured. Empty when none are. |
+| `GET /auth/oauth/{provider}/start` | Returns the provider authorize URL to send the browser to. |
+| `GET /auth/oauth/{provider}/callback` | Provider redirect target; completes the flow and issues a session. |
+| `POST /auth/oauth/{provider}/link` | Begin linking a provider identity to the signed-in account. |
+| `POST /auth/oauth/link/confirm` | Confirm a pending link. |
+| `GET /auth/oauth/linked` | Provider identities linked to the caller's account. |
+| `DELETE /auth/oauth/{provider}` | Unlink a provider identity. |
+
+Configuration: `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET`,
+`GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET`, and `OAUTH_PUBLIC_BASE_URL`
+(must match the redirect URI registered in each provider's console). All default to empty,
+which is the normal, supported state.
+
+**OAuth does not bypass the registration gate.** Signing in with a provider identity that
+belongs to no existing account does not create one — the caller is returned to the
+invite-gated registration flow. The only account-creating path in the backend is
+`AuthService.register()`, and it enforces the admin-managed email allowlist
+(`scripts/approve_email.py`; see
+[README § Security guidance](../../README.md#security-guidance)).
+
+## Public routes
+
+Two routes are reachable without a token, by design:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh` | The session-establishing routes, plus the OAuth start/callback pair above. |
+| `POST /waitlist` | The one public **write** route in the API: landing-page waitlist capture, reachable before anyone has an account or an invite. It records an email and optional name in `waitlist_entries` and returns the same `{"status": "ok"}` for a new signup, a repeat signup, and a concurrent collision, so it never discloses whether an address is already on the list. Its abuse guard is a per-minute budget in the `auth` rate-limit class. |
 
 ## AI Workspace endpoints
 

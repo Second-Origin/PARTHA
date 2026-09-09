@@ -809,7 +809,7 @@ PUBLIC_CAPABILITIES: tuple[PublicCapability, ...] = (
         "authentication-isolation",
         "Authentication and owner isolation",
         PublicStatus.IMPLEMENTED,
-        "Email/password, Argon2, short-lived access tokens, rotating refresh tokens with reuse detection. Protected resources are owner-scoped; non-owner access returns 404.",
+        "Email/password, Argon2, short-lived access tokens, rotating refresh tokens with reuse detection. Google and GitHub OAuth sign-in and account linking are implemented but inert until provider credentials are configured, and never create an account. Registration is gated by an admin-managed email allowlist in every environment, except the first account on an empty instance. Protected resources are owner-scoped; non-owner access returns 404.",
         ("product.authentication-isolation",),
     ),
     PublicCapability(
