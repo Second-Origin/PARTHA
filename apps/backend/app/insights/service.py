@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-
 from sqlalchemy import func, select
 
 from app.analysis.manifest import build_manifest, manifest_digest
-from app.insights.relationship_diagnostics import UnresolvedRelationshipSplit, split_unresolved_relationships
+from app.insights.relationship_diagnostics import (
+    UnresolvedRelationshipSplit,
+    load_unresolved_relationship_context,
+    split_unresolved_relationships,
+)
 from app.intelligence.query_service import SnapshotQueryService
 from app.models.repository import RepositoryRecord
-from app.models.snapshot import RiDiagnostic, RiEdge, RiEvidence, RiNode, RiObservation
+from app.models.snapshot import RiDiagnostic, RiEdge, RiEvidence, RiNode
 from app.schemas.insights import (
     InsightBreakdown,
     InsightExtractor,
@@ -322,7 +324,6 @@ class RepositoryInsightsBuilder:
         stored fact."""
 
         db = self.snapshots.db
-
         diagnostics: list[tuple[str | None, str | None]] = [
             (path, (details or {}).get("observation_id"))
             for path, details in db.execute(
@@ -334,56 +335,4 @@ class RepositoryInsightsBuilder:
         ]
         if not diagnostics:
             return UnresolvedRelationshipSplit(in_repo_gap=0, external_reference=0)
-
-        observed_kind_by_observation: dict[str, str] = {}
-        referent_by_observation: dict[str, str | None] = {}
-        binding_referent_by_pk: dict[int, str] = {}
-        for pk, observation_id, kind, referent in db.execute(
-            select(
-                RiObservation.id,
-                RiObservation.observation_id,
-                RiObservation.observed_kind,
-                RiObservation.referent_text,
-            ).where(RiObservation.snapshot_id == snapshot_id)
-        ).all():
-            observed_kind_by_observation[observation_id] = kind
-            referent_by_observation[observation_id] = referent
-            if kind == "import_binding" and referent:
-                binding_referent_by_pk[pk] = referent
-
-        # An import_binding's own subject_key is directory-scoped for Python, so
-        # its evidence path is the only exact source-file link. One join keeps
-        # this to the binding rows regardless of how many imports the repo has.
-        import_specifier_by_local_name: dict[str, dict[str, str]] = defaultdict(dict)
-        if binding_referent_by_pk:
-            for observation_ref, path in db.execute(
-                select(RiEvidence.observation_ref, RiEvidence.path)
-                .join(RiObservation, RiObservation.id == RiEvidence.observation_ref)
-                .where(
-                    RiEvidence.snapshot_id == snapshot_id,
-                    RiObservation.observed_kind == "import_binding",
-                )
-            ).all():
-                referent = binding_referent_by_pk.get(observation_ref)
-                if referent is None or not path:
-                    continue
-                parts = referent.split("|", 2)
-                if len(parts) == 3 and parts[0] and parts[2]:
-                    import_specifier_by_local_name[path].setdefault(parts[2], parts[0])
-
-        declared_dependency_keys = frozenset(
-            db.scalars(
-                select(RiNode.stable_key).where(
-                    RiNode.snapshot_id == snapshot_id,
-                    RiNode.node_kind == "dependency",
-                )
-            ).all()
-        )
-
-        return split_unresolved_relationships(
-            diagnostics=diagnostics,
-            observed_kind_by_observation=observed_kind_by_observation,
-            referent_by_observation=referent_by_observation,
-            import_specifier_by_local_name=dict(import_specifier_by_local_name),
-            declared_dependency_keys=declared_dependency_keys,
-        )
+        return split_unresolved_relationships(diagnostics, load_unresolved_relationship_context(db, snapshot_id))

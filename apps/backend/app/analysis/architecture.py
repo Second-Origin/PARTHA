@@ -10,6 +10,11 @@ from app.intelligence.query_service import (
     ArchitectureSnapshotFacts,
     SnapshotQueryService,
 )
+from app.insights.relationship_diagnostics import (
+    UnresolvedRelationshipContext,
+    is_external_unresolved,
+    load_unresolved_relationship_context,
+)
 from app.intelligence.models import RepositoryModule
 from app.models.repository import RepositoryRecord
 from app.models.snapshot import RiDiagnostic, RiEvidence, RiNode
@@ -367,10 +372,29 @@ class ArchitectureAnalyzer:
                 modules_by_file.setdefault(self._normalize_path(path), []).append(module.id)
         snapshot_node_by_key = {item.stable_key: item for item in facts.nodes}
         node_ids = {node.id for node in nodes}
+
+        # An RI-RES-UNRESOLVED whose target is a third-party dependency or the
+        # language platform is not an unmapped *architecture* relationship -- it
+        # should neither flag a module red nor crowd the diagnostics list.
+        # Genuine in-repo gaps and every RI-RES-AMBIGUOUS still count. Same
+        # #412 judgment Repository Insights uses; the raw resolver diagnostics
+        # stay available via the intelligence evidence API.
+        unresolved_ctx = (
+            load_unresolved_relationship_context(self.snapshots.db, facts.snapshot.snapshot_id)
+            if self.snapshots is not None
+            else UnresolvedRelationshipContext.empty()
+        )
+
+        def _is_architecture_relevant(item: RiDiagnostic) -> bool:
+            if item.code not in ARCHITECTURE_DIAGNOSTIC_CODES:
+                return False
+            if item.code != "RI-RES-UNRESOLVED":
+                return True
+            return not is_external_unresolved(item.path, (item.details or {}).get("observation_id"), unresolved_ctx)
+
+        architecture_diagnostic_items = [item for item in facts.diagnostics if _is_architecture_relevant(item)]
         diagnostics = [
-            self._architecture_diagnostic(item, modules_by_file, node_ids)
-            for item in facts.diagnostics
-            if item.code in ARCHITECTURE_DIAGNOSTIC_CODES
+            self._architecture_diagnostic(item, modules_by_file, node_ids) for item in architecture_diagnostic_items
         ]
         unresolved_node_ids: set[str] = set()
         # Inventory-only file nodes prove that a path exists, not that a
@@ -378,9 +402,7 @@ class ArchitectureAnalyzer:
         # syntax/manifest producer so unsupported files cannot look isolated.
         covered_paths = facts.covered_paths
 
-        for item in facts.diagnostics:
-            if item.code not in ARCHITECTURE_DIAGNOSTIC_CODES:
-                continue
+        for item in architecture_diagnostic_items:
             if item.path:
                 unresolved_node_ids.update(modules_by_file.get(self._normalize_path(item.path), []))
             for key in (item.subject_key, item.object_key):
