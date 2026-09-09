@@ -31,7 +31,6 @@ import landingReferenceDark from '@/assets/landing/landing-reference-dark.svg';
  */
 export function App() {
   const [faqIndex, setFaqIndex] = useState<number | null>(null);
-  const [footerNotice, setFooterNotice] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
   const [runItYourselfOpen, setRunItYourselfOpen] = useState(false);
   const theme = useLandingTheme();
@@ -110,7 +109,7 @@ export function App() {
         <a className="absolute left-[6.2%] top-[91.9%] z-20 h-[4.3%] w-[22.4%]" href="/" aria-label="PARTHA home" />
 
         {footerControls.map((item) => (
-          <FooterControl key={item.label} item={item} onUnavailable={setFooterNotice} />
+          <FooterControl key={item.label} item={item} />
         ))}
 
         {faqIndex !== null && (
@@ -130,13 +129,6 @@ export function App() {
 
         {demoOpen && <DemoModal onClose={() => setDemoOpen(false)} />}
         {runItYourselfOpen && <RunItYourselfModal onClose={() => setRunItYourselfOpen(false)} />}
-
-        {footerNotice && (
-          <div role="status" className="fixed bottom-5 left-1/2 z-50 w-[min(92vw,34rem)] -translate-x-1/2 rounded-2xl border border-primary/35 bg-card px-5 py-4 text-center text-sm font-medium text-foreground shadow-xl">
-            {footerNotice}
-            <button type="button" onClick={() => setFooterNotice(null)} className="ml-3 text-primary underline underline-offset-2">Close</button>
-          </div>
-        )}
       </div>
     </main>
   );
@@ -164,34 +156,46 @@ type FooterControl = {
   label: string;
   left: string;
   top: string;
-  href?: string;
+  href: string;
+  /** true for anything off this site: opens in a new tab with rel=noreferrer.
+   * false (or omitted) for same-page anchor scrolls. */
   external?: boolean;
-  message?: string;
 };
 
+const GITHUB_URL = 'https://github.com/Second-Origin/PARTHA';
+const REPO_BLOB = `${GITHUB_URL}/blob/dev`;
+const DISCORD_URL = 'https://discord.gg/qvk9DcxDA';
+
+// Every hotspot resolves to real, existing content. The four in-page anchors
+// scroll the reused artwork; the rest open the maintained doc / repo page that
+// actually covers that title. Nothing here is a "coming soon" placeholder.
 const footerControls: FooterControl[] = [
   { label: 'How it works', left: '39.1%', top: '93.65%', href: '#how-it-works' },
   { label: 'Capabilities', left: '39.1%', top: '94.45%', href: '#capabilities' },
   { label: 'FAQ', left: '39.1%', top: '95.25%', href: '#faq' },
-  { label: 'Privacy', left: '39.1%', top: '96.05%', message: 'Privacy details will be published with the public release.' },
-  { label: 'Docs', left: '55%', top: '93.65%', href: 'https://github.com/Second-Origin/PARTHA/blob/dev/docs/README.md', external: true },
-  { label: 'ri.v1 spec', left: '55%', top: '94.45%', message: 'The ri.v1 specification will be available shortly.' },
-  { label: 'Language matrix', left: '55%', top: '95.25%', message: 'The language matrix will be available shortly.' },
-  { label: 'Changelog', left: '55%', top: '96.05%', message: 'The changelog will be available shortly.' },
-  { label: 'About', left: '70.6%', top: '93.65%', message: 'About PARTHA will be available shortly.' },
-  { label: 'Security', left: '70.6%', top: '94.45%', href: 'https://github.com/Second-Origin/PARTHA/blob/dev/SECURITY.md', external: true },
-  { label: 'Contact', left: '70.6%', top: '95.25%', href: 'https://discord.gg/qvk9DcxDA', external: true },
-  { label: 'Legal', left: '70.6%', top: '96.05%', message: 'Legal information will be available shortly.' },
-  { label: 'LinkedIn', left: '86.3%', top: '93.65%', href: 'https://www.linkedin.com', external: true },
-  { label: 'X', left: '86.3%', top: '94.45%', href: 'https://x.com', external: true },
-  { label: 'GitHub', left: '86.3%', top: '95.25%', href: 'https://github.com/Second-Origin/PARTHA', external: true },
+  { label: 'Privacy', left: '39.1%', top: '96.05%', href: `${REPO_BLOB}/README.md#limitations-and-security`, external: true },
+  { label: 'Docs', left: '55%', top: '93.65%', href: `${REPO_BLOB}/docs/README.md`, external: true },
+  { label: 'ri.v1 spec', left: '55%', top: '94.45%', href: `${REPO_BLOB}/docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md`, external: true },
+  { label: 'Language matrix', left: '55%', top: '95.25%', href: `${REPO_BLOB}/docs/architecture/REPOSITORY_INTELLIGENCE.md#what-is-currently-extracted`, external: true },
+  { label: 'Changelog', left: '55%', top: '96.05%', href: `${GITHUB_URL}/releases`, external: true },
+  { label: 'About', left: '70.6%', top: '93.65%', href: `${REPO_BLOB}/README.md`, external: true },
+  { label: 'Security', left: '70.6%', top: '94.45%', href: `${REPO_BLOB}/SECURITY.md`, external: true },
+  { label: 'Contact', left: '70.6%', top: '95.25%', href: DISCORD_URL, external: true },
+  { label: 'Legal', left: '70.6%', top: '96.05%', href: `${REPO_BLOB}/LICENSE`, external: true },
+  { label: 'LinkedIn', left: '86.3%', top: '93.65%', href: 'https://www.linkedin.com/in/parthrohit', external: true },
+  { label: 'X', left: '86.3%', top: '94.45%', href: DISCORD_URL, external: true },
+  { label: 'GitHub', left: '86.3%', top: '95.25%', href: GITHUB_URL, external: true },
 ];
 
-function FooterControl({ item, onUnavailable }: { item: FooterControl; onUnavailable: (message: string) => void }) {
-  const className = 'absolute z-20 h-[0.9%] w-[10.5%] border-0 bg-transparent p-0';
-  const style = { left: item.left, top: item.top };
-  if (item.message) {
-    return <button type="button" aria-label={item.label} className={className} style={style} onClick={() => onUnavailable(item.message!)} />;
-  }
-  return <a aria-label={item.label} className={className} style={style} href={item.href} target={item.external ? '_blank' : undefined} rel={item.external ? 'noreferrer' : undefined} />;
+function FooterControl({ item }: { item: FooterControl }) {
+  return (
+    <a
+      aria-label={item.label}
+      className="absolute z-20 h-[0.9%] w-[10.5%] border-0 bg-transparent p-0"
+      style={{ left: item.left, top: item.top }}
+      href={item.href}
+      target={item.external ? '_blank' : undefined}
+      rel={item.external ? 'noreferrer' : undefined}
+    />
+  );
 }
