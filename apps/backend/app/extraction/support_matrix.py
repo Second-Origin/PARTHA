@@ -830,7 +830,7 @@ PUBLIC_CAPABILITIES: tuple[PublicCapability, ...] = (
         "repository-lineage",
         "Repository lineage",
         PublicStatus.IMPLEMENTED_WITH_DISCLOSED_LIMITS,
-        "Repeated imports of the same repository and branch are grouped into a durable, owner-scoped lineage with duplicate-revision detection (RFC-0002). No read API or UI exists yet for browsing that history.",
+        "Repeated imports of the same repository and branch are grouped into a durable, owner-scoped lineage with duplicate-revision detection (RFC-0002). `GET /repositories/{id}/lineage` returns the ordered history and the repository detail page renders it. Refresh and cross-revision comparison on top of a lineage are not built.",
         ("product.repository-lineage",),
     ),
     PublicCapability(

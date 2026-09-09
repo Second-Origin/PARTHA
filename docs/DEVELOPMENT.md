@@ -115,6 +115,17 @@ another one...` and starts on the next free port (typically 5174) instead.
 Check the terminal output for the actual `Local:` URL it printed rather than
 assuming 5173.
 
+**You are logged out on every page reload; `POST /auth/refresh` returns 401**
+The refresh cookie is `SameSite=Lax`, so the browser only sends it back on a
+request to the *same site* the page is on. If the page origin and `VITE_API_URL`
+disagree on host — most commonly one is `localhost` and the other is
+`127.0.0.1` — the cookie is withheld from `/auth/refresh` and the session never
+re-establishes. Serve the frontend and point `VITE_API_URL` at the **same
+host** (both `localhost` or both `127.0.0.1`). The documented defaults already
+match (`localhost:5173` + `http://localhost:8000`); this only bites if you
+change one of them. The same-site rule applies to real deployments too — see
+[System Overview § Authentication and session flow](architecture/SYSTEM_OVERVIEW.md#authentication-and-session-flow).
+
 **Backend refuses to start with a message naming a table that "already exists"**
 This is local database drift: `AUTO_CREATE_TABLES` (on by default in
 `development`/`test`) built a table directly from the models without ever
