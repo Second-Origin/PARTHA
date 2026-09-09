@@ -129,7 +129,7 @@ export function App() {
             <div className="flex items-start justify-between gap-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">FAQ</p>
-                <h2 id="landing-faq-title" className="mt-2 text-2xl font-semibold text-foreground">{faqQuestions[faqIndex]}</h2>
+                <h2 id="landing-faq-title" className="font-display mt-2 text-2xl font-semibold text-foreground">{faqQuestions[faqIndex]}</h2>
               </div>
               <button type="button" onClick={() => setFaqIndex(null)} className="rounded-xl border border-primary/30 px-3 py-2 text-sm font-semibold text-foreground hover:bg-accent">Close</button>
             </div>

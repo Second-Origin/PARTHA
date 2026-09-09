@@ -2,61 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Full token set copied verbatim from apps/frontend/src/styles/globals.css
-   (#382 redesign) -- including .landing-dark, which the reused LandingPage
-   applies to its own root element only (see App.tsx). Copied rather than
-   shared so this project has no cross-package dependency on apps/frontend
-   at all. */
+/* Token values follow PARTHA Foundations v1 (Typography and Color, July 2026):
+   Signal Orange #FA4D01 (primary CTA / focus), Burnt Orange #AA3D00
+   (secondary emphasis), Deep Blue #006298 (architecture / technical), Deep
+   Plum #392135 (headlines, body text, dark surfaces). Neutral surfaces carry
+   ~70% of the page; Signal Orange stays scarce. .landing-dark is scoped to the
+   landing root element only (see App.tsx / useLandingTheme.ts). */
 @layer base {
   :root {
-    --background: 38 27% 94%;
-    --foreground: 258 19% 13%;
+    --background: 40 30% 95%;
+    --foreground: 310 27% 18%; /* Deep Plum */
     --card: 0 0% 100%;
-    --card-foreground: 258 19% 13%;
+    --card-foreground: 310 27% 18%;
     --popover: 0 0% 100%;
-    --popover-foreground: 258 19% 13%;
-    --primary: 18 99% 38%;
+    --popover-foreground: 310 27% 18%;
+    --primary: 18 99% 49%; /* Signal Orange */
     --primary-foreground: 0 0% 100%;
-    --secondary: 198 39% 85%;
-    --secondary-foreground: 260 10% 34%;
-    --muted: 38 25% 92%;
-    --muted-foreground: 263 8% 43%;
-    --accent: 18 100% 94%;
-    --accent-foreground: 258 19% 13%;
+    --secondary: 201 100% 30%; /* Deep Blue */
+    --secondary-foreground: 0 0% 100%;
+    --burnt-orange: 22 100% 33%; /* Burnt Orange */
+    --muted: 40 24% 92%;
+    --muted-foreground: 310 13% 38%;
+    --accent: 20 100% 94%; /* pale Signal Orange surface tint */
+    --accent-foreground: 310 27% 18%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-    --success: 142 76% 26%;
-    --success-foreground: 210 40% 98%;
-    --warning: 38 92% 29%;
-    --warning-foreground: 258 19% 13%;
-    --border: 18 66% 76%;
-    --input: 18 42% 84%;
-    --ring: 17 91% 50%;
+    --success: 142 72% 29%;
+    --success-foreground: 0 0% 100%;
+    --warning: 33 100% 33%;
+    --warning-foreground: 0 0% 100%;
+    --border: 24 34% 85%;
+    --input: 24 30% 88%;
+    --ring: 18 99% 49%;
     --radius: 1rem;
-    /* The authored design's deep teal-blue accent (#006298), used for the
-       alternating tinted story cards on the mobile layout alongside the
-       orange primary. Not in the ported #382 token set. */
-    --brand-blue: 201 99% 30%;
   }
 
-  /* Scoped to the landing page's own root element only (never applied to
-     <html>) -- see App.tsx and useLandingTheme.ts. */
   .landing-dark {
-    --background: 0 0% 0%;
+    --background: 315 26% 8%; /* Deep Plum as a dark surface */
     --foreground: 0 0% 100%;
-    --card: 0 2% 10%;
+    --card: 315 18% 12%;
     --card-foreground: 0 0% 100%;
-    --primary: 18 99% 49%;
+    --primary: 18 99% 53%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 205 32% 16%;
+    --secondary: 201 66% 56%; /* Deep Blue lifted for dark surfaces */
     --secondary-foreground: 0 0% 100%;
-    --muted-foreground: 0 0% 48%;
-    --accent: 0 0% 16%;
+    --burnt-orange: 22 88% 58%;
+    --muted: 315 14% 15%;
+    --muted-foreground: 315 8% 64%;
+    --accent: 315 14% 16%;
     --accent-foreground: 0 0% 100%;
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
-    --ring: 18 99% 49%;
-    --brand-blue: 201 70% 62%;
+    --border: 315 12% 21%;
+    --input: 315 12% 21%;
+    --ring: 18 99% 53%;
   }
 
   body {
