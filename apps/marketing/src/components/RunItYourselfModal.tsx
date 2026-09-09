@@ -1,4 +1,4 @@
-import { SlidePanel } from '@/components/SlidePanel';
+import { Modal } from '@/components/Modal';
 
 const GITHUB_URL = 'https://github.com/Second-Origin/PARTHA';
 
@@ -27,7 +27,7 @@ npm run dev:frontend`;
  * "run it yourself" is the only call to action here. */
 export function RunItYourselfModal({ onClose }: { onClose: () => void }) {
   return (
-    <SlidePanel onClose={onClose} labelledBy="run-it-yourself-title" maxWidthClassName="max-w-2xl">
+    <Modal onClose={onClose} labelledBy="run-it-yourself-title" maxWidthClassName="max-w-2xl">
       <div className="p-6 sm:p-8">
         <div className="flex items-start justify-between gap-5">
           <div>
@@ -99,6 +99,6 @@ export function RunItYourselfModal({ onClose }: { onClose: () => void }) {
           </p>
         </div>
       </div>
-    </SlidePanel>
+    </Modal>
   );
 }
