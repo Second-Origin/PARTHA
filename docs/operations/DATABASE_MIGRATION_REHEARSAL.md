@@ -154,11 +154,13 @@ Use a downgrade only when the specific revision's review explicitly says it is d
 actual live data and it has been rehearsed against an equivalent disposable backup. Otherwise restore is
 the rollback path.
 
-## Future Repository Lineage (#299) migration review checklist
+## Repository Lineage (#299) migration review checklist — applied
 
-This is a gate checklist only. It does not authorize or implement Repository Lineage. PR #328 records
-the approved architecture contract, and this rehearsal must be rerun against the eventual #299 migration
-before that implementation PR merges.
+This gate applied to the Repository Lineage migration and is retained as a record. #299 has since
+been implemented and merged in [#372](https://github.com/Second-Origin/PARTHA/pull/372) (migrations
+`0013_lineage_expand` / `0014_lineage_constraints`); this checklist was the rehearsal-and-recovery
+gate that ran against it before merge. Reuse the same checklist for any future schema change of
+comparable scope.
 
 - [ ] Re-run this rehearsal on the then-current chain and on a representative disposable copy/fixture of the
   immediately preceding supported baseline.

@@ -1,7 +1,7 @@
 {
   "name": "@partha/marketing",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Static marketing site for PARTHA: the real product's landing page, repurposed with a scripted product simulation and a 'run it yourself' CTA to the main repository. Deliberately independent of apps/frontend -- no backend dependency, deployable to Vercel on its own (#382).",
   "type": "module",
   "scripts": {

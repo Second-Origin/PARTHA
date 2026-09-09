@@ -54,10 +54,10 @@ flowchart LR
 
     Root --> Parser
     Root --> Revision
-    Revision --> Job["Durable analysis job"]
-    Root --> Job
+    Parser -->|"persisted path inventory"| Job["Durable analysis job"]
+    Revision --> Job
+    Root -->|"source bytes under size/path policy"| Job
     Job --> Snapshot --> Consumers
-    Store -->|"from_record()"| Consumers
 ```
 
 ---
