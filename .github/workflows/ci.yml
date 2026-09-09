@@ -323,7 +323,17 @@ jobs:
           python -m pip install -e apps/backend --no-deps
 
       - name: Install Chromium
-        run: npm --prefix apps/frontend exec -- playwright install --with-deps chromium
+        # `--with-deps` runs `apt-get update`, which fails the whole job when
+        # any configured source has a transient bad index. The runner image
+        # pre-registers dl.google.com/linux/chrome-stable, and that repo has a
+        # recurring Release/Packages hash-mismatch window. Playwright downloads
+        # its own bundled Chromium from its CDN, so this repo is not needed
+        # here -- drop it before the update so a Google-side hiccup can't red
+        # the acceptance job.
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list \
+                     /etc/apt/sources.list.d/google.list
+          npm --prefix apps/frontend exec -- playwright install --with-deps chromium
 
       - name: Run disposable-fixture browser journeys
         run: node scripts/run-e2e-acceptance.mjs
