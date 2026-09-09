@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
-from app.insights.relationship_diagnostics import split_unresolved_relationships
+from app.insights.relationship_diagnostics import (
+    UnresolvedRelationshipContext,
+    split_unresolved_relationships,
+)
 
 _DJANGO_KEY = "dep:pypi:django"
 _REACT_KEY = "dep:npm:react"
 
 
 def _split(diagnostics, *, kinds=None, referents=None, bindings=None, deps=frozenset()):
-    return split_unresolved_relationships(
-        diagnostics=diagnostics,
+    ctx = UnresolvedRelationshipContext(
         observed_kind_by_observation=kinds or {},
         referent_by_observation=referents or {},
         import_specifier_by_local_name=bindings or {},
         declared_dependency_keys=deps,
     )
+    return split_unresolved_relationships(diagnostics, ctx)
 
 
 def test_stdlib_and_declared_dependency_imports_are_external():

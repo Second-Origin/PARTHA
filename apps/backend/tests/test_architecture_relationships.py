@@ -322,6 +322,32 @@ def test_architecture_excludes_manifest_and_lockfile_paths_from_modules(auth_cli
     assert "module:beta" in node_ids
 
 
+def test_architecture_does_not_flag_a_module_for_external_or_platform_references(auth_client):
+    """A reference into a Node builtin / third-party package is not an unmapped
+    *architecture* relationship: it must not turn a module red or appear in the
+    diagnostics list. A genuine in-repo gap in a sibling module still does."""
+
+    sources = {
+        "src/pure/index.ts": (
+            b"import { readFileSync } from 'fs';\nexport const load = (p: string) => readFileSync(p);\n"
+        ),
+        "src/broken/index.ts": b"import '../nowhere';\nexport const broken = 1;\n",
+    }
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(repository["id"], sources)
+
+    architecture = auth_client.get(f"/analysis/{repository['id']}/architecture").json()
+    nodes = {node["id"]: node for node in architecture["nodes"]}
+    diagnostics = architecture["diagnostics"]
+
+    # 'fs' + readFileSync() are the language platform: not a coverage gap.
+    assert nodes["module:pure"]["relationshipState"] != "unresolved"
+    assert not any(item["code"] == "RI-RES-UNRESOLVED" and item["path"] == "src/pure/index.ts" for item in diagnostics)
+    # '../nowhere' resolves to nothing in-repo: still a real gap.
+    assert nodes["module:broken"]["relationshipState"] == "unresolved"
+    assert any(item["code"] == "RI-RES-UNRESOLVED" and item["path"] == "src/broken/index.ts" for item in diagnostics)
+
+
 def test_architecture_module_name_for_a_bare_file_is_not_title_cased():
     """#396: a top-level file with no directory nesting is grouped by its own
     filename (e.g. "unmapped.ts", see test_architecture_maps_every_snapshot_
