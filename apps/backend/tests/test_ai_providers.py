@@ -297,3 +297,33 @@ def test_the_ollama_limit_does_not_apply_to_a_hosted_provider():
     asyncio.run(fire_five())
 
     assert sender.max_concurrent == 5
+
+
+# --- Ollama local-inference timeout -----------------------------------------
+#
+# The shared sender defaults to 60s, which is right for a hosted API but cuts
+# off a local Ollama mid-generation (model load + CPU inference legitimately
+# runs longer). Ollama passes an explicit long read budget instead; hosted
+# providers keep the default.
+
+
+def test_ollama_requests_a_long_read_budget_for_local_generation():
+    sender = RecordingSender({"message": {"content": "ok"}})
+    config = AiProviderConfig(provider="ollama", base_url="http://provider.example:11434")
+
+    asyncio.run(OllamaProvider(sender).complete(config, PROMPT))
+
+    timeout = sender.calls[0]["kwargs"]["timeout"]
+    assert isinstance(timeout, httpx.Timeout)
+    assert timeout.read is not None and timeout.read >= 300
+    # The connect phase stays tight so a wrong/unreachable base URL fails fast.
+    assert timeout.connect is not None and timeout.connect <= 15
+
+
+def test_hosted_providers_keep_the_default_sender_timeout():
+    sender = RecordingSender({"choices": [{"message": {"content": "ok"}}]})
+    config = AiProviderConfig(provider="openai", api_key="key")
+
+    asyncio.run(OpenAIProvider(sender).complete(config, PROMPT))
+
+    assert sender.calls[0]["kwargs"]["timeout"] is None

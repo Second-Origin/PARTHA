@@ -13,7 +13,14 @@ from app.core.exceptions import ExternalServiceError, TimeoutServiceError, Valid
 
 
 class ProviderHttpSender(Protocol):
-    async def post(self, config: AiProviderConfig, url: str, **kwargs: object) -> httpx.Response:
+    async def post(
+        self,
+        config: AiProviderConfig,
+        url: str,
+        *,
+        timeout: httpx.Timeout | float | None = None,
+        **kwargs: object,
+    ) -> httpx.Response:
         raise NotImplementedError
 
 
@@ -35,7 +42,14 @@ class SecureProviderHttpSender:
         self.policy = policy
         self.transport = transport
 
-    async def post(self, config: AiProviderConfig, url: str, **kwargs: object) -> httpx.Response:
+    async def post(
+        self,
+        config: AiProviderConfig,
+        url: str,
+        *,
+        timeout: httpx.Timeout | float | None = None,
+        **kwargs: object,
+    ) -> httpx.Response:
         # Policy preparation performs DNS resolution. Keep that blocking call
         # off the event loop used by the async AI routes.
         pinned = await anyio.to_thread.run_sync(self.policy.prepare_request, config, url)
@@ -49,8 +63,12 @@ class SecureProviderHttpSender:
         # application instead fails and revalidates DNS on the next request.
         transport = self.transport or httpx.AsyncHTTPTransport(verify=True, retries=0)
 
+        # 60s suits a hosted provider's request/response. A caller that knows
+        # its endpoint behaves differently -- a local Ollama, whose first call
+        # loads the model and whose generation runs on the user's own CPU --
+        # passes an explicit timeout instead of being cut off mid-completion.
         async with httpx.AsyncClient(
-            timeout=60,
+            timeout=timeout if timeout is not None else 60,
             verify=True,
             trust_env=False,
             follow_redirects=False,
@@ -111,13 +129,19 @@ async def post(
     url: str,
     *,
     sender: ProviderHttpSender | None = None,
+    timeout: httpx.Timeout | float | None = None,
     **kwargs: object,
 ) -> httpx.Response:
-    """Apply normalized provider errors around the central outbound sender."""
+    """Apply normalized provider errors around the central outbound sender.
+
+    ``timeout`` overrides the sender's default (60s) for one request -- used by
+    the Ollama provider, whose local, CPU-bound generation legitimately runs
+    far longer than any hosted API call.
+    """
 
     active_sender = sender or _default_sender()
     try:
-        response = await active_sender.post(config, url, **kwargs)
+        response = await active_sender.post(config, url, timeout=timeout, **kwargs)
         response.raise_for_status()
         return response
     except DestinationPolicyError as exc:

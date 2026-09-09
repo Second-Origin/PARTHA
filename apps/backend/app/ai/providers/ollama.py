@@ -1,4 +1,5 @@
 import anyio
+import httpx
 
 from app.ai.providers.http import ProviderHttpSender, post
 from app.ai.types import DEFAULT_MODELS, AiProviderConfig, AiProviderResponse, PromptBundle
@@ -32,6 +33,21 @@ from app.core.exceptions import ExternalServiceError
 _MAX_CONCURRENT_REQUESTS = 1
 _concurrency_limit = anyio.Semaphore(_MAX_CONCURRENT_REQUESTS)
 
+# The shared sender's 60s default is sized for a hosted API's request/response.
+# Ollama is neither: the first call after startup (or after another model was
+# loaded) pulls the model into memory before a single token is generated, and
+# the generation itself runs on whatever CPU/GPU the user's own machine has.
+# A review-sized completion routinely exceeds 60s that way -- entirely
+# healthy, not a stuck request -- and cutting it off there is the "it hangs
+# then fails" symptom this replaces. So:
+#   * connect: 10s. Ollama is either up on the LAN/loopback (connects fast) or
+#     it isn't; a wrong/unreachable base URL should fail quickly, not after a
+#     long minute, so this stays tight while the read budget is loosened.
+#   * read: 10 minutes. Bounds a genuinely wedged server without amputating a
+#     legitimately slow local generation.
+#   * write/pool: modest; the request body is small and the pool is unshared.
+_LOCAL_INFERENCE_TIMEOUT = httpx.Timeout(connect=10.0, read=600.0, write=30.0, pool=10.0)
+
 
 class OllamaProvider:
     def __init__(self, sender: ProviderHttpSender | None = None) -> None:
@@ -50,7 +66,13 @@ class OllamaProvider:
             ],
         }
         async with _concurrency_limit:
-            response = await post(config, f"{base_url}/api/chat", sender=self.sender, json=payload)
+            response = await post(
+                config,
+                f"{base_url}/api/chat",
+                sender=self.sender,
+                timeout=_LOCAL_INFERENCE_TIMEOUT,
+                json=payload,
+            )
         try:
             return AiProviderResponse(content=response.json()["message"]["content"])
         except (KeyError, IndexError, TypeError) as exc:
