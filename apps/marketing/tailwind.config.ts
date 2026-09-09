@@ -52,6 +52,7 @@ export default {
           DEFAULT: 'hsl(var(--popover))',
           foreground: 'hsl(var(--popover-foreground))',
         },
+        'brand-blue': 'hsl(var(--brand-blue))',
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -61,6 +62,11 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        // Authored-design accents used on the mobile layout: an editorial
+        // serif italic for the hero sub-copy, a script for the "Meet Partha"
+        // flourish. Both degrade to platform faces if the web font is slow.
+        serif: ['Newsreader', 'Georgia', 'Cambria', 'serif'],
+        script: ['Caveat', 'Bradley Hand', 'Segoe Script', 'cursive'],
       },
       fontSize: {
         '2xs': ['0.625rem', { lineHeight: '0.875rem' }],

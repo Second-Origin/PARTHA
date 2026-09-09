@@ -33,6 +33,10 @@
     --input: 18 42% 84%;
     --ring: 17 91% 50%;
     --radius: 1rem;
+    /* The authored design's deep teal-blue accent (#006298), used for the
+       alternating tinted story cards on the mobile layout alongside the
+       orange primary. Not in the ported #382 token set. */
+    --brand-blue: 201 99% 30%;
   }
 
   /* Scoped to the landing page's own root element only (never applied to
@@ -44,12 +48,15 @@
     --card-foreground: 0 0% 100%;
     --primary: 18 99% 49%;
     --primary-foreground: 0 0% 100%;
+    --secondary: 205 32% 16%;
+    --secondary-foreground: 0 0% 100%;
     --muted-foreground: 0 0% 48%;
     --accent: 0 0% 16%;
     --accent-foreground: 0 0% 100%;
     --border: 0 0% 20%;
     --input: 0 0% 20%;
     --ring: 18 99% 49%;
+    --brand-blue: 201 70% 62%;
   }
 
   body {
