@@ -3,7 +3,7 @@ import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
 import { DemoModal } from '@/components/DemoModal';
 import { RunItYourselfModal } from '@/components/RunItYourselfModal';
-import { SlidePanel } from '@/components/SlidePanel';
+import { Modal } from '@/components/Modal';
 import landingReference from '@/assets/landing/landing-reference.svg';
 import landingReferenceDark from '@/assets/landing/landing-reference-dark.svg';
 
@@ -25,8 +25,9 @@ import landingReferenceDark from '@/assets/landing/landing-reference-dark.svg';
  *
  * Everything else -- the artwork, the FAQ, the footer, the theme toggle --
  * is the same interaction shape as the real page. The demo, run-it-yourself,
- * and FAQ dialogs all share the SlidePanel container, which slides in from
- * the right rather than popping up centered over the page.
+ * and FAQ dialogs all share the Modal container: a centered card over a
+ * dimmed backdrop, which keeps the reused landing artwork's own length and
+ * layout untouched.
  */
 export function App() {
   const [faqIndex, setFaqIndex] = useState<number | null>(null);
@@ -113,7 +114,7 @@ export function App() {
         ))}
 
         {faqIndex !== null && (
-          <SlidePanel onClose={() => setFaqIndex(null)} labelledBy="landing-faq-title" maxWidthClassName="max-w-xl">
+          <Modal onClose={() => setFaqIndex(null)} labelledBy="landing-faq-title" maxWidthClassName="max-w-xl">
             <div className="p-6 sm:p-8">
               <div className="flex items-start justify-between gap-5">
                 <div>
@@ -124,7 +125,7 @@ export function App() {
               </div>
               <p className="mt-5 text-base leading-relaxed text-muted-foreground">{faqAnswers[faqIndex]}</p>
             </div>
-          </SlidePanel>
+          </Modal>
         )}
 
         {demoOpen && <DemoModal onClose={() => setDemoOpen(false)} />}

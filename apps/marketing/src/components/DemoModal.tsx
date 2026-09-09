@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { SlidePanel } from '@/components/SlidePanel';
+import { Modal } from '@/components/Modal';
 import {
   CATEGORY_LABELS,
   SAMPLE_CATEGORIES,
@@ -31,7 +31,7 @@ const CATEGORY_STATE_STYLE: Record<string, string> = {
 /** Opened from the reused LandingPage's "Log in" nav hotspot and its "See
  * how it works" hero hotspot (#382 redesign) -- there is no login flow, no
  * dashboard, and no anchor-scrollable walkthrough in this standalone site,
- * so both hotspots lead here instead. A slide-in side panel, not a page
+ * so both hotspots lead here instead. A centered modal dialog, not a page
  * section: keeps the reused landing artwork's own length and layout
  * completely untouched. */
 export function DemoModal({ onClose }: { onClose: () => void }) {
@@ -63,7 +63,7 @@ export function DemoModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <SlidePanel onClose={onClose} labelledBy="demo-modal-title" maxWidthClassName="max-w-3xl">
+    <Modal onClose={onClose} labelledBy="demo-modal-title" maxWidthClassName="max-w-3xl">
       <div className="sticky top-0 z-10 flex items-start justify-between gap-5 border-b border-border bg-card p-6 sm:p-8 sm:pb-6">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-accent px-3 py-1 text-2xs font-semibold uppercase tracking-[0.14em] text-primary">
@@ -246,6 +246,6 @@ export function DemoModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
       </div>
-    </SlidePanel>
+    </Modal>
   );
 }
