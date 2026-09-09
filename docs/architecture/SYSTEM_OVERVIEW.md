@@ -186,6 +186,8 @@ sequenceDiagram
 
 The access token is short-lived (15 min default); the refresh token lasts 14 days and rotates on every use. Refresh-token reuse revokes the whole family. `AUTH_SECRET_KEY` is required and length-checked outside `development`/`test`; in dev it falls back to a fixed insecure value.
 
+**Cookie scope and the same-site deployment requirement.** The refresh cookie is `HttpOnly`, `Path=/auth`, `SameSite=Lax`, and `Secure` outside `development`/`test` (`_set_refresh_cookie` in `app/api/routes/auth.py`). `SameSite=Lax` is a deliberate CSRF control, and it means **the frontend and the API must be served from the same site** (same registrable domain) in any deployment — e.g. one origin behind a path prefix, or `app.example.com` + `api.example.com`. If they are cross-site, the browser withholds the cookie from the background `POST /auth/refresh`, so the session cannot be re-established and the user is bounced to login on every reload. Locally this only bites if the frontend origin and `VITE_API_URL` disagree on host (`localhost` vs `127.0.0.1`); keep both on the same host.
+
 **Enforcement.** Every non-public route requires a valid access token. The `/repositories`, `/analysis`, `/ai`, `/documentation`, and `/export` routers each apply `get_current_user` at the router level, so a request with no token — or an invalid one — is rejected with 401 before reaching a handler, and a newly added route under those prefixes is protected by default. The pre-auth `get_current_user_or_default` fallback and its `X-Dev-User` header were removed in E1.3; there is no anonymous seed-user bucket. Data is additionally owner-scoped in the service layer (below), so authentication and authorization are enforced independently.
 
 ---

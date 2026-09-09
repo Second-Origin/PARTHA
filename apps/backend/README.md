@@ -269,6 +269,7 @@ repository revision and snapshot identity.
 | `POST /repositories/upload`, `POST /repositories/github` | Import an archive or a public GitHub URL. Extraction and file-tree parsing complete before the response. |
 | `GET /repositories`, `GET /repositories/{id}` | Owner-scoped listing and detail. The list is not paginated: it returns every repository the caller owns. |
 | `GET /repositories/{id}/file` | Path-checked bounded preview for the explorer. Feeds no analysis. |
+| `GET /repositories/{id}/lineage` | Ordered repository-lineage history (RFC-0002). A standalone (unlineaged) repository returns `isLineaged: false` and itself as the only entry. |
 | `DELETE /repositories/{id}` | Deletes the repository and cascades to its snapshots and conversation turns. |
 | `POST /analysis/{id}/start`, `POST /analysis/{id}/cancel`, `GET /analysis/{id}/status` | Durable job lifecycle, described above. |
 | `POST /documentation/generate` | Structural documentation from the sealed snapshot. |
