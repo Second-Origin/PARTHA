@@ -7,8 +7,8 @@
 > The interface has since changed — navigation is grouped into Analysis and
 > Assist with Settings pinned (#289), and the AI Workspace copy was corrected to
 > disclose conversation retention. For current behaviour see the
-> [README capability registry](README.md#what-works-today) and
-> [System Overview](docs/architecture/SYSTEM_OVERVIEW.md).
+> [README capability registry](../../README.md#what-works-today) and
+> [System Overview](../architecture/SYSTEM_OVERVIEW.md).
 
 ## Reference
 
