@@ -1,1 +1,29 @@
-* @parthrohit22
+# Review ownership for PARTHA. Last matching pattern wins.
+# Human-readable roles: ../MAINTAINERS.md
+#
+# NOTE: a CODEOWNERS entry only requires review from a user who has write (or
+# higher) access to this repository. New owners below must be added as
+# collaborators for their review to be requested and enforced.
+
+# Project-wide fallback — unclassified paths always have an explicit owner.
+*                               @parthrohit22
+
+# Backend: architecture, APIs, database/runtime changes, migrations.
+/apps/backend/                  @SHAURYAKSHARMA24 @parthrohit22
+
+# Infrastructure, CI/CD, deployment.
+/.github/                       @SHAURYAKSHARMA24 @parthrohit22
+/Dockerfile                     @SHAURYAKSHARMA24 @parthrohit22
+/.dockerignore                  @SHAURYAKSHARMA24 @parthrohit22
+/render.yaml                    @SHAURYAKSHARMA24 @parthrohit22
+/scripts/                       @SHAURYAKSHARMA24 @parthrohit22
+
+# Tests and regression coverage.
+/apps/backend/tests/            @hardikuppal04 @SHAURYAKSHARMA24 @parthrohit22
+
+# Documentation.
+/docs/                          @hardikuppal04 @parthrohit22
+/*.md                           @hardikuppal04 @parthrohit22
+/apps/backend/README.md         @hardikuppal04 @parthrohit22
+/apps/frontend/README.md        @hardikuppal04 @parthrohit22
+/apps/marketing/README.md       @hardikuppal04 @parthrohit22

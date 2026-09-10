@@ -17,12 +17,14 @@ in the same pull request as the behaviour it describes.
 
 | Role | Who | What it means |
 | --- | --- | --- |
-| **Maintainers** | Listed in [MAINTAINERS.md](MAINTAINERS.md) and [`.github/CODEOWNERS`](.github/CODEOWNERS) | Merge authority, release authority, and the final say on scope and architecture. Review is enforced by branch rulesets — see below. |
+| **Project Lead** | [@parthrohit22](https://github.com/parthrohit22) | Final say on product direction, architecture, roadmap, and release coordination. May review across the whole repository, and is the project-wide fallback owner in [`.github/CODEOWNERS`](.github/CODEOWNERS). |
+| **Area maintainers** | Listed in [MAINTAINERS.md](MAINTAINERS.md), with path ownership in [`.github/CODEOWNERS`](.github/CODEOWNERS) | Primary technical review for changes inside their ownership boundary (currently backend & infrastructure, and tests & documentation). Merge and release authority; maintain quality and architectural standards within their area. |
 | **Contributors** | Anyone who opens an issue or pull request | Participate through the [contribution workflow](CONTRIBUTING.md). No standing permissions. |
-| **RFC reviewers** | Named per RFC | Provide independent review of an architectural contract before it is accepted. Independent ratification is *requested* for significant RFCs and may be waived by the owner, on the record, when a substantive independent check is not available (see RFC-0001 §1, RFC-0002 §1.2). |
+| **RFC reviewers** | Named per RFC | Provide independent review of an architectural contract before it is accepted. Independent ratification is *requested* for significant RFCs and may be waived by the Project Lead, on the record, when a substantive independent check is not available (see RFC-0001 §1, RFC-0002 §1.2). |
 
-Maintainer appointment and removal is **not yet a written process**. It is currently the
-owner's decision. If the maintainer group grows, that process should be defined here.
+Maintainer appointment, inactivity, and removal is **not yet a written process**. It is
+currently the Project Lead's decision. As the maintainer group grows, that process should be
+defined here.
 
 ## How change lands
 
