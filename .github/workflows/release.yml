@@ -95,7 +95,7 @@ jobs:
           ruff format --check app
           mypy app
 
-      - name: Validate capability registry and README
+      - name: Validate capability registry and docs/CAPABILITIES.md
         run: python scripts/check-capabilities.py
 
       - name: Test backend

@@ -355,7 +355,7 @@ Run the checks relevant to your change. These are what CI runs.
 | --- | --- | --- |
 | `npm run test:backend` | Backend tests (pytest) | Backend |
 | `ruff check app` · `ruff format --check app` · `mypy app` | Backend static analysis. Needs `requirements-dev.txt` — see the [backend README](apps/backend/README.md#static-analysis) | Backend |
-| `python scripts/check-capabilities.py` | Capability registry and its generated README block are current and deterministic | Backend |
+| `python scripts/check-capabilities.py` | Capability registry and its generated `docs/CAPABILITIES.md` block are current and deterministic. `--write` regenerates the block | Backend |
 | `npm --prefix apps/frontend run test` | Frontend tests (vitest) | Frontend |
 | `npm run lint:frontend` | ESLint | Frontend |
 | `npm run build:frontend` | `tsc -b && vite build` — type errors surface here, not in lint | Frontend |
@@ -486,6 +486,9 @@ code-owner review, passing required status checks, and no deletion or force-push
    is genuinely out of date. Merge that to `dev` like any other change.
 2. Open a `dev` → `main` pull request and merge it once checks are green.
 3. Tag the release commit `vMAJOR.MINOR.PATCH` and push the tag.
+4. Once the GitHub Release exists and its notes are curated (below), add a row for
+   the version to [`CHANGELOG.md`](CHANGELOG.md) — a one-line summary and a link to
+   the release notes — so the in-repo index stays current.
 
 Pushing a `v*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml):
 a `validate` job re-runs the release-relevant frontend and backend checks against real

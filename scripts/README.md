@@ -10,7 +10,7 @@ Local workflow helpers. Prefer the root `package.json` scripts for common tasks 
 | `start-backend.sh` | Starts the backend with uvicorn on `0.0.0.0:8000`. Same venv preference as above; override with `PYTHON=…`. | Directly, or from a process manager |
 | `check-backend.sh` | Runs the backend test suite (`pytest`). Same venv preference; override with `PYTHON=…`. | Directly |
 | `generate-api-contract.mjs` | Regenerates the frontend DTOs from the FastAPI OpenAPI schema using the pinned `openapi-typescript`. `--check` fails on drift instead of writing. | `npm run generate:api-contract`, CI **API Contract Drift** |
-| `check-capabilities.py` | Validates the capability registry and the generated README block against `app/extraction/support_matrix.py`, so the published capability table cannot drift from the support matrices. | CI **Backend** |
+| `check-capabilities.py` | Validates the capability registry and the generated block in `docs/CAPABILITIES.md` against `app/extraction/support_matrix.py`, so the published capability table cannot drift from the source. `--write` regenerates the block. | CI **Backend** |
 | `apps/backend/scripts/approve_email.py` | **Operator tool for the registration gate.** Adds an email address to the `approved_emails` allowlist, which is what permits that address to register. There is deliberately no admin UI or API route for this. Approving the same address twice is a harmless no-op. | Maintainer, directly |
 | `apps/backend/scripts/list_waitlist.py` | Lists landing-page waitlist signups, newest first (`--csv` for a spreadsheet). The owner's review step before deciding whom to approve next. | Maintainer, directly |
 | `apps/backend/scripts/rehearse_migrations.py` | Creates disposable SQLite (or explicitly confirmed PostgreSQL) targets, exercises the Alembic clean chain and representative `0004` baseline, then removes the targets. | Maintainer runbook and backend test suite |
@@ -22,7 +22,7 @@ Local workflow helpers. Prefer the root `package.json` scripts for common tasks 
 The two shell scripts are standalone equivalents of the Node helpers, for environments where invoking `node` first is inconvenient.
 
 The generated frontend contract at `apps/frontend/src/shared/services/api/generated.ts` and the
-capability block in the root README are both build outputs. Edit their sources — the FastAPI
+capability block in `docs/CAPABILITIES.md` are both build outputs. Edit their sources — the FastAPI
 schema and `support_matrix.py` — and regenerate; CI fails on hand edits that drift.
 
 `npm run test:e2e` is the one-command browser gate after dependencies are installed. It
