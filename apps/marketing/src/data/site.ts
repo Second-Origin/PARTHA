@@ -22,7 +22,7 @@ export const FOOTER_COLUMNS: { heading: string; links: FooterLink[] }[] = [
       { label: 'How it works', href: '#how-it-works', external: false },
       { label: 'Capabilities', href: '#capabilities', external: false },
       { label: 'FAQ', href: '#faq', external: false },
-      { label: 'Privacy', href: `${REPO_BLOB}/README.md#limitations-and-security`, external: true },
+      { label: 'Privacy', href: `${REPO_BLOB}/README.md#current-limitations`, external: true },
     ],
   },
   {

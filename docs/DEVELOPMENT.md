@@ -2,7 +2,7 @@
 
 A single walkthrough for getting PARTHA running locally, running its test
 suites, and resolving the failures a new contributor is most likely to hit.
-It consolidates and cross-links the [root README](../README.md#run-partha-locally),
+It consolidates and cross-links the [root README](../README.md#quick-start),
 [CONTRIBUTING.md](../CONTRIBUTING.md#1-setup), and the
 [backend](../apps/backend/README.md) and [frontend](../apps/frontend/README.md)
 guides rather than duplicating them — follow those links for anything not

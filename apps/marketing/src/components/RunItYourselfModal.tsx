@@ -80,7 +80,7 @@ export function RunItYourselfModal({ onClose }: { onClose: () => void }) {
             Fork the repository
           </a>
           <a
-            href={`${GITHUB_URL}#run-partha-locally`}
+            href={`${GITHUB_URL}#quick-start`}
             target="_blank"
             rel="noreferrer"
             className="rounded-xl border border-border px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-accent"
