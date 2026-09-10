@@ -1,36 +1,56 @@
 # Maintainers
 
-The machine-readable source of review ownership is [`.github/CODEOWNERS`](.github/CODEOWNERS).
-This file is the human-readable version and the place to look for who to contact.
+PARTHA is maintained by a small team with defined areas of responsibility.
 
-Review is **not currently split by component** — CODEOWNERS assigns the whole repository to
-one owner. As the maintainer group and the codebase grow, per-area ownership should be added
-to CODEOWNERS and reflected here.
+The human-readable maintainer roles are documented here. Path-level review ownership is enforced through [`.github/CODEOWNERS`](.github/CODEOWNERS).
 
 ## Current maintainers
 
-| Maintainer | Focus | Basis |
+| Maintainer | Role | Focus |
 | --- | --- | --- |
-| [@parthrohit22](https://github.com/parthrohit22) | Project lead · architecture · Repository Intelligence · releases | Sole entry in `.github/CODEOWNERS`; author of RFC-0001 and RFC-0002; release authority per [CONTRIBUTING §14](CONTRIBUTING.md#14-releases) |
-| [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) | Review · independent RFC ratification | Named "an independent project maintainer other than the author" in [RFC-0001 §1](docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md#1-status-and-approval); independent ratifier on 2026-07-16 |
+| [@parthrohit22](https://github.com/parthrohit22) | **Project Lead / Maintainer** | Product direction, architecture, Repository Intelligence, RFCs, releases, roadmap, and cross-project review |
+| [@SHAURYAKSHARMA24](https://github.com/SHAURYAKSHARMA24) | **Backend & Infrastructure Maintainer** | Backend architecture, APIs, infrastructure, deployment, CI/CD, database and runtime changes |
+| [@hardikuppal04](https://github.com/hardikuppal04) | **Tests & Documentation Maintainer** | Test quality, regression coverage, documentation quality, documentation review, and contributor-facing technical guidance |
 
-## What a maintainer does
+## Maintainer responsibilities
 
-- Reviews and merges pull requests (merge requires code-owner review — see [GOVERNANCE.md](GOVERNANCE.md)).
-- Approves or requests changes on RFCs; provides independent ratification where the process calls for it.
-- Cuts releases.
-- Triages issues and sets roadmap direction.
+Maintainers help keep PARTHA technically coherent and reviewable as the project evolves. Depending on their area of ownership, maintainers:
 
-A maintainer listing here does not by itself imply every GitHub administrative permission;
-repository administration follows the org's own access controls.
+- review pull requests and request changes where required;
+- maintain quality and architectural standards within their area;
+- triage issues and help shape implementation scope;
+- keep tests and documentation aligned with implementation;
+- review RFCs and significant architectural changes;
+- support releases and repository maintenance.
+
+The Project Lead retains responsibility for overall product direction, architecture, roadmap, and release coordination.
+
+Area maintainers are expected to provide the primary technical review for changes within their ownership boundaries.
+
+## Review ownership
+
+Machine-readable review ownership lives in [`.github/CODEOWNERS`](.github/CODEOWNERS).
+
+The intended ownership model is:
+
+- **Project-wide / architecture:** `@parthrohit22`
+- **Backend / infrastructure:** `@SHAURYAKSHARMA24`
+- **Tests / documentation:** `@hardikuppal04`
+
+The Project Lead may review changes across the repository.
+
+A listing in this document describes project responsibility; it does not by itself imply every GitHub organization or repository administrative permission. A CODEOWNERS entry also only takes effect once the named maintainer has write access to the repository.
 
 ## Becoming a maintainer
 
-There is no written appointment or removal process yet; it is currently the project lead's
-decision. If you are contributing regularly and want to take on review responsibility for an
-area, say so in an issue or on [Discord](https://discord.gg/qvk9DcxDA).
+Maintainer responsibility is earned through sustained, constructive contribution and demonstrated ownership of an area of the project.
+
+Contributors interested in taking responsibility for a component should begin by contributing consistently, participating in reviews, and discussing the area with the existing maintainers through a GitHub issue or Discord.
+
+As PARTHA's maintainer group grows, appointment, inactivity, and removal procedures should be formalized in [GOVERNANCE.md](GOVERNANCE.md).
 
 ## Contact
 
-- General: [Discord](https://discord.gg/qvk9DcxDA) or a [GitHub issue](https://github.com/Second-Origin/PARTHA/issues)
-- Security: private disclosure per [SECURITY.md](SECURITY.md)
+- **Project discussion:** [GitHub Issues](https://github.com/Second-Origin/PARTHA/issues)
+- **Community:** [Discord](https://discord.gg/qvk9DcxDA)
+- **Security:** follow the private disclosure process in [SECURITY.md](SECURITY.md)

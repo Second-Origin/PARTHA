@@ -3,13 +3,13 @@
 </p>
 
 <p align="center">
-  <a href="#why-partha">Overview</a>
-  ·
-  <a href="#how-it-works">How it works</a>
+  <a href="https://www.partha.uk"><strong>Website</strong></a>
   ·
   <a href="#quick-start">Quick start</a>
   ·
   <a href="docs/README.md">Docs</a>
+  ·
+  <a href="ROADMAP.md">Roadmap</a>
   ·
   <a href="CONTRIBUTING.md">Contributing</a>
   ·
@@ -85,6 +85,10 @@ flowchart LR
 Supported structural facts retain evidence and provenance back to their repository revision and source location; coverage is surface-dependent, and free-form AI is deliberately uncited. The snapshot's canonical graph hash detects content differences inside a deployment — it is not a digital signature.
 
 **Read more:** [System Overview](docs/architecture/SYSTEM_OVERVIEW.md) · [Repository Intelligence](docs/architecture/REPOSITORY_INTELLIGENCE.md) · [RFC-0001 (`ri.v1` contract)](docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md) · [RFC-0002 (Repository Lineage)](docs/architecture/REPOSITORY_LINEAGE_RFC.md)
+
+## Explore PARTHA
+
+[**www.partha.uk**](https://www.partha.uk) is the public project site: it explains the product and includes a **scripted walkthrough** of an analysis, plus instructions for running PARTHA on your own code. The walkthrough uses fixed sample data and does not call a backend — there is no hosted PARTHA instance to analyse against. To analyse a real repository, run it locally with the [quick start](#quick-start) below.
 
 ## Quick start
 
