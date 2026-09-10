@@ -729,7 +729,7 @@ PRODUCT_CAPABILITIES: tuple[Capability, ...] = (
         "repository-lineage",
         SupportStatus.PARTIAL,
         "Durable lineage grouping repeated imports of the same repository (RFC-0002).",
-        "The `repository_lineages` table, owner-scoped grouping, and duplicate-revision detection run on every import. No read API or UI for browsing that history exists yet.",
+        "The `repository_lineages` table, owner-scoped grouping, and duplicate-revision detection run on every import; `GET /repositories/{id}/lineage` and the repository detail page expose the ordered history. Refresh and cross-revision comparison on top of a lineage are not built.",
     ),
     _product_capability(
         "service-interactions",
