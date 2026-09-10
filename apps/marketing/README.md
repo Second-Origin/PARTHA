@@ -47,9 +47,11 @@ no backend call anywhere on the site.
 
 ## Verification
 
-> **This package has no CI coverage.** No job in `.github/workflows/` builds, lints, or type-checks
-> `apps/marketing`, and there are no tests here. Run these locally before merging anything that touches it, and
-> check both layouts in a browser — a change that only breaks below 1024px will not be caught for you.
+The **Marketing Site** job in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) runs
+`npm ci` → `npm audit` → `lint` → `typecheck` → `build` against this package's own lockfile on every
+push and pull request. There are no automated tests here — the site has no runtime behaviour beyond
+a static build — so a change that only breaks the layout below 1024px will still not be caught for
+you; check both layouts in a browser before merging.
 
 ```bash
 npm run typecheck  # tsc -b --noEmit

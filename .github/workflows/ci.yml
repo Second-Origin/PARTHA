@@ -411,3 +411,40 @@ jobs:
       - name: Stop container
         if: always()
         run: docker rm -f partha-ci-check || true
+
+  marketing:
+    name: Marketing Site
+    needs: repository-hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # apps/marketing is a standalone static site outside the root npm
+    # workspace (its own package.json and lockfile), so it is not exercised
+    # by the Frontend job. This runs the same install/lint/typecheck/build
+    # gate against its own lockfile. It ships no tests today; there is no
+    # runtime behaviour to assert beyond a clean production build.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/marketing/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix apps/marketing
+
+      - name: Dependency audit
+        run: npm --prefix apps/marketing audit --omit=dev --audit-level=high
+
+      - name: Lint
+        run: npm --prefix apps/marketing run lint
+
+      - name: Typecheck
+        run: npm --prefix apps/marketing run typecheck
+
+      - name: Build
+        run: npm --prefix apps/marketing run build
