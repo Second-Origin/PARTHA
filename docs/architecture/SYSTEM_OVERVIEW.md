@@ -234,6 +234,34 @@ extracts and what it does not.
 | `ai/repository_context.py` | shared sealed structural projection, without source bytes, plus the recent turns of the stored conversation thread | Preview `RepositoryContext` → `PromptBundle` for a configured provider |
 | `reports/` | snapshot-backed analysis and documentation output | JSON / Markdown / HTML / PDF |
 
+### Repository metadata vs. Repository Intelligence
+
+Two different things answer "what language / framework is this repository", and they must not be
+confused.
+
+| | `RepositoryResponse.meta` (`RepositoryMeta`) | Repository Intelligence |
+| --- | --- | --- |
+| Source | `RepositoryParser`, at import time | sealed `ri.v1` snapshot, from durable analysis |
+| How | file-extension `Counter`; `_detect_framework` / `_detect_entry_point` / `_detect_package_manager` / `_detect_license` filename heuristics | evidence-backed extractors + deterministic resolver |
+| Provenance | none | path + span + producer/version on every fact |
+| Owner-scoped | via the repository row | yes, in the query service |
+| Can be wrong / disagree with the other | yes | it is the product's source of truth |
+
+`RepositoryMeta` exists so the repository list, dashboard, and detail header can show *something*
+before analysis has run or when it is stale. It is **not** Repository Intelligence. Any
+intelligence-oriented surface — Architecture, Dependencies, Insights, the authentication
+explanation, AI context — reads the snapshot query API, never `meta`.
+
+`RepositoryParser` is not redundant with the engine: it does the bounded tree walk, produces
+`file_tree` for the Explorer, enforces the file-count and symlink limits, and computes the size the
+import path persists. Its heuristic `meta` is a byproduct of that walk, not a parallel analysis
+engine, and no consumer under the Repository Intelligence boundary reads it.
+
+*Known UI debt:* `RepositoryDetailPage`, `RepositoriesPage`, and `DashboardPage` render
+`meta.language` / `meta.framework` without labelling them as import-time heuristics. Relabelling
+those surfaces (or switching them to snapshot-backed values once analysis has completed) is tracked
+as follow-up, not done here.
+
 ---
 
 ## External dependencies

@@ -67,6 +67,15 @@ Ruff targets the production package and Python 3.12, the project's minimum
 supported Python version. Run `ruff format app` to apply the repository's
 formatter, then review the resulting diff before committing.
 
+**mypy coverage is partial.** `mypy app` passes, but a list of modules in
+`pyproject.toml` (`[[tool.mypy.overrides]]` with `ignore_errors = true`) is
+checked leniently — the snapshot store, architecture analyzer, intelligence
+route, provider HTTP layer, and several services and route handlers. Removing
+that list surfaces roughly 90 real errors across ~24 files. A green `mypy` run is
+therefore not a claim that the whole backend is type-clean. The list is a
+ratchet: fix a module's annotations (without widening types to `Any`) and drop it
+from the list; never add a module to it to get CI green.
+
 ## Migrations
 
 ```bash

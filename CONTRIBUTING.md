@@ -489,10 +489,16 @@ code-owner review, passing required status checks, and no deletion or force-push
 
 Pushing a `v*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml):
 a `validate` job re-runs the release-relevant frontend and backend checks against real
-PostgreSQL and Redis, and only if that passes does a `github-release` job publish the
-GitHub Release. Release notes are then written by hand — grouped by area, stating what
-changed and what is still not built — rather than left as a raw list of merged pull
-requests.
+PostgreSQL and Redis, and only if that passes does a `github-release` job create the
+GitHub Release with `gh release create --generate-notes` — an automatically generated
+list of merged pull requests and new contributors.
+
+Those generated notes are a **baseline, not the final notes.** After the workflow runs,
+a maintainer edits the release (`gh release edit <tag> --notes-file …`, or the Releases
+UI) to replace or lead them with hand-written notes: grouped by area, stating what
+changed and — for a truth-focused project — what is still *not* built. The generated
+pull-request list may be kept underneath as a changelog. A release is not considered
+done until that curation has happened.
 
 `main` is only ever a pull-request **target**. Never open a pull request whose *source*
 branch is `main`: merged head branches are deleted automatically, which would delete

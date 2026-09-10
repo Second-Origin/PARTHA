@@ -10,16 +10,19 @@
 | **Ratifier** | Independent ratification was waived by the owner on 2026-08-11; the implementation-critical amendment in [PR #328](https://github.com/Second-Origin/PARTHA/pull/328) was explicitly approved by the owner on 2026-08-19 |
 | **Approval evidence** | Original owner sign-off is recorded below; the sequence, standalone-import, integrity, and deletion amendments were explicitly approved in [PR #328 review](https://github.com/Second-Origin/PARTHA/pull/328#pullrequestreview-4975035985) |
 | **Created** | 2026-08-11 |
-| **Last updated** | 2026-08-20 |
-| **Status** | **Accepted; PR #328 amendment approved and #299 authorized for implementation** |
+| **Last updated** | 2026-09-10 |
+| **Status** | **Accepted (design) — Implemented** |
+| **Implementation** | Shipped in [#299](https://github.com/Second-Origin/PARTHA/issues/299) via [PR #372](https://github.com/Second-Origin/PARTHA/pull/372): migrations `0013_lineage_expand` / `0014_lineage_constraints`. Read API [#407](https://github.com/Second-Origin/PARTHA/pull/407) and the repository-detail Lineage History UI followed. |
 | **Supersedes** | — |
 | **Superseded by** | — |
 
-> **This RFC records a design decision; it is not application code.** Acceptance does not by
-> itself create the `repository_lineages` table, add columns to `repositories`, change
-> `RepositoryService`, or alter any API or frontend surface. Implementation is tracked as a
-> separate issue, [#299](https://github.com/Second-Origin/PARTHA/issues/299). The exact authorization
-> rule for that issue is recorded in [§1.2](#12-implementation-authorization).
+> **This RFC records a design decision; it is not itself application code.** When it was written,
+> acceptance did not by itself create the `repository_lineages` table, add columns to
+> `repositories`, change `RepositoryService`, or alter any API or frontend surface — implementation
+> was tracked as a separate issue, [#299](https://github.com/Second-Origin/PARTHA/issues/299), under
+> the authorization rule in [§1.2](#12-implementation-authorization). That implementation has since
+> shipped; [§1.3](#13-implementation-status) records what landed. The design history in §1.1–§1.2 is
+> kept as written, not rewritten as though it were authored after the code.
 
 ---
 
@@ -51,8 +54,43 @@ The authorization state is therefore explicit:
   repeatable migration rehearsal and rollback evidence are **required before the #299
   implementation PR merges**, but that gate does not prevent implementation work from proceeding.
 
-The approval evidence is the owner review linked above. Approval authorizes writing and testing;
-it does not mean #299 has been implemented or remove its operational pre-merge gate.
+The approval evidence is the owner review linked above. *(Historical note: at the time this section
+was written, that approval authorized writing and testing and did not mean #299 had been
+implemented. It since was — see §1.3.)*
+
+### 1.3 Implementation status
+
+RFC-0002 is implemented. #299 shipped in [PR #372](https://github.com/Second-Origin/PARTHA/pull/372)
+(2026-08-28), and the [#322](https://github.com/Second-Origin/PARTHA/issues/322) rehearsal-and-recovery
+process was completed as its merge gate.
+
+**Delivered by RFC-0002 and its implementation:**
+
+- The `repository_lineages` table and the lineage columns on `repositories`
+  (migrations `0013_lineage_expand`, `0014_lineage_constraints`).
+- Durable, owner-scoped grouping of repeated imports of the same GitHub repository and branch,
+  with 1-based, never-reused `sequence` allocation and duplicate-revision detection, run on every
+  import.
+- Unlineaged standalone imports for uploads and unresolved-ref GitHub imports, exactly as
+  [§4.3](#43-uploads-and-unresolved-ref-imports-unlineaged-standalone-imports) specifies.
+- Database-enforced membership integrity and the deletion semantics in [§5.4](#54-deletion-semantics).
+- A read-only history: `GET /repositories/{id}/lineage` ([#407](https://github.com/Second-Origin/PARTHA/pull/407))
+  and the Lineage History view on the repository detail page.
+
+**Explicitly not provided by RFC-0002 — and still unimplemented anywhere in PARTHA:**
+
+- **Cross-revision graph comparison.** There is no `Snapshot A ↔ Snapshot B` topology diff.
+- **Semantic entity correspondence across revisions** — no rename, move, or symbol-identity
+  recovery after a path change. Stable keys within a single snapshot (RFC-0001 §4) are not the
+  same as matching an entity to its counterpart in a different snapshot.
+- **Structural edge/graph delta classification** (`ADDED` / `REMOVED` / `MOVED` / `RENAMED` / …).
+- **Cross-revision impact or "blast radius"** analysis. The single-snapshot impact traversal
+  (`GET /intelligence/v1/snapshots/{id}/impact`) is reachability inside one sealed snapshot, not a
+  comparison of two.
+- **Refresh / product re-analysis orchestration** driven from a lineage.
+
+A lineage is the durable anchor those future features would group revisions by; building them is
+the subject of a future RFC, not this one.
 
 ## 2. Terminology
 

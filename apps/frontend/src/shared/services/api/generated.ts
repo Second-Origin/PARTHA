@@ -2008,7 +2008,15 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** RepositoryMeta */
+        /**
+         * RepositoryMeta
+         * @description Import-time repository summary from RepositoryParser: file-tree counts plus
+         *     filename/path heuristics for language, framework, entry point, package manager,
+         *     and license. It is not a Repository Intelligence fact, carries no provenance, and
+         *     can disagree with the sealed ri.v1 snapshot. Intelligence surfaces must read the
+         *     snapshot query API instead. See docs/architecture/SYSTEM_OVERVIEW.md
+         *     "Repository metadata vs. Repository Intelligence".
+         */
         RepositoryMeta: {
             /** Configfiles */
             configFiles: string[];

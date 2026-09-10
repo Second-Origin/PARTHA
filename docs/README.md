@@ -28,7 +28,7 @@ are point-in-time evidence, not current-state documentation.
 | [Repository Intelligence golden benchmark](../apps/backend/tests/benchmark/README.md) | Contributors on the intelligence track | The versioned golden fixture corpus, independently authored expected facts, explicit mapping to the production support matrices, real-extractor precision/recall and citation validation, repeated-extraction canonical-hash determinism checks, and CI reports for Issue [#94](https://github.com/Second-Origin/PARTHA/issues/94). |
 | [Backend README](../apps/backend/README.md) | Backend contributors | Running the backend, the full endpoint surface (including OAuth and the one public write route), configuration, tests. |
 | [Frontend README](../apps/frontend/README.md) | Frontend contributors | Running the frontend, structure, commands, tests. |
-| [Marketing site README](../apps/marketing/README.md) | Anyone touching the public landing page | The standalone static marketing site: the 1024px split between the authored desktop canvas and the purpose-built mobile layout, the two demo surfaces, Vercel deployment, and the fact that this package has **no CI coverage**. |
+| [Marketing site README](../apps/marketing/README.md) | Anyone touching the public landing page | The standalone static marketing site: the 1024px split between the authored desktop canvas and the purpose-built mobile layout, the two demo surfaces, Vercel deployment, and its CI job (install / audit / lint / typecheck / build; no automated tests). |
 | [Scripts README](../scripts/README.md) | All contributors | What each helper script does. |
 
 ## Reading paths
