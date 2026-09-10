@@ -255,10 +255,11 @@ bounded projection into a response shape. That is all.
 
 ## Evidence and provenance
 
-Two terms with distinct meanings. PARTHA uses them precisely:
+Three terms with distinct meanings. PARTHA uses them precisely:
 
 - **Evidence** — the source artifact that supports a repository fact: a file, a declaration, an import, a route, or a configuration entry.
 - **Provenance** — the information identifying *where a fact came from*: the revision, file, symbol, line span, and extraction method.
+- **Integrity** — the snapshot's canonical graph hash and revision manifest. The digest detects content differences between snapshots **inside this deployment**; it is **not** a digital signature and not proof of authorship. A matching hash means two snapshots describe the same graph under the same rules, nothing more.
 
 ### What exists today
 

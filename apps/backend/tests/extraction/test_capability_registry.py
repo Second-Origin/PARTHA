@@ -1,4 +1,4 @@
-"""Focused tests for the authoritative capability registry and README view."""
+"""Focused tests for the authoritative capability registry and its generated docs view."""
 
 from __future__ import annotations
 
@@ -8,16 +8,19 @@ from pathlib import Path
 import pytest
 
 from app.extraction.support_matrix import (
+    CAPABILITIES_BLOCK_END,
+    CAPABILITIES_BLOCK_START,
     CAPABILITY_REGISTRY,
     PUBLIC_CAPABILITIES,
-    README_CAPABILITIES_END,
-    README_CAPABILITIES_START,
     PublicStatus,
     SupportStatus,
-    check_readme_capabilities,
-    render_readme_capabilities,
+    check_capabilities_doc,
+    render_capabilities_block,
+    splice_capabilities_block,
     validate_registry,
 )
+
+CAPABILITIES_DOC = Path(__file__).parents[4] / "docs" / "CAPABILITIES.md"
 
 
 def test_registry_is_typed_unique_and_deterministically_ordered():
@@ -55,20 +58,25 @@ def test_public_claims_resolve_to_consistent_registry_capabilities():
         validate_registry(public_capabilities=(broken,))
 
 
-def test_readme_capability_rendering_is_byte_stable_and_checked_in():
-    assert render_readme_capabilities() == render_readme_capabilities()
-    readme = Path(__file__).parents[4] / "README.md"
-    check_readme_capabilities(readme)
-    block = readme.read_text(encoding="utf-8")
-    assert block.count(README_CAPABILITIES_START) == 1
-    assert block.count(README_CAPABILITIES_END) == 1
+def test_capabilities_doc_block_is_byte_stable_and_checked_in():
+    assert render_capabilities_block() == render_capabilities_block()
+    check_capabilities_doc(CAPABILITIES_DOC)
+    content = CAPABILITIES_DOC.read_text(encoding="utf-8")
+    assert content.count(CAPABILITIES_BLOCK_START) == 1
+    assert content.count(CAPABILITIES_BLOCK_END) == 1
 
 
-def test_stale_readme_capability_claims_fail_check(tmp_path: Path):
-    readme = tmp_path / "README.md"
-    content = (Path(__file__).parents[4] / "README.md").read_text(encoding="utf-8")
-    readme.write_text(
+def test_stale_capabilities_doc_block_fails_check(tmp_path: Path):
+    doc = tmp_path / "CAPABILITIES.md"
+    content = CAPABILITIES_DOC.read_text(encoding="utf-8")
+    doc.write_text(
         content.replace("Archive upload and public GitHub import", "Changed capability", 1), encoding="utf-8"
     )
-    with pytest.raises(ValueError, match="README capability registry block is stale"):
-        check_readme_capabilities(readme)
+    with pytest.raises(ValueError, match="capability registry block is stale"):
+        check_capabilities_doc(doc)
+
+
+def test_splice_restores_a_mangled_block(tmp_path: Path):
+    content = CAPABILITIES_DOC.read_text(encoding="utf-8")
+    mangled = content.replace("Archive upload and public GitHub import", "Changed capability", 1)
+    assert splice_capabilities_block(mangled) == content

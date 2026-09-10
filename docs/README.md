@@ -10,7 +10,11 @@ are point-in-time evidence, not current-state documentation.
 
 | Document | Reader | Purpose |
 | --- | --- | --- |
-| [README](../README.md) | Anyone evaluating or running PARTHA | What PARTHA is, what currently works, how to run it locally, and its limitations. |
+| [README](../README.md) | Anyone evaluating or running PARTHA | What PARTHA is, what currently works, how to run it locally, and its limitations. The gateway; deeper detail lives in the documents below. |
+| [Capability matrix](CAPABILITIES.md) | Anyone checking exactly what is supported | The detailed, **generated** capability contract — every capability with its status and its coverage or trust boundary. Drift-checked in CI against `apps/backend/app/extraction/support_matrix.py`. |
+| [Roadmap](../ROADMAP.md) | Anyone asking "what's next" | Direction, not dates. Current focus, next, later, and an explicit list of what is *not* claimed today. |
+| [Governance](../GOVERNANCE.md) · [Maintainers](../MAINTAINERS.md) · [Support](../SUPPORT.md) | Contributors and users | How decisions are made, who owns review, how to get help, and version-support expectations. |
+| [Changelog](../CHANGELOG.md) | Anyone upgrading | Index of released versions, linking to the curated GitHub Release notes. |
 | [CONTRIBUTING](../CONTRIBUTING.md) | Contributors | The contribution rules: fork-first workflow, claiming an issue, branch naming, rebasing, pull requests, Definition of Ready and Done. Read before opening a PR. |
 | [Local development and troubleshooting](DEVELOPMENT.md) | New contributors | A single walkthrough for starting the backend and frontend, running every test/lint/build command, the local database and API-contract failures you're most likely to hit and how to fix them, and how to report a reproducible issue. |
 | [SECURITY](../SECURITY.md) | Anyone reporting a vulnerability | How to disclose privately. Never open a public issue for a vulnerability. |
@@ -58,5 +62,5 @@ rather than being rewritten.
 | [Iteration 1 design QA](qa/ITERATION_1_DESIGN_QA.md) | Iteration 1 | One QA pass of the implemented interface against the Iteration 1 Figma reference. The interface has since changed; the record's own header says how. |
 | [Iteration 1 engineer feedback](qa/ITERATION_1_ENGINEER_FEEDBACK.md) | Iteration 1 | Setup and validation feedback collected from an engineer working through the repository. |
 
-For current behaviour, read the [README capability registry](../README.md#what-works-today)
-and [System Overview](architecture/SYSTEM_OVERVIEW.md) instead of any record above.
+For current behaviour, read the [capability matrix](CAPABILITIES.md) and
+[System Overview](architecture/SYSTEM_OVERVIEW.md) instead of any record above.

@@ -163,9 +163,11 @@ which is the normal, supported state.
 **OAuth does not bypass the registration gate.** Signing in with a provider identity that
 belongs to no existing account does not create one — the caller is returned to the
 invite-gated registration flow. The only account-creating path in the backend is
-`AuthService.register()`, and it enforces the admin-managed email allowlist
-(`scripts/approve_email.py`; see
-[README § Security guidance](../../README.md#security-guidance)).
+`AuthService.register()`, and it enforces the admin-managed email allowlist. On a
+genuinely empty instance the first account registered (password or OAuth) is
+auto-approved and becomes the owner; every account after that needs an existing
+account holder to approve the email with
+[`scripts/approve_email.py`](scripts/approve_email.py).
 
 ## Public routes
 

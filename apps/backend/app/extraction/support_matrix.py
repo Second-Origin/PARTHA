@@ -16,8 +16,13 @@ from typing import Iterable
 
 
 REGISTRY_SCHEMA_VERSION = "ri-capability-registry.v1"
-README_CAPABILITIES_START = "<!-- BEGIN GENERATED CAPABILITY REGISTRY -->"
-README_CAPABILITIES_END = "<!-- END GENERATED CAPABILITY REGISTRY -->"
+CAPABILITIES_BLOCK_START = "<!-- BEGIN GENERATED CAPABILITY REGISTRY -->"
+CAPABILITIES_BLOCK_END = "<!-- END GENERATED CAPABILITY REGISTRY -->"
+
+# Backwards-compatible aliases (the marker strings never changed; only the
+# document that hosts them moved from README.md to docs/CAPABILITIES.md).
+README_CAPABILITIES_START = CAPABILITIES_BLOCK_START
+README_CAPABILITIES_END = CAPABILITIES_BLOCK_END
 
 
 class SupportStatus(StrEnum):
@@ -1058,9 +1063,15 @@ def supported_iac_filenames() -> tuple[str, ...]:
     return _SUPPORTED_IAC_FILENAMES
 
 
-def render_readme_capabilities() -> str:
+def render_capabilities_block() -> str:
+    """Render the marker-wrapped capability table spliced into ``docs/CAPABILITIES.md``.
+
+    The surrounding prose in that file is hand-written; only the text between the
+    two markers is generated and drift-checked.
+    """
+
     lines = [
-        README_CAPABILITIES_START,
+        CAPABILITIES_BLOCK_START,
         "| Capability | Status | Current boundary |",
         "| --- | --- | --- |",
     ]
@@ -1069,19 +1080,41 @@ def render_readme_capabilities() -> str:
         [
             "",
             "**Implemented with disclosed limits** means the workflow exists with an explicit coverage or trust boundary. **Planned** means it is roadmap work and current responses do not manufacture an answer. **Rejected** means the capability is intentionally outside the product contract.",
-            README_CAPABILITIES_END,
+            CAPABILITIES_BLOCK_END,
         ]
     )
     return "\n".join(lines)
 
 
-def check_readme_capabilities(readme: Path) -> None:
-    content = readme.read_text(encoding="utf-8")
-    start = content.find(README_CAPABILITIES_START)
-    end = content.find(README_CAPABILITIES_END)
+def splice_capabilities_block(document: str) -> str:
+    """Return ``document`` with its generated capability block replaced by the current one."""
+
+    start = document.find(CAPABILITIES_BLOCK_START)
+    end = document.find(CAPABILITIES_BLOCK_END)
     if start < 0 or end < start:
-        raise ValueError("README is missing the generated capability registry markers")
-    actual = content[start : end + len(README_CAPABILITIES_END)]
-    expected = render_readme_capabilities()
+        raise ValueError("document is missing the generated capability registry markers")
+    return document[:start] + render_capabilities_block() + document[end + len(CAPABILITIES_BLOCK_END) :]
+
+
+def check_capabilities_doc(path: Path) -> None:
+    """Raise if ``path`` (docs/CAPABILITIES.md) does not carry the current generated block."""
+
+    content = path.read_text(encoding="utf-8")
+    start = content.find(CAPABILITIES_BLOCK_START)
+    end = content.find(CAPABILITIES_BLOCK_END)
+    if start < 0 or end < start:
+        raise ValueError(f"{path.name} is missing the generated capability registry markers")
+    actual = content[start : end + len(CAPABILITIES_BLOCK_END)]
+    expected = render_capabilities_block()
     if actual != expected:
-        raise ValueError("README capability registry block is stale; run the reviewed registry renderer")
+        raise ValueError(
+            f"{path.name} capability registry block is stale; run `python scripts/check-capabilities.py --write`"
+        )
+
+
+# Backwards-compatible aliases for callers that predate the README -> docs move.
+render_readme_capabilities = render_capabilities_block
+
+
+def check_readme_capabilities(path: Path) -> None:
+    check_capabilities_doc(path)
