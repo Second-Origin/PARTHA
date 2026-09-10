@@ -35,6 +35,29 @@
     --input: 24 30% 88%;
     --ring: 18 99% 49%;
     --radius: 1rem;
+
+    /* Landing surfaces, sampled from the iteration-1 design frame. Dark mode
+       swaps each tint for the saturated brand colour it was derived from,
+       matching the design's dark variant. */
+    --ln-page: #ffffff;
+    --ln-bar: #f1eee7;
+    --ln-blue: #cce0ea;
+    --ln-peach: #fccdb7;
+    --ln-peach-soft: #feede5;
+    --ln-grey: #ebe8ea;
+    --ln-sand: #eed8cc;
+    --ln-orange: #fca57f;
+    --ln-quote: #fcede5;
+    --ln-card: #ffffff;
+    --ln-tint-blue: #f2f8fb;
+    --ln-ink: #191818;
+    --ln-ink-soft: #37383c;
+    --ln-ink-muted: #7a7a7a;
+    --ln-eyebrow: #5b6b74;
+    --ln-hero-head: #392135;
+    --ln-blue-ink: #006298;
+    --ln-blue-tile: #006298;
+    --ln-plum-tile: #392135;
   }
 
   .landing-dark {
@@ -54,6 +77,26 @@
     --border: 315 12% 21%;
     --input: 315 12% 21%;
     --ring: 18 99% 53%;
+
+    --ln-page: #000000;
+    --ln-bar: #000000;
+    --ln-blue: #006298;
+    --ln-peach: #a03200;
+    --ln-peach-soft: #6d2200;
+    --ln-grey: #392135;
+    --ln-sand: #aa3d00;
+    --ln-orange: #fa4d01;
+    --ln-quote: #241921;
+    --ln-card: #120c11;
+    --ln-tint-blue: #0d2b3d;
+    --ln-ink: #ffffff;
+    --ln-ink-soft: rgba(255, 255, 255, 0.82);
+    --ln-ink-muted: rgba(255, 255, 255, 0.6);
+    --ln-eyebrow: rgba(255, 255, 255, 0.7);
+    --ln-hero-head: #ffffff;
+    --ln-blue-ink: #7cc2e6;
+    --ln-blue-tile: #006298;
+    --ln-plum-tile: #0c0810;
   }
 
   body {

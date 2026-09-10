@@ -61,12 +61,12 @@ export default {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        // Foundations v1 typography roles. `sans` is the default body/reading
-        // family (Proza Libre); `display` is the brand/heading/button family
-        // (Montserrat Alternates); `accent` is Cormorant Upright, for a single
-        // expressive landing phrase only.
+        // Typography roles taken from the iteration-1 landing design. `sans` is
+        // the default body/reading family (Proza Libre); `display` is the
+        // heading/button family (Montserrat — plain, not Alternates, matching
+        // the design file); `accent` is Cormorant Upright for editorial lines.
         sans: ['"Proza Libre"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['"Montserrat Alternates"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['Montserrat', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         accent: ['"Cormorant Upright"', 'ui-serif', 'Georgia', 'serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
