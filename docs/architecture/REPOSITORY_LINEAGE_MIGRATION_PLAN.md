@@ -18,7 +18,7 @@ extending it.
 
 ## 1. Executive verdict
 
-**#299 AUTHORIZED FOR IMPLEMENTATION.**
+**#299 AUTHORIZED FOR IMPLEMENTATION** *(and since implemented — see the Implementation status row above, and the note below).*
 
 The owner explicitly approved the architecture amendment in
 [PR #328 review](https://github.com/Second-Origin/PARTHA/pull/328#pullrequestreview-4975035985).
