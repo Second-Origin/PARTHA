@@ -136,3 +136,52 @@ describe('useSettings tab deep-linking', () => {
     expect(result.current.activeTab).toBe('Notifications');
   });
 });
+
+describe('useSettings base URL handling across providers', () => {
+  const OLLAMA_SAVED: AiProviderPublicConfig = {
+    provider: 'ollama',
+    model: 'llama3.2',
+    baseUrl: 'http://localhost:11434',
+    hasApiKey: false,
+    apiKeyLast4: null,
+  };
+
+  it('does not carry a saved Ollama base URL into a fixed-endpoint provider', async () => {
+    // The reported sequence: Ollama is saved, the user switches to a hosted
+    // provider, and the backend answers "AI provider destination is not
+    // permitted." because a fixed destination rejects any base URL -- while
+    // the form shows no base URL field to clear, so the value is invisible.
+    vi.mocked(aiService.getConfig).mockResolvedValue(OLLAMA_SAVED);
+    vi.mocked(aiService.testConfig).mockResolvedValue({ ok: true, message: 'Connected.' });
+    vi.mocked(aiService.saveConfig).mockResolvedValue(EMPTY_CONFIG);
+
+    const { result } = renderHook(() => useSettings(), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.baseUrl).toBe('http://localhost:11434'));
+
+    act(() => result.current.setProvider('openai'));
+    expect(result.current.baseUrl).toBe('');
+
+    await act(async () => {
+      await result.current.testAiConfig();
+    });
+    expect(vi.mocked(aiService.testConfig).mock.lastCall?.[0].baseUrl).toBeUndefined();
+
+    await act(async () => {
+      await result.current.saveAiConfig();
+    });
+    expect(vi.mocked(aiService.saveConfig).mock.lastCall?.[0].baseUrl).toBeUndefined();
+  });
+
+  it('still sends the base URL for a provider that requires one', async () => {
+    vi.mocked(aiService.getConfig).mockResolvedValue(OLLAMA_SAVED);
+    vi.mocked(aiService.saveConfig).mockResolvedValue(OLLAMA_SAVED);
+
+    const { result } = renderHook(() => useSettings(), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.baseUrl).toBe('http://localhost:11434'));
+
+    await act(async () => {
+      await result.current.saveAiConfig();
+    });
+    expect(vi.mocked(aiService.saveConfig).mock.lastCall?.[0].baseUrl).toBe('http://localhost:11434');
+  });
+});

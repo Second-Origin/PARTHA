@@ -88,11 +88,26 @@ export function useSettings() {
     (nextProvider: AiProvider) => {
       setProvider(nextProvider);
       setModel(capabilityByProvider.get(nextProvider)?.defaultModel ?? '');
+      // A provider with a fixed endpoint has no base URL field, so a value
+      // left over from a previously selected provider would be invisible here
+      // and still be sent -- and the backend denies any base URL on a fixed
+      // destination, which surfaced as "AI provider destination is not
+      // permitted." with nothing on screen to correct.
+      if (!capabilityByProvider.get(nextProvider)?.requiresBaseUrl) {
+        setBaseUrl('');
+      }
       setStatusMessage(null);
       setError(null);
     },
     [capabilityByProvider],
   );
+
+  // Belt and braces: never send a base URL for a provider that does not take
+  // one, whatever the field happens to hold.
+  const baseUrlForRequest = useCallback(() => {
+    if (!capabilityByProvider.get(provider)?.requiresBaseUrl) return undefined;
+    return baseUrl.trim() || undefined;
+  }, [baseUrl, capabilityByProvider, provider]);
 
   const saveAiConfig = useCallback(async () => {
     setLoading(true);
@@ -104,7 +119,7 @@ export function useSettings() {
         provider,
         apiKey: apiKey.trim() || undefined,
         model: model.trim() || defaultModel,
-        baseUrl: baseUrl.trim() || undefined,
+        baseUrl: baseUrlForRequest(),
       });
       setAiConfig(config);
       setApiKey('');
@@ -114,7 +129,7 @@ export function useSettings() {
     } finally {
       setLoading(false);
     }
-  }, [apiKey, baseUrl, capabilityByProvider, model, provider]);
+  }, [apiKey, baseUrlForRequest, capabilityByProvider, model, provider]);
 
   const testAiConfig = useCallback(async () => {
     setTesting(true);
@@ -126,7 +141,7 @@ export function useSettings() {
         provider,
         apiKey: apiKey.trim() || undefined,
         model: model.trim() || defaultModel,
-        baseUrl: baseUrl.trim() || undefined,
+        baseUrl: baseUrlForRequest(),
       });
       setStatusMessage(response.message);
     } catch (caught) {
@@ -134,7 +149,7 @@ export function useSettings() {
     } finally {
       setTesting(false);
     }
-  }, [apiKey, baseUrl, capabilityByProvider, model, provider]);
+  }, [apiKey, baseUrlForRequest, capabilityByProvider, model, provider]);
 
   return {
     tabs: settingsTabs,
