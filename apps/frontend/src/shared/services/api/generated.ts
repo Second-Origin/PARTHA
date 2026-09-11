@@ -2034,6 +2034,11 @@ export interface components {
             licenseName: string | null;
             /** Packagemanager */
             packageManager: string | null;
+            /**
+             * Skippedsymlinks
+             * @default []
+             */
+            skippedSymlinks: string[];
             /** Totalfiles */
             totalFiles: number;
             /** Totalfolders */

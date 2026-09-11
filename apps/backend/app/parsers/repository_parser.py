@@ -89,31 +89,12 @@ class RepositoryFileLimitExceeded(Exception):
         self.file_count = file_count
 
 
-class UnsafeRepositoryPath(Exception):
-    """A repository's checked-out tree contains a symlink.
-
-    Archive uploads already can't reach this: TAR extraction rejects
-    symlink/link/device members before writing (storage/local.py), and
-    Python's zipfile.extractall() never materializes a real OS symlink from
-    a zip entry in the first place. A GitHub import has no such guard --
-    `git clone` faithfully recreates whatever real symlinks the source
-    repository committed, including ones that point outside the checkout
-    (e.g. a repo containing ``ln -s /etc some_dir``). Walking that with
-    plain is_dir()/is_file()/stat() (which all follow symlinks) would
-    recurse into and catalog host filesystem content that was never part of
-    the imported repository.
-    """
-
-    def __init__(self, relative_path: str) -> None:
-        super().__init__(f"repository contains a symlink at {relative_path}")
-        self.relative_path = relative_path
-
-
 class RepositoryParser:
     def parse(self, root: Path, *, max_file_count: int | None = None) -> tuple[list[FileTreeNode], RepositoryMeta, int]:
         if max_file_count is not None:
             self._enforce_file_count(root, max_file_count, [0])
-        tree = self._build_tree(root, root)
+        skipped_symlinks: list[str] = []
+        tree = self._build_tree(root, root, skipped_symlinks)
         flat = self._flatten(tree)
         file_nodes = [node for node in flat if node.type == "file"]
         folder_nodes = [node for node in flat if node.type == "folder"]
@@ -138,6 +119,7 @@ class RepositoryParser:
             has_readme=any(node.name.lower().startswith("readme") for node in file_nodes),
             has_license=license_name is not None,
             license_name=license_name,
+            skipped_symlinks=sorted(skipped_symlinks),
         )
         return tree, meta, total_size
 
@@ -152,8 +134,8 @@ class RepositoryParser:
                 if entry.name in IGNORED_DIRS or is_macos_artifact(entry.name):
                     continue
                 if entry.is_symlink():
-                    relative = "/" + str(Path(entry.path).relative_to(root)).replace("\\", "/")
-                    raise UnsafeRepositoryPath(relative)
+                    # Not followed, so it costs nothing and counts for nothing.
+                    continue
                 if entry.is_dir():
                     self._enforce_file_count(Path(entry.path), max_file_count, file_count, root)
                 elif entry.is_file():
@@ -161,14 +143,21 @@ class RepositoryParser:
                     if file_count[0] > max_file_count:
                         raise RepositoryFileLimitExceeded(max_file_count, file_count[0])
 
-    def _build_tree(self, path: Path, root: Path) -> list[FileTreeNode]:
+    def _build_tree(self, path: Path, root: Path, skipped_symlinks: list[str]) -> list[FileTreeNode]:
         nodes: list[FileTreeNode] = []
         for child in sorted(path.iterdir(), key=lambda item: (item.is_file(), item.name.lower())):
             if child.name in IGNORED_DIRS or is_macos_artifact(child.name):
                 continue
             relative = "/" + str(child.relative_to(root)).replace("\\", "/")
             if child.is_symlink():
-                raise UnsafeRepositoryPath(relative)
+                # Recorded and stepped over, never read through. is_dir() and
+                # is_file() follow links, so walking one would catalogue
+                # whatever it points at -- including, for a link that escapes
+                # the checkout, host filesystem content that was never part of
+                # the repository. Skipping is what keeps that unreachable, and
+                # the link's own target is deliberately never resolved.
+                skipped_symlinks.append(relative)
+                continue
             if child.is_dir():
                 nodes.append(
                     FileTreeNode(
@@ -176,7 +165,7 @@ class RepositoryParser:
                         name=child.name,
                         type="folder",
                         path=relative,
-                        children=self._build_tree(child, root),
+                        children=self._build_tree(child, root, skipped_symlinks),
                     )
                 )
             elif child.is_file():
