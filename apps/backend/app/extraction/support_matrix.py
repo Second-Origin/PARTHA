@@ -571,10 +571,23 @@ LOCKFILE_CAPABILITIES: tuple[Capability, ...] = (
         "Resolved PyPI versions from poetry.lock with lock-version major 1 or 2.",
         (
             "Only each [[package]] table's name and version are read. Lock-version 2 removed the per-package category "
-            "field, so the production/development split is reported as unknown rather than guessed. Pipfile.lock, "
-            "uv.lock, and pdm.lock are not read."
+            "field, so the production/development split is reported as unknown rather than guessed. Pipfile.lock and "
+            "pdm.lock are not read; uv.lock is recognised and disclosed separately."
         ),
         "src.poetry_lockfile",
+    ),
+    _capability(
+        "lockfile.uv-lock",
+        "source",
+        "lockfile:uv.lock",
+        SupportStatus.UNSUPPORTED,
+        "uv.lock, Astral uv's resolved lockfile.",
+        (
+            "The file is recognised and disclosed rather than read: no resolved version is claimed from it. It was "
+            "previously invisible, which left a uv-managed repository looking as though it pinned nothing."
+        ),
+        "src.uv_lockfile",
+        expected_diagnostic="RI-EXT-UNSUPPORTED",
     ),
 )
 
@@ -772,8 +785,33 @@ def _supported_filenames(capabilities: tuple[Capability, ...], prefix: str) -> t
     )
 
 
+def _disclosed_filenames(
+    capabilities: tuple[Capability, ...], prefix: str, supported: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Derive the filenames the registry names as unsupported *formats*.
+
+    A file the product cannot read is still worth recognising: silently
+    skipping it reports the same empty result as a repository that genuinely
+    pins nothing. An extractor claims these filenames only so it can disclose
+    them as ``RI-EXT-UNSUPPORTED``. Revision qualifiers (``@v1``) and anything
+    already supported are excluded — those are handled where the file is read.
+    """
+
+    return tuple(
+        sorted(
+            {
+                item.construct.removeprefix(prefix)
+                for item in capabilities
+                if item.status == SupportStatus.UNSUPPORTED and "@" not in item.construct
+            }
+            - set(supported)
+        )
+    )
+
+
 _SUPPORTED_MANIFEST_FILENAMES = _supported_filenames(MANIFEST_CAPABILITIES, "manifest:")
 _SUPPORTED_LOCKFILE_FILENAMES = _supported_filenames(LOCKFILE_CAPABILITIES, "lockfile:")
+_DISCLOSED_LOCKFILE_FILENAMES = _disclosed_filenames(LOCKFILE_CAPABILITIES, "lockfile:", _SUPPORTED_LOCKFILE_FILENAMES)
 
 # Compose accepts four canonical filenames for one format, so the registry
 # carries the format id and the filename set is spelled out beside it.
@@ -1057,6 +1095,10 @@ def supported_manifest_filenames() -> tuple[str, ...]:
 
 def supported_lockfile_filenames() -> tuple[str, ...]:
     return _SUPPORTED_LOCKFILE_FILENAMES
+
+
+def disclosed_lockfile_filenames() -> tuple[str, ...]:
+    return _DISCLOSED_LOCKFILE_FILENAMES
 
 
 def supported_iac_filenames() -> tuple[str, ...]:

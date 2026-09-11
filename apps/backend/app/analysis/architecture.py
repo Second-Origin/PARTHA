@@ -244,6 +244,46 @@ class ArchitectureAnalyzer:
             roles[assertion.subject_key.removeprefix("file:")] = classification
         return roles
 
+    @staticmethod
+    def _paths_in_relationships(facts: ArchitectureSnapshotFacts) -> set[str]:
+        """Files that are one end of an observed architecture relationship.
+
+        A file can be a real part of the system while defining nothing of its
+        own -- a package initialiser that only re-exports, a barrel module.
+        What makes it structural is that something resolved to it, or it
+        resolved to something, and both of those are sealed edges.
+        """
+
+        paths: set[str] = set()
+        for edge in facts.edges:
+            for key in (edge.subject_key, edge.object_key):
+                if key.startswith("file:"):
+                    paths.add(key.removeprefix("file:"))
+        return paths
+
+    @staticmethod
+    def _is_module_file(
+        path: str,
+        *,
+        role: str | None,
+        defines_symbols: bool,
+        related_paths: set[str],
+    ) -> bool:
+        """Whether this file is part of the system's own structure (#444).
+
+        A module has to be something the extraction actually saw: symbols it
+        defines, a relationship it takes part in, or a role the snapshot
+        classified it into (``documentation``, ``test``, ``controller``). A
+        file that produced none of those is not being judged unimportant --
+        nothing was observed about it, and inventing a module from a path is
+        how `.gitignore` ended up sitting in the Shared layer beside the
+        library itself.
+        """
+
+        if defines_symbols or path in related_paths:
+            return True
+        return role is not None and role != "unknown"
+
     def _symbols_by_file(self, facts: ArchitectureSnapshotFacts) -> dict[str, list[str]]:
         """Map file path -> names of the symbols that file defines.
 
@@ -290,22 +330,35 @@ class ArchitectureAnalyzer:
             # unresolved. It stays as an honest, empty module set rather than
             # ever reading `record.file_tree` (unsealed repository metadata).
             return self._empty_module([])
-        # Dependency-manifest and lockfile paths already surface as
-        # dependency evidence (Dependency Graph) -- grouping them into an
-        # architecture module too misrepresents `package.json`/
-        # `pyproject.toml` as a piece of the system's own structure.
+        role_by_path = self._file_roles(facts)
+        symbols_by_path = self._symbols_by_file(facts)
+        related_paths = self._paths_in_relationships(facts)
+        # Dependency-manifest and lockfile paths already surface as dependency
+        # evidence (Dependency Graph) -- grouping them into an architecture
+        # module too misrepresents `package.json`/`pyproject.toml` as a piece
+        # of the system's own structure. #396 stopped there, which was right
+        # but narrower than the defect: `.gitignore`, `.editorconfig`,
+        # `LICENSE.txt` and `uv.lock` are neither manifests nor lockfiles, so
+        # on `pallets/click` seven of the sixteen reported modules were not
+        # code. `_is_module_file` is what closes that hole.
         _non_module_filenames = SUPPORTED_MANIFEST_FILENAMES + SUPPORTED_LOCKFILE_FILENAMES
         file_paths = sorted(
-            node.stable_key.removeprefix("file:")
-            for node in facts.nodes
-            if node.node_kind == "file"
-            and node.stable_key.startswith("file:")
-            and posixpath.basename(node.stable_key.removeprefix("file:")) not in _non_module_filenames
+            path
+            for path in (
+                node.stable_key.removeprefix("file:")
+                for node in facts.nodes
+                if node.node_kind == "file" and node.stable_key.startswith("file:")
+            )
+            if posixpath.basename(path) not in _non_module_filenames
+            and self._is_module_file(
+                path,
+                role=role_by_path.get(path),
+                defines_symbols=bool(symbols_by_path.get(path)),
+                related_paths=related_paths,
+            )
         )
         if not file_paths:
             return self._empty_module([])
-        role_by_path = self._file_roles(facts)
-        symbols_by_path = self._symbols_by_file(facts)
         grouped: dict[str, list[str]] = defaultdict(list)
         for path in file_paths:
             module_id = self._module_id(path, role_by_path.get(path), defines_symbols=bool(symbols_by_path.get(path)))
@@ -355,11 +408,25 @@ class ArchitectureAnalyzer:
             if len(colliding) < 2:
                 continue
             for module in colliding:
-                directory = posixpath.dirname(module.id.removeprefix("module:"))
-                parent = posixpath.basename(directory)
-                if parent:
-                    module.name = f"{parent}/{name}"
+                qualifier = ArchitectureAnalyzer._qualifying_parent(module.id.removeprefix("module:"), name)
+                if qualifier:
+                    module.name = f"{qualifier}/{name}"
         return modules
+
+    @staticmethod
+    def _qualifying_parent(path: str, name: str) -> str:
+        """The nearest ancestor directory that actually distinguishes ``path``.
+
+        A directory named after the module it contains adds nothing:
+        `examples/termui/termui.py` qualified by its immediate parent reads
+        "termui/termui", which is noise where "examples/termui" is an answer.
+        Walk up until the ancestor says something the name does not.
+        """
+
+        for segment in reversed(posixpath.dirname(path).split("/")):
+            if segment and segment != name:
+                return segment
+        return ""
 
     @staticmethod
     def _module_id(path: str, role: str | None, *, defines_symbols: bool = False) -> str:
