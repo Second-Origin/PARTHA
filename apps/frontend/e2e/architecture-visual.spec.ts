@@ -188,10 +188,23 @@ test.describe('architecture graph visual acceptance', () => {
     await openArchitecture(page, byLabel('long-labels'));
     await waitForGraph(page);
 
-    const group = page.locator('.react-flow__node [role="group"]').first();
+    // Found by name, not by position: node ids order the graph, so picking
+    // `.first()` silently re-pointed this assertion at the README module the
+    // moment module ids changed (#445). The long name is the subject here.
+    const groups = page.locator('.react-flow__node [role="group"]');
+    const names = await groups.evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute('aria-label') ?? '')
+    );
+    const longLabel = 'customer-subscription-entitlement-orchestration';
+    const index = names.findIndex((name) => name.includes(longLabel));
+    expect(index, `no module named for ${longLabel} among: ${names.join(' | ')}`).toBeGreaterThan(-1);
+
+    const group = groups.nth(index);
     const accessibleName = await group.getAttribute('aria-label');
-    expect(accessibleName).toContain('Customer Subscription Entitlement Orchestration');
+    // Truncated on screen, whole in the accessible name -- the point of the test.
     expect(await group.getAttribute('title')).toBe(accessibleName);
+    const label = group.getByTestId('architecture-node-label');
+    expect(await label.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
     await capture(page, 'architecture-long-labels', testInfo);
   });
 
