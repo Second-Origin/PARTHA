@@ -1,0 +1,13 @@
+{
+  "schemaVersion":"ri-benchmark.v1","fixtureId":"adv-src-lockfile-uv","fixtureClass":"adversarial","language":"mixed",
+  "title":"Adversarial lockfile — recognised but unread uv.lock","description":"A uv.lock carries two real resolved versions and neither is claimed: the format is named and disclosed rather than skipped, so a uv-managed repository does not read as one that pins nothing.",
+  "sourceRoot":".","revisionIdentity":"upload-sha256","producerVersionSet":["dependency-lockfile@1.0.0","repository-inventory@1.1.0"],
+  "constructsCovered":["src.repository","src.uv_lockfile"],"deterministic":true,
+  "expected":{"nodes":[
+    {"comment":"As with the unsupported npm revision, the repository entity comes from stored bytes before extractor dispatch, so a diagnostics-only revision is still sealable. No file node and no dependency node: the extractor claims nothing about a format it does not read.",
+     "nodeKind":"repository","stableKey":"repo:root","name":"repository","constructs":["src.repository"],"evidence":[{"path":"uv.lock","startLine":1,"endLine":1,"extractor":"repository-inventory","extractorVersion":"1.1.0"}]}
+  ],"edges":[],"observations":[],"assertions":[],"diagnostics":[
+    {"comment":"Recognising the filename is the whole point (#444): before this, uv.lock reached no extractor at all, so the absence of pins was indistinguishable from a repository that declares none. The file is well-formed TOML, so RI-SRC-MALFORMED would be a false claim about the source.",
+     "code":"RI-EXT-UNSUPPORTED","category":"unsupported construct","severity":"info","message":"uv.lock is recognised but not read, and no resolutions are claimed","producer":"dependency-lockfile@1.0.0","path":"uv.lock","subject":"file:uv.lock","constructs":["src.uv_lockfile"]}
+  ]}
+}

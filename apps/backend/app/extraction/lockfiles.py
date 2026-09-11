@@ -64,10 +64,14 @@ from app.extraction.structured import (
     json_object_member_lines,
     toml_array_of_tables_lines,
 )
-from app.extraction.support_matrix import supported_lockfile_filenames
+from app.extraction.support_matrix import disclosed_lockfile_filenames, supported_lockfile_filenames
 from app.intelligence import canonical
 
 SUPPORTED_LOCKFILE_FILENAMES = supported_lockfile_filenames()
+#: Lockfile names this extractor claims only in order to disclose that it does
+#: not read them (#444). Skipping one silently reports the same empty result as
+#: a repository that pins nothing, which is the opposite of an honest limit.
+DISCLOSED_LOCKFILE_FILENAMES = disclosed_lockfile_filenames()
 
 #: ``package-lock.json`` revisions whose ``packages`` table this extractor reads.
 SUPPORTED_NPM_LOCKFILE_VERSIONS = (2, 3)
@@ -116,7 +120,8 @@ class LockfileExtractor:
         return f"{self.name}@{self.version}"
 
     def supports(self, path: str) -> bool:
-        return posixpath.basename(path) in SUPPORTED_LOCKFILE_FILENAMES
+        basename = posixpath.basename(path)
+        return basename in SUPPORTED_LOCKFILE_FILENAMES or basename in DISCLOSED_LOCKFILE_FILENAMES
 
     def extract(self, path: str, source: bytes) -> ExtractionResult:
         text, source_diagnostic = decode_source(path, source, producer=self.producer)
@@ -141,6 +146,8 @@ class LockfileExtractor:
         basename = posixpath.basename(normalized_path)
         file_subject = canonical.normalize_stable_key("file", f"file:{normalized_path}")
         try:
+            if basename in DISCLOSED_LOCKFILE_FILENAMES:
+                raise _UnsupportedLockfile(f"{basename} is recognised but not read, and no resolutions are claimed")
             if basename == "package-lock.json":
                 resolutions = self._npm_resolutions(text)
                 lockfile_format = "npm-package-lock"

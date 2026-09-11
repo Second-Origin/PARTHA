@@ -550,3 +550,35 @@ def test_a_repository_with_routes_still_gets_a_flow_built_from_observed_modules(
     # never the "/" placeholder this used to fall back to (#446).
     entry_point = architecture["summary"]["entryPoint"]
     assert entry_point is None or entry_point in sources
+
+
+def test_repository_furniture_does_not_become_an_architecture_module(auth_client):
+    """#444: on `pallets/click`, seven of the sixteen reported modules were a
+    dotfile, a licence, a changelog or `uv.lock` -- the repository's furniture
+    given the same weight as the library. A file the extraction observed nothing
+    about is not a module of the system."""
+
+    sources = {
+        ".gitignore": b"dist/\n*.pyc\n",
+        ".editorconfig": b"root = true\n",
+        ".github/workflows/ci.yaml": b"name: ci\non: [push]\n",
+        ".pre-commit-config.yaml": b"repos: []\n",
+        "LICENSE.txt": b"BSD 3-Clause License\n",
+        "CHANGES.md": b"# Changes\n\n## 1.0\n",
+        "uv.lock": b'version = 1\n\n[[package]]\nname = "click"\nversion = "8.1.7"\n',
+        "src/alpha/index.ts": b"export const alpha = 1;\n",
+    }
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(repository["id"], sources)
+
+    architecture = auth_client.get(f"/analysis/{repository['id']}/architecture").json()
+    node_ids = {node["id"] for node in architecture["nodes"]}
+
+    for furniture in (".gitignore", ".editorconfig", ".pre-commit-config", "license", "uv.lock", "github"):
+        assert not any(furniture in node_id.lower() for node_id in node_ids), f"{furniture} became a module: {node_ids}"
+    # The one file that defines something is still there, so the rule excludes
+    # furniture rather than everything that is not deeply nested.
+    assert "module:src/alpha/index.ts" in node_ids
+    # And nothing is left describing itself by its own path.
+    assert not any("derived from repository intelligence" in node["description"] for node in architecture["nodes"])
+    assert not any("Owns unknown concerns" in node["responsibilities"] for node in architecture["nodes"])

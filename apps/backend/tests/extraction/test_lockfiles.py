@@ -20,7 +20,7 @@ from app.extraction.lockfiles import (
     SUPPORTED_POETRY_LOCK_MAJORS,
     LockfileExtractor,
 )
-from app.extraction.support_matrix import supported_lockfile_filenames
+from app.extraction.support_matrix import disclosed_lockfile_filenames, supported_lockfile_filenames
 
 NPM_LOCK = b"""{
   "name": "web",
@@ -72,6 +72,15 @@ A description that mentions [[package]] on purpose.
 lock-version = "2.0"
 """
 
+UV_LOCK = b"""version = 1
+requires-python = ">=3.11"
+
+[[package]]
+name = "click"
+version = "8.1.7"
+source = { registry = "https://pypi.org/simple" }
+"""
+
 
 def _nodes(result):
     """Index by stable key, keeping the first emission.
@@ -105,7 +114,29 @@ def test_supported_filenames_come_from_the_capability_registry():
     assert not extractor.supports("yarn.lock")
     assert not extractor.supports("pnpm-lock.yaml")
     assert not extractor.supports("Pipfile.lock")
-    assert not extractor.supports("uv.lock")
+    # uv.lock is the deliberate exception (#444): claimed so the extractor can
+    # say out loud that it does not read it. Supported filenames are unchanged,
+    # so nothing downstream mistakes the disclosure for extraction support.
+    assert set(disclosed_lockfile_filenames()) == {"uv.lock"}
+    assert extractor.supports("uv.lock")
+    assert "uv.lock" not in supported_lockfile_filenames()
+
+
+def test_a_recognised_but_unread_lockfile_is_disclosed_rather_than_skipped():
+    """#444: silence would report the same empty result as a repository that
+    genuinely pins nothing. The file is well-formed, so the disclosure is an
+    unsupported-construct info, never a malformed-source error."""
+
+    result = _extract("uv.lock", UV_LOCK)
+
+    assert result.nodes == ()
+    assert [diagnostic.code for diagnostic in result.diagnostics] == ["RI-EXT-UNSUPPORTED"]
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.severity == "info"
+    assert diagnostic.path == "uv.lock"
+    assert diagnostic.subject == "file:uv.lock"
+    # No pin from the file is claimed, and none is quoted into the message.
+    assert "8.1.7" not in diagnostic.message
 
 
 # --- npm --------------------------------------------------------------------
