@@ -106,6 +106,7 @@ const dependencies: ReturnType<typeof useDependencies> = {
       hasReadme: false,
       hasLicense: false,
       licenseName: null,
+    skippedSymlinks: [],
     },
     fileTree: [],
   },

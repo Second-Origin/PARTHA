@@ -51,6 +51,9 @@ class RepositoryMeta(CamelModel):
     has_readme: bool
     has_license: bool
     license_name: str | None
+    #: Repository-relative paths of symlinks that were recorded but never
+    #: followed, so a reader can tell "not followed" from "not present".
+    skipped_symlinks: list[str] = []
 
 
 class RepositoryRevision(CamelModel):

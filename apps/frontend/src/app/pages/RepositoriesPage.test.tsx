@@ -36,6 +36,7 @@ const repository: Repository = {
     hasReadme: true,
     hasLicense: true,
     licenseName: 'MIT',
+    skippedSymlinks: [],
   },
   fileTree: [],
 };
