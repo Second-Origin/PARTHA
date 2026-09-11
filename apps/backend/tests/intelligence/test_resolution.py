@@ -590,11 +590,20 @@ def test_golden_ambiguous_call_fixture_emits_a_diagnostic_not_an_edge(session):
     assert store.seal(snapshot).state == "completed"
 
 
-def _python_import_snapshot(session, source: bytes, *, files: list[str], dependencies: list[str] = ()):
+def _python_import_snapshot(
+    session,
+    source: bytes,
+    *,
+    files: list[str],
+    dependencies: list[str] = (),
+    source_path: str = "app/main.py",
+):
     """Persist a single Python source plus explicit file/dependency nodes.
 
     File nodes stand in for the inventory extractor that runs alongside the
     Python extractor in production; the resolver reads only stored nodes.
+    ``source_path`` places the importing file, which matters once the resolver
+    derives import roots from the repository's own layout (#393).
     """
 
     store, snapshot = _store(session, ["python-ast@1.1.0", RESOLVER_PRODUCER])
@@ -602,7 +611,7 @@ def _python_import_snapshot(session, source: bytes, *, files: list[str], depende
         snapshot,
         node_kind="repository",
         stable_key="repo:root",
-        evidence=[Evidence("app/main.py", 1, 1, "python-ast", "1.1.0", 3)],
+        evidence=[Evidence(source_path, 1, 1, "python-ast", "1.1.0", 3)],
     )
     for path in files:
         store.add_node(
@@ -619,7 +628,7 @@ def _python_import_snapshot(session, source: bytes, *, files: list[str], depende
             name=name,
             evidence=[Evidence("pyproject.toml", 1, 1, "python-ast", "1.1.0", 1)],
         )
-    _persist_extraction(store, snapshot, PythonExtractor().extract("app/main.py", source), "python-ast")
+    _persist_extraction(store, snapshot, PythonExtractor().extract(source_path, source), "python-ast")
     return store, snapshot
 
 
@@ -900,3 +909,116 @@ def test_resolver_checks_cancellation_between_observations(session, monkeypatch)
 
     assert len(resolved) == 1
     assert resolved[0] in {first.stable_key, second.stable_key}
+
+
+# --- #393: absolute imports resolve from the repository's own source roots ---
+
+
+def test_python_source_roots_are_read_from_the_observed_layout():
+    """A directory holding a top-level package is an import root; a directory
+    inside a package is not. Both facts come off the file list, so nothing is
+    configured and nothing is guessed."""
+
+    roots = RelationshipResolver._python_source_roots
+
+    # src layout: `src` is the root, `src/click` is a package, not a root.
+    assert roots(["src/click/__init__.py", "src/click/core.py", "docs/conf.py"]) == ("", "src")
+    # A monorepo backend.
+    assert roots(["apps/backend/app/__init__.py", "apps/backend/app/core/config.py"]) == ("", "apps/backend")
+    # A subpackage never promotes its parent: `pkg` holds an __init__.py of its
+    # own, so `pkg` is not an import root just because `pkg/sub` is a package.
+    assert roots(["pkg/__init__.py", "pkg/sub/__init__.py"]) == ("",)
+    # Nothing packaged: the repository root, unchanged from before #393.
+    assert roots(["a.py", "b/c.py"]) == ("",)
+
+
+def test_a_bare_call_to_a_src_layout_import_resolves(session):
+    """#393: `pallets/click` puts its package at `src/click`, so
+    `from click.core import Command` named a file the resolver looked for at
+    `click/core.py` and never found -- and the later bare `Command()` had no
+    binding target and was reported unresolved. On the real repository that was
+    465 unresolved calls; this is the smallest case that reproduces it."""
+
+    store, snapshot = _python_import_snapshot(
+        session,
+        b"from click.core import Command\n\n\ndef build():\n    return Command()\n",
+        files=["src/click/__init__.py", "src/click/core.py", "src/click/decorators.py"],
+        source_path="src/click/decorators.py",
+    )
+    store.add_node(
+        snapshot,
+        node_kind="symbol",
+        stable_key="src/click/core.py::Command",
+        name="Command",
+        evidence=[Evidence("src/click/core.py", 1, 2, "python-ast", "1.1.0", 4)],
+    )
+
+    RelationshipResolver(store).resolve(snapshot)
+
+    triples = _edge_triples(session, snapshot)
+    assert ("file:src/click/decorators.py", "imports", "file:src/click/core.py") in triples
+    assert any(predicate == "calls" and object_ == "src/click/core.py::Command" for _, predicate, object_ in triples), (
+        triples
+    )
+    assert store.seal(snapshot).state == "completed"
+
+
+def test_a_bare_call_to_a_monorepo_import_resolves(session):
+    """The same gap in the other common layout -- the one this repository has.
+    `from app.core.config import get_settings` names
+    `apps/backend/app/core/config.py`, two directories below the root."""
+
+    store, snapshot = _python_import_snapshot(
+        session,
+        b"from app.core.config import get_settings\n\n\ndef run():\n    return get_settings()\n",
+        files=[
+            "apps/backend/app/__init__.py",
+            "apps/backend/app/core/config.py",
+            "apps/backend/alembic/env.py",
+        ],
+        source_path="apps/backend/alembic/env.py",
+    )
+    store.add_node(
+        snapshot,
+        node_kind="symbol",
+        stable_key="apps/backend/app/core/config.py::get_settings",
+        name="get_settings",
+        evidence=[Evidence("apps/backend/app/core/config.py", 1, 2, "python-ast", "1.1.0", 4)],
+    )
+
+    RelationshipResolver(store).resolve(snapshot)
+
+    triples = _edge_triples(session, snapshot)
+    assert any(
+        predicate == "calls" and object_ == "apps/backend/app/core/config.py::get_settings"
+        for _, predicate, object_ in triples
+    ), triples
+    assert store.seal(snapshot).state == "completed"
+
+
+def test_the_same_package_under_two_roots_stays_ambiguous(session):
+    """Widening the candidate set must not widen what gets claimed. Two roots
+    that both contain `pkg/service.py` are two candidates, and the resolver's
+    existing contract for that is a diagnostic, never a pick."""
+
+    store, snapshot = _python_import_snapshot(
+        session,
+        b"from pkg.service import run\n",
+        files=[
+            "src/pkg/__init__.py",
+            "src/pkg/service.py",
+            "vendor/pkg/__init__.py",
+            "vendor/pkg/service.py",
+            "app/main.py",
+        ],
+    )
+
+    RelationshipResolver(store).resolve(snapshot)
+
+    assert not [edge for edge in _edge_triples(session, snapshot) if edge[1] == "imports"]
+    # Ambiguous, not merely unresolved: both files were found and neither was
+    # chosen. Before #393 this was unresolved because neither was found at all,
+    # so the code is what distinguishes "two answers" from "no answer".
+    diagnostic = next(item for item in session.scalars(select(RiDiagnostic)).all() if item.path == "app/main.py")
+    assert diagnostic.code == "RI-RES-AMBIGUOUS"
+    assert sorted(diagnostic.details["candidates"]) == ["file:src/pkg/service.py", "file:vendor/pkg/service.py"]
