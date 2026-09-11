@@ -83,6 +83,13 @@ class ArchitectureSnapshotFacts:
 
     snapshot: RiSnapshot
     nodes: list[RiNode]
+    #: Stable keys of every ``symbol`` node in the snapshot, and nothing else.
+    #: The architecture consumer needs to know what each file defines, but
+    #: whole symbol rows are what dominate a large snapshot -- see the bound in
+    #: ``architecture_facts``. Keys alone are short strings and carry the file
+    #: and the qualified name already (``<path>::<qualified>``), which is all
+    #: the module inventory reads.
+    symbol_keys: list[str]
     edges: list[RiEdge]
     assertions: list[RiAssertion]
     node_evidence: dict[int, list[RiEvidence]]
@@ -395,6 +402,13 @@ class SnapshotQueryService:
                 .order_by(RiNode.stable_key, RiNode.id)
             ).all()
         )
+        symbol_keys = list(
+            self.db.scalars(
+                select(RiNode.stable_key)
+                .where(RiNode.snapshot_id == snapshot.snapshot_id, RiNode.node_kind == "symbol")
+                .order_by(RiNode.stable_key)
+            ).all()
+        )
         diagnostics = list(
             self.db.scalars(
                 select(RiDiagnostic)
@@ -424,6 +438,7 @@ class SnapshotQueryService:
         return ArchitectureSnapshotFacts(
             snapshot=snapshot,
             nodes=nodes,
+            symbol_keys=symbol_keys,
             edges=edges,
             assertions=assertions,
             node_evidence=self._evidence_for(snapshot, "node_ref", [node.id for node in nodes]),
