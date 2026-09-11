@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Modal } from '@/components/Modal';
+import { SlidePanel } from '@/components/SlidePanel';
 import {
   CATEGORY_LABELS,
   SAMPLE_CATEGORIES,
@@ -63,7 +63,7 @@ export function DemoModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal onClose={onClose} labelledBy="demo-modal-title" maxWidthClassName="max-w-3xl">
+    <SlidePanel onClose={onClose} labelledBy="demo-modal-title" eyebrow="See how it works">
       <div className="sticky top-0 z-10 flex items-start justify-between gap-5 border-b border-border bg-card p-6 sm:p-8 sm:pb-6">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-accent px-3 py-1 text-2xs font-semibold uppercase tracking-[0.14em] text-primary">
@@ -77,14 +77,6 @@ export function DemoModal({ onClose }: { onClose: () => void }) {
             real code. It uses PARTHA's actual finding categories and output shape.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="shrink-0 rounded-xl border border-primary/30 px-3 py-2 text-sm font-semibold text-foreground hover:bg-accent"
-        >
-          Close
-        </button>
       </div>
 
       <div className="p-6 sm:p-8">
@@ -246,6 +238,6 @@ export function DemoModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
       </div>
-    </Modal>
+    </SlidePanel>
   );
 }

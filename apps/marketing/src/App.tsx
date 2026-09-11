@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { DemoModal } from '@/components/DemoModal';
 import { RunItYourselfModal } from '@/components/RunItYourselfModal';
 import { LandingCanvas } from '@/components/landing/LandingCanvas';
+import { HEADER_HEIGHT, SiteHeader } from '@/components/landing/SiteHeader';
 import { LandingScaler } from '@/components/landing/LandingScaler';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
 
@@ -17,6 +18,11 @@ import { useLandingTheme } from '@/hooks/useLandingTheme';
  * It replaces a 3.3 MB flat SVG export of the same frame with invisible
  * hotspots on top, so the text is now real, controls are focusable, and the
  * pieces the design specified as interactive can actually behave.
+ *
+ * The two hero calls to action open full-screen panels over the page rather
+ * than navigating away: "See how it works" runs a scripted walkthrough of a
+ * real analysis, and "Analyze a Repository" shows how to run PARTHA against
+ * your own code. Closing either returns the reader exactly where they were.
  */
 export function App() {
   const [demoOpen, setDemoOpen] = useState(false);
@@ -30,8 +36,12 @@ export function App() {
 
   return (
     <div className={dark ? 'landing-dark min-h-screen bg-background' : 'min-h-screen bg-background'}>
-      <LandingScaler>
-        <LandingCanvas />
+      <SiteHeader />
+      <LandingScaler cropTop={HEADER_HEIGHT}>
+        <LandingCanvas
+          onSeeHowItWorks={() => setDemoOpen(true)}
+          onAnalyzeRepository={() => setRunItYourselfOpen(true)}
+        />
       </LandingScaler>
 
       {demoOpen && <DemoModal onClose={() => setDemoOpen(false)} />}

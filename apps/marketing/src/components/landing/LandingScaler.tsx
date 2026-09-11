@@ -4,7 +4,15 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 export const CANVAS_WIDTH = 1728;
 export const CANVAS_HEIGHT = 5608;
 
-type Props = { children: ReactNode };
+type Props = {
+  children: ReactNode;
+  /** Pixels to clip off the top of the canvas, in canvas units.
+   *
+   * The design draws the header into the composition. A real header is built
+   * separately so it can behave at any width, so the band the canvas spends on
+   * its own header is cropped away here rather than showing through behind it. */
+  cropTop?: number;
+};
 
 /** Renders the design canvas at its authored 1728px width and scales it to fit
  * the viewport.
@@ -18,7 +26,7 @@ type Props = { children: ReactNode };
  *
  * The outer element reserves the scaled height so the page scrolls correctly,
  * and the scale factor is recomputed on resize. */
-export function LandingScaler({ children }: Props) {
+export function LandingScaler({ children, cropTop = 0 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
 
@@ -47,12 +55,16 @@ export function LandingScaler({ children }: Props) {
   }, []);
 
   return (
-    <div ref={hostRef} className="w-full overflow-hidden" style={{ height: CANVAS_HEIGHT * scale }}>
+    <div
+      ref={hostRef}
+      className="w-full overflow-hidden"
+      style={{ height: (CANVAS_HEIGHT - cropTop) * scale }}
+    >
       <div
         style={{
           width: CANVAS_WIDTH,
           height: CANVAS_HEIGHT,
-          transform: `scale(${scale})`,
+          transform: `scale(${scale}) translateY(${-cropTop}px)`,
           transformOrigin: 'top left',
         }}
       >

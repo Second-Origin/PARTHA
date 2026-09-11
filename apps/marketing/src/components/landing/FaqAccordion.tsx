@@ -15,11 +15,11 @@ import { faqAnswers, faqQuestions } from '@/data/faq';
 
 const ROW_H = 56;
 
-export function FaqAccordion({ className }: { className?: string }) {
+export function FaqAccordion({ id, className }: { id?: string; className?: string }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <div className={className} data-node-id="480:8100" data-name="FAQ">
+    <div id={id} className={className} data-node-id="480:8100" data-name="FAQ">
       {faqQuestions.map((question, i) => {
         const open = openIndex === i;
         return (
