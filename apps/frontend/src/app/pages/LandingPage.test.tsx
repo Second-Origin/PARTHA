@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { LandingPage } from './LandingPage';
 import { useLandingThemeStore } from '@/features/landing/hooks/useLandingTheme';
@@ -143,5 +143,65 @@ describe('LandingPage interactions', () => {
     fireEvent.click(second);
     expect(first).toHaveAttribute('aria-expanded', 'false');
     expect(second).toHaveAttribute('aria-expanded', 'true');
+  });
+});
+
+describe('LandingPage footer', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    useLandingThemeStore.setState({ preference: 'light', resolved: 'light' });
+  });
+
+  /* "How it works", "Capabilities" and "FAQ" also appear in the header nav,
+     so every lookup here is scoped to the footer's own link list. */
+  const footer = () =>
+    within(document.querySelector('[data-node-id="508:8699"]') as HTMLElement);
+
+  /** Every footer label, and the thing it is actually about. */
+  const DESTINATIONS: [string, string][] = [
+    ['How it works', '#how-it-works'],
+    ['Capabilities', '#capabilities'],
+    ['FAQ', '#faq'],
+    ['ri.v1 spec', '/docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md'],
+    ['Language matrix', '/docs/CAPABILITIES.md'],
+    ['Changelog', '/CHANGELOG.md'],
+    ['Security', '/SECURITY.md'],
+    ['Legal', '/LICENSE'],
+    ['About', '/README.md'],
+    ['Contact', 'discord.gg'],
+    ['LinkedIn', 'linkedin.com/in/parthrohit'],
+    ['Discord', 'discord.gg'],
+    ['GitHub', 'github.com/Second-Origin/PARTHA'],
+  ];
+
+  it.each(DESTINATIONS)('points %s at %s', (label, target) => {
+    renderLanding();
+
+    const link = footer().getByRole('link', { name: label });
+    expect(link.getAttribute('href')).toContain(target);
+  });
+
+  it('opens off-site links in a new tab, and keeps in-page ones in this one', () => {
+    renderLanding();
+
+    expect(footer().getByRole('link', { name: 'GitHub' })).toHaveAttribute('target', '_blank');
+    expect(footer().getByRole('link', { name: 'FAQ' })).not.toHaveAttribute('target');
+  });
+
+  it('lists Discord in place of X', () => {
+    renderLanding();
+
+    expect(footer().getByRole('link', { name: 'Discord' })).toBeInTheDocument();
+    expect(footer().queryByRole('link', { name: 'X' })).toBeNull();
+  });
+
+  it('sends both PARTHA marks back to the top without leaving a hash behind', () => {
+    renderLanding();
+
+    const marks = screen.getAllByRole('link', { name: 'PARTHA, back to top' });
+    expect(marks).toHaveLength(2);
+    for (const mark of marks) {
+      expect(mark).toHaveAttribute('href', '#top');
+    }
   });
 });

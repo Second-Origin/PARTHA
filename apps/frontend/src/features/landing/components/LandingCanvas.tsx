@@ -7,7 +7,7 @@
  * Interactive behaviour is layered on top by the wrappers in App.tsx;
  * nothing here changes the design's own boxes. */
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import imgArrow1 from '@/assets/landing/figma/arrow1.png';
@@ -211,24 +211,24 @@ function FooterLinks({ className }: FooterLinksProps) {
         </div>
         <div className="content-stretch flex flex-col gap-[15px] h-[168px] items-start pt-[12px] relative shrink-0 w-[207px]" data-node-id="508:8665" data-name="List">
           <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-node-id="508:8666" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="508:8667">
+            <a href="#how-it-works" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="508:8667">
               How it works
-            </p>
+            </a>
           </div>
           <div className="content-stretch flex flex-col h-[27px] items-start pt-[8px] relative shrink-0 w-[207.328px]" data-node-id="508:8668" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="508:8669">
+            <a href="#capabilities" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="508:8669">
               Capabilities
-            </p>
+            </a>
           </div>
           <div className="content-stretch flex flex-col h-[27px] items-start pt-[8px] relative shrink-0 w-[207.328px]" data-node-id="508:8670" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="508:8671">
+            <a href="#faq" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="508:8671">
               FAQ
-            </p>
+            </a>
           </div>
           <div className="content-stretch flex flex-col h-[27px] items-start pt-[8px] relative shrink-0 w-[207.328px]" data-node-id="508:8672" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="508:8673">
+            <a href="https://github.com/Second-Origin/PARTHA/tree/dev/docs" target="_blank" rel="noreferrer" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="508:8673">
               Privacy
-            </p>
+            </a>
           </div>
         </div>
       </div>
@@ -240,24 +240,24 @@ function FooterLinks({ className }: FooterLinksProps) {
         </div>
         <div className="content-stretch flex flex-col gap-[15px] h-[149px] items-start pt-[12px] relative shrink-0 w-[207px]" data-node-id="508:8677" data-name="List">
           <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-node-id="508:8678" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="508:8679">
+            <a href="https://github.com/Second-Origin/PARTHA/tree/dev/docs" target="_blank" rel="noreferrer" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="508:8679">
               Docs
-            </p>
+            </a>
           </div>
           <div className="content-stretch flex flex-col h-[27px] items-start pt-[8px] relative shrink-0 w-[207.336px]" data-node-id="508:8680" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="508:8681">
+            <a href="https://github.com/Second-Origin/PARTHA/blob/dev/docs/architecture/REPOSITORY_INTELLIGENCE_V1_RFC.md" target="_blank" rel="noreferrer" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="508:8681">
               ri.v1 spec
-            </p>
+            </a>
           </div>
           <div className="content-stretch flex flex-col h-[27px] items-start pt-[8px] relative shrink-0 w-[207.336px]" data-node-id="508:8682" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="508:8683">
+            <a href="https://github.com/Second-Origin/PARTHA/blob/dev/docs/CAPABILITIES.md" target="_blank" rel="noreferrer" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="508:8683">
               Language matrix
-            </p>
+            </a>
           </div>
           <div className="content-stretch flex flex-col h-[27px] items-start pt-[8px] relative shrink-0 w-[207.336px]" data-node-id="508:8684" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="508:8685">
+            <a href="https://github.com/Second-Origin/PARTHA/blob/dev/CHANGELOG.md" target="_blank" rel="noreferrer" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="508:8685">
               Changelog
-            </p>
+            </a>
           </div>
         </div>
       </div>
@@ -269,24 +269,24 @@ function FooterLinks({ className }: FooterLinksProps) {
         </div>
         <div className="content-stretch flex flex-col gap-[15px] h-[176px] items-start pt-[12px] relative shrink-0 w-[207px]" data-node-id="508:8689" data-name="List">
           <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-node-id="508:8690" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="508:8691">
+            <a href="https://github.com/Second-Origin/PARTHA/blob/dev/README.md" target="_blank" rel="noreferrer" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="508:8691">
               About
-            </p>
+            </a>
           </div>
           <div className="content-stretch flex flex-col h-[27px] items-start pt-[8px] relative shrink-0 w-[207.328px]" data-node-id="508:8692" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="508:8693">
+            <a href="https://github.com/Second-Origin/PARTHA/blob/dev/SECURITY.md" target="_blank" rel="noreferrer" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="508:8693">
               Security
-            </p>
+            </a>
           </div>
           <div className="content-stretch flex flex-col h-[27px] items-start pt-[8px] relative shrink-0 w-[207.328px]" data-node-id="508:8694" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="508:8695">
+            <a href="https://discord.gg/qvk9DcxDA" target="_blank" rel="noreferrer" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="508:8695">
               Contact
-            </p>
+            </a>
           </div>
           <div className="content-stretch flex flex-col h-[27px] items-start pt-[8px] relative shrink-0 w-[207.328px]" data-node-id="508:8696" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="508:8697">
+            <a href="https://github.com/Second-Origin/PARTHA/blob/dev/LICENSE" target="_blank" rel="noreferrer" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="508:8697">
               Legal
-            </p>
+            </a>
           </div>
         </div>
       </div>
@@ -298,19 +298,19 @@ function FooterLinks({ className }: FooterLinksProps) {
         </div>
         <div className="content-stretch flex flex-col gap-[15px] h-[176px] items-start pt-[12px] relative shrink-0 w-[207px]" data-node-id="548:816" data-name="List">
           <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-node-id="548:817" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="548:818">
+            <a href="https://www.linkedin.com/in/parthrohit" target="_blank" rel="noreferrer" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="548:818">
               LinkedIn
-            </p>
+            </a>
           </div>
           <div className="content-stretch flex flex-col h-[27px] items-start pt-[8px] relative shrink-0 w-[207.328px]" data-node-id="548:819" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="548:820">
-              X
-            </p>
+            <a href="https://discord.gg/qvk9DcxDA" target="_blank" rel="noreferrer" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="548:820">
+              Discord
+            </a>
           </div>
           <div className="content-stretch flex flex-col h-[27px] items-start pt-[8px] relative shrink-0 w-[207.328px]" data-node-id="548:821" data-name="List Item">
-            <p className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap" data-node-id="548:822">
+            <a href="https://github.com/Second-Origin/PARTHA" target="_blank" rel="noreferrer" className="[word-break:break-word] font-body font-medium leading-[18.571px] not-italic relative shrink-0 text-[24px] text-[var(--ln-ink-60)] whitespace-nowrap block transition-colors duration-150 hover:text-[var(--ln-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fa4d01]" data-node-id="548:822">
               GitHub
-            </p>
+            </a>
           </div>
           <div className="content-stretch flex flex-col h-[27px] items-start pt-[8px] relative shrink-0 w-[207.328px]" data-node-id="548:823" data-name="List Item" />
         </div>
@@ -372,6 +372,11 @@ function LinkV1({ className }: LinkV1Props) {
 
 export function LandingCanvas() {
   const nav = useContext(LandingNavContext);
+
+  const handleBackToTop = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <div className="landing-canvas bg-[var(--ln-page)] relative size-full" data-node-id="1:2" data-name="Landing Page">
@@ -482,7 +487,7 @@ export function LandingCanvas() {
         <button className="absolute block cursor-pointer h-[148px] left-[167px] right-[1159px] top-[104px]" data-node-id="504:8560" data-name="Container">
           <div className="absolute h-[130.281px] left-0 top-[14px] w-[402px]" data-node-id="504:8561" data-name="Container">
             <div className="absolute h-[20px] left-0 right-0 top-0" data-node-id="504:8562" data-name="Container">
-              <div className="absolute h-[89px] left-0 overflow-clip top-0 w-[322px]" data-node-id="506:8651" data-name="LOGO">
+              <a href="#top" aria-label="PARTHA, back to top" onClick={handleBackToTop} className="absolute h-[89px] left-0 overflow-clip top-0 w-[322px] block cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#fa4d01]" data-node-id="506:8651" data-name="LOGO">
                 <div className="absolute inset-[29.21%_3.11%_4.49%_25.78%]" data-node-id="506:8652" data-name="Vector">
                   <img alt="" className="wordmark-light absolute block inset-0 max-w-none size-full" src={imgVector9} />
                   <img alt="" className="wordmark-dark absolute block inset-0 max-w-none size-full" src={imgWordmarkFooterDark} />
@@ -494,7 +499,7 @@ export function LandingCanvas() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </a>
             </div>
             <p className="[word-break:break-word] absolute font-accent font-normal leading-[16px] left-[83px] not-italic text-[#7a7a7a] text-[15px] text-left top-[94px] w-[310px]" data-node-id="508:8659">
               Deterministic repository intelligence. Sealed, evidence-backed models of the system behind the code.
@@ -1098,7 +1103,7 @@ export function LandingCanvas() {
       <div className="absolute contents left-0 top-0" data-node-id="157:30" data-name="NAVBAR">
         <div className="absolute bg-[var(--ln-bar)] h-[133px] left-0 top-0 w-[1728px]" data-node-id="82:2071" />
         <div className="absolute contents left-[78px] top-[40px]" data-node-id="199:1882">
-          <div className="absolute h-[53px] left-[78px] overflow-clip top-[40px] w-[205px]" data-node-id="99:269" data-name="LOGO">
+          <a href="#top" aria-label="PARTHA, back to top" onClick={handleBackToTop} className="absolute h-[53px] left-[78px] overflow-clip top-[40px] w-[205px] block cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#fa4d01]" data-node-id="99:269" data-name="LOGO">
             <div className="absolute inset-[29.04%_1.49%_0.74%_27.17%]" data-node-id="99:270" data-name="Vector">
               <img alt="" className="wordmark-light absolute block inset-0 max-w-none size-full" src={imgVector50} />
                   <img alt="" className="wordmark-dark absolute block inset-0 max-w-none size-full" src={imgWordmarkHeaderDark} />
@@ -1110,7 +1115,7 @@ export function LandingCanvas() {
                 </div>
               </div>
             </div>
-          </div>
+          </a>
           <div className="absolute contents left-[463px] top-[40px]" data-node-id="88:1536" data-name="Navbar 2">
             <div className="absolute bg-[var(--ln-bar)] h-[52px] left-[463px] top-[40px] w-[669px]" data-node-id="87:1523" />
             <a href="#product" className="-translate-x-1/2 [word-break:break-word] absolute block capitalize cursor-pointer font-display font-medium font-medium h-[19.007px] leading-[0] left-[541.5px] text-[24px] text-[var(--ln-ink)] text-center top-[51.99px] w-[103px]" data-node-id="87:1520">
