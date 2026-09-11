@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { DemoModal } from '@/components/DemoModal';
 import { RunItYourselfModal } from '@/components/RunItYourselfModal';
 import { LandingCanvas } from '@/components/landing/LandingCanvas';
-import { SiteHeader } from '@/components/landing/SiteHeader';
+import { HEADER_HEIGHT, SiteHeader } from '@/components/landing/SiteHeader';
 import { LandingScaler } from '@/components/landing/LandingScaler';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
 
@@ -24,9 +24,6 @@ import { useLandingTheme } from '@/hooks/useLandingTheme';
  * real analysis, and "Analyze a Repository" shows how to run PARTHA against
  * your own code. Closing either returns the reader exactly where they were.
  */
-/** The band the design spends on its own header, which `SiteHeader` replaces. */
-const CANVAS_HEADER_HEIGHT = 133;
-
 export function App() {
   const [demoOpen, setDemoOpen] = useState(false);
   const [runItYourselfOpen, setRunItYourselfOpen] = useState(false);
@@ -40,7 +37,7 @@ export function App() {
   return (
     <div className={dark ? 'landing-dark min-h-screen bg-background' : 'min-h-screen bg-background'}>
       <SiteHeader />
-      <LandingScaler cropTop={CANVAS_HEADER_HEIGHT}>
+      <LandingScaler cropTop={HEADER_HEIGHT}>
         <LandingCanvas
           onSeeHowItWorks={() => setDemoOpen(true)}
           onAnalyzeRepository={() => setRunItYourselfOpen(true)}

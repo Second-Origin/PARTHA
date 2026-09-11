@@ -432,7 +432,7 @@ export function LandingCanvas({ onSeeHowItWorks, onAnalyzeRepository }: LandingC
           </p>
         </div>
       </div>
-      <FaqAccordion className="absolute border border-[rgba(250,77,1,0.3)] border-solid left-[539px] overflow-hidden rounded-[12px] top-[4201px] w-[1109px]" />
+      <FaqAccordion id="faq" className="absolute border border-[rgba(250,77,1,0.3)] border-solid left-[539px] overflow-hidden rounded-[12px] top-[4201px] w-[1109px]" />
       <div className="absolute bg-[var(--ln-cta)] border border-[#fa4d01] border-solid h-[405px] left-[141px] overflow-clip rounded-[30px] shadow-[4px_4px_4px_0px_rgba(250,77,1,0.25)] top-[4638px] w-[1437px]" data-node-id="504:8541" data-name="contact">
         <p className="-translate-x-1/2 [word-break:break-word] absolute font-display font-light font-light leading-[48px] left-[717.5px] text-[48px] text-[var(--ln-ink)] text-center top-[68px] tracking-[-1.2px] w-[761px]" data-node-id="504:8522">
           Understand the system behind the code.
@@ -487,7 +487,7 @@ export function LandingCanvas({ onSeeHowItWorks, onAnalyzeRepository }: LandingC
         <ThemeControl className="absolute h-[38px] left-[1429px] top-[394px] w-[131px]" />
         <FooterLinks className="absolute h-[211px] left-[679px] top-[104px] w-[750px]" />
       </div>
-      <div className="absolute h-[797px] left-[74px] top-[2461px] w-[1583px]" data-node-id="539:4780" data-name="how it works">
+      <div className="absolute h-[797px] left-[74px] top-[2461px] w-[1583px]" id="how-it-works" data-node-id="539:4780" data-name="how it works">
         <div className="absolute content-stretch flex flex-col items-center left-[662px] top-[40px]" data-node-id="539:4781" data-name="Heading 2">
           <p className="[word-break:break-word] font-display font-extralight font-extralight leading-[48px] relative shrink-0 text-[32px] text-[var(--ln-ink)] text-center tracking-[-2.88px] whitespace-nowrap" data-node-id="539:4782">
             How Partha Works
@@ -736,7 +736,7 @@ export function LandingCanvas({ onSeeHowItWorks, onAnalyzeRepository }: LandingC
       </div>
       <div className="absolute contents left-[169px] top-[3413px]" data-node-id="573:7522">
         <div className="absolute contents left-[169px] top-[3491px]" data-node-id="573:7518">
-          <CapabilitiesCarousel className="absolute h-[518px] left-[169px] top-[3491px] w-[1390px]" />
+          <CapabilitiesCarousel id="capabilities" className="absolute h-[518px] left-[169px] top-[3491px] w-[1390px]" />
           <div className="absolute flex items-center justify-center left-[1166px] size-[115px] top-[3618px]" data-node-id="534:4547">
             <div className="-rotate-90 flex-none">
               <div className="relative size-[115px]" data-name="Frame">
@@ -753,7 +753,7 @@ export function LandingCanvas({ onSeeHowItWorks, onAnalyzeRepository }: LandingC
       </div>
       <div className="absolute h-[1384px] left-[74px] top-[1006px] w-[1583px]" data-node-id="550:1349" data-name="product">
         <div className="absolute h-[1328px] left-[-16px] right-[-16px] top-0" data-node-id="550:1350" data-name="Container">
-          <div className="absolute content-stretch flex flex-col gap-[16px] items-center left-[515px] top-[107px]" data-node-id="550:1351" data-name="Container">
+          <div id="product" className="absolute content-stretch flex flex-col gap-[16px] items-center left-[515px] top-[107px]" data-node-id="550:1351" data-name="Container">
             <div className="content-stretch flex gap-[10px] items-center justify-center px-[97px] relative shrink-0" data-node-id="562:4194" data-name="Meet Partha">
               <p className="[word-break:break-word] font-sans font-normal leading-[68.92px] not-italic relative shrink-0 text-[68.92px] text-[var(--ln-ink)] text-center tracking-[-4.1352px] whitespace-nowrap" data-node-id="562:4195">{`Meet `}</p>
               <Partha className="h-[69px] relative shrink-0 w-[184px]" />

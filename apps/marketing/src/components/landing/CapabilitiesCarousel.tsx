@@ -58,7 +58,7 @@ const CAPABILITIES: Capability[] = [
   },
 ];
 
-export function CapabilitiesCarousel({ className }: { className?: string }) {
+export function CapabilitiesCarousel({ id, className }: { id?: string; className?: string }) {
   const [index, setIndex] = useState(0);
 
   const goNext = useCallback(() => setIndex((i) => (i + 1) % CAPABILITIES.length), []);
@@ -71,7 +71,7 @@ export function CapabilitiesCarousel({ className }: { className?: string }) {
   const next = CAPABILITIES[(index + 1) % CAPABILITIES.length];
 
   return (
-  <div className={className} data-node-id="534:4423" data-name="capabilities">
+  <div id={id} className={className} data-node-id="534:4423" data-name="capabilities">
               <div className="absolute h-[518px] left-0 top-0 w-[1390px]" data-node-id="I534:4423;519:2177" data-name="Container">
                 <div className="absolute content-stretch flex flex-col items-start left-0 pr-[273px] top-0 w-[1137px]" data-node-id="I534:4423;519:2178" data-name="Container">
                   <div className="gap-x-[12px] gap-y-[12px] grid grid-cols-[__253px_599px] grid-rows-[__253px_253px] h-[518px] relative shrink-0 w-full" data-node-id="I534:4423;519:2179" data-name="Container">
