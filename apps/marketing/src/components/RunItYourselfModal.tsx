@@ -1,4 +1,4 @@
-import { Modal } from '@/components/Modal';
+import { SlidePanel } from '@/components/SlidePanel';
 
 const GITHUB_URL = 'https://github.com/Second-Origin/PARTHA';
 
@@ -27,23 +27,14 @@ npm run dev:frontend`;
  * "run it yourself" is the only call to action here. */
 export function RunItYourselfModal({ onClose }: { onClose: () => void }) {
   return (
-    <Modal onClose={onClose} labelledBy="run-it-yourself-title" maxWidthClassName="max-w-2xl">
+    <SlidePanel onClose={onClose} labelledBy="run-it-yourself-title" eyebrow="Run it yourself">
       <div className="p-6 sm:p-8">
         <div className="flex items-start justify-between gap-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Run it yourself</p>
-            <h2 id="run-it-yourself-title" className="font-display mt-2 text-xl font-semibold text-foreground">
+                        <h2 id="run-it-yourself-title" className="font-display mt-2 text-xl font-semibold text-foreground">
               Analyze your own repository
             </h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="shrink-0 rounded-xl border border-primary/30 px-3 py-2 text-sm font-semibold text-foreground hover:bg-accent"
-          >
-            Close
-          </button>
         </div>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           PARTHA isn&apos;t running as a hosted service, and there are no plans to host it -- it's open source and
@@ -99,6 +90,6 @@ export function RunItYourselfModal({ onClose }: { onClose: () => void }) {
           </p>
         </div>
       </div>
-    </Modal>
+    </SlidePanel>
   );
 }
