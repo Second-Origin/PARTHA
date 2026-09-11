@@ -2,13 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- The PARTHA mark. The SVG is preferred and carries the mark at full
+         resolution, so it stays sharp on any display; the PNGs are there for
+         apple-touch, which cannot take an SVG, and for anything that will not
+         load one. 32px is the smallest the labyrinth still reads at, so
+         nothing below it is declared. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
       content="PARTHA turns a repository revision into one sealed, queryable model and uses it to explain architecture, dependencies, review findings, insights, and documentation. See a scripted walkthrough, or run it yourself."
     />
-    <title>PARTHA — Repository Intelligence</title>
+    <title>PARTHA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Typography as specified by the iteration-1 landing design (Figma
