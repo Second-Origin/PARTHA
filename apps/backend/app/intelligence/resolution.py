@@ -9,7 +9,7 @@ exactly one member; zero and multiple candidates become visible diagnostics.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 import posixpath
 import re
@@ -94,6 +94,9 @@ class RelationshipResolver:
     def __init__(self, store: SnapshotStore) -> None:
         self.store = store
         self._snapshot: RiSnapshot | None = None
+        # Replaced per resolve(); the empty root alone keeps a caller that
+        # reaches a candidate helper before resolve() behaving as it used to.
+        self._python_roots: tuple[str, ...] = ("",)
 
     @property
     def producer(self) -> str:
@@ -127,6 +130,12 @@ class RelationshipResolver:
             self._check_cancelled(check_cancelled)
             nodes.append(node)
         nodes_by_key = {node.stable_key: node for node in nodes}
+        # Derived once per snapshot: every absolute Python specifier is matched
+        # against these, and they are a property of the whole file list rather
+        # than of any one import (#393).
+        self._python_roots = self._python_source_roots(
+            node.stable_key.removeprefix("file:") for node in nodes if node.node_kind == "file"
+        )
         self._check_cancelled(check_cancelled)
         observations: list[RiObservation] = []
         for observation in self.store.db.scalars(
@@ -508,10 +517,58 @@ class RelationshipResolver:
                 )
         return paths
 
+    def _python_absolute_file_candidates(self, specifier: str) -> set[str]:
+        """Every path in this repository the absolute specifier could name.
+
+        A Python import is written against the interpreter's path, not against
+        the repository root, so ``import click.core`` in a src-layout project
+        names ``src/click/core.py`` and ``from app.core.config import ...`` in
+        a monorepo names ``apps/backend/app/core/config.py``. Looking only
+        below the repository root -- which is all this did (#393) -- misses
+        both, and a bare call to anything imported that way then has no
+        binding target and is reported as unresolved. On `pallets/click` that
+        was 360 unresolved imports and 465 unresolved calls, in a repository
+        where nearly every one of those names is defined two directories away.
+
+        The roots are observed, not assumed: see ``_python_source_roots``. The
+        repository root is always among them, so a flat layout is unchanged.
+        """
+
+        module = specifier.replace(".", "/")
+        candidates: set[str] = set()
+        for root in self._python_roots:
+            prefix = f"{root}/" if root else ""
+            candidates.add(f"{prefix}{module}.py")
+            candidates.add(f"{prefix}{module}/__init__.py")
+        return candidates
+
     @staticmethod
-    def _python_absolute_file_candidates(specifier: str) -> set[str]:
-        root = specifier.replace(".", "/")
-        return {f"{root}.py", f"{root}/__init__.py"}
+    def _python_source_roots(paths: Iterable[str]) -> tuple[str, ...]:
+        """Directories this repository's absolute Python imports resolve from.
+
+        A directory is a source root when it holds a top-level package: it
+        contains ``<name>/__init__.py`` while not being part of a package
+        itself (no ``__init__.py`` of its own). That is the same fact the
+        interpreter uses, read straight off the observed file list rather than
+        configured or guessed, so ``src`` and ``apps/backend`` are found for
+        the layouts above and nothing is invented for a repository that has
+        neither.
+
+        The repository root is always included, so this only ever widens the
+        candidate set -- and a specifier that now matches files under two
+        different roots stays ambiguous rather than picking one, which is the
+        existing contract for every other multi-candidate reference.
+        """
+
+        package_dirs = {posixpath.dirname(path) for path in paths if posixpath.basename(path) == "__init__.py"}
+        roots = {""}
+        for package_dir in package_dirs:
+            parent = posixpath.dirname(package_dir)
+            # `parent` holding an __init__.py of its own means `package_dir` is
+            # a subpackage, and a subpackage's parent is not an import root.
+            if parent not in package_dirs:
+                roots.add(parent)
+        return tuple(sorted(roots))
 
     def _reference_candidates(
         self,
