@@ -35,6 +35,41 @@
     --sidebar-border: 18 50% 86%;
     --sidebar-accent: 18 99% 38%;
     --sidebar-accent-foreground: 0 0% 100%;
+
+  /* Landing-page surfaces and ink, from the iteration-1 design canvas.
+     These drive the landing route only; the product UI keeps the app
+     tokens above. */
+    --ln-page: #ffffff;
+    --ln-bar: #f1eee7;
+    --ln-blue: #cce0ea;
+    --ln-peach: #fccdb7;
+    --ln-peach-soft: #feede5;
+    --ln-grey: #ebe8ea;
+    --ln-sand: #eed8cc;
+    --ln-orange: #fda680;
+    --ln-quote: #fcede5;
+    --ln-card: #ffffff;
+    --ln-tint-blue: #f2f8fb;
+    --ln-ink: #191818;
+    --ln-ink-soft: #37383c;
+    --ln-ink-muted: #7a7a7a;
+    --ln-eyebrow: #5b6b74;
+    --ln-hero-head: #392135;
+    --ln-blue-ink: #006298;
+    --ln-blue-tile: #006298;
+    --ln-plum-tile: #392135;
+    --ln-faq-ink: #0a121f;
+    --ln-faq-ink-soft: rgba(10, 18, 31, 0.78);
+    --ln-ink-60: rgba(0, 0, 0, 0.6);
+    --ln-ink-70: rgba(0, 0, 0, 0.7);
+    --ln-ink-25: rgba(0, 0, 0, 0.25);
+    --ln-ink-20: rgba(0, 0, 0, 0.2);
+    --ln-cta: #feede5;
+    --ln-quote-soft: #fbf5f2;
+    --story-surface: rgba(0, 98, 152, 0.2);
+    --story-ink: #000000;
+    --story-ink-soft: rgba(0, 0, 0, 0.7);
+    --story-dot-idle: rgba(0, 0, 0, 0.3);
   }
 
   /* Scoped to the landing page's own root element only (never applied to
@@ -56,6 +91,37 @@
     --border: 0 0% 20%;
     --input: 0 0% 20%;
     --ring: 18 99% 49%;
+    --ln-page: #000000;
+    --ln-bar: #000000;
+    --ln-blue: #006298;
+    --ln-peach: #a03100;
+    --ln-peach-soft: #641f00;
+    --ln-grey: #392135;
+    --ln-sand: #aa3d00;
+    --ln-orange: #fa4d01;
+    --ln-quote: #aa3d00;
+    --ln-card: #120c11;
+    --ln-tint-blue: #006298;
+    --ln-ink: #ffffff;
+    --ln-ink-soft: rgba(255, 255, 255, 0.82);
+    --ln-ink-muted: rgba(255, 255, 255, 0.6);
+    --ln-eyebrow: rgba(255, 255, 255, 0.7);
+    --ln-hero-head: #ffffff;
+    --ln-blue-ink: #7cc2e6;
+    --ln-blue-tile: #006298;
+    --ln-plum-tile: #0c0810;
+    --ln-faq-ink: #ffffff;
+    --ln-faq-ink-soft: rgba(255, 255, 255, 0.78);
+    --ln-ink-60: rgba(255, 255, 255, 0.68);
+    --ln-ink-70: rgba(255, 255, 255, 0.85);
+    --ln-ink-25: rgba(255, 255, 255, 0.3);
+    --ln-ink-20: rgba(255, 255, 255, 0.25);
+    --ln-cta: #190800;
+    --ln-quote-soft: #2a0d00;
+    --story-surface: #006298;
+    --story-ink: #ffffff;
+    --story-ink-soft: rgba(255, 255, 255, 0.7);
+    --story-dot-idle: rgba(255, 255, 255, 0.3);
   }
 }
 
@@ -126,4 +192,115 @@
     width: 3px !important;
     margin-left: 3px;
   }
+}
+
+/* The product card's connector artwork ships as two exports -- blue lines for
+   the light card, white for the solid-blue dark one. Both are in the DOM so
+   the right one is painted on the first frame, with no theme lookup in JS. */
+.story-connectors-dark {
+  display: none;
+}
+
+.landing-dark .story-connectors-light {
+  display: none;
+}
+
+.landing-dark .story-connectors-dark {
+  display: block;
+}
+
+/* The ported canvas lays out every decorative shape as an absolutely
+   positioned image, and several of them are large, mostly transparent vectors
+   whose boxes overlap live controls further down the stack -- the carousel
+   dots sit under one such blob. Artwork in this canvas is never interactive,
+   so it must not take the pointer; the real controls are the buttons and
+   links underneath it. An <img> inside a control is unaffected: the event
+   simply targets the control itself. */
+/* The export leaves empty spacer boxes lying over live controls -- the
+   capabilities arrows sit under one such 253px square. An empty box in this
+   canvas never has anything to click, so it must not take the pointer. */
+.landing-canvas div:empty {
+  pointer-events: none;
+}
+
+.landing-canvas img,
+.landing-canvas svg,
+.landing-canvas [data-name='Vector'],
+.landing-canvas [data-name='Group'],
+.landing-canvas [data-name='Icon'],
+.landing-canvas [data-name='Mask group'],
+.landing-canvas [data-name='Clip path group'] {
+  pointer-events: none;
+}
+
+/* In the dark frame the small illustration tiles stay white -- the service
+   nodes, the evidence chips, the repository cards. Their labels must stay dark
+   with them, so any element that is still literally white re-declares the ink
+   tokens for its own subtree. */
+.landing-dark .landing-canvas .bg-white {
+  --ln-ink: #191818;
+  --ln-ink-60: rgba(0, 0, 0, 0.6);
+  --ln-ink-70: rgba(0, 0, 0, 0.7);
+  --ln-ink-25: rgba(0, 0, 0, 0.25);
+  --ln-ink-20: rgba(0, 0, 0, 0.2);
+}
+
+/* Artwork that exists in a light and a dark cut. Both are in the DOM so the
+   swap costs no load, and the class names read the same wherever they appear:
+   the story-card blobs, and anything else baked with a colour that cannot be
+   themed from CSS. */
+.theme-dark-art {
+  display: none;
+}
+
+.landing-dark .theme-light-art {
+  display: none;
+}
+
+.landing-dark .theme-dark-art {
+  display: block;
+}
+
+/* The PARTHA wordmark is one solid black path, so it vanishes on the dark
+   page. A white copy sits alongside it and CSS shows whichever the theme
+   needs -- both are in the DOM so neither has to load on a theme change. */
+.wordmark-dark {
+  display: none;
+}
+
+.landing-dark .wordmark-light {
+  display: none;
+}
+
+.landing-dark .wordmark-dark {
+  display: block;
+}
+
+/* The export flattens the canvas, so the labels that sit on the small white
+   chips are siblings of those chips rather than children -- a descendant rule
+   cannot reach them. These are the text nodes whose surface in the dark frame
+   is still white, found by sampling the dark export at each element's box, so
+   they keep the light palette's ink while everything around them inverts. */
+.landing-dark .landing-canvas [data-node-id="539:4822"],
+.landing-dark .landing-canvas [data-node-id="539:4795"],
+.landing-dark .landing-canvas [data-node-id="539:4806"],
+.landing-dark .landing-canvas [data-node-id="539:4865"],
+.landing-dark .landing-canvas [data-node-id="539:4866"],
+.landing-dark .landing-canvas [data-node-id="560:3778"],
+.landing-dark .landing-canvas [data-node-id="560:3793"],
+.landing-dark .landing-canvas [data-node-id="561:3819"],
+.landing-dark .landing-canvas [data-node-id="562:3922"],
+.landing-dark .landing-canvas [data-node-id="562:3923"],
+.landing-dark .landing-canvas [data-node-id="562:3924"],
+.landing-dark .landing-canvas [data-node-id="562:4033"],
+.landing-dark .landing-canvas [data-node-id="562:4034"],
+.landing-dark .landing-canvas [data-node-id="562:4040"],
+.landing-dark .landing-canvas [data-node-id="562:4041"],
+.landing-dark .landing-canvas [data-node-id="562:4050"],
+.landing-dark .landing-canvas [data-node-id="562:4051"],
+.landing-dark .landing-canvas [data-node-id="562:4090"],
+.landing-dark .landing-canvas [data-node-id="562:4091"] {
+  --ln-ink: #191818;
+  --ln-ink-60: rgba(0, 0, 0, 0.6);
+  --ln-ink-70: rgba(0, 0, 0, 0.7);
 }

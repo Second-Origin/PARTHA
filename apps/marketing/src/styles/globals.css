@@ -46,7 +46,7 @@
     --ln-peach-soft: #feede5;
     --ln-grey: #ebe8ea;
     --ln-sand: #eed8cc;
-    --ln-orange: #fca57f;
+    --ln-orange: #fda680;
     --ln-quote: #fcede5;
     --ln-card: #ffffff;
     --ln-tint-blue: #f2f8fb;
@@ -58,6 +58,25 @@
     --ln-blue-ink: #006298;
     --ln-blue-tile: #006298;
     --ln-plum-tile: #392135;
+
+    /* Product-card component set (Figma 555:2477). Its dark state fills the
+       card with solid Deep Blue and inverts the copy; the diagram tiles stay
+       white in both, exactly as the design has them. */
+    /* Ink at the opacities the canvas uses, so text inverts with the theme
+       instead of being pinned to black. */
+    --ln-faq-ink: #0a121f;
+    --ln-faq-ink-soft: rgba(10, 18, 31, 0.78);
+    --ln-ink-60: rgba(0, 0, 0, 0.6);
+    --ln-ink-70: rgba(0, 0, 0, 0.7);
+    --ln-ink-25: rgba(0, 0, 0, 0.25);
+    --ln-ink-20: rgba(0, 0, 0, 0.2);
+    --ln-cta: #feede5;
+    --ln-quote-soft: #fbf5f2;
+
+    --story-surface: rgba(0, 98, 152, 0.2);
+    --story-ink: #000000;
+    --story-ink-soft: rgba(0, 0, 0, 0.7);
+    --story-dot-idle: rgba(0, 0, 0, 0.3);
   }
 
   .landing-dark {
@@ -81,14 +100,14 @@
     --ln-page: #000000;
     --ln-bar: #000000;
     --ln-blue: #006298;
-    --ln-peach: #a03200;
-    --ln-peach-soft: #6d2200;
+    --ln-peach: #a03100;
+    --ln-peach-soft: #641f00;
     --ln-grey: #392135;
     --ln-sand: #aa3d00;
     --ln-orange: #fa4d01;
-    --ln-quote: #241921;
+    --ln-quote: #aa3d00;
     --ln-card: #120c11;
-    --ln-tint-blue: #0d2b3d;
+    --ln-tint-blue: #006298;
     --ln-ink: #ffffff;
     --ln-ink-soft: rgba(255, 255, 255, 0.82);
     --ln-ink-muted: rgba(255, 255, 255, 0.6);
@@ -97,6 +116,20 @@
     --ln-blue-ink: #7cc2e6;
     --ln-blue-tile: #006298;
     --ln-plum-tile: #0c0810;
+
+    --ln-faq-ink: #ffffff;
+    --ln-faq-ink-soft: rgba(255, 255, 255, 0.78);
+    --ln-ink-60: rgba(255, 255, 255, 0.68);
+    --ln-ink-70: rgba(255, 255, 255, 0.85);
+    --ln-ink-25: rgba(255, 255, 255, 0.3);
+    --ln-ink-20: rgba(255, 255, 255, 0.25);
+    --ln-cta: #190800;
+    --ln-quote-soft: #2a0d00;
+
+    --story-surface: #006298;
+    --story-ink: #ffffff;
+    --story-ink-soft: rgba(255, 255, 255, 0.7);
+    --story-dot-idle: rgba(255, 255, 255, 0.3);
   }
 
   body {
@@ -114,4 +147,266 @@
   .partha-surface {
     @apply rounded-2xl border border-border bg-card shadow-[0_12px_24px_hsl(var(--foreground)/0.06)];
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Landing motion.
+   The Figma file exports no keyframe data (get_motion_context returns an empty
+   node set for the landing frame), so this is authored motion rather than
+   transcribed values: entrances on scroll, a real height transition on the FAQ,
+   a cross-fade between capability slides, and small hover affordances.
+   Everything here is suppressed under prefers-reduced-motion.
+--------------------------------------------------------------------------- */
+@layer components {
+  /* Scroll entrance. The element renders in its final position for anyone
+     without JS or with reduced motion; only the [data-reveal] hook hides it. */
+  [data-reveal='pending'] {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  [data-reveal='shown'] {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 620ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Staggered children, used by the hero and the step row. */
+  [data-reveal='shown'] [data-stagger] {
+    animation: ln-rise 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--ln-stagger, 0) * 90ms);
+  }
+
+  @keyframes ln-rise {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Capability slide change: the quote and both labels cross-fade in place. */
+  @keyframes ln-slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .ln-slide {
+    animation: ln-slide-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* FAQ panel. The 0fr -> 1fr grid row animates real height without measuring
+     the panel in JS, so it stays correct when the answer text reflows. */
+  .ln-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .ln-panel[data-open='true'] {
+    grid-template-rows: 1fr;
+  }
+
+  .ln-panel > div {
+    overflow: hidden;
+  }
+
+  .ln-panel-inner {
+    opacity: 0;
+    transition: opacity 200ms ease-out;
+  }
+
+  .ln-panel[data-open='true'] .ln-panel-inner {
+    opacity: 1;
+    transition: opacity 260ms ease-out 120ms;
+  }
+
+  /* Hover affordances. */
+  .ln-card {
+    transition:
+      transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @media (hover: hover) {
+    .ln-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 18px 40px -24px rgb(57 33 53 / 0.45);
+    }
+  }
+
+  .ln-nudge {
+    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @media (hover: hover) {
+    .ln-nudge-host:hover .ln-nudge {
+      transform: translateX(4px);
+    }
+
+    .ln-nudge-host:hover .ln-nudge-back {
+      transform: translateX(-4px);
+    }
+  }
+
+  /* Nav underline. */
+  .ln-link {
+    background-image: linear-gradient(currentColor, currentColor);
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    background-size: 0% 1.5px;
+    transition: background-size 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @media (hover: hover) {
+    .ln-link:hover {
+      background-size: 100% 1.5px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal],
+  [data-reveal] [data-stagger],
+  .ln-slide,
+  .ln-panel,
+  .ln-panel-inner,
+  .ln-card,
+  .ln-nudge,
+  .ln-link {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .ln-panel {
+    grid-template-rows: 0fr;
+  }
+
+  .ln-panel[data-open='true'] {
+    grid-template-rows: 1fr;
+  }
+}
+
+/* The product card's connector artwork ships as two exports -- blue lines for
+   the light card, white for the solid-blue dark one. Both are in the DOM so
+   the right one is painted on the first frame, with no theme lookup in JS. */
+.story-connectors-dark {
+  display: none;
+}
+
+.landing-dark .story-connectors-light {
+  display: none;
+}
+
+.landing-dark .story-connectors-dark {
+  display: block;
+}
+
+/* The ported canvas lays out every decorative shape as an absolutely
+   positioned image, and several of them are large, mostly transparent vectors
+   whose boxes overlap live controls further down the stack -- the carousel
+   dots sit under one such blob. Artwork in this canvas is never interactive,
+   so it must not take the pointer; the real controls are the buttons and
+   links underneath it. An <img> inside a control is unaffected: the event
+   simply targets the control itself. */
+/* The export leaves empty spacer boxes lying over live controls -- the
+   capabilities arrows sit under one such 253px square. An empty box in this
+   canvas never has anything to click, so it must not take the pointer. */
+.landing-canvas div:empty {
+  pointer-events: none;
+}
+
+.landing-canvas img,
+.landing-canvas svg,
+.landing-canvas [data-name='Vector'],
+.landing-canvas [data-name='Group'],
+.landing-canvas [data-name='Icon'],
+.landing-canvas [data-name='Mask group'],
+.landing-canvas [data-name='Clip path group'] {
+  pointer-events: none;
+}
+
+/* In the dark frame the small illustration tiles stay white -- the service
+   nodes, the evidence chips, the repository cards. Their labels must stay dark
+   with them, so any element that is still literally white re-declares the ink
+   tokens for its own subtree. */
+.landing-dark .landing-canvas .bg-white {
+  --ln-ink: #191818;
+  --ln-ink-60: rgba(0, 0, 0, 0.6);
+  --ln-ink-70: rgba(0, 0, 0, 0.7);
+  --ln-ink-25: rgba(0, 0, 0, 0.25);
+  --ln-ink-20: rgba(0, 0, 0, 0.2);
+}
+
+/* Artwork that exists in a light and a dark cut. Both are in the DOM so the
+   swap costs no load, and the class names read the same wherever they appear:
+   the story-card blobs, and anything else baked with a colour that cannot be
+   themed from CSS. */
+.theme-dark-art {
+  display: none;
+}
+
+.landing-dark .theme-light-art {
+  display: none;
+}
+
+.landing-dark .theme-dark-art {
+  display: block;
+}
+
+/* The PARTHA wordmark is one solid black path, so it vanishes on the dark
+   page. A white copy sits alongside it and CSS shows whichever the theme
+   needs -- both are in the DOM so neither has to load on a theme change. */
+.wordmark-dark {
+  display: none;
+}
+
+.landing-dark .wordmark-light {
+  display: none;
+}
+
+.landing-dark .wordmark-dark {
+  display: block;
+}
+
+/* The export flattens the canvas, so the labels that sit on the small white
+   chips are siblings of those chips rather than children -- a descendant rule
+   cannot reach them. These are the text nodes whose surface in the dark frame
+   is still white, found by sampling the dark export at each element's box, so
+   they keep the light palette's ink while everything around them inverts. */
+.landing-dark .landing-canvas [data-node-id="539:4822"],
+.landing-dark .landing-canvas [data-node-id="539:4795"],
+.landing-dark .landing-canvas [data-node-id="539:4806"],
+.landing-dark .landing-canvas [data-node-id="539:4865"],
+.landing-dark .landing-canvas [data-node-id="539:4866"],
+.landing-dark .landing-canvas [data-node-id="560:3778"],
+.landing-dark .landing-canvas [data-node-id="560:3793"],
+.landing-dark .landing-canvas [data-node-id="561:3819"],
+.landing-dark .landing-canvas [data-node-id="562:3922"],
+.landing-dark .landing-canvas [data-node-id="562:3923"],
+.landing-dark .landing-canvas [data-node-id="562:3924"],
+.landing-dark .landing-canvas [data-node-id="562:4033"],
+.landing-dark .landing-canvas [data-node-id="562:4034"],
+.landing-dark .landing-canvas [data-node-id="562:4040"],
+.landing-dark .landing-canvas [data-node-id="562:4041"],
+.landing-dark .landing-canvas [data-node-id="562:4050"],
+.landing-dark .landing-canvas [data-node-id="562:4051"],
+.landing-dark .landing-canvas [data-node-id="562:4090"],
+.landing-dark .landing-canvas [data-node-id="562:4091"] {
+  --ln-ink: #191818;
+  --ln-ink-60: rgba(0, 0, 0, 0.6);
+  --ln-ink-70: rgba(0, 0, 0, 0.7);
 }

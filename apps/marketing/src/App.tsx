@@ -2,35 +2,21 @@ import { useEffect, useState } from 'react';
 
 import { DemoModal } from '@/components/DemoModal';
 import { RunItYourselfModal } from '@/components/RunItYourselfModal';
-import { Capabilities } from '@/components/landing/Capabilities';
-import { CtaBand } from '@/components/landing/CtaBand';
-import { Faq } from '@/components/landing/Faq';
-import { HowItWorks } from '@/components/landing/HowItWorks';
-import { Hero } from '@/components/landing/Hero';
-import { SiteFooter } from '@/components/landing/SiteFooter';
-import { SiteHeader } from '@/components/landing/SiteHeader';
-import { StoryCards } from '@/components/landing/StoryCards';
+import { LandingCanvas } from '@/components/landing/LandingCanvas';
+import { LandingScaler } from '@/components/landing/LandingScaler';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
 
 /**
- * The PARTHA marketing site, built from the iteration-1 landing design
- * (Figma f1HlSxjl8pvvOm86XFPZEJ, frame "Landing Page").
+ * The PARTHA marketing site.
  *
- * This is a real implementation of that design, not a picture of it. The
- * previous version rendered a 3.3 MB flat SVG export of the same frame with
- * invisible percentage-positioned hotspots on top, which meant nothing the
- * designer specified as interactive actually was: the capability carousel
- * never advanced, the FAQ opened a modal instead of expanding, there were no
- * hover or focus states, and the page carried no real text for search engines
- * or screen readers. Every section here is composed from the design's own
- * illustration exports instead.
+ * The page body is the iteration-1 Figma frame ported as real DOM
+ * (`LandingCanvas`), rendered at its authored 1728px width and scaled to the
+ * viewport by `LandingScaler`. The geometry is the design's own -- this is not
+ * a responsive re-interpretation of it.
  *
- * Two behavioural differences from the product, since this standalone site has
- * no backend and no accounts:
- *
- * - "Log In" and "See how it works" open the scripted demo (DemoModal).
- * - Every "Analyze a Repository" opens local setup instructions
- *   (RunItYourselfModal) -- there is no live backend to analyse against.
+ * It replaces a 3.3 MB flat SVG export of the same frame with invisible
+ * hotspots on top, so the text is now real, controls are focusable, and the
+ * pieces the design specified as interactive can actually behave.
  */
 export function App() {
   const [demoOpen, setDemoOpen] = useState(false);
@@ -42,30 +28,11 @@ export function App() {
     document.documentElement.removeAttribute('data-landing-theme-boot');
   }, []);
 
-  const openDemo = () => setDemoOpen(true);
-  const openRunItYourself = () => setRunItYourselfOpen(true);
-
   return (
-    <div className={dark ? 'landing-dark min-h-screen bg-background text-foreground' : 'min-h-screen bg-background text-foreground'}>
-      <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:font-display focus:text-sm focus:font-semibold focus:text-white"
-      >
-        Skip to content
-      </a>
-
-      <SiteHeader onLogIn={openDemo} onCreateAccount={openRunItYourself} />
-
-      <main id="main">
-        <Hero onAnalyze={openRunItYourself} onSeeHowItWorks={openDemo} />
-        <StoryCards />
-        <HowItWorks />
-        <Capabilities />
-        <Faq />
-        <CtaBand onAnalyze={openRunItYourself} />
-      </main>
-
-      <SiteFooter themePreference={theme.preference} onThemeChange={theme.setPreference} />
+    <div className={dark ? 'landing-dark min-h-screen bg-background' : 'min-h-screen bg-background'}>
+      <LandingScaler>
+        <LandingCanvas />
+      </LandingScaler>
 
       {demoOpen && <DemoModal onClose={() => setDemoOpen(false)} />}
       {runItYourselfOpen && <RunItYourselfModal onClose={() => setRunItYourselfOpen(false)} />}

@@ -51,8 +51,17 @@ describe('deep-linked route reachability (#179)', () => {
     // visitor's "analyze a repository" intent links straight to account
     // creation on this instance, not a waitlist -- registration itself
     // still enforces the allowlist (#374/#375) or dev bypass (#384).
-    expect(screen.queryAllByRole('link', { name: /analyze a repository/i })).toHaveLength(0);
-    expect(screen.getAllByRole('link', { name: /create an account/i }).length).toBeGreaterThan(0);
+    //
+    // The canvas states that intent in the destination rather than in the
+    // label. The old flat-artwork page gave this control the hidden name
+    // "Create an account" while it visibly read "Analyze a Repository";
+    // now that the button is real text, its accessible name has to match
+    // what is on it (WCAG 2.5.3), so the assertion is on where it goes.
+    const analyze = screen.getAllByRole('link', { name: /analyze a repository/i });
+    expect(analyze.length).toBeGreaterThan(0);
+    for (const link of analyze) {
+      expect(link).toHaveAttribute('href', '/register');
+    }
   });
 
   it('renders Dashboard directly at /dashboard instead of 404ing', async () => {
