@@ -63,6 +63,11 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        // Landing-page families (iteration-1 design). They are scoped to
+        // the landing canvas: `sans` above stays Inter for the product UI.
+        display: ['Montserrat', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        body: ['"Proza Libre"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        accent: ['"Cormorant Upright"', 'ui-serif', 'Georgia', 'serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       fontSize: {

@@ -1,0 +1,16 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="115" height="115" viewBox="0 0 115 115" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Frame" clip-path="url(#clip0_0_384)">
+<path id="Vector" d="M41.3281 32.3438C64.1529 32.3438 82.6562 50.8471 82.6562 73.6719C82.6562 96.4967 64.1529 115 41.3281 115C18.5033 115 0 96.4967 0 73.6719C0 50.8471 18.5033 32.3438 41.3281 32.3438ZM115 0V115H82.6562V32.3438H0V0H115Z" fill="#FA4D01" fill-opacity="0.2"/>
+<g id="Frame_2" clip-path="url(#clip1_0_384)">
+<path id="Vector_2" d="M50.8639 78.5L60.1527 87.7886L53.7886 94.1525L44.5 84.8639V98H35.5V84.8639L26.2114 94.1525L19.8475 87.7886L29.1361 78.5H16V69.5H29.1361L19.8475 60.2112L26.2114 53.8475L35.5 63.1361V50H44.5V63.1361L53.7888 53.8473L60.1525 60.2114L50.8639 69.5H64V78.5H50.8639Z" fill="#FA4D01" fill-opacity="0.6"/>
+</g>
+</g>
+<defs>
+<clipPath id="clip0_0_384">
+<rect width="115" height="115" fill="white"/>
+</clipPath>
+<clipPath id="clip1_0_384">
+<rect width="48" height="48" fill="white" transform="matrix(0 1 -1 0 64 50)"/>
+</clipPath>
+</defs>
+</svg>
