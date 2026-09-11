@@ -28,6 +28,15 @@ const CTA = { left: 1418, top: 41, width: 232, height: 52 };
  * header switches to a layout built for the space instead of a shrunk copy. */
 const COMPACT_BELOW = 1024;
 
+/** The compact bar's own height, which the spacer has to match. */
+const COMPACT_BAR_HEIGHT = 64;
+
+/** How close to the top edge the pointer has to come to call the header back. */
+const REVEAL_WITHIN = 64;
+
+/** How far below the bar the pointer has to travel before it withdraws again. */
+const REVEAL_RELEASE = 48;
+
 /** The site header.
  *
  * The page body is the design's fixed 1728px composition scaled to the
@@ -42,10 +51,12 @@ const COMPACT_BELOW = 1024;
  * with a disclosure menu, at sizes chosen for that space rather than shrunk.
  */
 export function SiteHeader() {
-  const hostRef = useRef<HTMLElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [compact, setCompact] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [revealed, setRevealed] = useState(false);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -71,6 +82,32 @@ export function SiteHeader() {
     };
   }, []);
 
+  /* The header travels with the page rather than staying pinned: it slides up
+   * as the reader scrolls past it and is gone by the time it has. Bringing the
+   * pointer back to the top edge calls it down again, so it is out of the way
+   * by default but never more than a gesture away.
+   *
+   * Touch has no pointer to read, so there the header is simply back once the
+   * reader returns to the top of the page, which the same offset already does. */
+  useEffect(() => {
+    const barHeight = hostRef.current?.offsetHeight ?? 0;
+    const onScroll = () => setOffset(Math.min(window.scrollY, barHeight));
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [compact, scale]);
+
+  useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      const barHeight = hostRef.current?.offsetHeight ?? 0;
+      // Reaching for the top edge calls it back; moving clear of it lets go.
+      if (event.clientY <= REVEAL_WITHIN) setRevealed(true);
+      else if (event.clientY > barHeight + REVEAL_RELEASE) setRevealed(false);
+    };
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    return () => window.removeEventListener('pointermove', onPointerMove);
+  }, []);
+
   useEffect(() => {
     if (!menuOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -89,12 +126,22 @@ export function SiteHeader() {
   const focusRing =
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#fa4d01]';
 
+  const barHeight = compact ? undefined : HEADER_HEIGHT * scale;
+
   return (
-    <header
-      ref={hostRef}
-      className="sticky top-0 z-40 w-full overflow-hidden bg-[var(--ln-bar)]"
-      style={{ height: compact ? undefined : HEADER_HEIGHT * scale }}
-    >
+    <>
+      {/* Holds the bar's place in the flow, so pulling it out of the page
+          cannot shift the page underneath it. */}
+      <div aria-hidden style={{ height: barHeight ?? COMPACT_BAR_HEIGHT }} />
+      <header
+        ref={hostRef}
+        className="fixed inset-x-0 top-0 z-40 w-full overflow-hidden bg-[var(--ln-bar)] will-change-transform"
+        style={{
+          height: barHeight,
+          transform: `translateY(${revealed ? 0 : -offset}px)`,
+          transition: 'transform 220ms ease-out',
+        }}
+      >
       {compact ? (
         <>
           <div className="flex h-[64px] items-center justify-between gap-3 px-4 sm:px-6">
@@ -195,12 +242,13 @@ export function SiteHeader() {
             style={{ left: CTA.left, top: CTA.top, width: CTA.width, height: CTA.height }}
           >
             <span className="absolute inset-0 rounded-[25px] border-[3px] border-solid border-[#fa4d01] bg-[#fffcf7] transition-colors duration-200 group-hover:bg-[#fa4d01]" />
-            <span className="absolute inset-0 grid place-items-center font-display text-[24px] font-medium text-[#fa4d01] transition-colors duration-200 group-hover:text-white">
+            <span className="absolute inset-0 grid place-items-center font-display text-[20px] font-medium text-[#fa4d01] transition-colors duration-200 group-hover:text-white">
               Try PARTHA v0.2.0
             </span>
           </a>
         </div>
       )}
-    </header>
+      </header>
+    </>
   );
 }
