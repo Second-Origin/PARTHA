@@ -9,6 +9,7 @@ from app.schemas.repository import (
     RepositoryFileResponse,
     RepositoryLineageResponse,
     RepositoryListResponse,
+    RepositoryReanalysisResponse,
     RepositoryResponse,
 )
 from app.services.repository_service import RepositoryService
@@ -43,6 +44,13 @@ _REPOSITORY_EXAMPLE = {
     "meta": None,
     "fileTree": [],
 }
+_REPOSITORY_REANALYSIS_EXAMPLE = {
+    "outcome": "already-current",
+    "repository": _REPOSITORY_EXAMPLE,
+    "remoteHead": "0123456789abcdef0123456789abcdef01234567",
+    "previousRepositoryId": None,
+}
+
 _REPOSITORY_LINEAGE_EXAMPLE = {
     "isLineaged": True,
     "lineageId": "22222222-2222-2222-2222-222222222222",
@@ -202,6 +210,32 @@ def get_repository_lineage(
     service: RepositoryService = Depends(get_repository_service),
 ) -> RepositoryLineageResponse:
     return service.get_lineage(repository_id)
+
+
+@router.post(
+    "/{repository_id}/reanalyse",
+    response_model=RepositoryReanalysisResponse,
+    responses=documented_responses(
+        status.HTTP_200_OK,
+        "Branch head compared against the lineage's latest revision. `already-current` means the head still "
+        "names the sealed revision and nothing was imported; `revision-imported` means a new revision was "
+        "added to the same lineage and is being analysed.",
+        _REPOSITORY_REANALYSIS_EXAMPLE,
+        401,
+        404,
+        409,
+        429,
+        502,
+        504,
+        500,
+    ),
+    openapi_extra=suppress_automatic_validation_error(),
+)
+def reanalyse_repository(
+    repository_id: str,
+    service: RepositoryService = Depends(get_repository_service),
+) -> RepositoryReanalysisResponse:
+    return service.reanalyse_repository(repository_id)
 
 
 @router.get(

@@ -9,7 +9,13 @@ from uuid import uuid4
 from fastapi import UploadFile
 
 from app.core.config import Settings
-from app.core.exceptions import ConflictServiceError, NotFoundError, ServiceError, ValidationServiceError
+from app.core.exceptions import (
+    ConflictServiceError,
+    ExternalServiceError,
+    NotFoundError,
+    ServiceError,
+    ValidationServiceError,
+)
 from app.github.client import GitHubClient
 from app.models.repository import RepositoryRecord
 from app.parsers.repository_parser import RepositoryFileLimitExceeded, RepositoryParser
@@ -22,6 +28,7 @@ from app.schemas.repository import (
     RepositoryLineageResponse,
     RepositoryListResponse,
     RepositoryMeta,
+    RepositoryReanalysisResponse,
     RepositoryResponse,
     RepositoryRevision,
 )
@@ -125,10 +132,20 @@ class RepositoryService:
         self.storage.delete_repository(local_path)
 
     def import_github_repository(self, request: GitHubImportRequest) -> RepositoryResponse:
-        repository_id = str(uuid4())
         url = self.github.validate_public_url(str(request.url))
         branch = self.github.validate_branch(request.branch)
+        return self._import_github_revision(url, branch)
 
+    def _import_github_revision(self, url: str, branch: str | None) -> RepositoryResponse:
+        """Clone, parse and seal one revision of an already-validated GitHub URL.
+
+        Shared by the first import and by re-analysis (#448) so a second
+        revision is produced by exactly the same path as the first -- the
+        lineage, the duplicate check and the sealed snapshot all behave
+        identically whichever entry point asked for it.
+        """
+
+        repository_id = str(uuid4())
         # A new commit is a new revision, so duplicate detection is keyed on the
         # resolved commit SHA rather than URL+branch (#87). That requires cloning
         # first: URL+branch is only a fallback when git identity is unavailable,
@@ -196,6 +213,65 @@ class RepositoryService:
             self.storage.delete_repository_id(repository_id)
             raise
         return self.to_response(persisted)
+
+    def reanalyse_repository(self, repository_id: str) -> RepositoryReanalysisResponse:
+        """Bring a lineaged GitHub repository up to its branch head (#448).
+
+        The capability was already there -- re-importing at a new commit has
+        always allocated a new revision in the same lineage (#298/#299/#400).
+        What was missing was any way to ask for it: the only route to a second
+        revision was retyping the URL, and if the branch had not moved the
+        answer came back as "Repository has already been imported", which
+        reads as a wall rather than as "you are already current".
+
+        So an unmoved branch is reported as a state, not an error. A moved one
+        goes through exactly the same import path as the first revision.
+        """
+
+        record = self._get_record(repository_id)
+        if record.source != "github" or not record.source_url:
+            raise ConflictServiceError(
+                "Only repositories imported from GitHub can be re-analysed. An upload has no upstream to check.",
+                {"repositoryId": record.id, "source": record.source},
+            )
+        latest = self._latest_in_lineage(record)
+        url = self.github.validate_public_url(record.source_url)
+        branch = self.github.validate_branch(record.branch)
+
+        remote_head = self.github.read_remote_head_commit(url, branch)
+        if remote_head is None:
+            raise ExternalServiceError(
+                "GitHub did not return a commit for this branch, so there is nothing to compare against.",
+                {"repositoryId": record.id},
+            )
+        if latest.revision_kind == "git" and latest.revision_value == remote_head:
+            return RepositoryReanalysisResponse(
+                outcome="already-current",
+                repository=self.to_response(latest),
+                remote_head=remote_head,
+            )
+        return RepositoryReanalysisResponse(
+            outcome="revision-imported",
+            repository=self._import_github_revision(url, branch),
+            remote_head=remote_head,
+            previous_repository_id=latest.id,
+        )
+
+    def _latest_in_lineage(self, record: RepositoryRecord) -> RepositoryRecord:
+        """The newest revision of `record`'s lineage, or `record` itself.
+
+        A repository viewed at an older revision must still re-analyse against
+        the head of its own history, not against the revision the reader
+        happens to be looking at -- otherwise opening revision 1 of a
+        three-revision lineage would report the branch as moved and import a
+        fourth copy of something already sealed.
+        """
+
+        if record.lineage_id is None:
+            return record
+        # `list_lineage_members` orders most-recent-first and is owner-scoped.
+        members = self.repository.list_lineage_members(record.lineage_id, self.owner_id)
+        return members[0] if members else record
 
     def _canonical_github_source(self, url: str) -> str:
         """Owner-scoped lineage grouping key for an already-validated live URL.

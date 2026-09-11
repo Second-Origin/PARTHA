@@ -111,6 +111,59 @@ class GitHubClient:
         ref = result.stdout.strip()
         return ref if ref.startswith("refs/") else None
 
+    def read_remote_head_commit(self, url: str, branch: str | None = None) -> str | None:
+        """Resolve a branch head over the network without cloning (#448).
+
+        Re-analysis asks "has this moved?", and for a repository that has not
+        moved -- the common answer -- a full clone is a download, a parse and a
+        directory of disk to learn one SHA. ``ls-remote`` answers the same
+        question in one round trip and touches no storage.
+
+        ``url`` and ``branch`` must already be through ``validate_public_url``
+        and ``validate_branch``: both are passed to git as arguments, and the
+        branch is additionally wrapped as a full ``refs/heads/`` ref so a name
+        can never be read as a flag or a wildcard.
+        """
+
+        env = os.environ.copy()
+        env["GIT_TERMINAL_PROMPT"] = "0"
+        ref = f"refs/heads/{branch}" if branch else "HEAD"
+        try:
+            result = subprocess.run(
+                ["git", "ls-remote", "--exit-code", "--", url, ref],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout_seconds,
+                env=env,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise TimeoutServiceError(
+                "Resolving the GitHub branch head timed out.",
+                {"timeoutSeconds": self.timeout_seconds},
+            ) from exc
+        except (subprocess.CalledProcessError, OSError) as exc:
+            return_code = exc.returncode if isinstance(exc, subprocess.CalledProcessError) else None
+            # As with clone, raw stderr is not logged: it can echo the URL and
+            # whatever the remote chose to say back.
+            logger.warning(
+                "git ls-remote failed for public repository (error_type=%s, return_code=%s).",
+                type(exc).__name__,
+                return_code,
+            )
+            raise ExternalServiceError(
+                "Failed to reach the GitHub repository. Confirm it is still public and the branch still exists.",
+            ) from exc
+
+        first_line = result.stdout.strip().splitlines()[0] if result.stdout.strip() else ""
+        sha = first_line.split("\t", 1)[0].strip() if first_line else ""
+        # A short or non-hex answer means the remote said something this method
+        # does not understand; reporting None keeps the caller from comparing a
+        # malformed value against a sealed revision.
+        if len(sha) != 40 or not all(character in "0123456789abcdef" for character in sha):
+            return None
+        return sha
+
     def clone_public_repository(self, url: str, destination: Path, branch: str | None = None) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()

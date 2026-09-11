@@ -4,6 +4,7 @@ import { Badge } from '@/shared/components/ui/Badge';
 import { EmptyState } from '@/shared/components/ui/EmptyState';
 import { repositoryStatusVariant } from '@/features/repositories/status';
 import { useRepositoryLineage } from '@/features/repositories/hooks/useRepositoryLineage';
+import { RepositoryReanalyseButton } from '@/features/repositories/components/RepositoryReanalyseButton';
 import { cn } from '@/shared/utils/cn';
 
 interface RepositoryLineageHistoryProps {
@@ -11,7 +12,7 @@ interface RepositoryLineageHistoryProps {
 }
 
 export function RepositoryLineageHistory({ repositoryId }: RepositoryLineageHistoryProps) {
-  const { entries, isLineaged, loading, error, retry } = useRepositoryLineage(repositoryId);
+  const { entries, isLineaged, loading, error, retry, refresh } = useRepositoryLineage(repositoryId);
 
   if (loading) {
     return (
@@ -34,7 +35,12 @@ export function RepositoryLineageHistory({ repositoryId }: RepositoryLineageHist
 
   return (
     <div className="space-y-4">
-      {!isLineaged && (
+      {isLineaged ? (
+        // Only a lineage has an upstream to check. A standalone import has
+        // nothing to poll, so the action is absent rather than present and
+        // failing -- an affordance that refuses is worse than no affordance.
+        <RepositoryReanalyseButton repositoryId={repositoryId} onRevisionImported={refresh} />
+      ) : (
         <p className="text-sm text-muted-foreground">
           This is a standalone import — repeated GitHub imports of the same repository and branch are grouped into a
           shared history; a one-off upload or an unresolved-ref import never gets one.
