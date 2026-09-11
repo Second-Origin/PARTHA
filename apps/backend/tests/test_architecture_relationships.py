@@ -178,14 +178,16 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
     nodes = {node["id"]: node for node in architecture["nodes"]}
 
     # Both modules have the same persisted role (entrypoint); neither is collapsed.
-    assert "entrypoint" in nodes["module:alpha"]["tags"]
-    assert "entrypoint" in nodes["module:beta"]["tags"]
+    assert "entrypoint" in nodes["module:src/alpha/index.ts"]["tags"]
+    assert "entrypoint" in nodes["module:src/beta/index.ts"]["tags"]
     assert architecture["relationshipSnapshotId"] == snapshot_id
 
     import_edges = [
         edge
         for edge in architecture["edges"]
-        if edge["source"] == "module:alpha" and edge["target"] == "module:beta" and edge["predicate"] == "imports"
+        if edge["source"] == "module:src/alpha/index.ts"
+        and edge["target"] == "module:src/beta/index.ts"
+        and edge["predicate"] == "imports"
     ]
     assert len(import_edges) == 1
     edge = import_edges[0]
@@ -199,19 +201,23 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
             "endLine": 1,
         }
     ]
-    assert "module:beta" in nodes["module:alpha"]["dependencies"]
-    assert "module:alpha" in nodes["module:beta"]["dependents"]
-    assert nodes["module:alpha"]["relationshipState"] == "connected"
-    assert nodes["module:beta"]["relationshipState"] == "connected"
+    assert "module:src/beta/index.ts" in nodes["module:src/alpha/index.ts"]["dependencies"]
+    assert "module:src/alpha/index.ts" in nodes["module:src/beta/index.ts"]["dependents"]
+    assert nodes["module:src/alpha/index.ts"]["relationshipState"] == "connected"
+    assert nodes["module:src/beta/index.ts"]["relationshipState"] == "connected"
     assert any(
-        item["source"] == "module:alpha" and item["target"] == "module:beta" and item["predicate"] == "calls"
+        item["source"] == "module:src/alpha/index.ts"
+        and item["target"] == "module:src/beta/index.ts"
+        and item["predicate"] == "calls"
         for item in architecture["edges"]
     )
     assert not any(item["source"] == item["target"] for item in architecture["edges"])
     assert not any(item["code"] == "ARCH-REL-ENDPOINT-UNMAPPED" for item in architecture["diagnostics"])
 
     dependency_edges = [
-        item for item in architecture["edges"] if item["source"] == "module:alpha" and item["target"] == "dep:npm:react"
+        item
+        for item in architecture["edges"]
+        if item["source"] == "module:src/alpha/index.ts" and item["target"] == "dep:npm:react"
     ]
     assert {item["predicate"] for item in dependency_edges} == {"imports", "depends_on"}
     assert not any(item["target"] == "dep:npm:lodash" for item in architecture["edges"])
@@ -223,7 +229,7 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
         if item["code"] == "ARCH-REL-REPO-SCOPED" and item["path"] == "package.json" and item["severity"] == "info"
     )
     assert root_scope_diagnostic["nodeIds"] is None
-    assert nodes["module:lonely"]["relationshipState"] == "no-observed-relationships"
+    assert nodes["module:src/lonely/index.ts"]["relationshipState"] == "no-observed-relationships"
     assert nodes["module:documentation"]["relationshipState"] == "not-extracted"
 
     diagnostics = architecture["diagnostics"]
@@ -231,10 +237,10 @@ def test_architecture_edges_come_from_resolved_snapshot_evidence(auth_client):
     assert any(
         item["code"] == "RI-RES-UNRESOLVED" and item["path"] == "src/unresolved/index.ts" for item in diagnostics
     )
-    assert nodes["module:ambiguous"]["relationshipState"] == "unresolved"
-    assert nodes["module:unresolved"]["relationshipState"] == "unresolved"
-    assert not any(edge["source"] == "module:ambiguous" for edge in architecture["edges"])
-    assert not any(edge["source"] == "module:unresolved" for edge in architecture["edges"])
+    assert nodes["module:src/ambiguous/index.ts"]["relationshipState"] == "unresolved"
+    assert nodes["module:src/unresolved/index.ts"]["relationshipState"] == "unresolved"
+    assert not any(edge["source"] == "module:src/ambiguous/index.ts" for edge in architecture["edges"])
+    assert not any(edge["source"] == "module:src/unresolved/index.ts" for edge in architecture["edges"])
 
     evidence_response = auth_client.get(f"/intelligence/v1/snapshots/{snapshot_id}/evidence?limit=100")
     assert evidence_response.status_code == 200
@@ -276,7 +282,9 @@ def test_architecture_maps_every_snapshot_file_to_a_module(auth_client):
     import_edges = [
         edge
         for edge in architecture["edges"]
-        if edge["source"] == "module:unmapped.ts" and edge["target"] == "module:beta" and edge["predicate"] == "imports"
+        if edge["source"] == "module:unmapped.ts"
+        and edge["target"] == "module:src/beta/index.ts"
+        and edge["predicate"] == "imports"
     ]
     assert len(import_edges) == 1
     assert import_edges[0]["evidence"][0]["path"] == "unmapped.ts"
@@ -319,7 +327,7 @@ def test_architecture_excludes_manifest_and_lockfile_paths_from_modules(auth_cli
     node_ids = {node["id"] for node in response.json()["nodes"]}
     assert not any("package.json" in node_id for node_id in node_ids)
     assert not any("package-lock.json" in node_id for node_id in node_ids)
-    assert "module:beta" in node_ids
+    assert "module:src/beta/index.ts" in node_ids
 
 
 def test_architecture_does_not_flag_a_module_for_external_or_platform_references(auth_client):
@@ -341,10 +349,10 @@ def test_architecture_does_not_flag_a_module_for_external_or_platform_references
     diagnostics = architecture["diagnostics"]
 
     # 'fs' + readFileSync() are the language platform: not a coverage gap.
-    assert nodes["module:pure"]["relationshipState"] != "unresolved"
+    assert nodes["module:src/pure/index.ts"]["relationshipState"] != "unresolved"
     assert not any(item["code"] == "RI-RES-UNRESOLVED" and item["path"] == "src/pure/index.ts" for item in diagnostics)
     # '../nowhere' resolves to nothing in-repo: still a real gap.
-    assert nodes["module:broken"]["relationshipState"] == "unresolved"
+    assert nodes["module:src/broken/index.ts"]["relationshipState"] == "unresolved"
     assert any(item["code"] == "RI-RES-UNRESOLVED" and item["path"] == "src/broken/index.ts" for item in diagnostics)
 
 

@@ -1,4 +1,5 @@
 import posixpath
+import re
 from collections import Counter, defaultdict
 
 from app.extraction.lockfiles import SUPPORTED_LOCKFILE_FILENAMES
@@ -57,6 +58,20 @@ _FRAMEWORK_BY_DEPENDENCY_NAME = {
     "django": "Django",
     "flask": "Flask",
 }
+
+
+_SYMBOL_DISAMBIGUATOR = re.compile(r"#\d+$")
+
+
+def _display_symbol(qualified: str) -> str:
+    """Strip the uniqueness suffix a stable key carries for repeated names.
+
+    Two `@overload`-style definitions of the same name in one file are distinct
+    nodes, so their keys are disambiguated (``group#5``). That suffix is an
+    identity detail, not part of what the code calls the symbol.
+    """
+
+    return _SYMBOL_DISAMBIGUATOR.sub("", qualified)
 
 
 class ArchitectureAnalyzer:
@@ -136,8 +151,8 @@ class ArchitectureAnalyzer:
                     id=module.id,
                     name=module.name,
                     type=node_type,  # type: ignore[arg-type]
-                    description=f"{module.name} derived from repository intelligence at {module.path_prefix}.",
-                    responsibilities=[f"Owns {module.role} concerns"],
+                    description=self._module_description(module),
+                    responsibilities=self._module_responsibilities(module),
                     files=module.files[:25],
                     dependencies=[],
                     dependents=[],
@@ -151,6 +166,52 @@ class ArchitectureAnalyzer:
                 )
             )
         return nodes
+
+    @staticmethod
+    def _module_description(module: RepositoryModule) -> str:
+        """State what the snapshot observed, rather than restating the path.
+
+        Every clause here is an observed fact already sealed in the snapshot:
+        how many symbols the module defines, which of them a reader would
+        recognise it by, and where it lives. Nothing is inferred about what
+        the module is *for* -- that would be a guess, and an unsourced claim
+        is exactly what this product does not make.
+        """
+
+        if not module.symbols:
+            # No symbols observed is itself worth saying plainly, rather than
+            # dressing the path up as a description.
+            return f"{module.path_prefix} — no code symbols were extracted from this module."
+        count = len(module.symbols)
+        noun = "symbol" if count == 1 else "symbols"
+        notable = ArchitectureAnalyzer._notable_symbols(module.symbols)
+        if not notable:
+            return f"Defines {count} {noun}."
+        listed = ", ".join(notable)
+        if count == len(notable):
+            # Everything it defines is named, so "including" would understate it.
+            return f"Defines {count} {noun}: {listed}."
+        return f"Defines {count} {noun}, including {listed}."
+
+    @staticmethod
+    def _module_responsibilities(module: RepositoryModule) -> list[str]:
+        """Observed properties of the module, not a guess at its purpose.
+
+        The previous wording ("Owns unknown concerns") read as a statement
+        about the code when it was really a statement about the classifier
+        having no opinion. Where a role *was* classified it is reported as
+        one; where it was not, the entry is omitted rather than asserted.
+        """
+
+        entries: list[str] = []
+        if module.role and module.role != "unknown":
+            entries.append(f"Classified as {module.role.replace('-', ' ')}")
+        file_count = len(module.files)
+        if file_count > 1:
+            entries.append(f"{file_count} files")
+        if module.symbols:
+            entries.append(f"{len(module.symbols)} observed symbols")
+        return entries
 
     def _empty_module(self, files: list[str]) -> list[RepositoryModule]:
         return [
@@ -183,6 +244,44 @@ class ArchitectureAnalyzer:
             roles[assertion.subject_key.removeprefix("file:")] = classification
         return roles
 
+    def _symbols_by_file(self, facts: ArchitectureSnapshotFacts) -> dict[str, list[str]]:
+        """Map file path -> names of the symbols that file defines.
+
+        Symbol stable keys are ``<path>::<qualified name>`` (#217), so the
+        owning file is read off the key rather than inferred. These are
+        observed facts already sealed in the snapshot; nothing here computes
+        or estimates anything.
+        """
+
+        symbols: dict[str, list[str]] = defaultdict(list)
+        for stable_key in facts.symbol_keys:
+            path, separator, qualified = stable_key.partition("::")
+            if not separator or not path or not qualified:
+                continue
+            # Top-level definitions only. A method is defined by its class, not
+            # by the module, and counting every one of them turns "what does
+            # this module define" into a line-count proxy -- which is exactly
+            # the kind of synthesized measure #217 rules out.
+            if "." in qualified:
+                continue
+            symbols[path].append(_display_symbol(qualified))
+        return {path: sorted(set(names)) for path, names in symbols.items()}
+
+    @staticmethod
+    def _notable_symbols(qualified_names: list[str], limit: int = 4) -> list[str]:
+        """The symbols a reader would recognise the module by.
+
+        The caller has already narrowed these to top-level definitions, so the
+        only judgement left is the oldest convention there is: a leading
+        underscore means the author did not mean it for the outside. Those are
+        dropped unless they are all there is. Ordering is deterministic, so the
+        same snapshot always renders the same description.
+        """
+
+        public = [name for name in qualified_names if not name.startswith("_")]
+        chosen = public or qualified_names
+        return sorted(chosen)[:limit]
+
     def _modules_from_facts(self, facts: ArchitectureSnapshotFacts | None) -> list[RepositoryModule]:
         if facts is None:
             # Defensive only: build_architecture requires a sealed snapshot
@@ -206,9 +305,11 @@ class ArchitectureAnalyzer:
         if not file_paths:
             return self._empty_module([])
         role_by_path = self._file_roles(facts)
+        symbols_by_path = self._symbols_by_file(facts)
         grouped: dict[str, list[str]] = defaultdict(list)
         for path in file_paths:
-            grouped[self._module_id(path, role_by_path.get(path))].append(path)
+            module_id = self._module_id(path, role_by_path.get(path), defines_symbols=bool(symbols_by_path.get(path)))
+            grouped[module_id].append(path)
         modules: list[RepositoryModule] = []
         for module_id, paths in grouped.items():
             candidate_roles = [
@@ -229,14 +330,39 @@ class ArchitectureAnalyzer:
                     layer=layer_for_role(dominant),
                     path_prefix=self._path_prefix(paths),
                     files=sorted(paths),
-                    symbols=[],
+                    symbols=sorted({name for path in paths for name in symbols_by_path.get(path, [])}),
                     dependencies=[],
                 )
             )
-        return sorted(modules, key=lambda module: module.id)
+        return self._disambiguate_names(sorted(modules, key=lambda module: module.id))
 
     @staticmethod
-    def _module_id(path: str, role: str | None) -> str:
+    def _disambiguate_names(modules: list[RepositoryModule]) -> list[RepositoryModule]:
+        """Qualify names that would otherwise collide.
+
+        A repository can hold several modules called ``utils`` -- FastAPI has
+        four. Rendering them all as "utils" tells the reader nothing about
+        which is which, so a colliding name takes on as much of its parent
+        path as it needs to become unique (``openapi/utils``,
+        ``security/utils``). Names that are already unique are left alone, so
+        the common case stays short.
+        """
+
+        by_name: dict[str, list[RepositoryModule]] = defaultdict(list)
+        for module in modules:
+            by_name[module.name].append(module)
+        for name, colliding in by_name.items():
+            if len(colliding) < 2:
+                continue
+            for module in colliding:
+                directory = posixpath.dirname(module.id.removeprefix("module:"))
+                parent = posixpath.basename(directory)
+                if parent:
+                    module.name = f"{parent}/{name}"
+        return modules
+
+    @staticmethod
+    def _module_id(path: str, role: str | None, *, defines_symbols: bool = False) -> str:
         parts = [part for part in path.strip("/").split("/") if part]
         if role in {"controller", "route"}:
             return "module:api"
@@ -254,6 +380,13 @@ class ArchitectureAnalyzer:
             return "module:tests"
         if role == "documentation":
             return "module:documentation"
+        # A file that defines symbols is a module in its own right. Grouping
+        # by the directory below the source root instead collapses a whole
+        # package into one opaque node -- for a single-package repository that
+        # is the entire library reduced to a single box, which is what this
+        # branch used to do to every file under `src/<package>/`.
+        if defines_symbols and parts:
+            return f"module:{path.strip('/')}"
         if parts and parts[0] in {"app", "src", "backend", "frontend", "apps"} and len(parts) > 1:
             return f"module:{parts[1].lower()}"
         return f"module:{parts[0].lower() if parts else 'repository'}"
@@ -261,6 +394,15 @@ class ArchitectureAnalyzer:
     @staticmethod
     def _module_display_name(module_id: str) -> str:
         raw = module_id.removeprefix("module:")
+        if "/" in raw:
+            # A per-file module id carries the path for uniqueness; the reader
+            # wants the module's own name. `src/click/core.py` reads as `core`,
+            # and a package initialiser reads as the package it opens.
+            stem = posixpath.splitext(posixpath.basename(raw))[0]
+            if stem in {"__init__", "index", "mod"}:
+                parent = posixpath.basename(posixpath.dirname(raw))
+                return parent or stem
+            return stem
         if "." in raw:
             # `_module_id`'s fallback groups a top-level file with no
             # directory nesting by its own filename (e.g. "app.py") -- that
