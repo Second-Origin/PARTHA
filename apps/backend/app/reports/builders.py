@@ -100,6 +100,9 @@ def build_review_document(review: EngineeringReviewResponse) -> ReportDocument:
     )
 
 
+NOT_ASSESSED = "Not assessed"
+
+
 def build_architecture_document(architecture: ArchitectureResponse) -> ReportDocument:
     summary = architecture.summary
     sections: list[Section] = [
@@ -108,10 +111,14 @@ def build_architecture_document(architecture: ArchitectureResponse) -> ReportDoc
             table=Table(
                 headers=["Property", "Value"],
                 rows=[
-                    ["Architecture Type", architecture.architecture_type],
+                    # An exported report carries the same absences as the view
+                    # it reports on (#446): a pattern that was not detected and
+                    # an entry point that was not observed print as such, never
+                    # as a blank cell a reader would take for an oversight.
+                    ["Architecture Type", architecture.architecture_type or NOT_ASSESSED],
                     ["Primary Language", summary.language],
                     ["Framework", summary.framework],
-                    ["Entry Point", summary.entry_point],
+                    ["Entry Point", summary.entry_point or NOT_ASSESSED],
                     ["Total Modules", str(summary.total_modules)],
                     ["Total Components", str(summary.total_nodes)],
                 ],

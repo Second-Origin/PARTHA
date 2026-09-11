@@ -119,7 +119,8 @@ class ArchitectureAnalyzer:
                 framework=frameworks[0] if frameworks else "Unknown",
                 total_modules=len(arch_modules),
                 total_nodes=len(nodes),
-                entry_point=entry_points[0] if entry_points else "/",
+                # An observed entrypoint or nothing: "/" is not a path click has (#446).
+                entry_point=entry_points[0] if entry_points else None,
                 architecture_pattern=self._architecture_type(frameworks),
             ),
             relationship_snapshot_id=facts.snapshot.snapshot_id if facts is not None else None,
@@ -670,55 +671,90 @@ class ArchitectureAnalyzer:
             for layer, node_ids in sorted(layers.items(), key=lambda item: LAYER_ORDER.get(item[0], 99))
         ]
 
-    def _architecture_type(self, frameworks: list[str]) -> str:
+    def _architecture_type(self, frameworks: list[str]) -> str | None:
+        """A detected architectural pattern, or ``None`` when none was (#446).
+
+        The previous fallback was "Repository Architecture", which restates
+        that the subject is a repository and names no pattern at all. Framework
+        evidence is the only thing here that supports a claim, so the absence
+        of it is reported as an absence rather than dressed up as a finding.
+        """
+
         if any(framework in {"React", "Next.js", "Vue"} for framework in frameworks):
             return "Client Application"
         if any(framework in {"FastAPI", "Django", "Flask"} for framework in frameworks):
             return "Backend Service"
-        return "Repository Architecture"
+        return None
 
     def _request_flow(self, modules: list[RepositoryModule]) -> list[RequestFlowStep]:
-        module_roles = {module.role for module in modules}
+        """The path a request takes -- only for a repository that serves one (#446).
+
+        `pallets/click` is an argument parser with no server and no HTTP
+        surface, and this used to answer for it with a Client step reading
+        "Browser or API client sends a request" followed by a Repository
+        Layer. Neither was observed; it was a fixed template emitted whatever
+        the repository turned out to be, and for a library every word of it
+        was false.
+
+        So the flow now depends on an observed HTTP surface -- a module the
+        snapshot classified as a route or a controller. Without one there is
+        no request to trace and the answer is nothing, which the view states
+        as a limit. With one, each step names the modules that are actually in
+        that role rather than narrating invented verbs at the reader.
+        """
+
+        by_role: dict[str, list[RepositoryModule]] = defaultdict(list)
+        for module in modules:
+            by_role[module.role].append(module)
+        entry_modules = by_role["route"] + by_role["controller"]
+        if not entry_modules:
+            return []
+
         steps = [
             RequestFlowStep(
                 id="client",
                 name="Client",
                 type="frontend",
-                description="Request enters the system.",
-                details=["Browser or API client sends a request."],
+                description="A request arrives from outside the repository.",
+                details=[],
+            ),
+            RequestFlowStep(
+                id="api",
+                name="API Layer",
+                type="controller",
+                description=self._flow_description(entry_modules, "route or controller"),
+                details=self._flow_details(entry_modules),
             ),
         ]
-        if "route" in module_roles or "controller" in module_roles:
+        for role, step_id, name, node_type in (
+            ("service", "service", "Service Layer", "service"),
+            ("repository", "repository", "Repository Layer", "repository"),
+        ):
+            role_modules = by_role[role]
+            if not role_modules:
+                continue
             steps.append(
                 RequestFlowStep(
-                    id="api",
-                    name="API Layer",
-                    type="controller",
-                    description="Route/controller handles input.",
-                    details=["Validate request", "Call service"],
-                )
-            )
-        if "service" in module_roles:
-            steps.append(
-                RequestFlowStep(
-                    id="service",
-                    name="Service Layer",
-                    type="service",
-                    description="Business logic executes.",
-                    details=[
-                        "Coordinate repository intelligence consumers",
-                        "Transform data",
-                    ],
-                )
-            )
-        if "repository" in module_roles:
-            steps.append(
-                RequestFlowStep(
-                    id="repository",
-                    name="Repository Layer",
-                    type="repository",
-                    description="Persistence or source files are accessed.",
-                    details=["Read or write data"],
+                    id=step_id,
+                    name=name,
+                    type=node_type,  # type: ignore[arg-type]
+                    description=self._flow_description(role_modules, role),
+                    details=self._flow_details(role_modules),
                 )
             )
         return steps
+
+    @staticmethod
+    def _flow_description(modules: list[RepositoryModule], role: str) -> str:
+        count = len(modules)
+        noun = "module" if count == 1 else "modules"
+        return f"{count} {noun} classified as {role}."
+
+    @staticmethod
+    def _flow_details(modules: list[RepositoryModule], limit: int = 6) -> list[str]:
+        """The modules in this step, named. Nothing is claimed about what they do."""
+
+        names = sorted(module.name for module in modules)
+        if len(names) <= limit:
+            return names
+        return [*names[:limit], f"and {len(names) - limit} more"]

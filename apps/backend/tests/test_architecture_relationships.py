@@ -485,3 +485,60 @@ def test_architecture_without_a_sealed_snapshot_returns_404(auth_client):
     response = auth_client.get(f"/analysis/{repository['id']}/architecture")
 
     assert response.status_code == 404
+
+
+def test_a_library_with_no_http_surface_gets_no_request_flow(auth_client):
+    """#446: `pallets/click` is an argument parser with no server, and the
+    Architecture response answered for it with a Client step reading "Browser
+    or API client sends a request". Nothing observed it; it was a template."""
+
+    sources = {
+        # No index/main file either, so nothing is classified as an entrypoint
+        # and the null case is genuinely exercised.
+        "src/parser/tokenizer.ts": b"export class Parser { parse(argv: string[]) { return argv; } }\n",
+        "src/types/flags.ts": b"export type Flag = { name: string };\n",
+        "README.md": b"# A command line library\n",
+    }
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(repository["id"], sources)
+
+    architecture = auth_client.get(f"/analysis/{repository['id']}/architecture").json()
+
+    assert architecture["requestFlow"] == []
+    # No pattern was detected and no entrypoint observed, so both say so
+    # rather than offering "Repository Architecture" and "/" as findings.
+    assert architecture["architectureType"] is None
+    assert architecture["summary"]["architecturePattern"] is None
+    assert architecture["summary"]["entryPoint"] is None
+
+
+def test_a_repository_with_routes_still_gets_a_flow_built_from_observed_modules(auth_client):
+    """The rule removes fabrication, not the feature: an observed HTTP surface
+    still produces a flow, and each step names the modules really in that role
+    instead of narrating invented verbs."""
+
+    sources = {
+        "src/routes/orders.ts": b"import { place } from '../services/ordering';\nexport const handler = () => place();\n",
+        "src/services/ordering.ts": b"export const place = () => 1;\n",
+        "README.md": b"# A service\n",
+    }
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(repository["id"], sources)
+
+    architecture = auth_client.get(f"/analysis/{repository['id']}/architecture").json()
+
+    flow = architecture["requestFlow"]
+    assert [step["id"] for step in flow] == ["client", "api", "service"]
+    # The client step makes no claim about who the client is.
+    assert flow[0]["details"] == []
+    assert "browser" not in flow[0]["description"].lower()
+    # Every named detail is a module that genuinely exists in the response.
+    module_names = {module["name"] for module in architecture["modules"]}
+    for step in flow[1:]:
+        assert step["details"], step
+        assert set(step["details"]) <= module_names, step
+
+    # An entry point is either a path the repository really has, or nothing --
+    # never the "/" placeholder this used to fall back to (#446).
+    entry_point = architecture["summary"]["entryPoint"]
+    assert entry_point is None or entry_point in sources
