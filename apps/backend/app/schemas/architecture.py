@@ -114,14 +114,18 @@ class ArchitectureSummary(CamelModel):
     framework: str
     total_modules: int
     total_nodes: int
-    entry_point: str
-    architecture_pattern: str
+    # Both are ``None`` when nothing was observed to support them (#446). The
+    # previous placeholders -- "/" for an entry point the repository does not
+    # have, "Repository Architecture" for a pattern that is a restatement of
+    # the noun -- read as findings, which is the one thing they were not.
+    entry_point: str | None
+    architecture_pattern: str | None
 
 
 class ArchitectureResponse(CamelModel):
     repository_id: str
     repository_name: str
-    architecture_type: str
+    architecture_type: str | None
     detected_layers: list[ArchLayer]
     nodes: list[ArchNode]
     edges: list[ArchEdge]

@@ -1115,7 +1115,7 @@ export interface components {
         /** ArchitectureResponse */
         ArchitectureResponse: {
             /** Architecturetype */
-            architectureType: string;
+            architectureType: string | null;
             /** Detectedlayers */
             detectedLayers: components["schemas"]["ArchLayer"][];
             /** Diagnostics */
@@ -1139,9 +1139,9 @@ export interface components {
         /** ArchitectureSummary */
         ArchitectureSummary: {
             /** Architecturepattern */
-            architecturePattern: string;
+            architecturePattern: string | null;
             /** Entrypoint */
-            entryPoint: string;
+            entryPoint: string | null;
             /** Framework */
             framework: string;
             /** Language */

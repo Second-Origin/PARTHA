@@ -27,6 +27,22 @@ interface RequestFlowProps {
 export function RequestFlow({ steps }: RequestFlowProps) {
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
 
+  // No observed HTTP surface means there is no request to trace. Saying that
+  // is the honest answer; the previous one was a Client step reading "Browser
+  // or API client sends a request" on a command-line library (#446).
+  if (steps.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+        <Route className="h-6 w-6 text-muted-foreground" aria-hidden />
+        <h2 className="text-sm font-medium text-foreground">No request flow was observed</h2>
+        <p className="max-w-md text-xs text-muted-foreground">
+          Nothing in this repository was classified as a route or a controller, so there is no request path to
+          trace. A library, a CLI, or a set of scripts will look like this — it is not a gap in the analysis.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center py-6">
       <h2 className="text-sm font-medium text-foreground mb-6">Request Flow</h2>
