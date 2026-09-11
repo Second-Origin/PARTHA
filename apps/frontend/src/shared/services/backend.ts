@@ -8,6 +8,7 @@ import type {
   AuthenticationExplanationResponse,
   DependencyGraphResponse,
   RepositoryLineageResponse,
+  RepositoryReanalysisResponse,
   RepositoryResponse,
 } from './api/types';
 import { repositoryService } from './api/repositories';
@@ -41,6 +42,13 @@ export const backendService = {
       throw new Error('Backend API is not configured.');
     }
     return repositoryService.getLineage(id);
+  },
+
+  async reanalyseRepository(id: string): Promise<RepositoryReanalysisResponse> {
+    if (!USE_BACKEND) {
+      throw new Error('Backend API is not configured.');
+    }
+    return repositoryService.reanalyse(id);
   },
 
   async uploadRepository(

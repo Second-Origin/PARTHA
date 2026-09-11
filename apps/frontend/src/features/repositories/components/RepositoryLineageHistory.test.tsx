@@ -86,6 +86,77 @@ describe('RepositoryLineageHistory', () => {
     expect(link).toHaveAttribute('href', '/repositories/repo-1');
   });
 
+  it('offers to check for a new revision on a lineage, and not on a standalone import', async () => {
+    const fetchLineage = vi.spyOn(backendService, 'fetchRepositoryLineage').mockResolvedValue(lineaged);
+
+    const { unmount } = render(
+      <MemoryRouter>
+        <RepositoryLineageHistory repositoryId="repo-2" />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('button', { name: /check for a new revision/i })).toBeInTheDocument();
+
+    // A standalone import has no upstream to poll, so the action is absent
+    // rather than present and refusing (#448).
+    unmount();
+    fetchLineage.mockResolvedValue(standalone);
+    render(
+      <MemoryRouter>
+        <RepositoryLineageHistory repositoryId="repo-1" />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/standalone import/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /check for a new revision/i })).not.toBeInTheDocument();
+  });
+
+  it('reports an unmoved branch as a state, naming the commit it checked', async () => {
+    vi.spyOn(backendService, 'fetchRepositoryLineage').mockResolvedValue(lineaged);
+    vi.spyOn(backendService, 'reanalyseRepository').mockResolvedValue({
+      outcome: 'already-current',
+      repository: { id: 'repo-2' } as never,
+      remoteHead: 'b'.repeat(40),
+      previousRepositoryId: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <RepositoryLineageHistory repositoryId="repo-2" />
+      </MemoryRouter>,
+    );
+
+    (await screen.findByRole('button', { name: /check for a new revision/i })).click();
+
+    // Neutral wording and no error role: being current is not a failure.
+    expect(await screen.findByText(/nothing new to analyse/i)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('re-reads the history in place when a new revision is imported', async () => {
+    const fetchLineage = vi.spyOn(backendService, 'fetchRepositoryLineage').mockResolvedValue(lineaged);
+    vi.spyOn(backendService, 'reanalyseRepository').mockResolvedValue({
+      outcome: 'revision-imported',
+      repository: { id: 'repo-3' } as never,
+      remoteHead: 'c'.repeat(40),
+      previousRepositoryId: 'repo-2',
+    });
+
+    render(
+      <MemoryRouter>
+        <RepositoryLineageHistory repositoryId="repo-2" />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('#2');
+    expect(fetchLineage).toHaveBeenCalledTimes(1);
+
+    (await screen.findByRole('button', { name: /check for a new revision/i })).click();
+
+    // No reload: the panel asks for the history again itself.
+    await waitFor(() => expect(fetchLineage).toHaveBeenCalledTimes(2));
+  });
+
   it('renders an honest error state with a retry action on failure', async () => {
     vi.spyOn(backendService, 'fetchRepositoryLineage').mockRejectedValue(new Error('network down'));
 

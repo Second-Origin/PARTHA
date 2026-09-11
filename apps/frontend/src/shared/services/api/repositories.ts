@@ -6,6 +6,7 @@ import type {
   RepositoryListResponse,
   RepositoryFileResponse,
   RepositoryLineageResponse,
+  RepositoryReanalysisResponse,
   ImportGithubRequest,
   RiNeighboursResponse,
   RiSnapshotMetadata,
@@ -22,6 +23,10 @@ export const repositoryService = {
 
   getLineage(id: string, config?: RequestConfig): Promise<RepositoryLineageResponse> {
     return api.get(`/repositories/${id}/lineage`, config);
+  },
+
+  reanalyse(id: string, config?: RequestConfig): Promise<RepositoryReanalysisResponse> {
+    return api.post(`/repositories/${id}/reanalyse`, undefined, config);
   },
 
   getFile(id: string, path: string, config?: RequestConfig): Promise<RepositoryFileResponse> {
