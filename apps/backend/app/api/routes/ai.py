@@ -8,6 +8,7 @@ from app.schemas.ai import (
     AiConversationResponse,
     AiProviderCapabilitiesResponse,
     AiProviderConfig,
+    AiProviderModelsResponse,
     AiProviderPublicConfig,
     AiProviderTestRequest,
     AiProviderTestResponse,
@@ -36,6 +37,10 @@ _CONFIG_REQUEST_EXAMPLE = {
 _TEST_REQUEST_EXAMPLE = {
     "summary": "Test the saved provider configuration",
     "value": {"provider": "openai", "model": "gpt-4.1-mini"},
+}
+_MODELS_REQUEST_EXAMPLE = {
+    "summary": "List the models a key can use, before saving it",
+    "value": {"provider": "gemini", "apiKey": "AIza-example-not-a-real-key"},
 }
 _CAPABILITIES_EXAMPLE = {
     "providers": [
@@ -174,6 +179,27 @@ async def test_ai_config(
     service: AiService = Depends(get_ai_service),
 ) -> AiProviderTestResponse:
     return await service.test_connection(request)
+
+
+@router.post(
+    "/models",
+    response_model=AiProviderModelsResponse,
+    responses=documented_responses(
+        200,
+        "Model IDs the provider reports for this key, with the one a first-time setup should start on.",
+        {"models": ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"], "recommended": "gemini-2.0-flash"},
+        401,
+        422,
+        429,
+        502,
+        500,
+    ),
+)
+async def list_ai_models(
+    request: Annotated[AiProviderTestRequest, Body(openapi_examples={"models": _MODELS_REQUEST_EXAMPLE})],
+    service: AiService = Depends(get_ai_service),
+) -> AiProviderModelsResponse:
+    return await service.list_models(request)
 
 
 @router.post(

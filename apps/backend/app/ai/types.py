@@ -5,11 +5,20 @@ from typing import Any
 
 from app.schemas.ai import AiCitation, AiProvider, AiProviderConfig
 
+#: The model a provider starts on before anyone has fetched a list.
+#:
+#: A hardcoded default is a fact with a shelf life: `gemini-1.5-flash` was
+#: correct when it was written and is not offered at all to a Google AI Studio
+#: project created today, so every new user met "AI provider rejected the
+#: request" with no way to discover what to type instead. These are kept
+#: current, but the real answer to that problem is `providers/models.py`, which
+#: asks the provider what this key can use -- a default is only ever the
+#: starting point, never the only route to a working configuration.
 DEFAULT_MODELS: dict[AiProvider, str] = {
-    "openai": "gpt-4o-mini",
-    "anthropic": "claude-3-5-haiku-latest",
-    "gemini": "gemini-1.5-flash",
-    "openrouter": "openai/gpt-4o-mini",
+    "openai": "gpt-4.1-mini",
+    "anthropic": "claude-haiku-4-5-20251001",
+    "gemini": "gemini-2.5-flash",
+    "openrouter": "openai/gpt-4.1-mini",
     "ollama": "llama3.2",
 }
 

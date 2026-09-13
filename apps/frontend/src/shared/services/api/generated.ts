@@ -42,6 +42,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ai/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** List Ai Models */
+        post: operations["list_ai_models_ai_models_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ai/providers": {
         parameters: {
             query?: never;
@@ -961,6 +978,20 @@ export interface components {
              * @enum {string}
              */
             provider: "openai" | "anthropic" | "gemini" | "openrouter" | "ollama";
+        };
+        /**
+         * AiProviderModelsResponse
+         * @description The model IDs this provider reports for the caller's own key (#291).
+         *
+         *     Every entry came back from the provider, so the list is what the key can
+         *     actually use rather than what was true when a default was last written.
+         *     ``recommended`` is one of ``models``, never a value invented here.
+         */
+        AiProviderModelsResponse: {
+            /** Models */
+            models: string[];
+            /** Recommended */
+            recommended: string;
         };
         /** AiProviderPublicConfig */
         AiProviderPublicConfig: {
@@ -3084,6 +3115,137 @@ export interface operations {
                      * @example {
                      *       "code": "internal_server_error",
                      *       "message": "An unexpected error occurred.",
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_ai_models_ai_models_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiProviderTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Model IDs the provider reports for this key, with the one a first-time setup should start on. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "models": [
+                     *         "gemini-2.0-flash",
+                     *         "gemini-2.5-flash",
+                     *         "gemini-2.5-pro"
+                     *       ],
+                     *       "recommended": "gemini-2.0-flash"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AiProviderModelsResponse"];
+                };
+            };
+            /** @description Authentication is required or the access token is invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "unauthorized",
+                     *       "message": "Not authenticated.",
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request could not be validated. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "request_validation_error",
+                     *       "message": "Request validation failed.",
+                     *       "details": {
+                     *         "errors": [
+                     *           {
+                     *             "loc": [
+                     *               "body",
+                     *               "url"
+                     *             ],
+                     *             "msg": "Field required"
+                     *           }
+                     *         ]
+                     *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request-rate limit has been exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "rate_limited",
+                     *       "message": "Too many requests. Try again shortly.",
+                     *       "details": {
+                     *         "retryAfterSeconds": 30
+                     *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description An unexpected server error occurred. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "internal_server_error",
+                     *       "message": "An unexpected error occurred.",
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description An upstream service could not complete the request. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "external_service_error",
+                     *       "message": "AI provider request failed.",
+                     *       "details": {
+                     *         "provider": "openai"
+                     *       },
                      *       "request_id": "req_01HXYZEXAMPLE"
                      *     }
                      */
