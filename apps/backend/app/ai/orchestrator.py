@@ -4,14 +4,17 @@ from app.ai.prompt_builder import PromptBuilder
 from app.ai.providers.capabilities import capability_for
 from app.ai.providers.config_store import ProviderConfigStore
 from app.ai.providers.factory import ProviderFactory
+from app.ai.providers.models import list_models as list_provider_models
+from app.ai.providers.models import preferred_model
 from app.ai.repository_context import RepositoryContextBuilder
-from app.ai.types import PromptBundle
+from app.ai.types import DEFAULT_MODELS, PromptBundle
 from app.core.exceptions import NotFoundError, ValidationServiceError
 from app.repositories.ai_conversation_repository import AiConversationRepository
 from app.repositories.repository_repository import RepositoryRepository
 from app.schemas.ai import (
     AiMessage,
     AiProviderConfig,
+    AiProviderModelsResponse,
     AiProviderPublicConfig,
     AiProviderTestRequest,
     AiProviderTestResponse,
@@ -52,6 +55,21 @@ class AiOrchestrator:
         await provider.complete(config, prompt)
         return AiProviderTestResponse(
             ok=True, message=f"{config.provider} connection succeeded.", checked_at=datetime.now(UTC)
+        )
+
+    async def list_models(self, request: AiProviderTestRequest) -> AiProviderModelsResponse:
+        """Ask the provider what this key can use, rather than making the user guess.
+
+        Deliberately shares `config_for_test`, so an unsaved key typed into the
+        form and a key already stored both resolve the same way -- the list can
+        be fetched before anything is saved, which is the moment it is needed.
+        """
+
+        config = self.config_store.config_for_test(request)
+        models = await list_provider_models(config)
+        return AiProviderModelsResponse(
+            models=models,
+            recommended=preferred_model(models, DEFAULT_MODELS[config.provider]),
         )
 
     def list_conversation(self, repository_id: str) -> list[AiMessage]:

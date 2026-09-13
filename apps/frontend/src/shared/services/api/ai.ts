@@ -9,6 +9,7 @@ import type {
   AiProviderPublicConfig,
   AiProviderTestRequest,
   AiProviderTestResponse,
+  AiProviderModelsResponse,
 } from './types';
 
 export const aiService = {
@@ -26,6 +27,10 @@ export const aiService = {
 
   testConfig(request: AiProviderTestRequest, config?: RequestConfig): Promise<AiProviderTestResponse> {
     return api.post('/ai/test', request, config);
+  },
+
+  listModels(request: AiProviderTestRequest, config?: RequestConfig): Promise<AiProviderModelsResponse> {
+    return api.post('/ai/models', request, config);
   },
 
   query(request: AiQueryRequest, config?: RequestConfig): Promise<AiQueryResponse> {

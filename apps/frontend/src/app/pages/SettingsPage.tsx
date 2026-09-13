@@ -258,16 +258,10 @@ export function SettingsPage() {
                 </a>
               </div>
             )}
+            {/* Credentials first, then the model: the list of models can only
+                be fetched once the key (or base URL) is in hand, so the fields
+                are ordered the way setup actually runs. */}
             <div className="space-y-4">
-              <div>
-                <label htmlFor="settings-model" className="block text-xs font-medium text-muted-foreground mb-1.5">Provider model ID</label>
-                <input
-                    id="settings-model"
-                  value={settings.model}
-                  onChange={(event) => settings.setModel(event.target.value)}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
               {settings.activeCapability?.requiresBaseUrl && (
                 <div>
                   <label htmlFor="settings-base-url" className="block text-xs font-medium text-muted-foreground mb-1.5">
@@ -301,6 +295,45 @@ export function SettingsPage() {
                   />
                 </div>
               )}
+              <div>
+                <div className="mb-1.5 flex items-center justify-between gap-3">
+                  <label htmlFor="settings-model" className="block text-xs font-medium text-muted-foreground">Model</label>
+                  <button
+                    type="button"
+                    onClick={settings.fetchModels}
+                    disabled={settings.loadingModels}
+                    className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                  >
+                    {settings.loadingModels ? 'Fetching…' : 'Fetch models'}
+                  </button>
+                </div>
+                {settings.models.length > 0 ? (
+                  <select
+                    id="settings-model"
+                    value={settings.model}
+                    onChange={(event) => settings.setModel(event.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    {settings.models.map((id) => (
+                      <option key={id} value={id}>
+                        {id}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="settings-model"
+                    value={settings.model}
+                    onChange={(event) => settings.setModel(event.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                )}
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {settings.models.length > 0
+                    ? `${settings.models.length} models available to this key.`
+                    : 'Fetch models to pick from what this key can actually use, or type an ID.'}
+                </p>
+              </div>
             </div>
             {settings.error && <p className="mt-4 text-sm text-destructive">{settings.error}</p>}
             {settings.statusMessage && <p className="mt-4 text-sm text-success">{settings.statusMessage}</p>}

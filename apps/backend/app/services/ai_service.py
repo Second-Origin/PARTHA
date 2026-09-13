@@ -7,6 +7,7 @@ from app.schemas.ai import (
     AiProviderCapability,
     AiProviderPublicConfig,
     AiProviderTestRequest,
+    AiProviderModelsResponse,
     AiProviderTestResponse,
     AiQueryRequest,
     AiQueryResponse,
@@ -42,6 +43,9 @@ class AiService:
 
     async def test_connection(self, request: AiProviderTestRequest) -> AiProviderTestResponse:
         return await self.orchestrator.test_connection(request)
+
+    async def list_models(self, request: AiProviderTestRequest) -> AiProviderModelsResponse:
+        return await self.orchestrator.list_models(request)
 
     async def query(self, request: AiQueryRequest) -> AiQueryResponse:
         return await self.orchestrator.query(request)

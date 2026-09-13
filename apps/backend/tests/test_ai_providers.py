@@ -10,7 +10,7 @@ from app.ai.providers.gemini import GeminiProvider
 from app.ai.providers.ollama import OllamaProvider
 from app.ai.providers.openai import OpenAIProvider
 from app.ai.providers.openrouter import OpenRouterProvider
-from app.ai.types import AiProviderConfig, PromptBundle
+from app.ai.types import DEFAULT_MODELS, AiProviderConfig, PromptBundle
 from app.api.deps import get_provider_registry
 from app.core.exceptions import ExternalServiceError, TimeoutServiceError, ValidationServiceError
 
@@ -72,7 +72,9 @@ def _provider_cases():
             GeminiProvider,
             AiProviderConfig(provider="gemini", api_key="key"),
             {"candidates": [{"content": {"parts": [{"text": "Gemini answer"}]}}]},
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+            # Derived, not spelled out: a default model is a fact with a shelf
+            # life, and this assertion is about the URL shape, not the value.
+            f"https://generativelanguage.googleapis.com/v1beta/models/{DEFAULT_MODELS['gemini']}:generateContent",
         ),
         (
             OpenRouterProvider,

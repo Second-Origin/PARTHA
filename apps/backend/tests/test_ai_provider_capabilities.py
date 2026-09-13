@@ -8,6 +8,8 @@ registry is that these two things cannot silently drift apart.
 
 import re
 
+from app.ai.types import DEFAULT_MODELS
+
 import pytest
 
 from app.ai.providers.capabilities import PROVIDER_CAPABILITIES, capability_for
@@ -70,9 +72,14 @@ def test_list_providers_response_carries_no_secret_looking_material(auth_client)
     # step sentence, or a boolean/provider id -- assert none of them is a
     # long opaque token, which is what a real leaked credential would look
     # like regardless of which field carried it.
+    # A dated model id ("claude-haiku-4-5-20251001") is long enough to match
+    # the shape below while being a compile-time constant from the capability
+    # registry, not runtime data -- so it is exempted by exact value rather
+    # than by loosening the pattern, which would let a real leak through.
+    registry_models = set(DEFAULT_MODELS.values())
     for item in response.json()["providers"]:
         for value in item.values():
-            if isinstance(value, str):
+            if isinstance(value, str) and value not in registry_models:
                 assert not re.fullmatch(r"[A-Za-z0-9_-]{24,}", value), f"looks like a token: {value!r}"
 
 

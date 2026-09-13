@@ -23,6 +23,17 @@ class ProviderHttpSender(Protocol):
     ) -> httpx.Response:
         raise NotImplementedError
 
+    async def send(
+        self,
+        method: str,
+        config: AiProviderConfig,
+        url: str,
+        *,
+        timeout: httpx.Timeout | float | None = None,
+        **kwargs: object,
+    ) -> httpx.Response:
+        raise NotImplementedError
+
 
 class RedirectDeniedError(Exception):
     """Signals a redirect without ever evaluating its Location header."""
@@ -50,6 +61,24 @@ class SecureProviderHttpSender:
         timeout: httpx.Timeout | float | None = None,
         **kwargs: object,
     ) -> httpx.Response:
+        return await self.send("POST", config, url, timeout=timeout, **kwargs)
+
+    async def send(
+        self,
+        method: str,
+        config: AiProviderConfig,
+        url: str,
+        *,
+        timeout: httpx.Timeout | float | None = None,
+        **kwargs: object,
+    ) -> httpx.Response:
+        """One outbound request through the policy, pinned to a validated IP.
+
+        ``method`` is the only thing that varies: model discovery is a GET
+        against the same host and base path a completion POSTs to, so it goes
+        through exactly this validation rather than a second, looser path.
+        """
+
         # Policy preparation performs DNS resolution. Keep that blocking call
         # off the event loop used by the async AI routes.
         pinned = await anyio.to_thread.run_sync(self.policy.prepare_request, config, url)
@@ -74,7 +103,7 @@ class SecureProviderHttpSender:
             follow_redirects=False,
             transport=transport,
         ) as client:
-            request = client.build_request("POST", pinned.connection_url, headers=request_headers, **kwargs)
+            request = client.build_request(method, pinned.connection_url, headers=request_headers, **kwargs)
             # httpcore's documented request extension preserves TLS SNI (and
             # therefore hostname verification) when connecting to a literal IP.
             request.extensions["sni_hostname"] = pinned.destination.host
@@ -118,10 +147,23 @@ def _plain_language_status_error(config: AiProviderConfig, exc: httpx.HTTPStatus
     if status in (400, 404, 422):
         return ValidationServiceError(
             "AI provider rejected the request, most likely because of an unsupported model ID. "
-            "Confirm the model ID and try again.",
+            "Use Fetch models to see what this key can use, then pick one.",
             {"provider": config.provider},
         )
     return ExternalServiceError("AI provider request failed.", {"provider": config.provider})
+
+
+async def get(
+    config: AiProviderConfig,
+    url: str,
+    *,
+    sender: ProviderHttpSender | None = None,
+    timeout: httpx.Timeout | float | None = None,
+    **kwargs: object,
+) -> httpx.Response:
+    """A GET with the same policy, pinning and error translation as ``post``."""
+
+    return await _request("GET", config, url, sender=sender, timeout=timeout, **kwargs)
 
 
 async def post(
@@ -139,9 +181,27 @@ async def post(
     far longer than any hosted API call.
     """
 
+    return await _request("POST", config, url, sender=sender, timeout=timeout, **kwargs)
+
+
+async def _request(
+    method: str,
+    config: AiProviderConfig,
+    url: str,
+    *,
+    sender: ProviderHttpSender | None = None,
+    timeout: httpx.Timeout | float | None = None,
+    **kwargs: object,
+) -> httpx.Response:
     active_sender = sender or _default_sender()
     try:
-        response = await active_sender.post(config, url, timeout=timeout, **kwargs)
+        # A POST still goes through `post`: that is the method every existing
+        # sender -- including the fakes tests inject -- already implements, and
+        # routing it through `send` instead would silently bypass any of them.
+        if method == "POST":
+            response = await active_sender.post(config, url, timeout=timeout, **kwargs)
+        else:
+            response = await active_sender.send(method, config, url, timeout=timeout, **kwargs)
         response.raise_for_status()
         return response
     except DestinationPolicyError as exc:

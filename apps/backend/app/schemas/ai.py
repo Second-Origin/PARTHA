@@ -75,6 +75,18 @@ class AiProviderTestResponse(CamelModel):
     checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class AiProviderModelsResponse(CamelModel):
+    """The model IDs this provider reports for the caller's own key (#291).
+
+    Every entry came back from the provider, so the list is what the key can
+    actually use rather than what was true when a default was last written.
+    ``recommended`` is one of ``models``, never a value invented here.
+    """
+
+    models: list[str]
+    recommended: str
+
+
 class AiProviderCapability(CamelModel):
     """Safe, non-secret setup metadata for one provider (#291).
 
