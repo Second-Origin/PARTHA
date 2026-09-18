@@ -84,7 +84,7 @@ def test_register_rejects_an_email_that_was_never_approved(client):
 
     error = assert_error_response(response, 422, "validation_error")
     assert "hasn't been approved" in error.message
-    assert "waitlist" in error.message.lower()
+    assert "whoever runs it" in error.message
 
 
 def test_first_ever_registration_becomes_the_owner_without_approval(client):

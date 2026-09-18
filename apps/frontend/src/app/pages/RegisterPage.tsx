@@ -32,16 +32,8 @@ export function RegisterPage() {
                 as the `error` alert below once submitted, but this stays
                 visible up front so it isn't a surprise. */}
             <p className="mt-1.5 text-2xs text-muted-foreground">
-              PARTHA is invite-only during the beta; this email must already be approved. Not approved yet?{' '}
-              <a
-                href="https://discord.gg/qvk9DcxDA"
-                target="_blank"
-                rel="noreferrer"
-                className="text-primary underline underline-offset-2"
-              >
-                Get in touch
-              </a>
-              .
+              The first account on a new install becomes its owner. After that, each new email must be approved
+              by whoever runs this install.
             </p>
           </div>
           <div>

@@ -27,14 +27,11 @@ describe('RegisterPage (#374 approved-email allowlist)', () => {
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
   });
 
-  it('still points an unapproved visitor at a way to get access', () => {
+  it('explains who approves access on a self-hosted install', () => {
     renderPage();
 
-    expect(screen.getByText(/not approved yet/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Get in touch' })).toHaveAttribute(
-      'href',
-      'https://discord.gg/qvk9DcxDA',
-    );
+    expect(screen.getByText(/first account on a new install becomes its owner/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Get in touch' })).not.toBeInTheDocument();
   });
 
   it('submits only email and password, and surfaces the allowlist rejection message', async () => {
@@ -42,7 +39,7 @@ describe('RegisterPage (#374 approved-email allowlist)', () => {
       new ApiError(
         422,
         'Unprocessable Content',
-        { code: 'validation_error', message: "This email hasn't been approved for access yet. Join the waitlist and we'll be in touch." },
+        { code: 'validation_error', message: "This email hasn't been approved on this PARTHA install yet. Ask whoever runs it to approve it." },
         '/auth/register',
         null,
       ),
