@@ -3,21 +3,20 @@ import { Loader2 } from 'lucide-react';
 import { useLoginForm } from '@/features/auth/hooks/useLoginForm';
 import { OAuthButtons } from '@/features/auth/components/OAuthButtons';
 import { AuthShell } from '@/shared/components/layout/AuthShell';
+import { PasswordInput } from '@/shared/components/ui/PasswordInput';
 
 export function LoginPage() {
   const { email, setEmail, password, setPassword, submitting, error, submit, redirectState } = useLoginForm();
 
   return (
     <AuthShell
-      eyebrow="Welcome back"
-      title="Sign in to PARTHA"
-      description="Continue to your repository intelligence workspace."
-      footer={<>Don&apos;t have an account?{' '}<Link to="/register" state={redirectState} data-testid="login-register-link" className="font-medium text-primary underline underline-offset-2">Create one</Link></>}
+      title="Hello! Welcome back"
+      footer={<>New to Partha?{' '}<Link to="/register" state={redirectState} data-testid="login-register-link" className="text-primary underline underline-offset-2">Create Account</Link></>}
     >
         <OAuthButtons />
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label htmlFor="login-email" className="block text-xs font-medium text-muted-foreground mb-1.5">
+            <label htmlFor="login-email" className="mb-2 block text-xs text-[#18191b]">
               Email
             </label>
             <input
@@ -27,21 +26,20 @@ export function LoginPage() {
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="partha-input w-full px-3 py-2.5 text-sm"
+              className="partha-input h-[46px] w-full px-4 text-sm"
             />
           </div>
           <div>
-            <label htmlFor="login-password" className="block text-xs font-medium text-muted-foreground mb-1.5">
+            <label htmlFor="login-password" className="mb-2 block text-xs text-[#18191b]">
               Password
             </label>
-            <input
+            <PasswordInput
               id="login-password"
-              type="password"
               autoComplete="current-password"
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="partha-input w-full px-3 py-2.5 text-sm"
+              className="partha-input h-[46px] w-full px-4 text-sm"
             />
           </div>
 
@@ -54,10 +52,10 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)] transition-colors hover:bg-primary/90 disabled:opacity-50"
+            className="flex h-8 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-            {submitting ? 'Signing in...' : 'Sign in'}
+            {submitting ? 'Logging in...' : 'Log In'}
           </button>
         </form>
 

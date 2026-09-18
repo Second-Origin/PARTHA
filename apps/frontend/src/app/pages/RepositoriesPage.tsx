@@ -62,7 +62,7 @@ export function RepositoriesPage() {
       <PageHeader title="Repositories" description="Manage your uploaded repositories">
         <button
           onClick={() => navigate('/upload')}
-          className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
+          className="flex h-8 items-center rounded-md bg-brand-blue px-3 text-sm text-white transition-colors hover:bg-brand-blue/90"
         >
           Upload New
         </button>
@@ -74,7 +74,7 @@ export function RepositoriesPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-3xl border border-primary/20 bg-card shadow-[0_14px_34px_hsl(var(--foreground)/0.05)] scrollbar-thin">
+      <div className="overflow-x-auto partha-surface scrollbar-thin">
         <table className="w-full min-w-[560px]">
           <thead>
             <tr className="border-b border-primary/15 bg-accent">

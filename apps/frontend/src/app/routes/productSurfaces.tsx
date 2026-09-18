@@ -16,19 +16,13 @@ import type { RouteObject } from 'react-router-dom';
 export type DeliveryPhase = 0 | 1 | 2 | 3 | 'not-scheduled';
 
 /**
- * `flagship`: the core upload -> analyse loop (#176).
- * `analysis`: the evidence-backed understand-the-structure surfaces, grouped
- * under one labelled section (#289) instead of an undifferentiated "More".
- * `assist`: the AI Workspace -- kept visually distinct from `analysis`
- * because it is an interactive tool over the same facts, not another
- * read-only view of them.
- * `utility`: Settings -- pinned at the bottom of the sidebar, separated from
- * the scrollable navigation list, since it configures the product rather
- * than being part of the repository-intelligence workflow.
- * None of these compete with the flagship surfaces for top-of-sidebar
- * attention, but nothing is hidden or removed.
+ * Sidebar grouping, following the in-app design (Dashboard / Primary Nav):
+ * `flagship`: the core loop plus Architecture -- Dashboard, Repositories,
+ * Upload Repository, Architecture -- at the top, unlabelled.
+ * `more`: every other surface, under a "More" label, in the order this
+ * array lists them. Nothing is hidden or removed.
  */
-export type NavGroup = 'flagship' | 'analysis' | 'assist' | 'utility';
+export type NavGroup = 'flagship' | 'more';
 
 interface ProductSurfaceBase {
   id: string;
@@ -123,7 +117,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/architecture',
     icon: Network,
     phase: 0,
-    navGroup: 'analysis',
+    navGroup: 'flagship',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {
@@ -141,7 +135,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/dependencies',
     icon: GitBranch,
     phase: 0,
-    navGroup: 'analysis',
+    navGroup: 'more',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {
@@ -150,53 +144,17 @@ export const productSurfaces: readonly ProductSurface[] = [
     },
   },
   {
-    // Restored as a primary snapshot-backed surface (#154). The active
-    // engineering-review.v2 contract contains no scores or generated roadmap:
-    // only diagnostics with same-snapshot source evidence become findings.
-    id: 'engineering-review',
-    label: 'Engineering Review',
-    path: '/review',
-    icon: ShieldCheck,
-    phase: 3,
-    navGroup: 'analysis',
+    id: 'settings',
+    label: 'Settings',
+    path: '/settings',
+    icon: Settings,
+    phase: 0,
+    navGroup: 'more',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {
-      const { EngineeringReviewPage } = await import('@/app/pages/EngineeringReviewPage');
-      return { Component: EngineeringReviewPage };
-    },
-  },
-  {
-    // Restored as a primary snapshot-backed surface (#154). Every displayed
-    // value comes from repository-insights.v1 and carries an exact definition,
-    // snapshot identity and assessment state.
-    id: 'insights',
-    label: 'Insights',
-    path: '/insights',
-    icon: BarChart3,
-    phase: 'not-scheduled',
-    navGroup: 'analysis',
-    readiness: 'ready',
-    primaryNavigation: true,
-    load: async () => {
-      const { InsightsPage } = await import('@/app/pages/InsightsPage');
-      return { Component: InsightsPage };
-    },
-  },
-  {
-    // Documentation is bound to the current repository revision's sealed
-    // snapshot and returns 404 rather than falling back to mutable metadata.
-    id: 'documentation',
-    label: 'Documentation',
-    path: '/documentation',
-    icon: FileText,
-    phase: 3,
-    navGroup: 'analysis',
-    readiness: 'ready',
-    primaryNavigation: true,
-    load: async () => {
-      const { DocumentationPage } = await import('@/app/pages/DocumentationPage');
-      return { Component: DocumentationPage };
+      const { SettingsPage } = await import('@/app/pages/SettingsPage');
+      return { Component: SettingsPage };
     },
   },
   {
@@ -210,7 +168,7 @@ export const productSurfaces: readonly ProductSurface[] = [
     path: '/ai-workspace',
     icon: MessageSquareText,
     phase: 3,
-    navGroup: 'assist',
+    navGroup: 'more',
     readiness: 'preview',
     primaryNavigation: true,
     limitation:
@@ -221,17 +179,53 @@ export const productSurfaces: readonly ProductSurface[] = [
     },
   },
   {
-    id: 'settings',
-    label: 'Settings',
-    path: '/settings',
-    icon: Settings,
-    phase: 0,
-    navGroup: 'utility',
+    // Restored as a primary snapshot-backed surface (#154). The active
+    // engineering-review.v2 contract contains no scores or generated roadmap:
+    // only diagnostics with same-snapshot source evidence become findings.
+    id: 'engineering-review',
+    label: 'Engineering Review',
+    path: '/review',
+    icon: ShieldCheck,
+    phase: 3,
+    navGroup: 'more',
     readiness: 'ready',
     primaryNavigation: true,
     load: async () => {
-      const { SettingsPage } = await import('@/app/pages/SettingsPage');
-      return { Component: SettingsPage };
+      const { EngineeringReviewPage } = await import('@/app/pages/EngineeringReviewPage');
+      return { Component: EngineeringReviewPage };
+    },
+  },
+  {
+    // Documentation is bound to the current repository revision's sealed
+    // snapshot and returns 404 rather than falling back to mutable metadata.
+    id: 'documentation',
+    label: 'Documentation',
+    path: '/documentation',
+    icon: FileText,
+    phase: 3,
+    navGroup: 'more',
+    readiness: 'ready',
+    primaryNavigation: true,
+    load: async () => {
+      const { DocumentationPage } = await import('@/app/pages/DocumentationPage');
+      return { Component: DocumentationPage };
+    },
+  },
+  {
+    // Restored as a primary snapshot-backed surface (#154). Every displayed
+    // value comes from repository-insights.v1 and carries an exact definition,
+    // snapshot identity and assessment state.
+    id: 'insights',
+    label: 'Insights',
+    path: '/insights',
+    icon: BarChart3,
+    phase: 'not-scheduled',
+    navGroup: 'more',
+    readiness: 'ready',
+    primaryNavigation: true,
+    load: async () => {
+      const { InsightsPage } = await import('@/app/pages/InsightsPage');
+      return { Component: InsightsPage };
     },
   },
 ];

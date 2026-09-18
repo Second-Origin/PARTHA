@@ -140,7 +140,7 @@ describe('UploadPage', () => {
       expect(screen.getByText('2 KB')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Analyse Repository/i })).toBeInTheDocument();
 
-      const removeButton = screen.getByText('my-repo.zip').closest('div.rounded-2xl')?.querySelector('button');
+      const removeButton = screen.getByText('my-repo.zip').closest('div.partha-surface')?.querySelector('button');
       expect(removeButton).not.toBeNull();
       fireEvent.click(removeButton!);
       expect(removeFile).toHaveBeenCalled();

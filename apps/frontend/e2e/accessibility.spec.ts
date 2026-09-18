@@ -154,7 +154,7 @@ async function expectWcagBaseline(
 async function login(page: Page) {
   await page.goto('/login');
   await page.getByLabel(/email/i).fill(FIXTURES.email);
-  await page.getByLabel(/password/i).fill(FIXTURES.password);
+  await page.getByLabel('Password', { exact: true }).fill(FIXTURES.password);
   await page.getByRole('button', { name: /sign in|log ?in/i }).click();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
 }
@@ -179,7 +179,7 @@ async function selectRepository(page: Page, fixture: Fixture) {
 test.describe('WCAG 2.2 AA automated baseline (#118)', () => {
   test('login form', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByRole('heading', { name: 'Sign in to PARTHA' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Hello! Welcome back' })).toBeVisible();
 
     // #240's `login-register-link` link-in-text-block allowance is
     // intentionally gone: the link now carries a persistent underline at

@@ -314,7 +314,7 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
       <ArchSummaryBar model={model} source={source} />
 
       <div className="flex min-w-0 items-center justify-between gap-2 overflow-x-auto border-b border-border px-3 py-2 scrollbar-thin sm:px-4">
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="partha-tabs shrink-0">
           <TabButton active={activeTab === 'graph'} onClick={() => setActiveTab('graph')}>
             Architecture Graph
           </TabButton>
@@ -449,10 +449,8 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={cn(
-        'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-        active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-      )}
+      aria-pressed={active}
+      className={cn('partha-tab', active && 'partha-tab-active')}
     >
       {children}
     </button>

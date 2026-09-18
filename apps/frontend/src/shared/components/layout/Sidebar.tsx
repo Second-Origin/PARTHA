@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useAppStore } from '@/app/store/useAppStore';
 import { useAuthStore } from '@/app/store/useAuthStore';
@@ -9,11 +9,7 @@ import { primaryNavigationSurfaces, type NavigableProductSurface } from '@/app/r
 import { BrandLogo } from '@/shared/components/ui/BrandLogo';
 
 const flagshipNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'flagship');
-const analysisNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'analysis');
-const assistNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'assist');
-// `filter`, not `find`: a second utility surface must not silently disappear
-// from navigation just because it was registered after Settings.
-const utilityNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'utility');
+const moreNavigationSurfaces = primaryNavigationSurfaces.filter((item) => item.navGroup === 'more');
 
 /** One sidebar row. `muted` reduces (never removes) a lower-emphasis surface's visual weight (#176). */
 function NavLink({
@@ -40,14 +36,14 @@ function NavLink({
       aria-label={item.label}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'flex min-h-10 items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors',
+        'flex h-9 items-center gap-3 rounded-md px-2.5 text-[19px] leading-none transition-colors',
         muted ? 'font-normal' : 'font-medium',
         isActive
-          ? 'bg-primary text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)]'
-          : 'text-sidebar-foreground/70 hover:bg-primary/10 hover:text-sidebar-foreground'
+          ? 'bg-primary text-primary-foreground'
+          : 'text-sidebar-foreground hover:bg-card'
       )}
     >
-      <item.icon className={cn('shrink-0', muted ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
+      <item.icon className={cn('shrink-0', muted ? 'h-3.5 w-3.5' : 'h-4 w-4', !isActive && 'text-sidebar-foreground/70')} />
       <AnimatePresence>
         {(isMobile || !sidebarCollapsed) && (
           <motion.span
@@ -65,7 +61,7 @@ function NavLink({
   );
 }
 
-/** A labelled, muted group of nav rows (e.g. Analysis, Assist) -- header hides accessibly when collapsed, links never do (#289). */
+/** A labelled, muted group of nav rows ("More") -- header hides accessibly when collapsed, links never do (#289). */
 function NavSection({
   label,
   testId,
@@ -94,7 +90,7 @@ function NavSection({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="px-3 pb-1 pt-5 text-2xs font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/65"
+            className="px-2.5 pb-[18px] pt-[30px] text-[19px] font-normal uppercase leading-none tracking-[0.06em] text-muted-foreground"
           >
             {label}
           </motion.p>
@@ -196,11 +192,11 @@ export function Sidebar() {
         animate={{ width: sidebarCollapsed ? 72 : 248 }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className={cn(
-          'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-primary/20 bg-muted max-md:!w-[min(82vw,280px)] max-md:transition-transform max-md:duration-200',
+          'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-sidebar-border bg-sidebar max-md:!w-[min(82vw,280px)] max-md:transition-transform max-md:duration-200',
           mobileSidebarOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
         )}
       >
-      <div className="flex h-24 items-center justify-between gap-2 px-4">
+      <div className="flex h-20 shrink-0 items-center justify-between gap-2 px-2.5 sm:h-[109px] sm:items-start sm:pt-11">
         <Link to="/dashboard" className="flex min-w-0 items-center overflow-hidden">
           <AnimatePresence>
             <motion.span
@@ -227,15 +223,25 @@ export function Sidebar() {
                 ? 'Expand sidebar'
                 : 'Collapse sidebar'
           }
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/20 text-sidebar-foreground/60 hover:bg-primary hover:text-primary-foreground transition-colors"
+          className="group relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-sidebar-foreground transition-colors hover:bg-card"
         >
-          <ChevronLeft
-            className={cn('h-4 w-4 transition-transform duration-200', sidebarCollapsed && 'rotate-180')}
-          />
+          {sidebarCollapsed && !isMobile ? (
+            <PanelLeftOpen aria-hidden="true" className="h-6 w-6" />
+          ) : (
+            <PanelLeftClose aria-hidden="true" className="h-6 w-6" />
+          )}
+          {!isMobile && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-1/2 top-full z-10 mt-1 -translate-x-1/2 whitespace-nowrap rounded-sm bg-card px-1.5 py-0.5 text-xs text-sidebar-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+            >
+              {sidebarCollapsed ? 'Show Sidebar' : 'Hide Sidebar'}
+            </span>
+          )}
         </button>
       </div>
 
-      <nav aria-label="Primary navigation" className="flex-1 space-y-1 overflow-y-auto px-3 py-4 scrollbar-thin">
+      <nav aria-label="Primary navigation" className="flex-1 space-y-1 overflow-y-auto px-2.5 pb-4 pt-3.5 scrollbar-thin">
         {flagshipNavigationSurfaces.map((item) => (
           <NavLink
             key={item.path}
@@ -248,19 +254,9 @@ export function Sidebar() {
         ))}
 
         <NavSection
-          label="Analysis"
-          testId="analysis-navigation-label"
-          items={analysisNavigationSurfaces}
-          isMobile={isMobile}
-          sidebarCollapsed={sidebarCollapsed}
-          location={location}
-          onNavigate={() => setMobileSidebarOpen(false)}
-        />
-
-        <NavSection
-          label="Assist"
-          testId="assist-navigation-label"
-          items={assistNavigationSurfaces}
+          label="More"
+          testId="more-navigation-label"
+          items={moreNavigationSurfaces}
           isMobile={isMobile}
           sidebarCollapsed={sidebarCollapsed}
           location={location}
@@ -268,27 +264,10 @@ export function Sidebar() {
         />
       </nav>
 
-      <div className="border-t border-primary/15 p-3">
-        {/* Pinned out of the scrollable list, but still inside a navigation
-            landmark of its own: moving Settings into a bare <div> would drop
-            it from landmark-based screen-reader navigation entirely (#289). */}
-        {utilityNavigationSurfaces.length > 0 && (
-          <nav aria-label="Settings" className="border-b border-primary/15 pb-3 mb-3 space-y-1">
-            {utilityNavigationSurfaces.map((item) => (
-              <NavLink
-                key={item.path}
-                item={item}
-                isActive={location.pathname === item.path}
-                isMobile={isMobile}
-                sidebarCollapsed={sidebarCollapsed}
-                onNavigate={() => setMobileSidebarOpen(false)}
-              />
-            ))}
-          </nav>
-        )}
-        <div className={cn('flex items-center gap-3 rounded-xl px-3 py-2.5', sidebarCollapsed && !isMobile && 'justify-center')}>
-          <div className="h-8 w-8 shrink-0 rounded-full bg-primary flex items-center justify-center">
-            <span className="text-xs font-semibold text-primary-foreground">{avatarInitial}</span>
+      <div className="shrink-0 border-t border-sidebar-border px-4 py-3">
+        <div className={cn('flex items-center gap-1', sidebarCollapsed && !isMobile && 'justify-center')}>
+          <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-brand-orange/20">
+            <span className="font-display text-sm font-semibold text-brand-plum">{avatarInitial}</span>
           </div>
           <AnimatePresence>
             {(isMobile || !sidebarCollapsed) && (
@@ -299,7 +278,7 @@ export function Sidebar() {
                 transition={{ duration: 0.15 }}
                 className="overflow-hidden"
               >
-                <p className="text-xs font-medium text-sidebar-foreground truncate">
+                <p className="truncate text-xs text-muted-foreground">
                   {userEmail ?? 'Account identity unavailable'}
                 </p>
               </motion.div>

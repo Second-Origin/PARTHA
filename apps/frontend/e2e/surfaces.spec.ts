@@ -45,7 +45,7 @@ function byLabel(label: string) {
 async function login(page: Page) {
   await page.goto('/login');
   await page.getByLabel(/email/i).fill(FIXTURES.email);
-  await page.getByLabel(/password/i).fill(FIXTURES.password);
+  await page.getByLabel('Password', { exact: true }).fill(FIXTURES.password);
   await page.getByRole('button', { name: /sign in|log ?in/i }).click();
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
 }

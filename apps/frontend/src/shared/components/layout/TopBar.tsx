@@ -2,13 +2,12 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search,
   Upload,
-  Github,
   Bell,
+  BadgeCheck,
   ChevronDown,
   User,
   LogOut,
   Settings,
-  Check,
   Loader2,
   Ban,
   Menu,
@@ -119,15 +118,15 @@ export function TopBar() {
   }, [repoDropdownOpen]);
 
   const statusIcon = (status: string) => {
-    if (status === 'completed') return <Check className="h-3 w-3 text-success" />;
-    if (status === 'analysing') return <Loader2 className="h-3 w-3 text-primary animate-spin" />;
-    if (status === 'cancelled') return <Ban className="h-3 w-3 text-muted-foreground" />;
+    if (status === 'completed') return <BadgeCheck aria-label="Analysed" className="h-5 w-5 shrink-0 fill-success text-white" />;
+    if (status === 'analysing') return <Loader2 aria-label="Analysing" className="h-4 w-4 shrink-0 animate-spin text-primary" />;
+    if (status === 'cancelled') return <Ban aria-label="Cancelled" className="h-4 w-4 shrink-0 text-muted-foreground" />;
     return null;
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-20 min-w-0 items-center justify-between gap-2 border-b border-primary/15 bg-background/95 px-3 backdrop-blur-sm sm:h-24 sm:px-7">
-      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+    <header className="sticky top-0 z-30 flex h-20 min-w-0 shrink-0 items-center justify-between gap-2 border-b border-border bg-muted px-3 sm:h-[109px] sm:items-start sm:pl-[35px] sm:pr-[51px] sm:pt-12">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-[35px]">
         <button
           type="button"
           onClick={() => setMobileSidebarOpen(true)}
@@ -144,12 +143,12 @@ export function TopBar() {
             aria-expanded={repoDropdownOpen}
             aria-controls="repository-selector-options"
             onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
-            className="flex max-w-[140px] items-center gap-2 rounded-xl border border-primary/20 bg-card px-3 py-2.5 text-sm transition-colors hover:bg-accent sm:max-w-[230px]"
+            className="flex h-9 w-[140px] items-center justify-between gap-2 rounded-md border border-brand-orange bg-white px-2 text-base text-foreground shadow-[0_2px_4px_hsl(0_0%_0%/0.15)] transition-colors hover:bg-card sm:w-[222px]"
           >
-            <span className="text-muted-foreground truncate">
+            <span className="truncate">
               {activeRepository ? activeRepository.name : 'No repository'}
             </span>
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform', repoDropdownOpen && 'rotate-180')} />
           </button>
           {repoDropdownOpen && (
             <div
@@ -157,9 +156,9 @@ export function TopBar() {
               id="repository-selector-options"
               role="listbox"
               aria-label="Repositories"
-              className="absolute top-full left-0 mt-2 w-64 rounded-2xl border border-primary/20 bg-popover shadow-lg animate-scale-in z-50"
+              className="absolute left-0 top-full z-50 mt-1 w-[290px] rounded-md border border-brand-orange bg-popover shadow-[0_2px_4px_hsl(0_0%_0%/0.15)] animate-scale-in"
             >
-              <div className="p-2">
+              <div className="space-y-1 p-1.5">
                 {repositories.length === 0 ? (
                   <p className="px-3 py-2 text-sm text-muted-foreground">No repositories uploaded</p>
                 ) : (
@@ -175,8 +174,8 @@ export function TopBar() {
                         repoTriggerRef.current?.focus();
                       }}
                       className={cn(
-                        'w-full flex items-center justify-between rounded-xl px-3 py-2 text-sm text-left hover:bg-accent transition-colors',
-                        activeRepository?.id === repo.id && 'bg-accent'
+                        'flex w-full items-center justify-between gap-3 rounded-md px-2 py-1 text-left text-lg transition-colors hover:bg-accent',
+                        activeRepository?.id === repo.id && 'bg-[#f3ceb9] hover:bg-[#f3ceb9]'
                       )}
                     >
                       <span className="truncate">{repo.name}</span>
@@ -189,18 +188,18 @@ export function TopBar() {
           )}
         </div>
 
-        <div className="relative hidden max-w-md flex-1 md:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <div className="relative hidden max-w-[662px] flex-1 md:block">
+          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-foreground/70" />
           <input
             ref={searchRef}
             type="text"
             placeholder="Search... (Ctrl+K)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="partha-input w-full py-2 pl-9 pr-3 text-sm transition-shadow"
+            className="h-9 w-full rounded-md border border-brand-orange bg-white pl-10 pr-3 text-base text-foreground shadow-[0_2px_4px_hsl(0_0%_0%/0.15)] placeholder:text-muted-foreground"
           />
           {searchQuery.trim() && (
-            <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-primary/20 bg-popover shadow-lg animate-scale-in z-50 p-2">
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-brand-orange bg-popover p-1.5 shadow-[0_2px_4px_hsl(0_0%_0%/0.15)] animate-scale-in">
               {searchResults.length === 0 ? (
                 <p className="px-3 py-2 text-sm text-muted-foreground">No matches found</p>
               ) : (
@@ -212,7 +211,7 @@ export function TopBar() {
                       setSearchQuery('');
                       navigate(buildSearchResultDestination(result.repo.id, result));
                     }}
-                    className="w-full rounded-xl px-3 py-2 text-left hover:bg-accent transition-colors"
+                    className="w-full rounded-md px-3 py-2 text-left transition-colors hover:bg-accent"
                   >
                     <p className="text-sm text-foreground truncate">{result.label}</p>
                     <p className="text-2xs text-muted-foreground truncate">
@@ -226,22 +225,13 @@ export function TopBar() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 sm:gap-6">
         <button
           onClick={() => navigate('/upload')}
-          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
+          className="flex h-9 items-center justify-center gap-2 rounded-md bg-brand-blue px-3 text-base text-white transition-colors hover:bg-brand-blue/90 sm:w-[122px]"
         >
-          <Upload className="h-3.5 w-3.5" />
+          <Upload className="h-4 w-4" />
           <span className="hidden sm:inline">Upload</span>
-        </button>
-
-        <button
-          onClick={() => activeRepository?.sourceUrl && window.open(activeRepository.sourceUrl, '_blank', 'noopener,noreferrer')}
-          disabled={!activeRepository?.sourceUrl}
-          title={activeRepository?.sourceUrl ? 'Open repository source' : 'No GitHub URL available'}
-          className="hidden h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 sm:flex"
-        >
-          <Github className="h-4 w-4" />
         </button>
 
         <div ref={notifRef} className="relative hidden sm:block">
@@ -251,15 +241,15 @@ export function TopBar() {
             aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
             aria-haspopup="true"
             aria-expanded={notifOpen}
-            className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            className="relative flex h-9 w-9 items-center justify-center rounded-full text-foreground transition-colors hover:bg-card"
           >
-            <Bell aria-hidden="true" focusable="false" className="h-4 w-4" />
+            <Bell aria-hidden="true" focusable="false" className="h-6 w-6" />
             {unreadCount > 0 && (
-              <span aria-hidden="true" className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary" />
+              <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-orange" />
             )}
           </button>
           {notifOpen && (
-            <div className="absolute top-full right-0 mt-2 w-80 rounded-2xl border border-primary/20 bg-popover shadow-lg animate-scale-in z-50">
+            <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-md border border-brand-orange bg-popover shadow-[0_2px_4px_hsl(0_0%_0%/0.15)] animate-scale-in">
               <div className="p-3 border-b border-border flex items-center justify-between">
                 <h3 className="text-sm font-medium">Notifications</h3>
                 {unreadCount > 0 && (
@@ -275,7 +265,7 @@ export function TopBar() {
                       key={notif.id}
                       onClick={() => markNotificationRead(notif.id)}
                       className={cn(
-                        'w-full text-left px-3 py-2 rounded-xl hover:bg-accent transition-colors',
+                        'w-full rounded-md px-3 py-2 text-left transition-colors hover:bg-accent',
                         !notif.read && 'bg-accent/50'
                       )}
                     >
@@ -296,26 +286,26 @@ export function TopBar() {
             aria-label="Account menu"
             aria-haspopup="true"
             aria-expanded={userMenuOpen}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_14px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-orange/20 text-foreground transition-colors hover:bg-brand-orange/30"
           >
-            <User aria-hidden="true" focusable="false" className="h-4 w-4" />
+            <User aria-hidden="true" focusable="false" className="h-5 w-5" />
           </button>
           {userMenuOpen && (
-            <div className="absolute top-full right-0 mt-2 w-48 rounded-2xl border border-primary/20 bg-popover shadow-lg animate-scale-in z-50">
+            <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-md border border-brand-orange bg-popover shadow-[0_2px_4px_hsl(0_0%_0%/0.15)] animate-scale-in">
               <div className="p-1">
                 <button
                   onClick={() => {
                     navigate('/settings');
                     setUserMenuOpen(false);
                   }}
-                  className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-accent transition-colors"
+                  className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent transition-colors"
                 >
                   <Settings className="h-4 w-4" /> Settings
                 </button>
                 <button
                   onClick={handleSignOut}
                   disabled={signingOut}
-                  className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-destructive hover:bg-accent disabled:opacity-50 transition-colors"
+                  className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-accent disabled:opacity-50 transition-colors"
                 >
                   <LogOut className="h-4 w-4" /> {signingOut ? 'Signing out...' : 'Sign Out'}
                 </button>
