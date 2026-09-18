@@ -14,7 +14,7 @@ describe('auth inline link non-color affordance (#240)', () => {
     });
     render(<RouterProvider router={router} />);
 
-    const link = screen.getByRole('link', { name: 'Create one' });
+    const link = screen.getByRole('link', { name: 'Create Account' });
     expect(link.className.split(' ')).toEqual(expect.arrayContaining(['underline']));
     expect(link.className).not.toContain('hover:underline');
   });
@@ -25,7 +25,7 @@ describe('auth inline link non-color affordance (#240)', () => {
     });
     render(<RouterProvider router={router} />);
 
-    const link = screen.getByRole('link', { name: 'Sign in' });
+    const link = screen.getByRole('link', { name: 'Log in' });
     expect(link.className.split(' ')).toEqual(expect.arrayContaining(['underline']));
     expect(link.className).not.toContain('hover:underline');
   });

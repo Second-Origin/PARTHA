@@ -41,7 +41,7 @@ describe('login/register redirect-destination consistency', () => {
     render(<RouterProvider router={router} />);
 
     // Same destination RequireAuth would have captured on the way to /login.
-    fireEvent.click(screen.getByRole('link', { name: 'Create one' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Create Account' }));
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/register'));
     expect(router.state.location.state).toEqual({ from: capturedFrom });
@@ -54,7 +54,7 @@ describe('login/register redirect-destination consistency', () => {
 
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new@example.com' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'longenoughpassword' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/repositories/abc'));
     expect(router.state.location.search).toBe('?tab=files');

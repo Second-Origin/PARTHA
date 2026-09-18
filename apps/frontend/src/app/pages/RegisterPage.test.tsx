@@ -48,7 +48,7 @@ describe('RegisterPage (#374 approved-email allowlist)', () => {
     renderPage();
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'nobody@example.com' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'longenoughpassword' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
 
     await waitFor(() =>
       expect(authService.register).toHaveBeenCalledWith({ email: 'nobody@example.com', password: 'longenoughpassword' }),

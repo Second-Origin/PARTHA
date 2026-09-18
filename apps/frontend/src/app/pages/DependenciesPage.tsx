@@ -63,7 +63,7 @@ export function DependenciesPage() {
         <PageHeader title="Dependency Graph" description={`Dependencies for ${activeRepository.name}`}>
           <DataSourceBadge source={dependencies.source} />
         </PageHeader>
-        <div className="rounded-3xl border border-primary/20 bg-card p-8 text-sm text-muted-foreground">Loading dependency graph...</div>
+        <div className="partha-surface p-8 text-sm text-muted-foreground">Loading dependency graph...</div>
       </div>
     );
   }
@@ -142,7 +142,7 @@ export function DependenciesPage() {
         Vulnerability and outdated-version assessments have not been run.
       </p>
 
-      <div className="overflow-hidden rounded-3xl border border-primary/20 bg-card shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+      <div className="overflow-hidden partha-surface">
         <div className="flex flex-col justify-between gap-3 border-b border-primary/15 px-5 py-4 sm:flex-row sm:items-center">
           <div className="relative max-w-sm flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -219,7 +219,7 @@ function assessmentLabel(assessment: DependencyAssessment | undefined): string {
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-2xl border border-primary/20 bg-card p-4 shadow-[0_10px_24px_hsl(var(--foreground)/0.03)]">
+    <div className="partha-surface p-4">
       <p className="text-2xs font-semibold uppercase tracking-[0.12em] text-primary">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
     </div>

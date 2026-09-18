@@ -39,7 +39,7 @@ export function AnalysisPipelinePage() {
         <DataSourceBadge source={analysis.source} />
       </PageHeader>
 
-      <div className="mb-6 rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+      <div className="mb-6 partha-surface p-6">
         <div className="flex items-center justify-between mb-4">
           <span className="text-2xs font-semibold text-primary uppercase tracking-[0.14em]">
             Progress
@@ -58,7 +58,7 @@ export function AnalysisPipelinePage() {
         </div>
       </div>
 
-      <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+      <div className="partha-surface p-6">
         <div className="space-y-0">
           {analysis.stages.map((stage, index) => {
             const isCompleted = index < analysis.currentStageIndex;

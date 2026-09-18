@@ -9,7 +9,7 @@ interface BrandLogoProps {
 /** Reuses the designer-supplied PARTHA mark; no substitute glyphs or generated logo. */
 export function BrandLogo({ className, compact = false }: BrandLogoProps) {
   return (
-    <span className={cn('block overflow-hidden', compact ? 'w-9' : 'w-[132px]', className)}>
+    <span className={cn('block overflow-hidden', compact ? 'w-[30px]' : 'w-[132px]', className)}>
       <img
         src={brandLogo}
         alt="PARTHA"

@@ -77,7 +77,6 @@ export function OAuthCompletePage() {
 
     return (
       <AuthShell
-        eyebrow="Almost there"
         title="Confirm it's you"
         description={`An account already exists for the email your ${provider ?? 'provider'} account uses. Enter your password to link them.`}
         footer={
@@ -130,7 +129,6 @@ export function OAuthCompletePage() {
   const reason = searchParams.get('reason');
   return (
     <AuthShell
-      eyebrow="Sign-in interrupted"
       title="Couldn't complete sign-in"
       description={messageFor(reason)}
       footer={

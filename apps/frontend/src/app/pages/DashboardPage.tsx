@@ -61,7 +61,7 @@ export function DashboardPage() {
       <PageHeader title="Dashboard" description="Your repository intelligence overview">
         <button
           onClick={() => navigate('/upload')}
-          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_18px_hsl(var(--primary)/0.18)] hover:bg-primary/90 transition-colors"
+          className="flex h-8 items-center gap-2 rounded-md bg-brand-blue px-3 text-sm text-white transition-colors hover:bg-brand-blue/90"
         >
           <Upload className="h-3.5 w-3.5" />
           Upload
@@ -69,7 +69,7 @@ export function DashboardPage() {
       </PageHeader>
 
       {mostRecentlyAnalysed && (
-        <p data-testid="latest-analysis-summary" className="mb-7 rounded-2xl border border-primary/15 bg-accent px-4 py-3 text-sm text-muted-foreground">
+        <p data-testid="latest-analysis-summary" className="-mt-3 mb-6 text-sm text-muted-foreground">
           Most recently analysed:{' '}
           <span className="font-medium text-foreground">{mostRecentlyAnalysed.name}</span>
           {' — '}
@@ -85,19 +85,18 @@ export function DashboardPage() {
         </p>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(220px,294px))]">
         <MetricCard label="Repositories" value={metrics.totalRepositories} icon={FolderGit2} />
         <MetricCard label="Analysed" value={metrics.completedRepositories} icon={Activity} />
         <MetricCard label="Total Files" value={metrics.totalFiles} icon={LayoutDashboard} />
         <MetricCard label="Total Size" value={formatFileSize(metrics.totalSize)} icon={Upload} />
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-primary/20 bg-card shadow-[0_14px_34px_hsl(var(--foreground)/0.05)]">
-        <div className="border-b border-primary/15 px-6 py-5">
-          <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">System view</p>
-          <h2 className="mt-1 text-lg font-semibold text-foreground">Repositories</h2>
+      <div className="partha-surface overflow-hidden">
+        <div className="flex h-[54px] items-center border-b border-brand-orange px-5">
+          <h2 className="text-lg font-medium text-foreground">Repositories</h2>
         </div>
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-brand-orange/40">
           {repositories.map((repo, index) => (
             <motion.div
               key={repo.id}
@@ -109,24 +108,24 @@ export function DashboardPage() {
                 if (repo.status === 'analysing' || repo.status === 'cancelled') navigate(`/analysis/${repo.id}`);
                 else navigate(`/repositories/${repo.id}`);
               }}
-              className="flex min-w-0 flex-col items-start justify-between gap-3 px-5 py-4 hover:bg-accent cursor-pointer transition-colors sm:flex-row sm:items-center sm:px-6"
+              className="flex min-w-0 cursor-pointer flex-col items-start justify-between gap-3 px-5 py-[14px] transition-colors hover:bg-accent sm:flex-row sm:items-center"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-secondary">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-navy-tile">
                   {repo.source === 'github' ? (
-                    <Github className="h-4 w-4 text-muted-foreground" />
+                    <Github className="h-4 w-4 text-white" />
                   ) : (
-                    <FolderGit2 className="h-4 w-4 text-muted-foreground" />
+                    <FolderGit2 className="h-4 w-4 text-white" />
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">{repo.name}</p>
-                  <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-2">
+                  <p className="truncate text-lg font-medium leading-6 text-foreground">{repo.name}</p>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {repo.meta?.language && (
-                      <span className="text-xs text-muted-foreground">{repo.meta.language}</span>
+                      <span className="text-[13px] text-foreground">{repo.meta.language}</span>
                     )}
                     {repo.meta?.framework && (
-                      <span className="text-xs text-muted-foreground">/ {repo.meta.framework}</span>
+                      <span className="text-[13px] text-foreground">/ {repo.meta.framework}</span>
                     )}
                     {!repo.meta && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -140,7 +139,7 @@ export function DashboardPage() {
               <div className="flex max-w-full flex-wrap items-center gap-3 sm:justify-end">
                 <DataSourceBadge source={repo.source} />
                 {repo.meta && (
-                  <span className="text-xs text-muted-foreground hidden sm:inline">
+                  <span className="hidden text-sm text-foreground sm:inline">
                     {repo.meta.totalFiles} files
                   </span>
                 )}

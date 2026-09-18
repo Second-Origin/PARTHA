@@ -77,7 +77,7 @@ export function DocumentationPage() {
           <span className="font-mono">{documentation.document.revisionValue}</span>
         </p>
       )}
-      <div className="mt-4 overflow-hidden rounded-3xl border border-primary/20 bg-card shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+      <div className="mt-4 overflow-hidden partha-surface">
         <div className="flex flex-col gap-3 border-b border-primary/15 px-5 py-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">

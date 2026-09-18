@@ -23,11 +23,11 @@ export function MainLayout() {
         <div
           className={cn(
             'ml-0 flex min-w-0 flex-1 flex-col transition-all duration-200',
-            sidebarCollapsed ? 'md:ml-16' : 'md:ml-[248px]'
+            sidebarCollapsed ? 'md:ml-[72px]' : 'md:ml-[248px]'
           )}
         >
           <TopBar />
-          <main className="min-w-0 flex-1 overflow-y-auto overflow-x-clip p-4 scrollbar-thin sm:p-6 lg:px-10 lg:py-8">
+          <main className="min-w-0 flex-1 overflow-y-auto overflow-x-clip bg-background p-4 scrollbar-thin sm:p-6 lg:pb-10 lg:pl-[35px] lg:pr-[54px] lg:pt-9">
             <Outlet />
           </main>
         </div>

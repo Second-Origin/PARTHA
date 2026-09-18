@@ -50,6 +50,6 @@ describe('MainLayout', () => {
 
     renderMainLayout();
 
-    expect(screen.getByTestId('page-content').closest('div.flex.min-w-0.flex-1')).toHaveClass('md:ml-16');
+    expect(screen.getByTestId('page-content').closest('div.flex.min-w-0.flex-1')).toHaveClass('md:ml-[72px]');
   });
 });

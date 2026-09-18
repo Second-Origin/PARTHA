@@ -62,7 +62,7 @@ export function LandingPage() {
       className={
         dark
           ? 'landing-dark min-h-screen bg-background text-foreground'
-          : 'min-h-screen bg-background text-foreground'
+          : 'min-h-screen bg-[hsl(38_27%_94%)] text-foreground'
       }
     >
       <h1 className="sr-only">Reveal the system behind the code.</h1>

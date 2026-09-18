@@ -19,7 +19,7 @@ export function SettingsPage() {
     <div className="w-full max-w-4xl">
       <PageHeader title="Settings" description="Manage your account and preferences" />
 
-      <div role="tablist" aria-label="Settings sections" className="mb-7 flex max-w-full items-center gap-1 overflow-x-auto border-b border-primary/15 scrollbar-thin">
+      <div role="tablist" aria-label="Settings sections" className="partha-tabs mb-7">
         {tabs.map((tab) => (
           <button
             key={tab}
@@ -27,15 +27,9 @@ export function SettingsPage() {
             role="tab"
             aria-selected={activeTab === tab}
             onClick={() => setActiveTab(tab)}
-            className={cn(
-              'relative rounded-t-xl px-4 py-3 text-sm font-semibold transition-colors',
-              activeTab === tab ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-            )}
+            className={cn('partha-tab', activeTab === tab && 'partha-tab-active')}
           >
             {tab}
-            {activeTab === tab && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
-            )}
           </button>
         ))}
       </div>
@@ -43,7 +37,7 @@ export function SettingsPage() {
       <div className="space-y-6">
         {activeTab === 'General' && (
           <div className="space-y-6">
-            <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+            <div className="partha-surface p-6">
               <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">Account</p><h2 className="mt-1 text-lg font-semibold text-foreground mb-4">Your profile</h2>
               <div className="space-y-4">
                 <div>
@@ -75,7 +69,7 @@ export function SettingsPage() {
             </div>
             {(oauthAccounts.identities === null ? [] : oauthAccounts.identities).length > 0 ||
             oauthAccounts.linkableProviders.length > 0 ? (
-              <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+              <div className="partha-surface p-6">
                 <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">Sign-in</p>
                 <h2 className="mt-1 text-lg font-semibold text-foreground mb-4">Connected accounts</h2>
                 <div className="space-y-3">
@@ -348,7 +342,7 @@ export function SettingsPage() {
           </div>
         )}
         {activeTab === 'Notifications' && (
-          <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+          <div className="partha-surface p-6">
             <div className="mb-4">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-medium text-foreground">Notification Preferences</h2>
@@ -383,7 +377,7 @@ export function SettingsPage() {
           </div>
         )}
         {activeTab === 'API Keys' && (
-          <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+          <div className="partha-surface p-6">
             <h2 className="text-sm font-medium text-foreground mb-2">API Keys</h2>
             <p className="text-xs text-muted-foreground mb-4">Manage API keys for programmatic access.</p>
             <div className="flex items-center justify-center py-8">

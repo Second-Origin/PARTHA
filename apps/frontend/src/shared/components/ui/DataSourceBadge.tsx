@@ -16,7 +16,7 @@ export function DataSourceBadge({ source }: DataSourceBadgeProps) {
   if (!label) return null;
 
   return (
-    <span className="text-xs text-muted-foreground" data-testid="repository-source">
+    <span className="text-sm text-foreground" data-testid="repository-source">
       {label}
     </span>
   );

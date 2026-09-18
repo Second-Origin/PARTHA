@@ -4,37 +4,47 @@
 
 @layer base {
   :root {
-    --background: 38 27% 94%;
-    --foreground: 258 19% 13%;
-    --card: 0 0% 100%;
-    --card-foreground: 258 19% 13%;
+    /* Product UI palette, taken from the in-app design (Dashboard frame):
+       white work area, #F1EEE7 chrome (sidebar + top bar), #F2E1D5 cards
+       outlined in #FA4D01, #AA3D00 for the active nav item and primary
+       actions, #006298 for Upload, #392135 for page headings. */
+    --background: 0 0% 100%;
+    --foreground: 240 3% 10%;
+    --card: 25 53% 89%;
+    --card-foreground: 240 3% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 258 19% 13%;
-    /* The product orange remains recognisable while providing AA contrast
-       against white for normal-size button and link text. */
-    --primary: 18 99% 38%;
+    --popover-foreground: 240 3% 10%;
+    --primary: 22 100% 33%;
     --primary-foreground: 0 0% 100%;
     --secondary: 198 39% 85%;
     --secondary-foreground: 260 10% 34%;
-    --muted: 38 25% 92%;
-    --muted-foreground: 263 8% 43%;
+    --muted: 42 26% 93%;
+    /* #616161 rather than the design's #7A7A7A: the darkest the grey has to
+       go for small text to clear WCAG AA (4.5:1) on the #F2E1D5 cards, which
+       the e2e accessibility baseline enforces. */
+    --muted-foreground: 0 0% 38%;
     --accent: 18 100% 94%;
-    --accent-foreground: 258 19% 13%;
+    --accent-foreground: 240 3% 10%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-    --success: 142 76% 26%;
+    /* Design green (#00AB3F) darkened to clear AA on its own pale tint. */
+    --success: 142 100% 22%;
     --success-foreground: 210 40% 98%;
-    --warning: 38 92% 29%;
+    --warning: 38 92% 22%;
     --warning-foreground: 258 19% 13%;
-    --border: 18 66% 76%;
-    --input: 18 42% 84%;
-    --ring: 17 91% 50%;
-    --radius: 1rem;
-    --sidebar: 38 27% 94%;
-    --sidebar-foreground: 258 19% 13%;
-    --sidebar-border: 18 50% 86%;
-    --sidebar-accent: 18 99% 38%;
+    --border: 25 53% 89%;
+    --input: 40 10% 92%;
+    --ring: 18 99% 49%;
+    --radius: 0.75rem;
+    --sidebar: 42 26% 93%;
+    --sidebar-foreground: 240 3% 10%;
+    --sidebar-border: 25 53% 89%;
+    --sidebar-accent: 22 100% 33%;
     --sidebar-accent-foreground: 0 0% 100%;
+    --brand-orange: 18 99% 49%;
+    --brand-blue: 201 100% 30%;
+    --brand-plum: 310 27% 18%;
+    --navy-tile: 224 46% 11%;
 
   /* Landing-page surfaces and ink, from the iteration-1 design canvas.
      These drive the landing route only; the product UI keeps the app
@@ -143,12 +153,32 @@
 }
 
 @layer components {
+  /* The design's card: #F2E1D5 fill, 1px #FA4D01 outline, 12px radius, flat. */
   .partha-surface {
-    @apply rounded-2xl border border-border bg-card shadow-[0_12px_24px_hsl(var(--foreground)/0.04)];
+    @apply rounded-xl border border-brand-orange bg-card;
   }
 
+  /* Form fields are a filled #EDECE8 well with no outline (design: Form). */
   .partha-input {
-    @apply rounded-xl border border-input bg-card text-foreground placeholder:text-muted-foreground;
+    @apply rounded-md border border-transparent bg-input text-foreground placeholder:text-muted-foreground focus-visible:border-brand-orange;
+  }
+
+  /* Tab switcher (design: slider menu): a #006298 bar of white labels, the
+     selected one sitting on a lighter pill. */
+  .partha-tabs {
+    @apply inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg bg-brand-blue p-1 scrollbar-thin;
+  }
+
+  .partha-tab {
+    @apply flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-1.5 font-display text-sm text-white transition-colors hover:bg-white/10;
+  }
+
+  .partha-tab-active {
+    @apply bg-white/15 hover:bg-white/15;
+  }
+
+  .partha-heading {
+    @apply font-display font-semibold text-brand-plum;
   }
 }
 

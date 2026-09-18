@@ -125,7 +125,7 @@ export function EngineeringReviewPage() {
         <RevisionManifestPanel repositoryId={review.repositoryId} />
       </div>
 
-      <section className="mb-6 rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+      <section className="mb-6 partha-surface p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">Engineering review</p><h2 className="mt-1 text-lg font-semibold text-foreground">Evidence-backed summary</h2>
@@ -151,7 +151,7 @@ export function EngineeringReviewPage() {
         <h2 className="mb-3 text-sm font-medium text-foreground">Assessment matrix</h2>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {review.categories.map((category) => (
-            <article key={category.id} className="rounded-2xl border border-primary/20 bg-card p-4 shadow-[0_10px_24px_hsl(var(--foreground)/0.03)]">
+            <article key={category.id} className="partha-surface p-4">
               <div className="flex items-start justify-between gap-2">
                 <h3 className="text-sm font-medium text-foreground">{category.label}</h3>
                 <span className="shrink-0 rounded-lg bg-accent px-2 py-1 text-[10px] text-muted-foreground">
@@ -177,7 +177,7 @@ export function EngineeringReviewPage() {
           <ReviewFilters />
         </div>
         {review.summary.evidenceBackedFindingCount === 0 ? (
-          <div className="rounded-3xl border border-primary/20 bg-card p-8 text-center">
+          <div className="partha-surface p-8 text-center">
             <CheckCircle2 className="mx-auto mb-2 h-7 w-7 text-emerald-400" />
             <h3 className="text-sm font-medium text-foreground">No evidence-backed findings</h3>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -185,7 +185,7 @@ export function EngineeringReviewPage() {
             </p>
           </div>
         ) : findings.length === 0 ? (
-          <div className="rounded-3xl border border-primary/20 bg-card p-8 text-center">
+          <div className="partha-surface p-8 text-center">
             <Info className="mx-auto mb-2 h-7 w-7 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">No findings match the selected filters.</p>
           </div>

@@ -31,7 +31,7 @@ describe('AuthShell is immune to the landing page theme', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: 'Sign in to PARTHA' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Hello! Welcome back' })).toBeInTheDocument();
     expect(document.documentElement.classList.contains('dark')).toBe(false);
     expect(document.documentElement.classList.contains('landing-dark')).toBe(false);
     expect(document.querySelector('.landing-dark')).toBeNull();

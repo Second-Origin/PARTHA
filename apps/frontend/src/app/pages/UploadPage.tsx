@@ -57,19 +57,14 @@ export function UploadPage() {
         <DataSourceBadge source={mode === 'file' ? upload.source : githubImport.source} />
       </PageHeader>
 
-      <div role="tablist" aria-label="Repository source" className="mb-8 grid w-full grid-cols-2 gap-1 rounded-2xl border border-primary/20 bg-accent p-1.5 sm:w-fit">
+      <div role="tablist" aria-label="Repository source" className="partha-tabs mb-8">
         <button
           type="button"
           role="tab"
           aria-selected={mode === 'file'}
           aria-controls="upload-file-panel"
           onClick={() => { setMode('file'); githubImport.retry(); }}
-          className={cn(
-            'flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all',
-            mode === 'file'
-              ? 'bg-card text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
+          className={cn('partha-tab', mode === 'file' && 'partha-tab-active')}
         >
           <FileArchive className="h-4 w-4" />
           Upload File
@@ -80,12 +75,7 @@ export function UploadPage() {
           aria-selected={mode === 'github'}
           aria-controls="upload-github-panel"
           onClick={() => { setMode('github'); upload.retry(); }}
-          className={cn(
-            'flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all',
-            mode === 'github'
-              ? 'bg-card text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
+          className={cn('partha-tab', mode === 'github' && 'partha-tab-active')}
         >
           <Github className="h-4 w-4" />
           GitHub URL
@@ -169,7 +159,7 @@ export function UploadPage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
-                  className="mt-4 rounded-2xl border border-primary/20 bg-card p-5 shadow-[0_12px_26px_hsl(var(--foreground)/0.04)]"
+                  className="mt-4 partha-surface p-5"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -230,7 +220,7 @@ export function UploadPage() {
             exit={{ opacity: 0, x: -10 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="rounded-3xl border border-primary/20 bg-card p-6 shadow-[0_14px_34px_hsl(var(--foreground)/0.04)]">
+            <div className="partha-surface p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
                   <Github className="h-5 w-5 text-muted-foreground" />
