@@ -107,7 +107,7 @@ describe('OAuthCompletePage', () => {
   it('status=error with a known reason shows the mapped, friendly message', async () => {
     renderAt('/oauth/complete?status=error&reason=email_not_approved');
 
-    expect(await screen.findByText(/invite-only during the beta/)).toBeInTheDocument();
+    expect(await screen.findByText(/Ask whoever runs it to approve it/)).toBeInTheDocument();
   });
 
   it('status=error with an unrecognized or missing reason shows a generic message', async () => {

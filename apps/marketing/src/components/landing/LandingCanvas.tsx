@@ -437,7 +437,7 @@ export function LandingCanvas({ onSeeHowItWorks, onAnalyzeRepository }: LandingC
         <p className="-translate-x-1/2 [word-break:break-word] absolute font-display font-light font-light leading-[48px] left-[717.5px] text-[48px] text-[var(--ln-ink)] text-center top-[68px] tracking-[-1.2px] w-[761px]" data-node-id="504:8522">
           Understand the system behind the code.
         </p>
-        <p className="-translate-x-1/2 [word-break:break-word] absolute font-accent font-normal leading-[24px] left-[717.5px] not-italic text-[20px] text-[var(--ln-ink)] text-center top-[192px] w-[697px]" data-node-id="504:8542">{`PARTHA is currently in private preview with a small group of engineering teams. Request access and we'll follow up with onboarding materials and a self-hosted install guide.`}</p>
+        <p className="-translate-x-1/2 [word-break:break-word] absolute font-accent font-normal leading-[24px] left-[717.5px] not-italic text-[20px] text-[var(--ln-ink)] text-center top-[192px] w-[697px]" data-node-id="504:8542">{`PARTHA is open source and runs on your own machine. Clone the repository, point it at a codebase you need to understand, and your code never leaves your computer.`}</p>
         <div className="-translate-x-1/2 absolute content-stretch flex gap-[26px] items-center left-1/2 px-[256px] top-[292px]" data-node-id="504:8527" data-name="Container">
           <a href="https://github.com/Second-Origin/PARTHA#quick-start" target="_blank" rel="noreferrer" className="h-[43px] relative rounded-[34px] shrink-0 w-[245px] cursor-pointer block" data-node-id="504:8555" data-name="Button v1">
             <div className="absolute bg-[#fa4d01] inset-0 rounded-[15px]" data-node-id="504:8556" />
