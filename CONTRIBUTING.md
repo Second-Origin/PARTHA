@@ -480,21 +480,35 @@ code-owner review, passing required status checks, and no deletion or force-push
 
 **Cutting a release.**
 
-1. Bump the version in `package.json`, `apps/frontend/package.json`,
-   `apps/marketing/package.json`, `apps/backend/pyproject.toml`, and the FastAPI
-   `version=` in `apps/backend/app/main.py`, together with any documentation that
-   is genuinely out of date. Merge that to `dev` like any other change.
-2. Open a `dev` → `main` pull request and merge it once checks are green.
-3. Tag the release commit `vMAJOR.MINOR.PATCH` and push the tag.
-4. Once the GitHub Release exists and its notes are curated (below), add a row for
-   the version to [`CHANGELOG.md`](CHANGELOG.md) — a one-line summary and a link to
-   the release notes — so the in-repo index stays current.
+A release is a promotion, in this order:
+
+1. **Prepare on `dev`.** Bump the version in `package.json`, `apps/frontend/package.json`,
+   `apps/marketing/package.json`, both `package-lock.json` files, `apps/backend/pyproject.toml`,
+   and the FastAPI `version=` in `apps/backend/app/main.py`; point any version-bearing copy
+   (the marketing site's "Try PARTHA vX.Y.Z" button) at the new version; and update any
+   documentation that is genuinely out of date. Merge that to `dev` like any other change.
+2. **Promote.** Open a `dev` → `main` pull request and merge it once every check is green.
+   Use a merge commit, not a squash, so `main` and `dev` keep shared history.
+3. **Verify.** Check through the GitHub API, not just local git, that `main` still exists and
+   points at the merge commit (`gh api repos/<owner>/<repo>/branches/main`), and that the
+   Production deployment for that commit succeeded. Anything user-facing (the marketing
+   copy) is live only from this point.
+4. **Sync back.** The promotion leaves `main` one merge commit ahead of `dev`. Bring it back
+   with a pull request into `dev` from a **throwaway branch created at `main`'s tip**
+   (for example `sync/main-into-dev`), never from `main` itself (see the warning below).
+5. **Tag from `main`.** Tag the release commit on `main` `vMAJOR.MINOR.PATCH` and push the tag.
+6. **Curate the release** (below), then add a row for the version to
+   [`CHANGELOG.md`](CHANGELOG.md), a one-line summary and a link to the release notes, so
+   the in-repo index stays current.
 
 Pushing a `v*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml):
 a `validate` job re-runs the release-relevant frontend and backend checks against real
 PostgreSQL and Redis, and only if that passes does a `github-release` job create the
 GitHub Release with `gh release create --generate-notes` — an automatically generated
-list of merged pull requests and new contributors.
+list of merged pull requests and new contributors. **Let the workflow create the release**
+rather than creating it by hand first: with the release already present, `github-release`
+fails with "tag_name already exists" (the validation still runs and passes, but the run
+shows red).
 
 Those generated notes are a **baseline, not the final notes.** After the workflow runs,
 a maintainer edits the release (`gh release edit <tag> --notes-file …`, or the Releases
@@ -505,7 +519,10 @@ done until that curation has happened.
 
 `main` is only ever a pull-request **target**. Never open a pull request whose *source*
 branch is `main`: merged head branches are deleted automatically, which would delete
-`main` itself.
+`main` itself. This is not hypothetical: merging the step-4 sync-back with `main` as its head
+did exactly that for v0.3.0, and `main` had to be recreated at the promotion commit. If it
+happens, `gh api -X POST repos/<owner>/<repo>/git/refs -f ref=refs/heads/main -f sha=<merge commit>`
+restores it (the branch ruleset reapplies), and step 3's API check is how you notice.
 
 PARTHA is pre-1.0. Minor versions may change behaviour; the release notes say so when
 they do.

@@ -55,7 +55,10 @@ npm run dev:frontend
 ```
 
 Open `http://localhost:5173`. There is no seeded account or sample
-repository — register a new local account through the UI, then add a
+repository (and no pre-approved email address) — register a new local account through the UI
+(in the default `APP_ENV=development` any address is accepted; anywhere else the first account
+on an empty instance becomes its owner and every later one must be added with
+`apps/backend/scripts/approve_email.py`), then add a
 repository (upload an archive or import a public GitHub repository over
 HTTPS) and start analysis.
 

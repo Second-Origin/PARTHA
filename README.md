@@ -43,7 +43,7 @@ Each surface reads the sealed snapshot for the analysed revision:
 - **Repository Intelligence** — builds an immutable, revision-addressed structural snapshot from supported repository sources, with evidence and provenance on supported facts.
 - **Architecture** — an interactive graph of modules and resolved relationships, plus an evidence-cited authentication explanation for supported Python/FastAPI patterns.
 - **Dependency Graph** — direct declarations from `package.json`, `pyproject.toml`, and `requirements.txt`, with resolved pins from two lockfile formats recorded as resolutions, never as direct edges.
-- **Engineering Review** — findings that are each backed by a stored evidence span; unassessed categories stay visible. No score, grade, or health percentage.
+- **Engineering Review** — findings that are each backed by a stored evidence span; unassessed categories stay visible. References into third-party or platform code, local names and non-code assets are not reported as findings. No score, grade, or health percentage.
 - **Repository Insights** — defined counts, ratios, diagnostics, and coverage from one snapshot. No change-over-time claims.
 - **Repository Lineage** — repeated imports of the same repository and branch grouped into a durable history, browsable through the API and UI. This is revision *history*, not cross-revision comparison.
 - **Documentation & export** — structural documentation, and Review / Documentation / Architecture / Dependencies exported through one JSON / Markdown / HTML / PDF pipeline.
@@ -129,7 +129,7 @@ The [development guide](docs/DEVELOPMENT.md) covers the full test / lint / build
 - **Optional AI can be external.** Depending on configuration, AI calls a configured provider; only local providers keep everything on the host. See the [egress policy](docs/security/AI_PROVIDER_EGRESS.md).
 - **In-process worker.** One daemon worker thread inside the API process handles one analysis job at a time; there is no separate worker service or job queue.
 
-Non-auth product routes require authentication, repository access is owner-scoped, provider keys are Fernet-encrypted at rest, and AI egress is validated against a deployment-owned allowlist with DNS pinning — meaningful controls, but not a claim of production hardening. See [SECURITY.md](SECURITY.md) and [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) for the details.
+Non-auth product routes require authentication, repository access is owner-scoped, provider keys are Fernet-encrypted at rest, and AI egress is validated against a deployment-owned allowlist with DNS pinning — meaningful controls, but not a claim of production hardening. Registration does not verify email ownership, and in the default `development` environment any address may register. See [SECURITY.md](SECURITY.md) and [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) for the details.
 
 ## Documentation
 
@@ -152,7 +152,7 @@ Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.
 
 ## Releases
 
-`main` carries the latest tagged release; `dev` is where active development happens and is the target of every pull request. PARTHA is pre-1.0, so minor versions may change behaviour — each release's notes say what moved. See [all releases](https://github.com/Second-Origin/PARTHA/releases), the [changelog](CHANGELOG.md), and [CONTRIBUTING § Releases](CONTRIBUTING.md#14-releases).
+`main` carries the latest tagged release; `dev` is where active development happens and is the target of every pull request. A release is a promotion: prepare on `dev`, promote `dev` to `main`, verify, sync back, then tag from `main`. PARTHA is pre-1.0, so minor versions may change behaviour — each release's notes say what moved. See [all releases](https://github.com/Second-Origin/PARTHA/releases), the [changelog](CHANGELOG.md), and [CONTRIBUTING § Releases](CONTRIBUTING.md#14-releases).
 
 ## License
 
