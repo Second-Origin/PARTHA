@@ -132,8 +132,9 @@ class RepositoryService:
         self.storage.delete_repository(local_path)
 
     def import_github_repository(self, request: GitHubImportRequest) -> RepositoryResponse:
-        url = self.github.validate_public_url(str(request.url))
-        branch = self.github.validate_branch(request.branch)
+        url, url_ref = self.github.split_import_url(str(request.url))
+        # An explicit branch field wins over one pasted inside the URL.
+        branch = self.github.validate_branch(request.branch or url_ref)
         return self._import_github_revision(url, branch)
 
     def _import_github_revision(self, url: str, branch: str | None) -> RepositoryResponse:

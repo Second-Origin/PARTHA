@@ -5,14 +5,18 @@ import { getErrorMessage } from '@/shared/services/api';
 import { useAppStore } from '@/app/store/useAppStore';
 import { useRepository } from '@/features/repositories/hooks/useRepository';
 
+// A URL copied from a branch page ends in /tree/<branch>; the backend splits
+// that off as the ref, so it is accepted here too. Any other extra path
+// (issues, blob, ...) is still refused.
+const GITHUB_URL =
+  /^https:\/\/(?:www\.)?github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+?)(?:\.git)?(?:\/tree\/[^\s?#]+)?\/?(?:[?#]\S*)?$/;
+
 function isValidGithubUrl(url: string): boolean {
-  const pattern = /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(?:\.git)?\/?$/;
-  return pattern.test(url.trim());
+  return GITHUB_URL.test(url.trim());
 }
 
 function extractRepoName(url: string): string {
-  const parts = url.trim().replace(/\/$/, '').split('/');
-  return parts[parts.length - 1]?.replace(/\.git$/i, '') || 'unknown-repo';
+  return GITHUB_URL.exec(url.trim())?.[2] || 'unknown-repo';
 }
 
 export function useGitHubImport() {

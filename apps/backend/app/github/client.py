@@ -4,6 +4,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from app.core.config import Settings
 from app.core.exceptions import ExternalServiceError, TimeoutServiceError, ValidationServiceError
@@ -12,6 +13,12 @@ logger = logging.getLogger(__name__)
 
 GITHUB_RE = re.compile(r"^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?(?:\.git)?$")
 BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
+
+
+_GITHUB_HOSTS = {"github.com", "www.github.com"}
+_URL_HELP = (
+    "Use a public GitHub repository URL such as https://github.com/owner/repo, optionally followed by /tree/<branch>."
+)
 
 
 class GitHubClient:
@@ -26,6 +33,35 @@ class GitHubClient:
         if not GITHUB_RE.match(normalized):
             raise ValidationServiceError("Only public GitHub repository HTTPS URLs are supported.")
         return normalized
+
+    def split_import_url(self, url: str) -> tuple[str, str | None]:
+        """Turn the URL a person copies from the browser into ``(repo URL, ref)``.
+
+        The address bar on a branch page reads
+        ``https://github.com/owner/repo/tree/master``; rejecting it made the
+        user work out that they had to delete the tail (#481). Query strings
+        and fragments are dropped, ``www.`` is accepted, and ``/tree/<ref>`` is
+        split off as the ref (a ref may itself contain slashes, so everything
+        after ``tree/`` is the ref). Any other extra path (``/issues``,
+        ``/blob/...``) is refused with what to paste instead, rather than
+        guessed at. The repository URL still goes through
+        ``validate_public_url``.
+        """
+
+        parsed = urlsplit(url.strip())
+        host = (parsed.hostname or "").lower()
+        if parsed.scheme != "https" or host not in _GITHUB_HOSTS:
+            raise ValidationServiceError(f"Only public GitHub repository HTTPS URLs are supported. {_URL_HELP}")
+        segments = [segment for segment in parsed.path.split("/") if segment]
+        if len(segments) < 2:
+            raise ValidationServiceError(f"That URL does not name a repository. {_URL_HELP}")
+        owner, repo, *rest = segments
+        ref: str | None = None
+        if rest:
+            if rest[0] != "tree" or len(rest) < 2:
+                raise ValidationServiceError(f"That GitHub URL points at a page, not a repository. {_URL_HELP}")
+            ref = "/".join(rest[1:])
+        return self.validate_public_url(f"https://github.com/{owner}/{repo}"), ref
 
     def validate_branch(self, branch: str | None) -> str | None:
         if not branch:

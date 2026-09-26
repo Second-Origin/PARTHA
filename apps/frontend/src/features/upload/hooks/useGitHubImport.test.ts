@@ -78,7 +78,6 @@ describe('useGitHubImport', () => {
     'http://github.com/example/project',
     'https://gitlab.com/example/project',
     'https://github.com/example',
-    'https://github.com/example/project/tree/main',
   ])('rejects malformed or non-GitHub URLs without calling the backend: %s', async (url) => {
     const backend = mockBackendLifecycle();
     const hook = renderHook(() => useGitHubImport());
@@ -236,5 +235,60 @@ describe('useGitHubImport', () => {
     expect(backend.importFromGithub).toHaveBeenCalledOnce();
     expect(backend.startAnalysis).toHaveBeenCalledOnce();
     expect(backend.fetchRepository).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'https://github.com/octocat/Hello-World/tree/master',
+    'https://github.com/octocat/Hello-World/tree/feature/login-page/',
+    'https://www.github.com/octocat/Hello-World?tab=readme',
+  ])('accepts a URL pasted from the browser and sends it to the backend: %s', async (url) => {
+    repositoryState.repositories = [repository('existing-id', 'Existing-Project')];
+    const backend = mockBackendLifecycle();
+    const hook = renderHook(() => useGitHubImport());
+
+    act(() => {
+      hook.result.current.setGithubUrl(url);
+    });
+    await act(async () => {
+      await hook.result.current.analyseGithub().catch(() => null);
+    });
+
+    expect(backend.importFromGithub).toHaveBeenCalledWith(url);
+  });
+
+  it('names the repository, not the branch, in the duplicate check', async () => {
+    repositoryState.repositories = [repository('existing-id', 'Hello-World')];
+    const backend = mockBackendLifecycle();
+    const hook = renderHook(() => useGitHubImport());
+
+    act(() => {
+      hook.result.current.setGithubUrl('https://github.com/octocat/Hello-World/tree/master');
+    });
+    await act(async () => {
+      await hook.result.current.analyseGithub();
+    });
+
+    expect(hook.result.current.error).toBe('A repository named "Hello-World" already exists.');
+    expect(backend.importFromGithub).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'https://github.com/octocat/Hello-World/issues/4',
+    'https://github.com/octocat/Hello-World/blob/main/README.md',
+    'https://github.com/octocat',
+    'http://github.com/octocat/Hello-World',
+  ])('still refuses %s', async (url) => {
+    const backend = mockBackendLifecycle();
+    const hook = renderHook(() => useGitHubImport());
+
+    act(() => {
+      hook.result.current.setGithubUrl(url);
+    });
+    await act(async () => {
+      await hook.result.current.analyseGithub();
+    });
+
+    expect(hook.result.current.error).toBe('Invalid GitHub URL. Format: https://github.com/owner/repository');
+    expect(backend.importFromGithub).not.toHaveBeenCalled();
   });
 });
