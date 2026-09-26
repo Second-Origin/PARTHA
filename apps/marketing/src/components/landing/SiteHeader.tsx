@@ -158,7 +158,7 @@ export function SiteHeader() {
                 rel="noreferrer"
                 className={`rounded-[25px] border-2 border-[#fa4d01] bg-[#fffcf7] px-3 py-[6px] font-display text-[13px] font-medium text-[#fa4d01] transition-colors hover:bg-[#fa4d01] hover:text-white ${focusRing}`}
               >
-                Try PARTHA v0.2.0
+                Try PARTHA v0.3.0
               </a>
               <button
                 type="button"
@@ -243,7 +243,7 @@ export function SiteHeader() {
           >
             <span className="absolute inset-0 rounded-[25px] border-[3px] border-solid border-[#fa4d01] bg-[#fffcf7] transition-colors duration-200 group-hover:bg-[#fa4d01]" />
             <span className="absolute inset-0 grid place-items-center font-display text-[20px] font-medium text-[#fa4d01] transition-colors duration-200 group-hover:text-white">
-              Try PARTHA v0.2.0
+              Try PARTHA v0.3.0
             </span>
           </a>
         </div>

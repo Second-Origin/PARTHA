@@ -1107,7 +1107,7 @@ export function LandingCanvas({ onSeeHowItWorks, onAnalyzeRepository }: LandingC
           <a href="https://github.com/Second-Origin/PARTHA" target="_blank" rel="noreferrer" className="group absolute block cursor-pointer h-[52px] left-[1418px] top-[41px] w-[232px]" data-node-id="128:99" data-name="Button-sign up">
             <div className="absolute bg-[#fffcf7] border-3 border-[#fa4d01] border-solid inset-0 rounded-[25px] transition-colors duration-200 group-hover:bg-[#fa4d01] group-focus-visible:bg-[#fa4d01] motion-reduce:transition-none" data-node-id="I128:99;128:68" />
             <p className="[word-break:break-word] absolute font-display font-medium font-medium inset-[21.15%_7.93%_19.27%_7.93%] leading-[normal] text-[#fa4d01] transition-colors duration-200 group-hover:text-white group-focus-visible:text-white motion-reduce:transition-none text-[24px] text-center" data-node-id="I128:99;128:69">
-              Try PARTHA v0.2.0
+              Try PARTHA v0.3.0
             </p>
           </a>
         </div>
