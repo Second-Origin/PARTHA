@@ -21,10 +21,10 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ConflictServiceError, NotFoundError, ServiceError
+from app.core.exceptions import ConflictServiceError, NotFoundError, ServiceBusyError, ServiceError
 from app.extraction import production_extractors
 from app.extraction.pipeline import ExtractionPipeline
 from app.intelligence import canonical
@@ -69,6 +69,15 @@ ANALYSIS_SCHEMA_VERSION = canonical.SCHEMA_VERSION
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+#: How many times ``cancel`` tries the flag write when SQLite reports the
+#: database locked (each try already waits out the connection's busy timeout).
+_CANCEL_LOCK_ATTEMPTS = 3
+
+
+def _is_sqlite_lock_error(exc: OperationalError) -> bool:
+    return "database is locked" in str(exc.orig if exc.orig is not None else exc).lower()
 
 
 class AnalysisJobService:
@@ -144,10 +153,26 @@ class AnalysisJobService:
         """
 
         self._get_record(repository_id)
-        job = self._latest_job(repository_id)
-        if job is None:
-            raise ConflictServiceError("No analysis job to cancel.", {"repositoryId": repository_id})
-        return self._cancel_job(job)
+        for attempt in range(_CANCEL_LOCK_ATTEMPTS):
+            job = self._latest_job(repository_id)
+            if job is None:
+                raise ConflictServiceError("No analysis job to cancel.", {"repositoryId": repository_id})
+            try:
+                return self._cancel_job(job)
+            except OperationalError as exc:
+                # SQLite has one writer. The worker commits every fraction of a
+                # second, but a busy handler that loses the race to it can still
+                # time out; the flag write is idempotent, so try again rather
+                # than turning a transient lock into a failed cancel (#469).
+                if not _is_sqlite_lock_error(exc):
+                    raise
+                self.db.rollback()
+                if attempt == _CANCEL_LOCK_ATTEMPTS - 1:
+                    raise ServiceBusyError(
+                        "The database is busy; the cancellation was not recorded. Try again.",
+                        {"repositoryId": repository_id},
+                    ) from exc
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def _cancel_job(self, job: AnalysisJob) -> AnalysisJob:
         """Cancel ``job`` without overwriting a concurrent claim/terminal state."""

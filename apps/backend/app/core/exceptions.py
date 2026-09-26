@@ -57,6 +57,13 @@ class ConflictServiceError(ServiceError):
     code = "conflict_error"
 
 
+class ServiceBusyError(ServiceError):
+    """The database is momentarily too busy to take this write; retrying is safe."""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    code = "database_busy"
+
+
 class TimeoutServiceError(ServiceError):
     status_code = status.HTTP_504_GATEWAY_TIMEOUT
     code = "timeout_error"

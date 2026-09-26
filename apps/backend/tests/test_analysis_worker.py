@@ -7,10 +7,12 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, func, select, update
+from sqlalchemy import create_engine, func, select, text, update
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import register_sqlite_foreign_key_enforcement
+from app.core.exceptions import ServiceBusyError
 from app.intelligence.query_service import SnapshotQueryService
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
 from app.models import RepositoryRecord, User
@@ -665,6 +667,117 @@ def test_cancellation_interrupts_in_flight_snapshot_extraction(session_factory, 
         snapshots = list(reader.scalars(select(RiSnapshot)))
         assert len(snapshots) == 1
         assert snapshots[0].state == "failed"
+
+
+def test_cancel_is_not_locked_out_by_a_running_extraction(session_factory, tmp_path, monkeypatch):
+    """SQLite has one writer. The extract stage used to keep a single write
+    transaction open for the whole run, so ``POST /cancel`` waited out the busy
+    timeout and failed with "database is locked" (#469) while the job ran on.
+    Mid-extraction the worker now commits between facts, so a cancel from
+    another connection gets in immediately and the worker stops."""
+
+    monkeypatch.setattr("app.workers.analysis_worker._WRITE_RELEASE_INTERVAL_SECONDS", 0.0)
+    monkeypatch.setattr("app.workers.analysis_worker._WRITE_RELEASE_PAUSE_SECONDS", 0.0)
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "repo")
+        owner_id = owner.id
+        record_id = record.id
+        AnalysisJobService(session, owner_id).submit(record_id)
+
+    worker = AnalysisWorker(session_factory, worker_id="worker-a", lease_seconds=60, heartbeat_interval_seconds=30)
+    persisted = 0
+    cancel_outcome: dict[str, object] = {}
+    real_persist = worker._persist_produced
+
+    def persist_then_cancel(*args, **kwargs):
+        nonlocal persisted
+        persisted += 1
+        if persisted == 2:
+            # A different connection, while the worker is mid-extraction and its
+            # earlier facts have been written. A short busy timeout makes a held
+            # write lock fail fast instead of after five seconds.
+            with session_factory() as cancel_session:
+                cancel_session.execute(text("PRAGMA busy_timeout=100"))
+                try:
+                    cancel_outcome["job"] = AnalysisJobService(cancel_session, owner_id).cancel(record_id)
+                except Exception as exc:  # noqa: BLE001 - asserted below
+                    cancel_outcome["error"] = exc
+        return real_persist(*args, **kwargs)
+
+    monkeypatch.setattr(worker, "_persist_produced", persist_then_cancel)
+
+    assert worker.run_once() is True
+
+    assert persisted >= 2
+    assert "error" not in cancel_outcome, cancel_outcome.get("error")
+    assert cancel_outcome["job"].cancel_requested is True
+    with session_factory() as reader:
+        job = reader.scalars(select(AnalysisJob).where(AnalysisJob.repository_id == record_id)).one()
+        assert job.status == "cancelled"
+        assert reader.get(RepositoryRecord, record_id).status == "cancelled"
+        assert [snapshot.state for snapshot in reader.scalars(select(RiSnapshot))] == ["failed"]
+
+
+def _lock_error() -> OperationalError:
+    return OperationalError("UPDATE analysis_jobs", {}, Exception("database is locked"))
+
+
+def test_cancel_retries_a_transient_sqlite_lock(session_factory, tmp_path, monkeypatch):
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "repo")
+        AnalysisJobService(session, owner.id).submit(record.id)
+        service = AnalysisJobService(session, owner.id)
+        real = service._cancel_job
+        calls = 0
+
+        def flaky(job):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise _lock_error()
+            return real(job)
+
+        monkeypatch.setattr(service, "_cancel_job", flaky)
+
+        assert service.cancel(record.id).status == "cancelled"
+        assert calls == 2
+
+
+def test_cancel_reports_a_persistently_locked_database_as_busy_not_a_server_error(
+    session_factory, tmp_path, monkeypatch
+):
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "repo")
+        AnalysisJobService(session, owner.id).submit(record.id)
+        service = AnalysisJobService(session, owner.id)
+
+        def always_locked(_job):
+            raise _lock_error()
+
+        monkeypatch.setattr(service, "_cancel_job", always_locked)
+
+        with pytest.raises(ServiceBusyError) as raised:
+            service.cancel(record.id)
+        assert raised.value.status_code == 503
+
+
+def test_cancel_does_not_swallow_other_database_errors(session_factory, tmp_path, monkeypatch):
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "repo")
+        AnalysisJobService(session, owner.id).submit(record.id)
+        service = AnalysisJobService(session, owner.id)
+
+        def broken(_job):
+            raise OperationalError("UPDATE analysis_jobs", {}, Exception("disk I/O error"))
+
+        monkeypatch.setattr(service, "_cancel_job", broken)
+
+        with pytest.raises(OperationalError):
+            service.cancel(record.id)
 
 
 def test_repository_byte_budget_is_terminal_and_never_seals(session_factory, tmp_path):

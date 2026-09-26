@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -122,6 +123,26 @@ class _StageContext:
     reused: bool = False
     resource_budget: AnalysisResourceBudget | None = None
     heartbeat: _HeartbeatState | None = None
+    #: ``time.monotonic()`` of the last commit that ended this job's open
+    #: write transaction during a stage (see ``_check_heartbeat``).
+    last_write_release: float = field(default_factory=time.monotonic)
+    #: True only while the extract stage is adding facts to the ``building``
+    #: snapshot. Never during sealing, whose job-row lock and snapshot
+    #: transition must commit together (see the module note).
+    release_writes: bool = False
+
+
+#: How long a stage may keep one write transaction open before committing it.
+#: SQLite allows a single writer, and the API's own writes (most importantly
+#: ``POST /analysis/{id}/cancel``) wait on ``busy_timeout`` (5s) for that lock.
+#: A stage that persisted every fact in one transaction held the lock for the
+#: whole run, so a cancel timed out with "database is locked" (HTTP 500) while
+#: the job carried on. Committing at this cadence keeps every wait well under
+#: the timeout. Snapshot rows stay invisible until sealing, so an intermediate
+#: commit exposes nothing, and a cancelled or failed build is marked failed
+#: exactly as before.
+_WRITE_RELEASE_INTERVAL_SECONDS = 0.25
+_WRITE_RELEASE_PAUSE_SECONDS = 0.02
 
 
 class AnalysisWorker:
@@ -377,31 +398,36 @@ class AnalysisWorker:
             production_extractors(),
             max_source_bytes=self.max_source_bytes,
         )
-        deferred_dependencies: list[ProducedExtraction] = []
-        for produced in pipeline.iter_run(
-            sources,
-            check_cancelled=lambda: self._check_heartbeat(ctx),
-        ):
-            if any(node.node_kind == "dependency" for node in produced.result.nodes):
-                # Dependency observations reference these nodes, so the complete
-                # manifest and lockfile results must wait for the cross-file
-                # reducer that folds them onto one identity.
-                deferred_dependencies.append(produced)
-                continue
-            self._persist_produced(store, snapshot, produced, ctx)
-        for produced in self._merge_dependency_declarations(tuple(deferred_dependencies)):
-            self._persist_produced(store, snapshot, produced, ctx)
-        self._check_heartbeat(ctx)
-        RelationshipResolver(store).resolve(
-            snapshot,
-            check_cancelled=lambda: self._check_heartbeat(ctx),
-        )
-        self._check_heartbeat(ctx)
-        RoleClassifier(store).classify(
-            snapshot,
-            check_cancelled=lambda: self._check_heartbeat(ctx),
-        )
-        self._check_heartbeat(ctx)
+        ctx.last_write_release = time.monotonic()
+        ctx.release_writes = True
+        try:
+            deferred_dependencies: list[ProducedExtraction] = []
+            for produced in pipeline.iter_run(
+                sources,
+                check_cancelled=lambda: self._check_heartbeat(ctx),
+            ):
+                if any(node.node_kind == "dependency" for node in produced.result.nodes):
+                    # Dependency observations reference these nodes, so the complete
+                    # manifest and lockfile results must wait for the cross-file
+                    # reducer that folds them onto one identity.
+                    deferred_dependencies.append(produced)
+                    continue
+                self._persist_produced(store, snapshot, produced, ctx)
+            for produced in self._merge_dependency_declarations(tuple(deferred_dependencies)):
+                self._persist_produced(store, snapshot, produced, ctx)
+            self._check_heartbeat(ctx)
+            RelationshipResolver(store).resolve(
+                snapshot,
+                check_cancelled=lambda: self._check_heartbeat(ctx),
+            )
+            self._check_heartbeat(ctx)
+            RoleClassifier(store).classify(
+                snapshot,
+                check_cancelled=lambda: self._check_heartbeat(ctx),
+            )
+            self._check_heartbeat(ctx)
+        finally:
+            ctx.release_writes = False
 
     def _stage_seal(self, ctx: _StageContext) -> None:
         """Seal the building snapshot (commits internally, see the module note)."""
@@ -838,8 +864,7 @@ class AnalysisWorker:
         finally:
             session.close()
 
-    @staticmethod
-    def _check_heartbeat(ctx: _StageContext) -> None:
+    def _check_heartbeat(self, ctx: _StageContext) -> None:
         state = ctx.heartbeat
         if state is not None:
             if state.ownership_lost.is_set():
@@ -850,6 +875,31 @@ class AnalysisWorker:
                 raise state.failure
         if ctx.resource_budget is not None:
             ctx.resource_budget.check()
+        self._release_write_lock(ctx)
+
+    def _release_write_lock(self, ctx: _StageContext) -> None:
+        """Commit the open transaction if it has been held for a while.
+
+        Called from the stage's cancellation checkpoints, which fire between
+        individual facts, so it never splits one fact's writes.
+        """
+
+        if not ctx.release_writes:
+            return
+        now = time.monotonic()
+        if now - ctx.last_write_release < _WRITE_RELEASE_INTERVAL_SECONDS:
+            return
+        ctx.last_write_release = now
+        ctx.session.commit()
+        # SQLite's busy handler polls rather than queues, so a worker that
+        # re-acquires the write lock the instant it releases it can starve a
+        # waiting writer. A short pause lets the waiter take its turn.
+        time.sleep(_WRITE_RELEASE_PAUSE_SECONDS)
+        # The commit above just made a concurrent cancel request visible, so
+        # read the flag here instead of waiting for the next heartbeat pulse
+        # (up to five seconds away) to relay it.
+        if self._cancel_requested(ctx):
+            raise _CancellationObserved(ctx.job.id)
 
     def _new_resource_budget(self) -> AnalysisResourceBudget:
         kwargs: dict[str, object] = {
