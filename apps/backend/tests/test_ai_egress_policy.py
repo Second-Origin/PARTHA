@@ -842,3 +842,72 @@ def test_invalid_secret_header_encoding_is_a_generic_provider_error_without_a_ne
     assert caught.value.message == "AI provider request failed."
     assert caught.value.details == {"provider": "openai"}
     assert calls == 0
+
+
+# --- a denial for a configurable endpoint names the setting to change (#479) ---
+
+
+def test_an_unlisted_ollama_url_names_the_settings_that_govern_it():
+    policy = ProviderEgressPolicy(mode="hosted", resolver=MutableResolver(["203.0.113.10"]))
+
+    with pytest.raises(DestinationPolicyError) as raised:
+        policy.validate_config(AiProviderConfig(provider="ollama", base_url="http://localhost:11434"))
+
+    message = str(raised.value)
+    assert message.startswith("AI provider destination is not permitted.")
+    for setting in ("AI_EGRESS_ALLOWED_BASE_URLS", "AI_EGRESS_MODE=self_hosted", "AI_EGRESS_ALLOWED_CIDRS"):
+        assert setting in message
+    # Guidance names settings; it never echoes the destination or an address.
+    assert "localhost" not in message
+    assert "203.0.113" not in message
+
+
+def test_a_listed_url_in_hosted_mode_says_the_mode_blocks_private_addresses():
+    policy = ProviderEgressPolicy(
+        mode="hosted",
+        allowed_base_urls=["http://localhost:11434"],
+        resolver=MutableResolver(["127.0.0.1"]),
+    )
+
+    with pytest.raises(DestinationPolicyError) as raised:
+        policy.validate_config(AiProviderConfig(provider="ollama", base_url="http://localhost:11434"))
+
+    assert "AI_EGRESS_MODE is 'hosted'" in str(raised.value)
+    assert "127.0.0.1" not in str(raised.value)
+
+
+def test_an_address_outside_the_allowed_cidrs_names_that_setting():
+    policy = ProviderEgressPolicy(
+        mode="self_hosted",
+        allowed_base_urls=["http://localhost:11434"],
+        allowed_cidrs=["10.0.0.0/8"],
+        resolver=MutableResolver(["127.0.0.1"]),
+    )
+
+    with pytest.raises(DestinationPolicyError) as raised:
+        policy.validate_config(AiProviderConfig(provider="ollama", base_url="http://localhost:11434"))
+
+    assert "outside AI_EGRESS_ALLOWED_CIDRS" in str(raised.value)
+
+
+def test_a_cloud_provider_denial_stays_non_specific():
+    policy = ProviderEgressPolicy(mode="hosted", resolver=MutableResolver(["203.0.113.10"]))
+
+    with pytest.raises(DestinationPolicyError) as raised:
+        policy.validate_config(AiProviderConfig(provider="openai", api_key="key", base_url="https://x.example"))
+
+    assert str(raised.value) == "AI provider destination is not permitted."
+
+
+def test_the_saved_response_carries_the_guidance(client):
+    auth = register_user(client, "egress-hint@example.com")
+
+    response = client.put(
+        "/ai/config",
+        json={"provider": "ollama", "baseUrl": "http://localhost:11434"},
+        headers=auth["headers"],
+    )
+
+    assert response.status_code == 422
+    assert "AI_EGRESS_ALLOWED_BASE_URLS" in response.json()["message"]
+    assert "localhost" not in response.text

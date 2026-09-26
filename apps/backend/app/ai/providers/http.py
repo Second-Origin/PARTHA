@@ -205,7 +205,7 @@ async def _request(
         response.raise_for_status()
         return response
     except DestinationPolicyError as exc:
-        raise ValidationServiceError("AI provider destination is not permitted.") from exc
+        raise ValidationServiceError(str(exc)) from exc
     except RedirectDeniedError as exc:
         raise ExternalServiceError("AI provider request failed.", {"provider": config.provider}) from exc
     except httpx.HTTPStatusError as exc:

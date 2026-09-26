@@ -24,10 +24,20 @@ _NUMERIC_DOTTED_HOST = re.compile(r"[0-9.]+$")
 
 
 class DestinationPolicyError(ValueError):
-    """A deliberately non-specific policy denial safe to return to callers."""
+    """A policy denial safe to return to callers.
 
-    def __init__(self) -> None:
-        super().__init__("AI provider destination is not permitted.")
+    The denial itself stays non-specific: it never says what an address
+    resolved to or which internal ranges exist. For a *configurable* endpoint
+    (Ollama) it may carry a ``hint`` naming the administrator setting that
+    governs the decision, because "not permitted" with no next step leaves a
+    self-hoster stuck (#479). Hints name settings, never addresses.
+    """
+
+    MESSAGE = "AI provider destination is not permitted."
+
+    def __init__(self, hint: str | None = None) -> None:
+        self.hint = hint
+        super().__init__(f"{self.MESSAGE} {hint}" if hint else self.MESSAGE)
 
 
 class DestinationPolicyConfigurationError(ValueError):
@@ -120,8 +130,25 @@ FIXED_PROVIDER_DESTINATIONS: dict[str, _FixedProviderDestination] = {
 }
 
 
-def _deny() -> DestinationPolicyError:
-    return DestinationPolicyError()
+def _deny(hint: str | None = None) -> DestinationPolicyError:
+    return DestinationPolicyError(hint)
+
+
+_HINT_NOT_ALLOWLISTED = (
+    "This server only connects to AI endpoints the administrator has allowed. Add this exact base URL to "
+    "AI_EGRESS_ALLOWED_BASE_URLS; for a server on this machine or a private network also set "
+    "AI_EGRESS_MODE=self_hosted and add its address range to AI_EGRESS_ALLOWED_CIDRS. "
+    "Then restart the backend."
+)
+_HINT_HOSTED_MODE = (
+    "AI_EGRESS_MODE is 'hosted', which blocks local and private-network addresses. Set AI_EGRESS_MODE=self_hosted "
+    "and add the address range to AI_EGRESS_ALLOWED_CIDRS, then restart the backend."
+)
+_HINT_OUTSIDE_CIDRS = (
+    "The address this host name resolves to is outside AI_EGRESS_ALLOWED_CIDRS. Add the range that contains it "
+    "(for example 127.0.0.1/32 for this machine), then restart the backend."
+)
+_HINT_UNRESOLVED = "The host name could not be resolved from this server."
 
 
 def _configuration_error(message: str) -> DestinationPolicyConfigurationError:
@@ -350,7 +377,7 @@ class ProviderEgressPolicy:
             raise _deny()
         base = normalize_base_url(config.base_url)
         if base.base_url not in self.allowed_base_urls:
-            raise _deny()
+            raise _deny(_HINT_NOT_ALLOWLISTED)
         return base
 
     def _validate_fixed_request(self, config: ProviderConfigLike, destination: NormalizedDestination) -> None:
@@ -385,7 +412,7 @@ class ProviderEgressPolicy:
             try:
                 answers = self.resolver(destination.host, destination.port)
             except Exception as exc:
-                raise _deny() from exc
+                raise _deny(_HINT_UNRESOLVED if configurable else None) from exc
 
         if isinstance(answers, (str, bytes)) or not answers:
             raise _deny()
@@ -405,11 +432,11 @@ class ProviderEgressPolicy:
 
         allow_internal = configurable and self.mode == "self_hosted"
         if any(not _is_permitted_address_class(address, allow_internal=allow_internal) for address in resolved):
-            raise _deny()
+            raise _deny(_HINT_HOSTED_MODE if configurable and self.mode == "hosted" else None)
 
         if allow_internal:
             if not self.allowed_cidrs or any(
                 not any(address in network for network in self.allowed_cidrs) for address in resolved
             ):
-                raise _deny()
+                raise _deny(_HINT_OUTSIDE_CIDRS)
         return tuple(resolved)

@@ -119,7 +119,7 @@ from a hosted API in ways worth knowing:
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| Save returns `422 validation_error`, "destination is not permitted" | The base URL is not in the deployment allowlist, or the mode is `hosted` for a local endpoint | Set `AI_EGRESS_MODE` / `AI_EGRESS_ALLOWED_BASE_URLS` / `AI_EGRESS_ALLOWED_CIDRS` to match the exact URL, then save again |
+| Save returns `422 validation_error`, "destination is not permitted" (the message itself now names the setting to change) | The base URL is not in the deployment allowlist, or the mode is `hosted` for a local endpoint | Set `AI_EGRESS_MODE` / `AI_EGRESS_ALLOWED_BASE_URLS` / `AI_EGRESS_ALLOWED_CIDRS` to match the exact URL, then save again |
 | "AI provider rejected the API key" | Wrong, revoked, or expired key | Regenerate the key at the provider and paste it again |
 | "AI provider rejected the request… unsupported model ID" | The model ID is not one the provider serves (or not pulled, for Ollama) | Correct the model ID; for Ollama run `ollama pull <model>` |
 | "Could not reach the AI provider…" | Self-hosted provider not running, or wrong base URL | Start Ollama; confirm the origin and port |

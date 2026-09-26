@@ -104,7 +104,7 @@ class EncryptedProviderConfigStore:
         try:
             self.egress_policy.validate_config(config)
         except DestinationPolicyError as exc:
-            raise ValidationServiceError("AI provider destination is not permitted.") from exc
+            raise ValidationServiceError(str(exc)) from exc
         record = self._record()
         encrypted, last4 = self._resolve_key(config, record)
         model = config.model or DEFAULT_MODELS[config.provider]
