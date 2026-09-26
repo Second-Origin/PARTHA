@@ -52,7 +52,7 @@ RFC-0002 (Repository Lineage) are the existing examples.
 
 ## Releases
 
-Releases are cut by maintainers: bump versions, promote `dev` → `main`, tag `vMAJOR.MINOR.PATCH`.
+Releases are cut by maintainers: choose the version under [VERSIONING.md](VERSIONING.md), bump versions, promote `dev` → `main`, tag `vMAJOR.MINOR.PATCH`.
 The tag triggers [`release.yml`](.github/workflows/release.yml), which re-validates against
 PostgreSQL and Redis before publishing a GitHub Release; a maintainer then curates the
 generated notes. Full steps are in [CONTRIBUTING §14](CONTRIBUTING.md#14-releases). PARTHA

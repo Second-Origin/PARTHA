@@ -480,9 +480,11 @@ code-owner review, passing required status checks, and no deletion or force-push
 
 **Cutting a release.**
 
-A release is a promotion, in this order:
+Which version number a release gets is decided by [VERSIONING.md](VERSIONING.md): review
+everything merged since the last tag, take the highest level it reaches (patch, minor or
+major), and increment by exactly one step. A release is a promotion, in this order:
 
-1. **Prepare on `dev`.** Bump the version in `package.json`, `apps/frontend/package.json`,
+1. **Prepare on `dev`.** Choose the version under the policy, then bump it in `package.json`, `apps/frontend/package.json`,
    `apps/marketing/package.json`, both `package-lock.json` files, `apps/backend/pyproject.toml`,
    and the FastAPI `version=` in `apps/backend/app/main.py`; point any version-bearing copy
    (the marketing site's "Try PARTHA vX.Y.Z" button) at the new version; and update any

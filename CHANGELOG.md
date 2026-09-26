@@ -5,7 +5,7 @@ The authoritative, curated notes for each release live on the
 short index of released versions and links to those notes; it is updated as part of cutting a
 release ([CONTRIBUTING §14](CONTRIBUTING.md#14-releases)).
 
-PARTHA is pre-1.0. Minor versions may change behaviour; each release's notes say what moved.
+PARTHA follows [Semantic Versioning](VERSIONING.md). It is pre-1.0: minor versions may change behaviour; patch versions are bug fixes only. Each release's notes say what moved.
 Unreleased work lives on `dev`.
 
 ## Released

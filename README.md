@@ -152,7 +152,7 @@ Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.
 
 ## Releases
 
-`main` carries the latest tagged release; `dev` is where active development happens and is the target of every pull request. A release is a promotion: prepare on `dev`, promote `dev` to `main`, verify, sync back, then tag from `main`. PARTHA is pre-1.0, so minor versions may change behaviour — each release's notes say what moved. See [all releases](https://github.com/Second-Origin/PARTHA/releases), the [changelog](CHANGELOG.md), and [CONTRIBUTING § Releases](CONTRIBUTING.md#14-releases).
+`main` carries the latest tagged release; `dev` is where active development happens and is the target of every pull request. A release is a promotion: prepare on `dev`, promote `dev` to `main`, verify, sync back, then tag from `main`. PARTHA follows [Semantic Versioning](VERSIONING.md) and is pre-1.0, so minor versions may change behaviour — each release's notes say what moved. See [all releases](https://github.com/Second-Origin/PARTHA/releases), the [changelog](CHANGELOG.md), and [CONTRIBUTING § Releases](CONTRIBUTING.md#14-releases).
 
 ## License
 

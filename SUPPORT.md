@@ -20,7 +20,7 @@ PARTHA is **pre-1.0 and under active development.**
 
 - Fixes land on `dev` and are included in the next tagged release. Security fixes are
   provided for `dev` and the latest release (see [SECURITY.md](SECURITY.md#supported-versions)).
-- **Minor version bumps may change behaviour.** Each release's notes state what moved; read
+- **Minor version bumps may change behaviour** (PARTHA is pre-1.0; see the [versioning policy](VERSIONING.md)); patch releases are bug fixes only. Each release's notes state what moved; read
   them before upgrading. There is no back-porting to older releases and no long-term-support
   branch.
 - When reporting an issue, say which release tag or commit SHA you are on — behaviour on an
