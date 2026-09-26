@@ -1,5 +1,6 @@
 import posixpath
 import re
+from dataclasses import dataclass
 from collections import Counter, defaultdict
 
 from app.extraction.lockfiles import SUPPORTED_LOCKFILE_FILENAMES
@@ -75,6 +76,13 @@ def _display_symbol(qualified: str) -> str:
     return _SYMBOL_DISAMBIGUATOR.sub("", qualified)
 
 
+@dataclass(frozen=True)
+class StackSummary:
+    language: str
+    framework: str
+    entry_point: str | None
+
+
 class ArchitectureAnalyzer:
     """Builds the Architecture read model exclusively from sealed ri.v1 snapshots.
 
@@ -95,7 +103,8 @@ class ArchitectureAnalyzer:
         facts = self.snapshots.architecture_facts(record.id) if self.snapshots is not None else None
         modules = self._modules_from_facts(facts)
         frameworks = self._frameworks_from_facts(facts)
-        primary_language = self._primary_language_from_facts(facts)
+        stack = self.stack_summary(facts)
+        primary_language = stack.language
         entry_points = self._entry_points_from_facts(facts)
         nodes = self._nodes_for_modules(modules)
         nodes.extend(self._dependency_nodes(facts))
@@ -132,7 +141,7 @@ class ArchitectureAnalyzer:
             request_flow=self._request_flow(modules),
             summary=ArchitectureSummary(
                 language=primary_language,
-                framework=frameworks[0] if frameworks else "Unknown",
+                framework=stack.framework,
                 total_modules=len(arch_modules),
                 total_nodes=len(nodes),
                 # An observed entrypoint or nothing: "/" is not a path click has (#446).
@@ -491,6 +500,23 @@ class ArchitectureAnalyzer:
             else:
                 break
         return "/" + "/".join(prefix) if prefix else "/"
+
+    def stack_summary(self, facts: ArchitectureSnapshotFacts | None) -> StackSummary:
+        """Language, framework(s) and entry point read from one snapshot.
+
+        The single derivation behind both the Architecture summary and the
+        repository's own metadata, so the pages cannot disagree about what the
+        repository is (#475). A monorepo lists every framework it declares
+        rather than picking one.
+        """
+
+        frameworks = self._frameworks_from_facts(facts)
+        entry_points = self._entry_points_from_facts(facts)
+        return StackSummary(
+            language=self._primary_language_from_facts(facts),
+            framework=", ".join(frameworks) if frameworks else "Unknown",
+            entry_point=entry_points[0] if entry_points else None,
+        )
 
     def _frameworks_from_facts(self, facts: ArchitectureSnapshotFacts | None) -> list[str]:
         if facts is None:

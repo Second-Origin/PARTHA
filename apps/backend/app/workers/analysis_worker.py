@@ -64,7 +64,9 @@ from app.extraction.pipeline import (
     ExtractionPipeline,
     ProducedExtraction,
 )
+from app.analysis.architecture import ArchitectureAnalyzer
 from app.intelligence.classification import RoleClassifier
+from app.intelligence.query_service import SnapshotQueryService
 from app.intelligence.resolution import RelationshipResolver
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
 from app.models.analysis_job import AnalysisJob
@@ -487,7 +489,37 @@ class AnalysisWorker:
             ctx.record.analysis_progress = 100
             ctx.record.error_message = None
             ctx.record.analysed_at = now
+            self._reconcile_repository_meta(ctx)
         ctx.session.commit()
+
+    def _reconcile_repository_meta(self, ctx: _StageContext) -> None:
+        """Make the repository's own metadata agree with what analysis found.
+
+        Upload-time detection only looks at the repository root, so a monorepo
+        (``frontend/`` + ``backend/``) was recorded as framework "Unknown" with
+        no entry point while the Architecture view, reading the sealed
+        snapshot, named both (#475). Where the snapshot supplies a value it
+        replaces the guess; where it has none the upload-time value stays.
+        Best-effort: a failure here must not fail a completed analysis.
+        """
+
+        record = ctx.record
+        assert record is not None
+        try:
+            facts = SnapshotQueryService(ctx.session, record.owner_id).architecture_facts(record.id)
+            if facts is None:
+                return
+            stack = ArchitectureAnalyzer().stack_summary(facts)
+            meta = dict(record.repo_metadata or {})
+            if stack.language != "Unknown":
+                meta["language"] = stack.language
+            if stack.framework != "Unknown":
+                meta["framework"] = stack.framework
+            if stack.entry_point:
+                meta["entryPoint"] = stack.entry_point
+            record.repo_metadata = meta
+        except Exception:  # noqa: BLE001 - metadata refinement is best-effort
+            logger.warning("Could not reconcile repository metadata", extra={"repository_id": record.id})
 
     def _cancel(self, ctx: _StageContext) -> None:
         """Honour a cooperative cancel: fail any open snapshot, cancel the job."""
