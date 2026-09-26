@@ -156,7 +156,11 @@ function getBackendMessage(body: unknown): string | null {
 
 function getBackendDetails(body: unknown): string[] {
   if (!isErrorResponse(body)) return [];
-  const raw = body.details;
+  // FastAPI-style validation failures arrive as `details: { errors: [...] }`.
+  const raw =
+    body.details && typeof body.details === 'object' && !Array.isArray(body.details)
+      ? (body.details as { errors?: unknown }).errors
+      : body.details;
   if (Array.isArray(raw)) {
     return raw
       .map((item) => {

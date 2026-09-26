@@ -1,9 +1,10 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import EmailStr, Field
+from pydantic import Field
 
 from app.schemas.base import CamelModel
+from app.schemas.email import EmailAddress
 
 # Minimum length is the only enforced policy; complexity rules push users
 # toward predictable substitutions instead of longer passphrases.
@@ -12,12 +13,12 @@ PASSWORD_MAX_LENGTH = 128
 
 
 class RegisterRequest(CamelModel):
-    email: EmailStr
+    email: EmailAddress
     password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
 
 class LoginRequest(CamelModel):
-    email: EmailStr
+    email: EmailAddress
     # No minimum here: login validates against the stored hash, and rejecting
     # short inputs early would leak the registration policy on the login form.
     password: str = Field(max_length=PASSWORD_MAX_LENGTH)
@@ -42,7 +43,7 @@ class AccountDeletionRequest(CamelModel):
     password: str = Field(max_length=PASSWORD_MAX_LENGTH)
     # Deliberate confirmation gate: the caller must type back their own
     # account email, not just click a button, before an irreversible delete.
-    confirm_email: EmailStr
+    confirm_email: EmailAddress
 
 
 class OAuthProvidersResponse(CamelModel):

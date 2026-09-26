@@ -1,5 +1,8 @@
 import logging
 
+from collections.abc import Sequence
+from typing import Any
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -74,6 +77,22 @@ class ExternalServiceError(ServiceError):
     code = "external_service_error"
 
 
+def _readable_errors(errors: Sequence[Any]) -> list[dict[str, Any]]:
+    """Drop pydantic's "Value error, " prefix so the reason reads as a sentence
+    (the UI shows it to the person who typed the field)."""
+
+    cleaned = []
+    for error in errors:
+        message = error.get("msg")
+        if isinstance(message, str) and message.startswith("Value error, "):
+            error = {**error, "msg": message.removeprefix("Value error, ")}
+        # ``ctx`` can carry the raised exception object, which is not JSON.
+        if isinstance(error.get("ctx"), dict):
+            error = {**error, "ctx": {key: str(value) for key, value in error["ctx"].items()}}
+        cleaned.append(error)
+    return cleaned
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(ServiceError)
     async def service_error_handler(_: Request, exc: ServiceError) -> JSONResponse:
@@ -96,7 +115,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             content=ErrorResponse(
                 code="request_validation_error",
                 message="Request validation failed.",
-                details={"errors": exc.errors()},
+                details={"errors": _readable_errors(exc.errors())},
                 request_id=get_request_id(),
             ).model_dump(),
         )

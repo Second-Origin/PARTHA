@@ -9,6 +9,7 @@ import {
   isNetworkError,
   isTimeoutError,
   getErrorDetail,
+  getErrorMessage,
   parseRetryAfter,
 } from './errors';
 
@@ -126,5 +127,29 @@ describe('getErrorDetail', () => {
       details: ['name is required'],
     });
     expect(getErrorDetail(invalid).details).toEqual([]);
+  });
+
+  it("reads the backend's validation errors from details.errors", () => {
+    const error = new ApiError(
+      422,
+      'Unprocessable Entity',
+      {
+        code: 'request_validation_error',
+        message: 'Request validation failed.',
+        details: {
+          errors: [
+            { loc: ['body', 'email'], msg: 'The part after the @ must be a domain name.', type: 'value_error' },
+            { loc: ['body', 'password'], msg: 'String should have at least 10 characters', type: 'string_too_short' },
+          ],
+        },
+      },
+      '/auth/register',
+    );
+
+    expect(getErrorDetail(error).details).toEqual([
+      'body.email: The part after the @ must be a domain name.',
+      'body.password: String should have at least 10 characters',
+    ]);
+    expect(getErrorMessage(error)).toContain('- body.email: The part after the @ must be a domain name.');
   });
 });
