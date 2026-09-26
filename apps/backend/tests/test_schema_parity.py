@@ -21,6 +21,17 @@ from app.models.base import Base
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
+#: ``repositories`` and ``repository_lineages`` reference each other, and
+#: SQLite cannot add a foreign key after the fact. ``create_all`` on SQLite
+#: therefore cannot be relied on to emit either table's foreign keys (it
+#: resolves the cycle by leaving some out, and which ones is not stable from
+#: one run to the next); the models document this as a ``create_all``-only
+#: bootstrap gap (see ``RepositoryLineage.fk_repository_lineages_latest_member``).
+#: Their foreign keys are asserted on the migrated side below instead, which
+#: is the schema every real deployment has.
+_CYCLIC_FK_TABLES = frozenset({"repositories", "repository_lineages"})
+
+
 def _snapshot(engine) -> dict[str, dict[str, object]]:
     inspector = inspect(engine)
     schema: dict[str, dict[str, object]] = {}
@@ -89,14 +100,30 @@ def test_both_paths_create_the_same_tables(schemas):
 def test_every_table_has_the_same_columns_keys_indexes_and_constraints(schemas):
     created, migrated = schemas
 
-    differences = {
-        table: {
-            aspect: {"create_all": created[table][aspect], "migrations": migrated[table][aspect]}
-            for aspect in created[table]
-            if created[table][aspect] != migrated[table][aspect]
-        }
-        for table in sorted(set(created) & set(migrated))
-        if created[table] != migrated[table]
-    }
+    def comparable(schema: dict[str, object], table: str) -> dict[str, object]:
+        aspects = dict(schema)
+        if table in _CYCLIC_FK_TABLES:
+            aspects.pop("foreign_keys")
+        return aspects
+
+    differences = {}
+    for table in sorted(set(created) & set(migrated)):
+        left, right = comparable(created[table], table), comparable(migrated[table], table)
+        if left != right:
+            differences[table] = {
+                aspect: {"create_all": left[aspect], "migrations": right[aspect]}
+                for aspect in left
+                if left[aspect] != right[aspect]
+            }
 
     assert differences == {}
+
+
+def test_the_migrated_schema_has_the_cyclic_lineage_foreign_keys(schemas):
+    _, migrated = schemas
+
+    repositories = {(key[0], key[1]) for key in migrated["repositories"]["foreign_keys"]}
+    lineages = {(key[0], key[1]) for key in migrated["repository_lineages"]["foreign_keys"]}
+
+    assert (("lineage_id", "owner_id"), "repository_lineages") in repositories
+    assert (("latest_repository_id", "id"), "repositories") in lineages
