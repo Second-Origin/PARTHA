@@ -37,6 +37,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.intelligence import canonical
+from app.intelligence.retention import purge_snapshot_facts
 from app.models.snapshot import (
     RiAssertion,
     RiDerivation,
@@ -410,6 +411,8 @@ class SnapshotStore:
         snapshot.state = "failed"
         snapshot.failure_code = code
         self._commit_transition(snapshot, from_state="building", to_state="failed")
+        # A failed build's partial facts are never read again (#485).
+        purge_snapshot_facts(self.db, snapshot.snapshot_id)
         return snapshot
 
     # -- fact writers --------------------------------------------------------
@@ -770,6 +773,9 @@ class SnapshotStore:
         snapshot.state = "failed"
         snapshot.failure_code = snapshot.failure_code or "RI-INT-VALIDATION"
         self._commit_transition(snapshot, from_state="building", to_state="failed")
+        # Deliberately not purged here: a seal rejection is a bug report, and
+        # its facts are the evidence of what was rejected. The worker's
+        # periodic sweep discards them (``purge_orphaned_failed_facts``).
 
     def _discard_tampered_facts(self) -> None:
         """Revert in-memory edits to stored facts so the fail commit can proceed.

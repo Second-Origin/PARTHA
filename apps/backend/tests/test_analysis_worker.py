@@ -18,7 +18,7 @@ from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
 from app.models import RepositoryRecord, User
 from app.models.analysis_job import AnalysisJob
 from app.models.base import Base
-from app.models.snapshot import RiSnapshot
+from app.models.snapshot import RiNode, RiSnapshot
 from app.schemas.repository import RepositoryMeta
 from app.services.analysis_job_service import (
     ANALYSIS_CONFIG_HASH,
@@ -667,6 +667,9 @@ def test_cancellation_interrupts_in_flight_snapshot_extraction(session_factory, 
         snapshots = list(reader.scalars(select(RiSnapshot)))
         assert len(snapshots) == 1
         assert snapshots[0].state == "failed"
+        # The cancelled build's partial facts are discarded, not left to
+        # accumulate on disk (#485).
+        assert reader.scalar(select(func.count()).select_from(RiNode)) == 0
 
 
 def test_cancel_is_not_locked_out_by_a_running_extraction(session_factory, tmp_path, monkeypatch):

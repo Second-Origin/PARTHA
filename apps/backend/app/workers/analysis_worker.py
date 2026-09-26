@@ -67,6 +67,7 @@ from app.extraction.pipeline import (
 from app.analysis.architecture import ArchitectureAnalyzer
 from app.intelligence.classification import RoleClassifier
 from app.intelligence.query_service import SnapshotQueryService
+from app.intelligence.retention import purge_orphaned_failed_facts
 from app.intelligence.resolution import RelationshipResolver
 from app.intelligence.snapshot_store import Evidence, Revision, SnapshotStore
 from app.models.analysis_job import AnalysisJob
@@ -228,6 +229,9 @@ class AnalysisWorker:
 
         session = self.session_factory()
         try:
+            # Failed builds from before failures were purged at the source
+            # still hold their partial facts; work them off a few at a time.
+            purge_orphaned_failed_facts(session)
             now = self._clock()
             stale_ids = self.control_plane.expired_job_ids(session, now=now)
             reclaimed = 0
