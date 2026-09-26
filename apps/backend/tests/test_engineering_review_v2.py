@@ -323,6 +323,71 @@ def test_a_genuinely_broken_relative_import_is_still_a_finding(auth_client):
     assert findings[0]["path"] == "src/index.ts"
 
 
+# --- one classification for Review, Insights and Architecture (#468) ---------
+
+
+def test_a_call_through_a_local_name_is_not_a_finding(auth_client):
+    """``setOpen`` is a state setter the component declared a line earlier: a
+    call through a local name, not a missing cross-file relationship. Drives a
+    real analysis so a change to the resolver's wording fails here."""
+
+    repository = _upload(
+        auth_client,
+        {
+            "README.md": b"# local binding fixture\n",
+            "src/menu.ts": (
+                b"export function menu(useThing: () => [boolean, (v: boolean) => void]) {\n"
+                b"  const [open, setOpen] = useThing();\n"
+                b"  setOpen(!open);\n"
+                b"}\n"
+            ),
+        },
+    )
+
+    body = auth_client.get(f"/analysis/{repository['id']}/review").json()
+
+    assert _relationship_findings(body) == []
+
+
+def test_a_call_to_a_symbol_imported_from_a_declared_package_is_not_a_finding(auth_client):
+    repository = _upload(
+        auth_client,
+        {
+            "README.md": b"# declared npm dependency fixture\n",
+            "package.json": b'{"name": "fixture", "devDependencies": {"@playwright/test": "1.50.0"}}\n',
+            "tests/home.spec.ts": (
+                b"import { test, expect } from '@playwright/test';\n\n"
+                b"test('home', async () => {\n  expect(1).toBe(1);\n});\n"
+            ),
+        },
+    )
+
+    body = auth_client.get(f"/analysis/{repository['id']}/review").json()
+
+    assert _relationship_findings(body) == []
+
+
+def test_a_path_alias_import_of_an_in_repo_file_is_not_a_finding_but_a_broken_one_is(auth_client):
+    repository = _upload(
+        auth_client,
+        {
+            "README.md": b"# path alias fixture\n",
+            "web/src/lib/utils.ts": b"export const cn = (...v: string[]) => v.join(' ');\n",
+            "web/src/page.ts": (
+                b"import { cn } from '@/lib/utils';\n"
+                b"import { gone } from '@/lib/deleted';\n\n"
+                b"export const label = [cn('a'), gone];\n"
+            ),
+        },
+    )
+
+    body = auth_client.get(f"/analysis/{repository['id']}/review").json()
+
+    findings = _relationship_findings(body)
+    assert [item["explanation"] for item in findings] == ["imports has no resolvable target"]
+    assert findings[0]["path"] == "web/src/page.ts"
+
+
 def _seal_snapshot_with_file_diagnostic(auth_client, *, granularity: str) -> dict:
     """Seal a snapshot whose only rule-matching diagnostic records no span.
 

@@ -198,8 +198,11 @@ class RepositoryInsightsBuilder:
                 "diagnostics",
                 "Sealed RI-RES-UNRESOLVED diagnostics whose reference was expected to "
                 "resolve within this repository but could not -- a relative import that "
-                "matched no file, or a bare name with no binding and no same-file "
-                "definition. Excludes references into external code (counted separately). "
+                "matched no file, an import whose target file exists but was not linked "
+                "(a path alias, an absolute import from a sub-directory package), or a "
+                "bare name with no binding and no same-file definition. Excludes "
+                "references into external code, calls to local names and asset imports (counted "
+                "separately). "
                 "The raw RI-RES-UNRESOLVED total is in Diagnostics by code.",
             ),
             metric(
@@ -211,6 +214,16 @@ class RepositoryInsightsBuilder:
                 "library / language platform or a package this repository declares as a "
                 "dependency. Expected -- that code is outside the analysed repository, so "
                 "there is no in-repo definition to resolve to.",
+            ),
+            metric(
+                "diagnostics.relationships.local-bindings",
+                "Local names and asset imports",
+                unresolved_relationships.local_binding + unresolved_relationships.non_code_asset,
+                "diagnostics",
+                "Sealed RI-RES-UNRESOLVED diagnostics for a call whose name a local "
+                "variable or parameter shadows, or an import of a stylesheet / image / "
+                "other non-code asset. Expected -- neither is a relationship between "
+                "code files.",
             ),
             metric(
                 "diagnostics.relationships.ambiguous",
@@ -324,10 +337,10 @@ class RepositoryInsightsBuilder:
         stored fact."""
 
         db = self.snapshots.db
-        diagnostics: list[tuple[str | None, str | None]] = [
-            (path, (details or {}).get("observation_id"))
-            for path, details in db.execute(
-                select(RiDiagnostic.path, RiDiagnostic.details).where(
+        diagnostics: list[tuple[str | None, str | None, str | None]] = [
+            (path, (details or {}).get("observation_id"), message)
+            for path, details, message in db.execute(
+                select(RiDiagnostic.path, RiDiagnostic.details, RiDiagnostic.message).where(
                     RiDiagnostic.snapshot_id == snapshot_id,
                     RiDiagnostic.code == "RI-RES-UNRESOLVED",
                 )

@@ -94,6 +94,34 @@ def is_platform_import(specifier: str, source_path: str) -> bool:
     return root in NODE_BUILTIN_MODULES or root.removeprefix("node:") in NODE_BUILTIN_MODULES
 
 
+#: Well-known PyPI packages whose *import* name differs from the name they
+#: are declared under (``import yaml`` <- ``pyyaml``). Without this a declared
+#: ``pyjwt`` never matches ``import jwt`` and a normal import reads as an
+#: undeclared package. Curated and bounded, like the other lists here; an
+#: unlisted mismatch stays a finding, which is the conservative direction.
+PYPI_DISTRIBUTIONS_BY_IMPORT_NAME: dict[str, tuple[str, ...]] = {
+    "yaml": ("pyyaml",),
+    "jwt": ("pyjwt",),
+    "argon2": ("argon2-cffi",),
+    "PIL": ("pillow",),
+    "cv2": ("opencv-python", "opencv-python-headless"),
+    "bs4": ("beautifulsoup4",),
+    "sklearn": ("scikit-learn",),
+    "dateutil": ("python-dateutil",),
+    "dotenv": ("python-dotenv",),
+    "jose": ("python-jose",),
+    "multipart": ("python-multipart",),
+    "magic": ("python-magic",),
+    "git": ("gitpython",),
+    "attr": ("attrs",),
+    "psycopg2": ("psycopg2-binary",),
+    "OpenSSL": ("pyopenssl",),
+    "serial": ("pyserial",),
+    "markdown": ("markdown",),
+    "google.protobuf": ("protobuf",),
+}
+
+
 def declared_dependency_key(specifier: str, source_path: str) -> str | None:
     """The dependency stable key ``specifier`` would need to match against a
     declared, sealed-snapshot dependency node -- or ``None`` if it can never
@@ -125,4 +153,132 @@ def is_recognized_external_import(
     if is_platform_import(specifier, source_path):
         return True
     key = declared_dependency_key(specifier, source_path)
-    return key is not None and key in declared_dependency_keys
+    if key is not None and key in declared_dependency_keys:
+        return True
+    if source_path.endswith(".py") and not specifier.startswith("."):
+        root = package_root(specifier, source_path)
+        return any(
+            dependency_stable_key("pypi", distribution) in declared_dependency_keys
+            for distribution in PYPI_DISTRIBUTIONS_BY_IMPORT_NAME.get(root, ())
+        )
+    return False
+
+
+#: Extensions a TS/JS module specifier may omit, and asset/style files a
+#: bundler lets you import by their full name.
+_JS_MODULE_EXTENSIONS = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts")
+
+#: Conventional "project root" import prefixes (tsconfig/vite ``paths``). The
+#: prefix names the source root of the *importing* package, which is an
+#: in-repo location, not a package published elsewhere.
+_JS_ALIAS_PREFIXES = ("@/", "~/", "#/")
+
+
+def resolves_to_in_repo_file(
+    specifier: str,
+    source_path: str,
+    file_paths: frozenset[str],
+    directory_paths: frozenset[str] = frozenset(),
+) -> bool:
+    """True if an import specifier the resolver left unresolved plainly names
+    a file that *is* in the scanned repository.
+
+    Two shapes the resolver does not link, both of which point at real
+    in-repo files: a TS/JS path alias (``@/lib/utils`` -> ``<pkg>/src/lib/
+    utils.ts``, or a directory of scanned files) and a Python absolute import whose package root is a
+    sub-directory of the repo (``app.api.deps`` from ``backend/app/...`` ->
+    ``backend/app/api/deps.py``). The target must sit under a directory that
+    is an ancestor of the importing file, so a same-named file in an
+    unrelated package never counts.
+
+    Read-time only, like the rest of this module: it decides whether an
+    unresolved fact is a defect of the reviewed repository, never whether it
+    resolves.
+    """
+
+    if not specifier or not source_path or not file_paths:
+        return False
+    if source_path.endswith(".py"):
+        return _python_module_in_repo(specifier, source_path, file_paths)
+    if source_path.endswith(_JS_MODULE_EXTENSIONS):
+        return _js_alias_in_repo(specifier, source_path, file_paths, directory_paths)
+    return False
+
+
+def _ancestor_prefixes(source_path: str) -> list[str]:
+    """``""`` plus every directory prefix of ``source_path``, with trailing
+    slash: ``a/b/c.ts`` -> ``["", "a/", "a/b/"]``."""
+
+    segments = source_path.split("/")[:-1]
+    return ["/".join(segments[:count]) + "/" if count else "" for count in range(len(segments) + 1)]
+
+
+def _python_module_in_repo(specifier: str, source_path: str, file_paths: frozenset[str]) -> bool:
+    if specifier.startswith("."):
+        return False
+    parts = specifier.split(".")
+    prefixes = _ancestor_prefixes(source_path)
+    # ``app.api.deps.SessionDep`` names a symbol inside module ``app.api.deps``,
+    # so try the full dotted path first and then progressively shorter ones.
+    for end in range(len(parts), 0, -1):
+        module = "/".join(parts[:end])
+        for prefix in prefixes:
+            if f"{prefix}{module}.py" in file_paths or f"{prefix}{module}/__init__.py" in file_paths:
+                return True
+    return False
+
+
+def _js_alias_in_repo(
+    specifier: str,
+    source_path: str,
+    file_paths: frozenset[str],
+    directory_paths: frozenset[str],
+) -> bool:
+    alias = next((prefix for prefix in _JS_ALIAS_PREFIXES if specifier.startswith(prefix)), None)
+    if alias is None:
+        return False
+    target = specifier[len(alias) :].split("?", 1)[0].rstrip("/")
+    if not target:
+        return False
+    tails = [target]
+    tails += [target + extension for extension in _JS_MODULE_EXTENSIONS]
+    tails += [f"{target}/index{extension}" for extension in _JS_MODULE_EXTENSIONS]
+    # A path alias roots at the importing package's ``src`` directory (or the
+    # package root itself); accept either as the anchor.
+    for prefix in _ancestor_prefixes(source_path):
+        for tail in tails:
+            if f"{prefix}src/{tail}" in file_paths or f"{prefix}{tail}" in file_paths:
+                return True
+        # A barrel (``index.ts`` holding only re-exports) leaves no node or
+        # evidence of its own, so a directory that holds scanned files is the
+        # available proof that ``@/shared/services/api`` names real code.
+        if f"{prefix}src/{target}" in directory_paths or f"{prefix}{target}" in directory_paths:
+            return True
+    return False
+
+
+#: Files a bundler lets you import that are not code: stylesheets, images,
+#: fonts, media. Importing one is a build-time reference, not a relationship
+#: between code files.
+_NON_CODE_ASSET_EXTENSIONS = frozenset(
+    {
+        ".css", ".scss", ".sass", ".less", ".styl",
+        ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".ico", ".bmp",
+        ".woff", ".woff2", ".ttf", ".otf", ".eot",
+        ".mp3", ".mp4", ".webm", ".ogg", ".wav",
+        ".md", ".mdx", ".txt", ".csv", ".yaml", ".yml", ".graphql", ".gql",
+    }
+)  # fmt: skip
+
+
+def is_non_code_asset_import(specifier: str, source_path: str) -> bool:
+    """True if a TS/JS import names a non-code asset, or uses a bundler loader
+    query (``./generated.ts?raw``, ``./icon.svg?url``), which imports the file
+    as text/URL rather than as a module."""
+
+    if not source_path.endswith(_JS_MODULE_EXTENSIONS):
+        return False
+    base, has_query, _ = specifier.partition("?")
+    if has_query:
+        return True
+    return "." in base.rsplit("/", 1)[-1] and "." + base.rsplit(".", 1)[-1].lower() in _NON_CODE_ASSET_EXTENSIONS

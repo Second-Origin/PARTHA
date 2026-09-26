@@ -13,7 +13,8 @@ from app.intelligence.query_service import (
 )
 from app.insights.relationship_diagnostics import (
     UnresolvedRelationshipContext,
-    is_external_unresolved,
+    UnresolvedDisposition,
+    classify_unresolved,
     load_unresolved_relationship_context,
 )
 from app.intelligence.models import RepositoryModule
@@ -600,7 +601,17 @@ class ArchitectureAnalyzer:
                 return False
             if item.code != "RI-RES-UNRESOLVED":
                 return True
-            return not is_external_unresolved(item.path, (item.details or {}).get("observation_id"), unresolved_ctx)
+            disposition = classify_unresolved(
+                item.path, (item.details or {}).get("observation_id"), unresolved_ctx, item.message
+            )
+            # A reference into external code, or a call through a local name,
+            # is not an unmapped architecture relationship (nor is an asset import). A relationship whose
+            # in-repo target exists but was not linked *is* one, so it stays.
+            return disposition not in (
+                UnresolvedDisposition.EXTERNAL,
+                UnresolvedDisposition.LOCAL_BINDING,
+                UnresolvedDisposition.NON_CODE_ASSET,
+            )
 
         architecture_diagnostic_items = [item for item in facts.diagnostics if _is_architecture_relevant(item)]
         diagnostics = [
