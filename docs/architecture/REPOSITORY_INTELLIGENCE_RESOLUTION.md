@@ -57,7 +57,7 @@ and reads sealed rows only.
 | `implements` | TypeScript `implements` clause | `implements` |
 | `route` + `route_handler` | Route declaration and one handler reference | `routes_to` |
 | `dependency` | Direct manifest declaration on a dependency node | `depends_on` |
-| `injects` | A `Depends(name)` argument (#95) | `injects` |
+| `injects` | A `Depends(name)` argument (#95), including one in a route decorator's or same-file router's `dependencies=[...]` (recorded against the handler symbol, #471) | `injects` |
 | `http_call` | A proven outbound HTTP call site, `METHOD\|origin\|path` (#209) | `calls_service` |
 | `iac_resource` | A declared infrastructure resource on an `iac_resource` node (#209) | `declares` |
 | `resolution` | A lockfile pin on a dependency node (#209) | *(none — deliberately not a relationship input)* |

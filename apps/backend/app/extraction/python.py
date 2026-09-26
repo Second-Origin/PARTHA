@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import builtins
+import re
 
 from app.extraction.http import (
     HTTP_METHOD_ATTRIBUTES,
@@ -33,7 +34,42 @@ from app.intelligence import canonical
 
 _ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
 _REFLECTION_CALLS = {"getattr", "setattr", "delattr"}
+#: ``except A, B:`` without parentheses is valid from Python 3.14 (PEP 758) but
+#: a syntax error on the 3.12/3.13 interpreters this service runs on. The
+#: official FastAPI full-stack template uses it in ``deps.py``, which made the
+#: whole file "malformed" and hid every guard defined there (#471). Only the
+#: bare form matches: a clause with ``as`` still needs parentheses in 3.14, and
+#: anything with parentheses or a statement after the colon is left alone.
+_PEP_758_EXCEPT = re.compile(
+    r"^(?P<head>[ \t]*except\*?[ \t]+)(?P<types>[^\n():#]*,[^\n():#]*?)(?P<tail>[ \t]*:[ \t]*(?:#[^\n]*)?)$",
+    re.MULTILINE,
+)
+
+
+def _parse_python(text: str) -> ast.Module:
+    """``ast.parse``, tolerating PEP 758 ``except A, B:`` on an older interpreter.
+
+    The rewrite only runs after a genuine syntax error, changes no line
+    numbers (evidence cites lines), and a file that still fails to parse is
+    reported malformed exactly as before.
+    """
+
+    try:
+        return ast.parse(text)
+    except SyntaxError:
+        rewritten = _PEP_758_EXCEPT.sub(
+            lambda match: (
+                f"{match['head']}({match['types']}){match['tail']}" if " as " not in f" {match['types']} " else match[0]
+            ),
+            text,
+        )
+        if rewritten == text:
+            raise
+        return ast.parse(rewritten)
+
+
 _DEPENDENCY_MARKERS = {"Depends"}
+_ROUTER_CONSTRUCTORS = {"APIRouter", "FastAPI"}
 
 # A bare call to a language builtin (print, len, isinstance, sorted, ...) has
 # no in-repo definition to resolve to, and is not a relationship worth a
@@ -196,7 +232,7 @@ class PythonExtractor:
 
         line_count = logical_line_count(text)
         try:
-            tree = ast.parse(text)
+            tree = _parse_python(text)
         except SyntaxError:
             return ExtractionResult(
                 diagnostics=(
@@ -327,6 +363,45 @@ class PythonExtractor:
     def _collect_symbols(self, tree, path, line_count, nodes, observations, diagnostics) -> None:
         assigner = DiscriminatorAssigner()
         route_ordinal = 0
+        # ``router = APIRouter(dependencies=[Depends(guard)])`` guards every
+        # route later declared on ``router`` in this file (#471).
+        router_dependencies = self._router_dependencies(tree)
+        injected: set[tuple[str, str, int]] = set()
+
+        def emit_route_dependencies(handler_key: str, decorator: ast.Call) -> None:
+            """Record the guards a route declares on itself or inherits from
+            its router as ``injects`` facts on the handler."""
+
+            guards = list(self._keyword_dependencies(decorator))
+            receiver = decorator.func.value if isinstance(decorator.func, ast.Attribute) else None
+            if isinstance(receiver, ast.Name):
+                guards.extend(router_dependencies.get(receiver.id, ()))
+            for guard_name, depends_call in guards:
+                marker = (handler_key, guard_name, depends_call.lineno)
+                if marker in injected:
+                    continue
+                injected.add(marker)
+                evidence, evidence_diagnostic = build_evidence(
+                    path,
+                    depends_call.lineno,
+                    depends_call.end_lineno or depends_call.lineno,
+                    line_count,
+                    producer=self.producer,
+                )
+                if evidence is None:
+                    if evidence_diagnostic is not None:
+                        diagnostics.append(evidence_diagnostic)
+                    continue
+                observations.append(
+                    ExtractedObservation(
+                        observed_kind="injects",
+                        subject_kind="symbol",
+                        subject_key=handler_key,
+                        referent_text=guard_name,
+                        ordinal=_UNASSIGNED_ORDINAL,
+                        evidence=evidence,
+                    )
+                )
 
         def visit(scope: list[str], body) -> None:
             nonlocal route_ordinal
@@ -395,7 +470,9 @@ class PythonExtractor:
                                 evidence=dec_ev,
                             )
                         )
+                    handler_key = canonical.normalize_stable_key("symbol", final_key)
                     for route_path, route_node in self._route_paths(child):
+                        emit_route_dependencies(handler_key, route_node)
                         route_ev, route_diag = build_evidence(
                             path,
                             route_node.lineno,
@@ -1145,6 +1222,53 @@ class PythonExtractor:
         if isinstance(target, ast.Name):
             parts.append(target.id)
         return ".".join(reversed(parts)) if parts else None
+
+    @staticmethod
+    def _depends_guard(node) -> tuple[str, ast.Call] | None:
+        """``Depends(name)`` -> ``(name, call)``; anything else -> ``None``."""
+
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in _DEPENDENCY_MARKERS
+            and node.args
+            and isinstance(node.args[0], ast.Name)
+        ):
+            return node.args[0].id, node
+        return None
+
+    def _keyword_dependencies(self, call: ast.Call):
+        """Each ``Depends(name)`` in a ``dependencies=[...]`` keyword."""
+
+        for keyword in call.keywords:
+            if keyword.arg != "dependencies" or not isinstance(keyword.value, (ast.List, ast.Tuple)):
+                continue
+            for element in keyword.value.elts:
+                guard = self._depends_guard(element)
+                if guard is not None:
+                    yield guard
+
+    def _router_dependencies(self, tree) -> dict[str, list[tuple[str, ast.Call]]]:
+        """Module-level ``name = APIRouter(dependencies=[...])`` (or ``FastAPI``)
+        -> the guards every route on ``name`` inherits."""
+
+        routers: dict[str, list[tuple[str, ast.Call]]] = {}
+        for statement in tree.body:
+            if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+                target, value = statement.targets[0], statement.value
+            elif isinstance(statement, ast.AnnAssign) and statement.value is not None:
+                target, value = statement.target, statement.value
+            else:
+                continue
+            if not isinstance(target, ast.Name) or not isinstance(value, ast.Call):
+                continue
+            constructor = value.func.attr if isinstance(value.func, ast.Attribute) else getattr(value.func, "id", None)
+            if constructor not in _ROUTER_CONSTRUCTORS:
+                continue
+            guards = list(self._keyword_dependencies(value))
+            if guards:
+                routers[target.id] = guards
+        return routers
 
     def _route_paths(self, symbol):
         for decorator in getattr(symbol, "decorator_list", []):

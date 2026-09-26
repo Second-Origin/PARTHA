@@ -51,7 +51,7 @@ _SYMBOL_SUFFIX_RULES: tuple[tuple[str, str], ...] = (
 )
 
 _AUTH_DEPENDENCY_PATTERN = re.compile(
-    r"(auth|current_user|credential|token|permission|require_user|verify|oauth)",
+    r"(auth|current_user|get_current_|superuser|credential|token|permission|require_user|verify|oauth)",
     re.IGNORECASE,
 )
 
