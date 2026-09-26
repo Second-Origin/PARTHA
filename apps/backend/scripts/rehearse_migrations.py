@@ -30,7 +30,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-HEAD_REVISION = "0016_approved_emails"
+HEAD_REVISION = "0017_remove_seeded_approval"
 REPRESENTATIVE_BASELINE = "0004_ai_provider_configs"
 REQUIRED_HEAD_TABLES = {
     "users",

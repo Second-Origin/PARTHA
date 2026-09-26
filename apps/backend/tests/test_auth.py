@@ -91,9 +91,7 @@ def test_first_ever_registration_becomes_the_owner_without_approval(client):
     """#388: the very first account on a fresh instance is auto-approved
     without needing anyone to have pre-approved it -- otherwise a genuine
     self-hoster running their own copy of PARTHA has no way to ever
-    register at all, since nobody is pre-approved on a fresh database
-    except this project's own owner (seeded by the #374 migration, not
-    relevant to a self-hoster's own instance).
+    register at all, since nobody is pre-approved on a fresh database.
 
     The `client` fixture itself runs as APP_ENV=test (see conftest.py) --
     a non-development environment -- so this exercises the real

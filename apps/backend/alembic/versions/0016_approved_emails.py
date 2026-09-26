@@ -1,4 +1,4 @@
-"""add approved_emails, seed the product owner's address
+"""add approved_emails
 
 Revision ID: 0016_approved_emails
 Revises: 0015_oauth_identities
@@ -10,17 +10,13 @@ in place as a historical audit record -- nothing drops it -- but nothing in
 the live registration path consults it after this migration; only
 ``approved_emails`` does.
 
-Seeds exactly one row: the product owner's own address, so this migration
-can never lock him out of the very system it's gating. No other real
-account email could be identified anywhere in this codebase to also seed --
-the only pre-existing seed user (``users.id ==
-'00000000-0000-0000-0000-000000000000'``) is an explicit non-login system
-placeholder (``password_hash`` is null, and both the password-login and
-OAuth-login paths already refuse to authenticate it), not a real owner
-account, so it is deliberately not approved here.
+This revision originally also seeded one hardcoded address as pre-approved.
+That was removed (#465): registration has no email verification, so a
+pre-approved address that is public in source is claimable by anyone on any
+instance. Owners are established by the first-user bootstrap (#388), not by a
+seed. Databases that already ran the old version of this revision have the
+row removed by ``0017_remove_seeded_approval``.
 """
-
-from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from alembic import op
@@ -29,19 +25,6 @@ revision = "0016_approved_emails"
 down_revision = "0015_oauth_identities"
 branch_labels = None
 depends_on = None
-
-# Kept in one place so upgrade() and downgrade() can never disagree on which
-# row this migration is responsible for.
-_SEEDED_EMAIL = "parthrohit60@gmail.com"
-
-approved_emails = sa.table(
-    "approved_emails",
-    sa.column("id", sa.String),
-    sa.column("email", sa.String),
-    sa.column("note", sa.String),
-    sa.column("added_by", sa.String),
-    sa.column("created_at", sa.DateTime),
-)
 
 
 def upgrade() -> None:
@@ -62,19 +45,6 @@ def upgrade() -> None:
         sa.UniqueConstraint("email", name="uq_approved_emails_email"),
     )
     op.create_index("ix_approved_emails_email", "approved_emails", ["email"], unique=True)
-
-    op.bulk_insert(
-        approved_emails,
-        [
-            {
-                "id": "00000000-0000-0000-0000-000000000001",
-                "email": _SEEDED_EMAIL,
-                "note": "Pre-approved: product owner, seeded by migration 0016 so this change can never lock him out.",
-                "added_by": "migration:0016_approved_emails",
-                "created_at": datetime.now(UTC),
-            }
-        ],
-    )
 
 
 def downgrade() -> None:

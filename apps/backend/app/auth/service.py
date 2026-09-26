@@ -126,9 +126,10 @@ class AuthService:
 
         Without this, a genuine self-hoster running their own copy of PARTHA
         in production mode has no way to ever register at all: nobody is
-        pre-approved on a fresh database except the hardcoded product-owner
-        row seeded by the #374 migration, which is this project's own owner,
-        not theirs. This is the self-hoster claiming their own instance, the
+        pre-approved on a fresh database (the #374 migration originally
+        seeded the project owner's own address; that was removed, #465,
+        because a public pre-approved address is claimable by anyone). This
+        is the self-hoster claiming their own instance, the
         same bootstrap pattern used by most self-hosted software (the first
         person to reach the setup wizard becomes the admin).
 
