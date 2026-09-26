@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -21,6 +21,10 @@ class ApprovedEmail(Base):
     """
 
     __tablename__ = "approved_emails"
+    # ``0016_approved_emails`` creates a named UNIQUE constraint as well as the
+    # unique index ``unique=True, index=True`` produces. Declare both so a
+    # ``create_all`` database has the same schema as a migrated one (#483).
+    __table_args__ = (UniqueConstraint("email", name="uq_approved_emails_email"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
