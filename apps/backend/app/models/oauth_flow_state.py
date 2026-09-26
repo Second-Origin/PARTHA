@@ -1,9 +1,10 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text
+from sqlalchemy import CheckConstraint, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
+from app.models.types import UTCDateTime
 
 
 class OAuthFlowState(Base):
@@ -44,7 +45,7 @@ class OAuthFlowState(Base):
     # one flow always agree even if a deployment ever serves the start and
     # callback routes through more than one entry origin.
     frontend_redirect_base: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=lambda: datetime.now(UTC))
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
 
     __table_args__ = (CheckConstraint("intent IN ('login', 'link')", name="ck_oauth_flow_states_intent"),)

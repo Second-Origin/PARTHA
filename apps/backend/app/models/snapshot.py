@@ -42,11 +42,11 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy import DateTime
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
+from app.models.types import UTCDateTime
 from app.models.repository import _hex_only_sql
 
 
@@ -70,11 +70,9 @@ class RiSnapshot(Base):
     canonical_graph_hash: Mapped[str | None] = mapped_column(String(80), nullable=True)
     actual_producers: Mapped[list | None] = mapped_column(MutableList.as_mutable(JSON), nullable=True)
     failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
-    )
-    sealed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False, default=_utcnow, onupdate=_utcnow)
+    sealed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     __table_args__ = (
         CheckConstraint(

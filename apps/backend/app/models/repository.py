@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
-    DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -16,6 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from app.models.base import Base
+from app.models.types import UTCDateTime
 
 
 def _hex_only_sql(expression: str) -> str:
@@ -57,14 +57,14 @@ class RepositoryRecord(Base):
     status: Mapped[str] = mapped_column(String(32), index=True)
     analysis_stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
     analysis_progress: Mapped[int] = mapped_column(Integer, default=0)
-    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    analysed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=lambda: datetime.now(UTC))
+    analysed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     repo_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     file_tree: Mapped[list] = mapped_column(JSON, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UTCDateTime(),
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )

@@ -508,7 +508,7 @@ def test_heartbeat_keeps_a_long_stage_from_being_reclaimed(session_factory, tmp_
             lease = reader.scalars(
                 select(AnalysisJob.lease_expires_at).where(AnalysisJob.repository_id == record_id)
             ).one()
-            return lease is not None and lease > original_lease and lease > now[0].replace(tzinfo=None)
+            return lease is not None and lease > original_lease and lease > now[0]
 
     _wait_for(_lease_was_renewed)
     sweeper = AnalysisWorker(

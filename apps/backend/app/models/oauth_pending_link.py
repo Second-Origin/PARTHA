@@ -1,9 +1,10 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
+from app.models.types import UTCDateTime
 
 
 class OAuthPendingLink(Base):
@@ -25,5 +26,5 @@ class OAuthPendingLink(Base):
     provider_subject: Mapped[str] = mapped_column(String(255))
     email: Mapped[str] = mapped_column(Text)
     display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=lambda: datetime.now(UTC))
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())

@@ -1,9 +1,10 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import CheckConstraint, DateTime, String
+from sqlalchemy import CheckConstraint, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
+from app.models.types import UTCDateTime
 
 
 class AccountDeletionAuditRecord(Base):
@@ -21,8 +22,8 @@ class AccountDeletionAuditRecord(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     deleted_user_id: Mapped[str] = mapped_column(String(36), index=True)
     status: Mapped[str] = mapped_column(String(16))
-    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=lambda: datetime.now(UTC))
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     __table_args__ = (

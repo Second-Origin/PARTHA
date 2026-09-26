@@ -2,7 +2,6 @@ from datetime import UTC, datetime
 
 from sqlalchemy import (
     CheckConstraint,
-    DateTime,
     ForeignKeyConstraint,
     Index,
     Integer,
@@ -14,6 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
+from app.models.types import UTCDateTime
 
 _CANONICAL_PARTIAL_WHERE = text("canonical_source_key IS NOT NULL AND canonical_branch IS NOT NULL")
 
@@ -44,7 +44,7 @@ class RepositoryLineage(Base):
     # Durable, never-reused, transactionally-allocated next ordinal. Starts at
     # 1; deleting a repository never decrements it (RFC §4.3).
     next_sequence: Mapped[int] = mapped_column(Integer, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=lambda: datetime.now(UTC))
 
     __table_args__ = (
         # Composite ownership FK target for `repositories.lineage_id`.

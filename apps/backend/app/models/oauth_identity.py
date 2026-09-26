@@ -1,9 +1,10 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
+from app.models.types import UTCDateTime
 
 
 class OAuthIdentity(Base):
@@ -30,7 +31,7 @@ class OAuthIdentity(Base):
     # The verified email at link time, kept only for display in Settings'
     # linked-account list; never re-verified or kept in sync afterward.
     email: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=lambda: datetime.now(UTC))
 
     __table_args__ = (
         UniqueConstraint("provider", "provider_subject", name="uq_oauth_identities_provider_subject"),
