@@ -82,7 +82,11 @@ Provider requests explicitly disable redirect following. Any 3xx response is a
 controlled provider failure; PARTHA never sends a request to its `Location`
 target.
 
-Policy errors use a generic message. Normal API errors and logs must not include
+Policy errors use a generic message. For a configurable endpoint (Ollama) the message
+may append one line of guidance that names the administrator setting deciding the
+outcome (`AI_EGRESS_ALLOWED_BASE_URLS`, `AI_EGRESS_MODE`, `AI_EGRESS_ALLOWED_CIDRS`), so a
+self-hoster is not left stuck (#479); it never carries the URL, address or range.
+Normal API errors and logs must not include
 the rejected URL, hostname, resolved addresses, or any URL credentials. Gemini
 credentials are sent in the provider-supported API-key header rather than the
 query string, and HTTPX/httpcore request-detail logging is held at warning level

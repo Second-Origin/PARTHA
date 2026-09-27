@@ -81,16 +81,16 @@ flowchart LR
 | `extraction/` | The producer set behind the engine: syntax-aware `python.py` and `typescript.py`, dependency `manifests.py` and `lockfiles.py`, outbound service interactions (`http.py`), Docker Compose resources (`iac.py`), and the `support_matrix.py` that generates the public capability registry. | Persist snapshots or answer product queries. |
 | `analysis/` | Architecture model — modules, layers, edges, request-flow hints. **Consumer.** | Read the filesystem. |
 | `graph/` | Dependency graph response model. **Consumer.** | Re-read dependency manifests. |
-| `review/` | Deterministic `engineering-review.v2` findings and category assessment over one sealed snapshot. **Consumer.** | Read the legacy JSON model, invent scores/grades, or emit a finding without exact same-snapshot evidence. |
+| `review/` | Deterministic `engineering-review.v2` findings and category assessment over one sealed snapshot. An unresolved reference becomes a finding only if the shared classifier in `insights/relationship_diagnostics.py` (also used by Insights and Architecture, #467) calls it a genuine gap. **Consumer.** | Read the legacy JSON model, invent scores/grades, or emit a finding without exact same-snapshot evidence. |
 | `insights/` | Defined `repository-insights.v1` metrics and breakdowns over one sealed snapshot. **Consumer.** | Read legacy metadata, infer trends without history, or publish undefined health metrics. |
 | `ai/` | Context builder, prompt builder, orchestrator, provider registry/factory, five provider implementations, and the central egress policy/pinned sender. **Consumer.** | Parse repositories, read source files, or let a tenant expand provider destinations. |
 | `reports/` | `ReportDocument` intermediate representation, builders, and JSON/Markdown/HTML/PDF renderers. **Second-order consumer** — renders analysis output that already exists. | Re-analyse a repository. |
 | `auth/` | Argon2 password hashing, HS256 access tokens, rotating refresh tokens with reuse detection. | — |
-| `core/` | Settings and validation, database engine, structured logging with redaction, request IDs, metrics, rate limiting, security headers. | — |
+| `core/` | Settings and validation, database engine, structured logging with redaction, request IDs, metrics, rate limiting, security headers. Timestamp columns use `models/types.py::UTCDateTime`: stored as UTC and always read back timezone-aware, so the API emits an explicit `Z` on SQLite as on PostgreSQL (#473). | — |
 | `storage/` | Local filesystem storage for uploads and extracted/cloned repositories. Enforces path safety on extraction. | — |
 | `workers/control_plane.py` | The queue boundary: which jobs are eligible, and who owns them — claiming, lease renewal, expiry, reclaim, and every ownership guard. | Analyse a repository, or read anything but `analysis_jobs`. |
 | `workers/runner.py` | The in-process runner: worker identity, the poll/sweep loop, and shutdown. The same loop a standalone worker process would run. | Contain queue policy of its own, or be imported by the API for anything but start/stop. |
-| `workers/analysis_worker.py` | Execution of an *already-claimed* job: the extraction pipeline, snapshot sealing, bounded retry, cancellation and stale-job reconciliation. | Decide who owns a job, or serve request-specific data. |
+| `workers/analysis_worker.py` | Execution of an *already-claimed* job: the extraction pipeline, snapshot sealing, bounded retry, cancellation and stale-job reconciliation. During the extract stage it commits between facts (about every 0.25 s) so other writers, notably a cancel request, are never locked out of SQLite's single writer for the whole run (#469); it never does this while sealing. On failure or cancellation it discards the build's partial facts (`intelligence/retention.py`, #485). | Decide who owns a job, or serve request-specific data. |
 
 ---
 
@@ -154,7 +154,7 @@ contract. Running analysis in a separate process is not implemented today.
 | --- | --- | --- |
 | Relational DB | `users`, `refresh_tokens`, `repositories`, `repository_lineages`, `analysis_jobs`, `ai_provider_configs`, `ai_conversation_messages`, the account-access tables (`approved_emails`, `invite_tokens`, `oauth_identities`, `oauth_flow_states`, `oauth_pending_links`, `account_deletion_audits`), `waitlist_entries`, and the normalized `ri_*` snapshot tables | SQLite by default for local development; PostgreSQL is supported through `DATABASE_URL`. Analysis jobs and their worker leases are durable database state. |
 | `account_deletion_audits` | A minimal, **non-PII** record that an account deletion happened: the deleted user id, status, timestamps, and any failure reason. | Retained after the user row and its data are removed, so a deletion remains auditable without preserving the account. |
-| `approved_emails` | The registration gate: which email addresses may create an account. | Registration is allowlisted in **every** environment. The one exception is a genuinely empty instance, where the first account registered is auto-approved and becomes that instance's owner. `invite_tokens` is the superseded invite-code table, retained for historical continuity and no longer a gate. |
+| `approved_emails` | The registration gate: which email addresses may create an account. | Registration is allowlisted in every environment **except `development`** (the default `APP_ENV` when running from source), where any address is auto-approved so local use stays frictionless. Outside development the one exception is a genuinely empty instance: the first account registered is auto-approved and becomes that instance's owner. No address is pre-approved by a migration (the seed row `0016` once inserted was removed in #465). Registration does **not verify email ownership**, so an approved address can be claimed by whoever registers it first, and there is no admin role: rows are added with `scripts/approve_email.py`. Account requests accept private-network domains such as `corp.local`. `invite_tokens` is the superseded invite-code table, retained for historical continuity and no longer a gate. |
 | `oauth_identities`, `oauth_flow_states`, `oauth_pending_links` | Linked Google/GitHub provider identities, in-flight authorization state, and pending link confirmations. | OAuth is inert unless provider credentials are configured. It never creates an account — an unknown identity is returned to the invite-gated registration flow. |
 | `repository_lineages` | Owner-scoped grouping of repeated imports of the same repository and branch, with 1-based never-reused sequence allocation (RFC-0002). | Uploads and unresolved GitHub imports stay unlineaged: their lineage fields are null and no synthetic lineage is created. |
 | `waitlist_entries` | Landing-page waitlist signups: normalized email and optional name. | Written by `POST /waitlist`, the one **public write route** in the API. Deliberately unauthenticated; guarded by the `auth` rate-limit class and an existence-concealing response. |
@@ -164,7 +164,7 @@ contract. Running analysis in a separate process is not implemented today.
 | `repositories.file_tree` (JSON column) | The parsed file tree. | Serves the explorer. |
 | `ai_provider_configs` | One row per user: provider, model, base URL, and the **Fernet-encrypted** API key plus its last four characters. | Owner-scoped; the plaintext key is never stored or returned. A stored endpoint remains unusable unless it satisfies the current deployment egress policy. |
 | `ai_conversation_messages` | One row per AI Workspace turn: role, content, optional citations, and an explicit `sequence`. | **The AI Workspace thread is durable, not ephemeral.** One ordered thread per owner per repository, so history survives navigating away and returning. `UNIQUE(owner_id, repository_id, sequence)` is the concurrency guard; the repository foreign key cascades, so deleting a repository deletes its turns. A cross-owner read resolves to the same 404 as a missing repository. |
-| Filesystem (`STORAGE_PATH`) | Extracted archives and cloned repositories; uploaded archives (deleted after extraction). | Repository source is read from here on demand for file preview. |
+| Filesystem (`STORAGE_PATH`) | Extracted archives and cloned repositories; uploaded archives (deleted after extraction). | Repository source is read from here on demand for file preview. What accumulates, what is discarded automatically and the operator cleanup script are in [Storage and retention](../operations/STORAGE_AND_RETENTION.md). |
 
 AI provider configuration is **per-user and encrypted at rest**. Each user's API key is encrypted with a Fernet key from `AI_ENCRYPTION_KEY` (required outside `development`/`test`), decrypted only in-process at request time, and injected per request — so a query runs against the caller's own key and bill, never a shared one.
 
@@ -241,7 +241,7 @@ confused.
 
 | | `RepositoryResponse.meta` (`RepositoryMeta`) | Repository Intelligence |
 | --- | --- | --- |
-| Source | `RepositoryParser`, at import time | sealed `ri.v1` snapshot, from durable analysis |
+| Source | `RepositoryParser`, at import time; language, framework and entry point are then **refreshed from the snapshot when analysis completes** (`ArchitectureAnalyzer.stack_summary`, #475), so an analysed repository's `meta` and its Architecture summary agree | sealed `ri.v1` snapshot, from durable analysis |
 | How | file-extension `Counter`; `_detect_framework` / `_detect_entry_point` / `_detect_package_manager` / `_detect_license` filename heuristics | evidence-backed extractors + deterministic resolver |
 | Provenance | none | path + span + producer/version on every fact |
 | Owner-scoped | via the repository row | yes, in the query service |
@@ -257,10 +257,11 @@ explanation, AI context — reads the snapshot query API, never `meta`.
 import path persists. Its heuristic `meta` is a byproduct of that walk, not a parallel analysis
 engine, and no consumer under the Repository Intelligence boundary reads it.
 
-*Known UI debt:* `RepositoryDetailPage`, `RepositoriesPage`, and `DashboardPage` render
-`meta.language` / `meta.framework` without labelling them as import-time heuristics. Relabelling
-those surfaces (or switching them to snapshot-backed values once analysis has completed) is tracked
-as follow-up, not done here.
+Until analysis completes, `meta.language` / `meta.framework` remain the import-time heuristics, and
+the repository pages do not label them as such. Once analysis has completed, the worker replaces them
+with the snapshot-derived values where the snapshot supplies one (a value it cannot supply, such as an
+unknown framework, keeps the import-time one). Repositories analysed before that change keep their
+old values until re-analysed.
 
 ---
 
@@ -269,7 +270,7 @@ as follow-up, not done here.
 | Dependency | Used for | Failure mode |
 | --- | --- | --- |
 | `git` (system binary) | Shallow-cloning public GitHub repositories. | Import fails with a normalized external-service error; the partial clone is cleaned up. |
-| GitHub (HTTPS) | Source for public repository import. Only `https://github.com/owner/repo` URLs are accepted; no authentication, so no private repositories. | Timeout and size caps abort and clean up. |
+| GitHub (HTTPS) | Source for public repository import. Only `https://github.com/owner/repo` URLs are accepted, optionally with `/tree/<branch>` (split off as the branch, #481); other page URLs are refused. No authentication, so no private repositories. | Timeout and size caps abort and clean up. |
 | AI providers | Answering repository questions. Configured per user with an encrypted API key; destinations are centrally policy-checked and DNS-pinned. | A missing, stale, or policy-denied configuration produces a normalized error; the rest of the system is unaffected. |
 | PostgreSQL, Redis | Optional configured services and CI integration. Redis backs the rate limiter when `RATE_LIMIT_BACKEND=redis`. | Local development uses SQLite and the in-memory rate limiter; neither service is required. |
 
