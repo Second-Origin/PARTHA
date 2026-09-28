@@ -45,7 +45,7 @@ pydantic_core==2.46.5
 Pygments==2.21.0
 pyhanko-certvalidator==0.32.1
 pyHanko==0.37.0
-PyJWT==2.14.0
+PyJWT==2.15.0
 pypdf==6.19.0
 python-bidi==0.6.11
 python-dotenv==1.2.3
@@ -55,8 +55,8 @@ redis==8.1.0
 reportlab==4.5.1
 requests==2.34.2
 six==1.17.0
-SQLAlchemy==2.0.54
-starlette==1.6.0
+SQLAlchemy==2.1.0
+starlette==1.7.0
 svglib==2.2.0
 tinycss2==1.5.1
 tree-sitter==0.26.0
