@@ -11,6 +11,26 @@ export const ARCH_NODE_HEIGHT = 112;
 const RANK_GAP = 50;
 const NODE_GAP = 35;
 
+/**
+ * Relationship count above which the graph stops drawing every edge at once.
+ *
+ * A real 343-module repository carries ~13.8k relationships (mostly
+ * module-to-package dependency edges). Feeding them all to Dagre and React Flow
+ * froze the tab for ~160s. Dagre's cost grows steeply with edge count (343
+ * nodes: 500 edges ~0.4s, 1,000 ~6s, 1,500 ~29s), so the threshold sits where
+ * layout stays around a second. Above it the canvas shows only the selected
+ * module's relationships; the full set stays available through the
+ * Relationship panel and the List View. Graphs at or below it are unchanged.
+ */
+export const LARGE_GRAPH_EDGE_THRESHOLD = 500;
+
+/** Edges to put on the canvas: all of them, or only the focused node's in large-graph mode. */
+export function selectVisibleEdges(edges: Edge[], limited: boolean, focusNodeId: string | null): Edge[] {
+  if (!limited) return edges;
+  if (!focusNodeId) return [];
+  return edges.filter((edge) => edge.source === focusNodeId || edge.target === focusNodeId);
+}
+
 export function getLayoutedElements(
   archNodes: ArchNode[],
   archEdges: ArchEdge[],
@@ -23,7 +43,7 @@ export function getLayoutedElements(
     layers?: ArchLayer[];
     collapsedLayers?: Set<string>;
   }
-): { nodes: ArchFlowNode[]; edges: Edge[] } {
+): { nodes: ArchFlowNode[]; edges: Edge[]; edgesLimited: boolean; edgeCount: number } {
   const direction = options?.direction || 'LR';
   const heatmapMode = options?.heatmapMode || 'none';
   const bookmarks = options?.bookmarks || new Set();
@@ -51,11 +71,15 @@ export function getLayoutedElements(
   });
 
   const filteredNodeIds = new Set(filteredNodes.map((node) => node.id));
-  filteredEdges.forEach((edge) => {
-    if (filteredNodeIds.has(edge.source) && filteredNodeIds.has(edge.target)) {
-      g.setEdge(edge.source, edge.target);
-    }
-  });
+  const visibleEdges = filteredEdges.filter(
+    (edge) => filteredNodeIds.has(edge.source) && filteredNodeIds.has(edge.target),
+  );
+  const edgesLimited = visibleEdges.length > LARGE_GRAPH_EDGE_THRESHOLD;
+  // Node positions come from the layer grid below; Dagre only orders nodes
+  // within a layer. In large-graph mode skip its edge work entirely.
+  if (!edgesLimited) {
+    visibleEdges.forEach((edge) => g.setEdge(edge.source, edge.target));
+  }
 
   layout(g);
 
@@ -86,8 +110,7 @@ export function getLayoutedElements(
     };
   });
 
-  const edges: Edge[] = filteredEdges
-    .filter((e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target))
+  const edges: Edge[] = visibleEdges
     .map((edge) => ({
       id: edge.id,
       source: edge.source,
@@ -101,7 +124,7 @@ export function getLayoutedElements(
       },
     }));
 
-  return { nodes, edges };
+  return { nodes, edges, edgesLimited, edgeCount: visibleEdges.length };
 }
 
 function getOrderedLayers(nodes: ArchNode[], layers?: ArchLayer[]): ArchLayer[] {

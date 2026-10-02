@@ -25,7 +25,7 @@ import { RequestFlow } from './RequestFlow';
 import { NodeContextMenu } from './NodeContextMenu';
 import { HeatmapControls } from './HeatmapControls';
 import { RelationshipPanel } from './RelationshipPanel';
-import { getLayoutedElements } from '../layout';
+import { getLayoutedElements, selectVisibleEdges } from '../layout';
 import { useArchitectureStore } from '../store';
 import { cn } from '@/shared/utils/cn';
 import type { RepositorySource } from '@/shared/types';
@@ -89,20 +89,31 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
       collapsedLayers,
     }), [model.detectedLayers, heatmapMode, bookmarkedNodes, hiddenNodes, isolatedSubtree, collapsedLayers]);
 
-  const { nodes: initialNodes, edges: initialEdges } = useMemo(
+  const {
+    nodes: initialNodes,
+    edges: layoutEdges,
+    edgesLimited,
+    edgeCount,
+  } = useMemo(
     () => getLayoutedElements(model.nodes, model.edges, layoutOptions),
     [model.nodes, model.edges, layoutOptions]
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(
+    selectVisibleEdges(layoutEdges, edgesLimited, selectedNodeId),
+  );
   const nodesInitialized = useNodesInitialized();
 
   useEffect(() => {
-    const { nodes: newNodes, edges: newEdges } = getLayoutedElements(model.nodes, model.edges, layoutOptions);
-    setNodes(newNodes);
-    setEdges(newEdges);
-  }, [layoutOptions, model.nodes, model.edges, setNodes, setEdges]);
+    setNodes(initialNodes);
+  }, [initialNodes, setNodes]);
+
+  // In large-graph mode only the selected module's relationships are drawn;
+  // selecting a module changes the edges but never the node layout or camera.
+  useEffect(() => {
+    setEdges(selectVisibleEdges(layoutEdges, edgesLimited, selectedNodeId));
+  }, [layoutEdges, edgesLimited, selectedNodeId, setEdges]);
 
   useEffect(() => {
     if (!nodesInitialized) return;
@@ -251,19 +262,23 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
   const handleResetLayout = useCallback(() => {
     setIsolatedSubtree(null);
     showAllNodes();
-    const { nodes: newNodes, edges: newEdges } = getLayoutedElements(model.nodes, model.edges, {
+    const {
+      nodes: newNodes,
+      edges: newEdges,
+      edgesLimited: newEdgesLimited,
+    } = getLayoutedElements(model.nodes, model.edges, {
       ...layoutOptions,
       hiddenNodes: new Set(),
       collapsedLayers: new Set(),
     });
     showAllLayers();
     setNodes(newNodes);
-    setEdges(newEdges);
+    setEdges(selectVisibleEdges(newEdges, newEdgesLimited, selectedNodeId));
     setTimeout(
       () => reactFlowInstance.fitView({ padding: 0.2, duration: 300, minZoom: READABLE_MIN_ZOOM }),
       50,
     );
-  }, [model, setNodes, setEdges, reactFlowInstance, layoutOptions, setIsolatedSubtree, showAllNodes, showAllLayers]);
+  }, [model, setNodes, setEdges, reactFlowInstance, layoutOptions, selectedNodeId, setIsolatedSubtree, showAllNodes, showAllLayers]);
 
   const handleExportPng = useCallback(() => {
     const el = document.querySelector('.react-flow') as HTMLElement;
@@ -364,6 +379,19 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
                   onToggleFullscreen={handleToggleFullscreen}
                   isFullscreen={isFullscreen}
                 />
+                {edgesLimited && (
+                  <div
+                    role="status"
+                    data-testid="large-graph-notice"
+                    className="absolute bottom-3 left-3 right-3 z-10 rounded-lg border border-border bg-card/95 px-3 py-2 text-xs text-muted-foreground shadow-sm sm:right-auto sm:max-w-md"
+                  >
+                    <span className="font-medium text-foreground">Large graph.</span>{' '}
+                    {edgeCount.toLocaleString()} relationships are hidden to keep this view responsive.
+                    {selectedNodeId
+                      ? ' Showing the selected module\u2019s relationships.'
+                      : ' Select a module to see its relationships, or use the List View for the full set.'}
+                  </div>
+                )}
                 <ReactFlow
                   nodes={nodes}
                   edges={edges}
