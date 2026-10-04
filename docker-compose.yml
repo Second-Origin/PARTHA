@@ -1,0 +1,75 @@
+# Run PARTHA on your own machine with one command:
+#
+#   docker compose up --build
+#
+# then open http://localhost:8000. The first account you register becomes the
+# owner of this instance (#388). Anyone else needs approving first:
+#
+#   docker compose exec partha python scripts/approve_email.py --email them@example.com
+#
+# One container serves both the API and the built frontend (see ./Dockerfile).
+# Everything it keeps -- the SQLite database, imported repositories, and the
+# secrets generated on first start -- lives in the `partha-data` volume, so it
+# survives `docker compose down` and rebuilds. `docker compose down -v` deletes
+# it for good.
+#
+# The port is bound to 127.0.0.1 on purpose: PARTHA is built for local or
+# trusted-network use and is not hardened for the public internet (README,
+# "Current limitations").
+
+services:
+  partha:
+    build: .
+    image: partha:local
+    ports:
+      - "127.0.0.1:${PARTHA_PORT:-8000}:8000"
+    environment:
+      APP_ENV: production
+      DATABASE_URL: sqlite:////data/partha.db
+      STORAGE_PATH: /data/storage
+      SECRETS_DIR: /data/secrets
+      # Optional AI through a local model such as Ollama on the host stays off
+      # until you opt in. It needs self_hosted egress with an exact URL and a
+      # matching CIDR -- see docs/security/AI_PROVIDER_EGRESS.md.
+      # AI_EGRESS_MODE: self_hosted
+      # AI_EGRESS_ALLOWED_BASE_URLS: http://host.docker.internal:11434
+      # AI_EGRESS_ALLOWED_CIDRS: <the address host.docker.internal resolves to>/32
+    volumes:
+      - partha-data:/data
+    # production refuses to start without AUTH_SECRET_KEY and
+    # AI_ENCRYPTION_KEY. Rather than make everyone generate them by hand, the
+    # first start writes a random pair into the volume, one file per setting,
+    # and every later start reuses them. SECRETS_DIR (above) is how every
+    # process in the container finds them, including `docker compose exec`.
+    # Losing them signs everyone out and makes saved AI provider keys
+    # unreadable, so back up the whole volume, not just the database.
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        if [ ! -f "$$SECRETS_DIR/ai_encryption_key" ]; then
+          mkdir -p -m 700 "$$SECRETS_DIR"
+          umask 077
+          python - <<'PY'
+        import os
+        import secrets
+        from pathlib import Path
+        from cryptography.fernet import Fernet
+        directory = Path(os.environ["SECRETS_DIR"])
+        (directory / "auth_secret_key").write_text(secrets.token_urlsafe(48))
+        (directory / "ai_encryption_key").write_text(Fernet.generate_key().decode())
+        PY
+        fi
+        alembic upgrade head
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  partha-data:

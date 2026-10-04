@@ -7,5 +7,30 @@
     "functionality becomes reachable in our own source. Removing the vulnerable dependency",
     "also requires removing its entry: a stale acknowledgement fails the build too."
   ],
-  "acknowledged": []
+  "acknowledged": [
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "severity": "high",
+      "acceptedVersion": "3.0.3",
+      "patchedVersion": null,
+      "advisoryUrl": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+      "reason": "No patched release exists: GitHub lists braces <=3.0.3 as affected with no first patched version, and 3.0.3 is the latest published version, so there is nothing to upgrade or override to. braces reaches the tree only through tailwindcss@3 (chokidar and micromatch), which expands glob patterns from our own tailwind.config content paths at build time. The audit labels it runtime only because tailwindcss-animate (a Tailwind plugin in dependencies) declares tailwindcss as a peer; no braces, micromatch or chokidar code is in the built bundle a browser loads. The DoS needs an attacker-controlled, deeply nested brace pattern, and the only patterns passed are fixed strings in our repository. Re-review when braces publishes a fix or by the date below.",
+      "reachability": {
+        "description": "Fails if our own source starts importing braces or the glob libraries that wrap it, which would let untrusted patterns reach it.",
+        "roots": [
+          "apps/frontend/src"
+        ],
+        "forbiddenPatterns": [
+          "'braces'",
+          "\"braces\"",
+          "'micromatch'",
+          "\"micromatch\"",
+          "'chokidar'",
+          "\"chokidar\""
+        ]
+      },
+      "reviewBy": "2026-12-31"
+    }
+  ]
 }

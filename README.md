@@ -179,6 +179,18 @@ npm run dev:frontend
 
 Open `http://localhost:5173`, register a local account, add a repository, and start analysis.
 
+### Or run it with Docker
+
+If you have Docker, one command builds and starts everything in a single container:
+
+```bash
+git clone https://github.com/Second-Origin/PARTHA.git
+cd PARTHA
+docker compose up --build
+```
+
+Open `http://localhost:8000`. The first account you register becomes the owner of the instance; approve anyone else with `docker compose exec partha python scripts/approve_email.py --email them@example.com`. Data and generated secrets live in the `partha-data` volume, and the port is bound to `127.0.0.1` only. See [`docker-compose.yml`](docker-compose.yml) for the details.
+
 The [development guide](docs/DEVELOPMENT.md) covers the full test / lint / build / benchmark / Docker / E2E commands and the local database and API-contract failures you are most likely to hit. Review the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md) before configuring any custom or local provider endpoint.
 
 ## Current limitations
