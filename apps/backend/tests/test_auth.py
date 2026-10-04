@@ -515,6 +515,25 @@ def test_auth_secret_key_is_required_and_strong_outside_dev():
     assert Settings(app_env="development", auth_secret_key="").auth_secret_key
 
 
+def test_production_secrets_can_come_from_one_file_per_setting(tmp_path, monkeypatch):
+    # docker-compose.yml writes its generated keys this way (SECRETS_DIR), so
+    # `docker compose exec` scripts see the same keys as the server.
+    from cryptography.fernet import Fernet
+
+    from app.core.config import Settings
+
+    monkeypatch.delenv("AUTH_SECRET_KEY", raising=False)
+    monkeypatch.delenv("AI_ENCRYPTION_KEY", raising=False)
+    ai_key = Fernet.generate_key().decode()
+    (tmp_path / "auth_secret_key").write_text("s" * 64 + "\n", encoding="utf-8")
+    (tmp_path / "ai_encryption_key").write_text(ai_key + "\n", encoding="utf-8")
+
+    settings = Settings(app_env="production", _secrets_dir=tmp_path)
+
+    assert settings.auth_secret_key == "s" * 64
+    assert settings.ai_encryption_key == ai_key
+
+
 # --- interaction with protected routes ----------------------------------------
 
 

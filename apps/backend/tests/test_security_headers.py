@@ -51,3 +51,27 @@ def test_cors_preflight_reports_allowed_methods_not_wildcard(client):
     allow_methods = response.headers["access-control-allow-methods"]
     assert "POST" in allow_methods
     assert "*" not in allow_methods
+
+
+def test_frontend_policy_hashes_inline_scripts_however_the_tag_is_written():
+    import base64
+    import hashlib
+
+    from app.core.security_headers import frontend_content_security_policy
+
+    def source(body: str) -> str:
+        return "'sha256-" + base64.b64encode(hashlib.sha256(body.encode("utf-8")).digest()).decode() + "'"
+
+    html = (
+        "<html><head>"
+        "<script>a();</script>"
+        '<SCRIPT type="text/javascript">\n  b();\n</SCRIPT>'
+        '<script type="module" src="/assets/index.js"></script>'
+        "</head></html>"
+    )
+    script_src = frontend_content_security_policy(html).split("script-src ", 1)[1].split(";", 1)[0]
+
+    assert source("a();") in script_src
+    assert source("\n  b();\n") in script_src
+    # An external script is allowed by 'self', not by a hash of its empty body.
+    assert source("") not in script_src

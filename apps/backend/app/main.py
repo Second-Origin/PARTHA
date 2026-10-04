@@ -28,10 +28,12 @@ from app.core.logging import configure_logging
 from app.core.observability import new_request_id, reset_request_id, runtime_metrics, set_request_id
 from app.core.rate_limit import RateLimitMiddleware, build_rate_limit_store
 from app.core.schema_sync import ensure_schema_in_sync, stamp_head
-from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.security_headers import SecurityHeadersMiddleware, frontend_content_security_policy
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from starlette.types import ASGIApp, Receive, Scope, Send
+
     from app.workers.runner import AnalysisWorkerRunner
 
 logger = logging.getLogger(__name__)
@@ -283,6 +285,40 @@ def create_app() -> FastAPI:
     return app
 
 
+# API paths a browser legitimately loads as a page: the interactive docs, the
+# OAuth redirects (#288), and the probes. Every other API route needs a bearer
+# token that a page load can't carry, so the browser can only mean the SPA.
+_BROWSER_FACING_API_PREFIXES = ("/docs", "/redoc", "/openapi.json", "/auth/oauth/", "/health", "/ready", "/metrics")
+
+
+class SpaNavigationMiddleware:
+    """Send browser page loads to the SPA shell even where an API route shares the path.
+
+    Several client-side routes are also API paths -- `/repositories`,
+    `/repositories/:id`, `/analysis/:id/architecture` -- so with both served
+    from one origin, refreshing one of those pages returned the API's JSON 401
+    instead of the app. A page load asks for text/html; the frontend's own
+    fetches never do. Rewriting the path to `/` (owned only by the frontend
+    catch-all) keeps the browser's URL, so react-router still sees the real
+    route, and every other middleware still runs on the response.
+    """
+
+    def __init__(self, app: "ASGIApp") -> None:
+        self.app = app
+
+    async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
+        if scope["type"] == "http" and scope["method"] in {"GET", "HEAD"} and scope["path"] != "/":
+            path: str = scope["path"]
+            accept = dict(scope["headers"]).get(b"accept", b"")
+            if (
+                b"text/html" in accept
+                and not path.startswith(_BROWSER_FACING_API_PREFIXES)
+                and not path.startswith("/assets/")
+            ):
+                scope = {**scope, "path": "/", "raw_path": b"/"}
+        await self.app(scope, receive, send)
+
+
 def _mount_frontend(app: FastAPI, dist_path: Path) -> None:
     """Serve the built frontend from this same service (#339).
 
@@ -300,10 +336,16 @@ def _mount_frontend(app: FastAPI, dist_path: Path) -> None:
         return
 
     resolved_dist_path = dist_path.resolve()
+    # SecurityHeadersMiddleware only fills in a CSP the response doesn't
+    # already carry, so setting it here replaces the API's deny-all policy for
+    # the page shell. Built once: index.html can't change while the process runs.
+    shell_headers = {"Content-Security-Policy": frontend_content_security_policy(index_path.read_text("utf-8"))}
 
     assets_path = dist_path / "assets"
     if assets_path.is_dir():
         app.mount("/assets", StaticFiles(directory=assets_path), name="frontend-assets")
+
+    app.add_middleware(SpaNavigationMiddleware)
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_frontend(full_path: str) -> FileResponse:
@@ -311,12 +353,17 @@ def _mount_frontend(app: FastAPI, dist_path: Path) -> None:
         # "../../etc/passwd" would pass a naive prefix check but still land
         # outside dist_path once the OS follows the ".." segments.
         candidate = (dist_path / full_path).resolve()
-        if full_path and candidate.is_relative_to(resolved_dist_path) and candidate.is_file():
+        if (
+            full_path
+            and candidate.is_relative_to(resolved_dist_path)
+            and candidate.is_file()
+            and candidate != index_path.resolve()
+        ):
             return FileResponse(candidate)
         # Anything else -- a client-side route like /dashboard, or a direct
         # refresh on one -- gets the SPA shell; react-router takes it from
         # there instead of the browser seeing a bare 404.
-        return FileResponse(index_path)
+        return FileResponse(index_path, headers=shell_headers)
 
 
 app = create_app()

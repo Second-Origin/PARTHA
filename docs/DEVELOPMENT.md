@@ -16,10 +16,14 @@ covered here.
 | Node.js | 22 | Frontend and workflow scripts |
 | Git | Recent version | Checkout and public GitHub import |
 
-There is no Docker Compose file for local development. A root [`Dockerfile`](../Dockerfile)
-exists for single-service hosting (building the frontend and serving it from
-the same FastAPI process), but day-to-day development runs the backend and
-frontend as two separate local processes, described below.
+Day-to-day development runs the backend and frontend as two separate local
+processes, described below. To *use* PARTHA rather than work on it, the root
+[`docker-compose.yml`](../docker-compose.yml) runs the single-service
+[`Dockerfile`](../Dockerfile) (the built frontend served by the same FastAPI
+process) with SQLite and storage in a volume: `docker compose up --build`, then
+`http://localhost:8000`. It runs with `APP_ENV=production`, so the first
+account registered becomes the owner and later ones need
+`docker compose exec partha python scripts/approve_email.py --email ...`.
 
 ## 1. Clone and start the backend
 
