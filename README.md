@@ -52,6 +52,68 @@ Each surface reads the sealed snapshot for the analysed revision:
 The full contract, with every coverage and trust boundary stated per capability, is the
 **[capability matrix](docs/CAPABILITIES.md)** — generated from the code and drift-checked in CI.
 
+## Repository architecture at a glance
+
+PARTHA is organized as a small monorepo with a single shared backend and multiple product surfaces:
+
+- `apps/backend` — FastAPI service for auth, repository import, durable analysis jobs, snapshot storage, intelligence queries, and export generation.
+- `apps/frontend` — React + TypeScript app for browsing architecture graphs, dependency views, review findings, insights, repository detail, and settings.
+- `apps/marketing` — static landing site and scripted product walkthrough, intentionally decoupled from the application frontend.
+
+The backend follows a layered pipeline that mirrors the product promise:
+
+- `app/api/*` — HTTP routes and OpenAPI contract.
+- `app/services/*` — orchestration of repository, analysis, documentation, and AI operations.
+- `app/models/*` and `app/repositories/*` — persistence layer and owner-scoped repository access.
+- `app/extraction/*` — repository inventory, language parsing, manifest and lockfile extraction, and IaC detection.
+- `app/intelligence/*` — canonicalization, snapshot store, retention, and evidence-backed read models.
+- `app/analysis/*`, `app/graph/*`, `app/review/*`, and `app/insights/*` — architecture, dependency, review, and diagnostics builders.
+- `app/workers/*` — durable background analysis execution and lease-based queue controls.
+- `app/ai/*` — optional AI provider integration and provider-aware repository context assembly.
+
+The project uses a shared repository intelligence snapshot (`ri.v1`) as the main read model, so downstream consumers read a single sealed interpretation instead of re-parsing source files. This design helps maintain consistency across architecture views, dependency graphs, engineering review, and exports.
+
+The current stack is intentionally pragmatic rather than over-engineered:
+
+- Backend: Python 3.12+, FastAPI, SQLAlchemy, Pydantic, Uvicorn, JWT, Redis, cryptography, tree-sitter.
+- Frontend: React 18, TypeScript, Vite, Tailwind CSS, Zustand, React Router.
+- Visualization: `@xyflow/react`, `@dagrejs/dagre`, `framer-motion`, `@monaco-editor/react`.
+- Testing: `pytest`, `vitest`, `@testing-library/react`, and `playwright`.
+
+## Project status and next priorities
+
+PARTHA is a product-focused repository intelligence platform rather than a generic app template. The core ideas are already solid: a sealed repository snapshot, evidence-backed review, architecture and dependency extraction, and exports that reuse the same source-of-truth model. The main work remaining is operational maturity rather than basic product shape.
+
+The highest leverage areas are:
+
+1. Improve backend type-safety and contract discipline.
+2. Move analysis execution beyond the single in-process worker.
+3. Reduce whole-repo re-analysis cost and expand semantic coverage.
+
+This does not mean the codebase is immature in a chaotic sense; it means the product is transitioning from a strong proof-of-concept into a more scalable engineering platform.
+
+## Architecture decision themes
+
+A few principles show up repeatedly in this codebase:
+
+- Shared facts, not duplicated parsers: if a repository fact is needed in multiple places, it should be built once and reused.
+- Evidence-backed outputs: findings and architectural explanations should be traceable to source evidence rather than loose heuristics.
+- Owner-scoped access: repositories and their derived data are treated as user-owned resources, not globally shared objects.
+- Local-first development: the default dev setup uses SQLite, local storage, and a simple in-memory rate limiter so the project is easy to run and debug.
+- Safety-conscious AI usage: optional AI is downstream from repository intelligence; it does not become a second interpretation layer.
+
+## Operational risks and trade-offs
+
+The project is intentionally clear about where it is not yet production-hardened:
+
+- In-process worker execution limits concurrency and makes scaling harder.
+- Semantic coverage is strongest for Python and TypeScript/JavaScript; other languages mainly contribute inventory data.
+- Whole-repository re-analysis remains full-cost and is not incremental.
+- AI egress is optional and must be configured carefully to respect policy and trust boundaries.
+- The development environment is not a hardened multi-tenant deployment; it should be treated as a trusted local environment.
+
+These are conscious trade-offs in service of a focused product objective, not accidental gaps.
+
 ## Core workflow
 
 ```text
@@ -116,6 +178,18 @@ npm run dev:frontend
 ```
 
 Open `http://localhost:5173`, register a local account, add a repository, and start analysis.
+
+### Or run it with Docker
+
+If you have Docker, one command builds and starts everything in a single container:
+
+```bash
+git clone https://github.com/Second-Origin/PARTHA.git
+cd PARTHA
+docker compose up --build
+```
+
+Open `http://localhost:8000`. The first account you register becomes the owner of the instance; approve anyone else with `docker compose exec partha python scripts/approve_email.py --email them@example.com`. Data and generated secrets live in the `partha-data` volume, and the port is bound to `127.0.0.1` only. See [`docker-compose.yml`](docker-compose.yml) for the details.
 
 The [development guide](docs/DEVELOPMENT.md) covers the full test / lint / build / benchmark / Docker / E2E commands and the local database and API-contract failures you are most likely to hit. Review the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md) before configuring any custom or local provider endpoint.
 

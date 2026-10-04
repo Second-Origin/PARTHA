@@ -48,7 +48,14 @@ WORKDIR /app
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git \
   && rm -rf /var/lib/apt/lists/* \
-  && useradd --create-home --uid 1000 --shell /usr/sbin/nologin appuser
+  && useradd --create-home --uid 1000 --shell /usr/sbin/nologin appuser \
+  && mkdir /data \
+  && chown appuser:appuser /data
+
+# /data is where docker-compose.yml mounts its volume. Creating it here, owned
+# by appuser, means a fresh named volume inherits that ownership instead of
+# coming up root-owned and unwritable. Render mounts its own disk elsewhere
+# (/var/data, render.yaml) and never touches this path.
 
 COPY --from=backend-build /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -57,6 +64,9 @@ COPY apps/backend/pyproject.toml ./
 COPY apps/backend/app ./app
 COPY apps/backend/alembic.ini ./
 COPY apps/backend/alembic ./alembic
+# Operator scripts (approve_email.py and friends), so a containerised install
+# can run them with `docker compose exec` instead of needing a host checkout.
+COPY apps/backend/scripts ./scripts
 
 COPY --from=frontend-build /repo/apps/frontend/dist /app/frontend-dist
 ENV FRONTEND_DIST_PATH=/app/frontend-dist

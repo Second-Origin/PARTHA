@@ -1,16 +1,23 @@
 """Single-service frontend hosting (#339): app.main mounts a built frontend
 when one is present, and behaves exactly as before when one is not."""
 
+import base64
 from collections.abc import Generator
+import hashlib
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 
+INLINE_SCRIPT = "document.documentElement.dataset.boot = 'ok';"
+
+
 def _write_fake_build(dist_path: Path) -> None:
     dist_path.mkdir(parents=True, exist_ok=True)
-    (dist_path / "index.html").write_text("<html><body>spa shell</body></html>", encoding="utf-8")
+    (dist_path / "index.html").write_text(
+        f"<html><head><script>{INLINE_SCRIPT}</script></head><body>spa shell</body></html>", encoding="utf-8"
+    )
     assets_path = dist_path / "assets"
     assets_path.mkdir(parents=True, exist_ok=True)
     (assets_path / "app.js").write_text("console.log('app');", encoding="utf-8")
@@ -113,3 +120,49 @@ def test_traversal_attempts_cannot_escape_the_dist_directory(
     assert response.status_code == 200
     assert "top secret" not in response.text
     assert "spa shell" in response.text
+
+
+def test_spa_shell_gets_a_policy_that_lets_the_page_load(mounted_client: TestClient) -> None:
+    # The API's deny-all CSP on the shell blanked the whole page in the
+    # single-service image: every script and stylesheet was blocked.
+    csp = mounted_client.get("/dashboard").headers["Content-Security-Policy"]
+    inline_hash = base64.b64encode(hashlib.sha256(INLINE_SCRIPT.encode("utf-8")).digest()).decode()
+
+    assert "default-src 'none'" not in csp
+    assert "script-src 'self'" in csp
+    assert f"'sha256-{inline_hash}'" in csp
+    assert "'unsafe-inline'" not in csp.split("script-src", 1)[1].split(";", 1)[0]
+    assert "connect-src 'self'" in csp
+    assert "frame-ancestors 'none'" in csp
+
+
+def test_api_routes_keep_the_deny_all_policy_when_the_frontend_is_mounted(mounted_client: TestClient) -> None:
+    response = mounted_client.get("/health")
+
+    assert response.headers["Content-Security-Policy"].startswith("default-src 'none'")
+
+
+@pytest.mark.parametrize("path", ["/repositories", "/repositories/some-id", "/analysis/some-id/architecture"])
+def test_page_load_on_a_path_the_api_shares_gets_the_spa_shell(mounted_client: TestClient, path: str) -> None:
+    # These client-side routes are also API paths. Refreshing one of them
+    # returned the API's 401 JSON instead of the app.
+    response = mounted_client.get(path, headers={"Accept": "text/html,application/xhtml+xml,*/*;q=0.8"})
+
+    assert response.status_code == 200
+    assert "spa shell" in response.text
+    assert "script-src 'self'" in response.headers["Content-Security-Policy"]
+    assert response.headers["X-Frame-Options"] == "DENY"
+
+
+def test_api_fetch_on_a_shared_path_still_reaches_the_api(mounted_client: TestClient) -> None:
+    response = mounted_client.get("/repositories", headers={"Accept": "application/json"})
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "unauthorized"
+
+
+@pytest.mark.parametrize("path", ["/docs", "/health", "/auth/oauth/github/callback"])
+def test_page_load_on_a_browser_facing_api_path_is_left_to_the_api(mounted_client: TestClient, path: str) -> None:
+    response = mounted_client.get(path, headers={"Accept": "text/html"})
+
+    assert "spa shell" not in response.text

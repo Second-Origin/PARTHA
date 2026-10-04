@@ -60,6 +60,14 @@ updates:
         update-types:
           - minor
           - patch
+      # vitest and its plugins (@vitest/coverage-v8 today) pin each other as
+      # exact peers, so a bump of either alone fails `npm ci` with ERESOLVE.
+      # No update-types filter: majors must move as one PR too. Split vitest 5
+      # bumps (#417, #418) sat red for three weeks because of this.
+      vitest-stack:
+        patterns:
+          - vitest
+          - "@vitest/*"
       frontend-minor-and-patch:
         applies-to: version-updates
         update-types:

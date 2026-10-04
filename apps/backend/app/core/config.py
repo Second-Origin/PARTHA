@@ -3,6 +3,7 @@ import binascii
 import hashlib
 import ipaddress
 import logging
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -122,6 +123,12 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        # Docker-secrets style: one file per setting, named after it (e.g.
+        # auth_secret_key). docker-compose.yml writes its generated keys there so
+        # every process in the container -- the server, alembic, and
+        # scripts run with `docker compose exec` -- reads the same values.
+        # Environment variables still take precedence.
+        secrets_dir=os.environ.get("SECRETS_DIR") or None,
     )
 
     @field_validator("cors_origins", mode="before")

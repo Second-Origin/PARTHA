@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getLayoutedElements } from './layout';
+import { LARGE_GRAPH_EDGE_THRESHOLD, getLayoutedElements, selectVisibleEdges } from './layout';
 import type { ArchEdge, ArchLayer, ArchNode } from '@/shared/types/architecture';
 
 function node(id: string, layer: string, relationshipState: ArchNode['relationshipState'] = 'connected'): ArchNode {
@@ -100,5 +100,63 @@ describe('getLayoutedElements', () => {
     expect(yPositions.size).toBeGreaterThan(1);
     expect(Math.max(...xPositions) - Math.min(...xPositions)).toBeLessThan(1000);
     expect(Math.max(...yPositions) - Math.min(...yPositions)).toBeLessThan(1000);
+  });
+});
+
+describe('large-graph edge limiting', () => {
+  // Distinct directed pairs so the edge count is exact and ids are unique.
+  function denseGraph(nodeCount: number, edgeCount: number) {
+    const nodes = Array.from({ length: nodeCount }, (_, i) => node(`n${i}`, 'business-logic'));
+    const edges: ArchEdge[] = [];
+    for (let s = 0; s < nodeCount && edges.length < edgeCount; s += 1) {
+      for (let t = 0; t < nodeCount && edges.length < edgeCount; t += 1) {
+        if (s !== t) edges.push(edge(`n${s}`, `n${t}`));
+      }
+    }
+    return { nodes, edges };
+  }
+
+  it('keeps every edge at the threshold, so small graphs are unchanged', () => {
+    const { nodes, edges } = denseGraph(60, LARGE_GRAPH_EDGE_THRESHOLD);
+    const result = getLayoutedElements(nodes, edges);
+    expect(result.edgesLimited).toBe(false);
+    expect(result.edgeCount).toBe(LARGE_GRAPH_EDGE_THRESHOLD);
+    expect(result.edges).toHaveLength(LARGE_GRAPH_EDGE_THRESHOLD);
+  });
+
+  it('flags the graph as limited one edge past the threshold and still lays out every node', () => {
+    const { nodes, edges } = denseGraph(60, LARGE_GRAPH_EDGE_THRESHOLD + 1);
+    const result = getLayoutedElements(nodes, edges);
+    expect(result.edgesLimited).toBe(true);
+    expect(result.edgeCount).toBe(LARGE_GRAPH_EDGE_THRESHOLD + 1);
+    expect(result.nodes).toHaveLength(60);
+    expect(new Set(result.nodes.map((n) => `${n.position.x},${n.position.y}`)).size).toBe(60);
+  });
+
+  it('counts only edges between visible nodes against the threshold', () => {
+    const { nodes, edges } = denseGraph(60, LARGE_GRAPH_EDGE_THRESHOLD + 200);
+    const hiddenNodes = new Set(nodes.slice(30).map((n) => n.id));
+    const result = getLayoutedElements(nodes, edges, { hiddenNodes });
+    expect(result.edgeCount).toBeLessThan(edges.length);
+    expect(result.edgesLimited).toBe(result.edgeCount > LARGE_GRAPH_EDGE_THRESHOLD);
+  });
+
+  it('selectVisibleEdges shows nothing, then only the focused node, when limited', () => {
+    const { nodes, edges } = denseGraph(60, LARGE_GRAPH_EDGE_THRESHOLD + 1);
+    const { edges: all } = getLayoutedElements(nodes, edges);
+    expect(selectVisibleEdges(all, true, null)).toEqual([]);
+    const focused = selectVisibleEdges(all, true, 'n0');
+    expect(focused.length).toBeGreaterThan(0);
+    expect(focused.length).toBeLessThan(all.length);
+    expect(focused.every((e) => e.source === 'n0' || e.target === 'n0')).toBe(true);
+  });
+
+  it('selectVisibleEdges returns the same edges untouched when not limited', () => {
+    const { edges: all } = getLayoutedElements(
+      [node('web', 'presentation'), node('api', 'business-logic')],
+      [edge('web', 'api')],
+    );
+    expect(selectVisibleEdges(all, false, null)).toBe(all);
+    expect(selectVisibleEdges(all, false, 'web')).toBe(all);
   });
 });
