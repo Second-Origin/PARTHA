@@ -205,6 +205,10 @@ def load_unresolved_relationship_context(db: Session, snapshot_id: str) -> Unres
                 RiObservation.observed_kind == "import_binding",
             )
         ).all():
+            # The inner join already excludes a null observation_ref; this
+            # narrows the nullable column type SQLAlchemy 2.1 now reports.
+            if observation_ref is None:
+                continue
             referent = binding_referent_by_pk.get(observation_ref)
             if referent is None or not path:
                 continue
