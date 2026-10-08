@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import { authService } from '@/shared/services/api';
 import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { PASSWORD_MIN_LENGTH, useRegisterForm } from '@/features/auth/hooks/useRegisterForm';
@@ -5,6 +7,13 @@ import { AuthShell } from '@/shared/components/layout/AuthShell';
 import { PasswordInput } from '@/shared/components/ui/PasswordInput';
 
 export function RegisterPage() {
+  const [registrationMode, setRegistrationMode] = useState<'open' | 'approval' | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    authService.registrationPolicy({signal:controller.signal}).then(policy => setRegistrationMode(policy.mode)).catch(() => {});
+    return () => controller.abort();
+  }, []);
+
   const { email, setEmail, password, setPassword, submitting, error, submit, redirectState } = useRegisterForm();
 
   return (
@@ -26,13 +35,12 @@ export function RegisterPage() {
               onChange={(event) => setEmail(event.target.value)}
               className="partha-input h-[46px] w-full px-4 text-sm"
             />
-            {/* #374: registration is now gated by an admin-approved email
-                allowlist, not an invite code -- an unapproved email surfaces
-                as the `error` alert below once submitted, but this stays
-                visible up front so it isn't a surprise. */}
             <p className="mt-1.5 text-2xs text-muted-foreground">
-              The first account on a new install becomes its owner. After that, each new email must be approved
-              by whoever runs this install.
+              {registrationMode === 'open'
+                ? 'This development install allows any email to register. Registration does not verify email ownership.'
+                : registrationMode === 'approval'
+                  ? 'After the initial setup account, new emails must be approved by whoever runs this install. Setup does not grant administrator privileges.'
+                  : 'Registration depends on this installation: development permits any email; other environments require approval after initial setup.'}
             </p>
           </div>
           <div>

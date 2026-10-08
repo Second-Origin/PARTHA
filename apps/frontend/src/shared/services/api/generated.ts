@@ -518,6 +518,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/registration-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Registration Policy */
+        get: operations["registration_policy_auth_registration_policy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/documentation/generate": {
         parameters: {
             query?: never;
@@ -1918,6 +1935,14 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** RegistrationPolicyResponse */
+        RegistrationPolicyResponse: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "open" | "approval";
         };
         /** RepositoryFileResponse */
         RepositoryFileResponse: {
@@ -6317,6 +6342,66 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request-rate limit has been exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "rate_limited",
+                     *       "message": "Too many requests. Try again shortly.",
+                     *       "details": {
+                     *         "retryAfterSeconds": 30
+                     *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description An unexpected server error occurred. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "internal_server_error",
+                     *       "message": "An unexpected error occurred.",
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    registration_policy_auth_registration_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installation registration mode; no account or bootstrap state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "mode": "approval"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RegistrationPolicyResponse"];
                 };
             };
             /** @description The request-rate limit has been exceeded. */

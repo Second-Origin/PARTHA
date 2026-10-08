@@ -8,7 +8,14 @@ from app.auth.service import AuthService
 from app.core.config import Settings, get_settings
 from app.core.exceptions import UnauthorizedError
 from app.models.user import User
-from app.schemas.auth import AccountDeletionRequest, AuthResponse, LoginRequest, RegisterRequest, UserResponse
+from app.schemas.auth import (
+    AccountDeletionRequest,
+    AuthResponse,
+    LoginRequest,
+    RegisterRequest,
+    RegistrationPolicyResponse,
+    UserResponse,
+)
 from app.services.account_deletion_service import AccountDeletionService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -49,6 +56,18 @@ def _set_refresh_cookie(response: Response, raw_token: str, settings: Settings) 
         secure=settings.app_env not in {"development", "test"},
         path="/auth",
     )
+
+
+@router.get(
+    "/registration-policy",
+    response_model=RegistrationPolicyResponse,
+    responses=documented_responses(
+        200, "Installation registration mode; no account or bootstrap state.", {"mode": "approval"}, 429, 500
+    ),
+    openapi_extra=suppress_automatic_validation_error(),
+)
+def registration_policy(settings: Settings = Depends(get_settings)) -> RegistrationPolicyResponse:
+    return RegistrationPolicyResponse(mode="open" if settings.app_env == "development" else "approval")
 
 
 @router.post(

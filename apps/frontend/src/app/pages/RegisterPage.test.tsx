@@ -10,6 +10,7 @@ import { ApiError } from '@/shared/services/api/errors';
 describe('RegisterPage (#374 approved-email allowlist)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(authService, 'registrationPolicy').mockResolvedValue({mode:'approval'});
   });
 
   function renderPage() {
@@ -27,10 +28,10 @@ describe('RegisterPage (#374 approved-email allowlist)', () => {
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
   });
 
-  it('explains who approves access on a self-hosted install', () => {
+  it('explains who approves access on a self-hosted install', async () => {
     renderPage();
 
-    expect(screen.getByText(/first account on a new install becomes its owner/i)).toBeInTheDocument();
+    expect(await screen.findByText(/new emails must be approved/i)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Get in touch' })).not.toBeInTheDocument();
   });
 
@@ -55,4 +56,13 @@ describe('RegisterPage (#374 approved-email allowlist)', () => {
     );
     expect(await screen.findByRole('alert')).toHaveTextContent("hasn't been approved");
   });
+});
+
+
+it('describes open development registration without an owner privilege claim', async () => {
+  vi.spyOn(authService, 'registrationPolicy').mockResolvedValue({mode:'open'});
+  const router = createMemoryRouter([{path:'/register',element:<RegisterPage/>}],{initialEntries:['/register']});
+  render(<RouterProvider router={router}/>);
+  expect(await screen.findByText(/development install allows any email/i)).toBeInTheDocument();
+  expect(screen.queryByText(/becomes its owner/i)).not.toBeInTheDocument();
 });

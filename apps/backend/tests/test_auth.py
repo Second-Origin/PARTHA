@@ -578,3 +578,13 @@ def test_anonymous_repository_access_is_rejected(client):
     # an empty seed-user view.
     response = client.get("/repositories")
     assert response.status_code == 401
+
+
+def test_registration_policy_is_public_and_exposes_only_installation_mode(client, monkeypatch):
+    from app.core.config import get_settings
+
+    for environment, expected in [("development", "open"), ("test", "approval"), ("production", "approval")]:
+        monkeypatch.setattr(get_settings(), "app_env", environment)
+        response = client.get("/auth/registration-policy")
+        assert response.status_code == 200
+        assert response.json() == {"mode": expected}

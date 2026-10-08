@@ -73,3 +73,7 @@ class OAuthLinkedIdentity(CamelModel):
 
 class OAuthLinkedIdentitiesResponse(CamelModel):
     identities: list[OAuthLinkedIdentity]
+
+
+class RegistrationPolicyResponse(CamelModel):
+    mode: Literal["open", "approval"]

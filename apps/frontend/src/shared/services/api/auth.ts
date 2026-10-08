@@ -1,3 +1,4 @@
+import type { components } from './generated';
 import { api } from './client';
 import type { RequestConfig } from './client';
 import type {
@@ -14,6 +15,10 @@ import type {
 } from './types';
 
 export const authService = {
+  registrationPolicy(config?: RequestConfig): Promise<components['schemas']['RegistrationPolicyResponse']> {
+    return api.get('/auth/registration-policy', config);
+  },
+
   register(request: RegisterRequest, config?: RequestConfig): Promise<AuthResponse> {
     return api.post('/auth/register', request, config);
   },

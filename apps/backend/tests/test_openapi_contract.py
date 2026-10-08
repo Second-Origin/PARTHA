@@ -12,6 +12,7 @@ from app.core.exceptions import ErrorResponse
 
 
 PUBLIC_OPERATIONS = {
+    ("GET", "/auth/registration-policy"),
     ("POST", "/auth/register"),
     ("POST", "/auth/login"),
     # Logout is deliberately idempotent when its refresh cookie is absent.
@@ -37,6 +38,7 @@ PUBLIC_OPERATIONS = {
 COOKIE_REQUIRED_OPERATIONS = {("POST", "/auth/refresh")}
 
 EXPECTED_RESPONSES = {
+    ("GET", "/auth/registration-policy"): {200, 429, 500},
     ("POST", "/auth/register"): {201, 409, 422, 429, 500},
     ("POST", "/waitlist"): {201, 422, 429, 500},
     ("POST", "/auth/login"): {200, 401, 422, 429, 500},
