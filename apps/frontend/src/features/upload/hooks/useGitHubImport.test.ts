@@ -100,7 +100,7 @@ describe('useGitHubImport', () => {
     expect(backend.fetchRepository).not.toHaveBeenCalled();
   });
 
-  it('rejects a duplicate repository name case-insensitively without calling the backend', async () => {
+  it('delegates same-name identity checks to the backend', async () => {
     repositoryState.repositories = [repository('existing-id', 'Existing-Project')];
     const backend = mockBackendLifecycle();
     const hook = renderHook(() => useGitHubImport());
@@ -115,8 +115,7 @@ describe('useGitHubImport', () => {
     });
 
     expect(imported).toBeNull();
-    expect(hook.result.current.error).toBe('A repository named "existing-project" already exists.');
-    expect(backend.importFromGithub).not.toHaveBeenCalled();
+    expect(backend.importFromGithub).toHaveBeenCalledWith('https://github.com/example/existing-project.git');
     expect(backend.startAnalysis).not.toHaveBeenCalled();
     expect(backend.fetchRepository).not.toHaveBeenCalled();
   });
@@ -256,7 +255,7 @@ describe('useGitHubImport', () => {
     expect(backend.importFromGithub).toHaveBeenCalledWith(url);
   });
 
-  it('names the repository, not the branch, in the duplicate check', async () => {
+  it('allows another branch of a same-name repository to reach the backend', async () => {
     repositoryState.repositories = [repository('existing-id', 'Hello-World')];
     const backend = mockBackendLifecycle();
     const hook = renderHook(() => useGitHubImport());
@@ -268,8 +267,7 @@ describe('useGitHubImport', () => {
       await hook.result.current.analyseGithub();
     });
 
-    expect(hook.result.current.error).toBe('A repository named "Hello-World" already exists.');
-    expect(backend.importFromGithub).not.toHaveBeenCalled();
+    expect(backend.importFromGithub).toHaveBeenCalledWith('https://github.com/octocat/Hello-World/tree/master');
   });
 
   it.each([

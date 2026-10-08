@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { Repository } from '@/shared/types';
 import { backendService } from '@/shared/services/backend';
 import { getErrorMessage } from '@/shared/services/api';
@@ -20,16 +20,11 @@ function extractRepoName(url: string): string {
 }
 
 export function useGitHubImport() {
-  const { repositories, selectRepository } = useRepository();
+  const { selectRepository } = useRepository();
   const addRepository = useAppStore((state) => state.addRepository);
   const [githubUrl, setGithubUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const repositoryNames = useMemo(
-    () => new Set(repositories.map((repo) => repo.name.toLowerCase())),
-    [repositories],
-  );
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -48,12 +43,6 @@ export function useGitHubImport() {
 
     if (!isValidGithubUrl(githubUrl)) {
       setError('Invalid GitHub URL. Format: https://github.com/owner/repository');
-      return null;
-    }
-
-    const repoName = extractRepoName(githubUrl);
-    if (repositoryNames.has(repoName.toLowerCase())) {
-      setError(`A repository named "${repoName}" already exists.`);
       return null;
     }
 
@@ -82,7 +71,7 @@ export function useGitHubImport() {
     } finally {
       setLoading(false);
     }
-  }, [addRepository, githubUrl, repositoryNames, selectRepository]);
+  }, [addRepository, githubUrl, selectRepository]);
 
   return {
     githubUrl,
