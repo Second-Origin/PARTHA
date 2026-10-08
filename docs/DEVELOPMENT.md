@@ -22,7 +22,7 @@ processes, described below. To *use* PARTHA rather than work on it, the root
 [`Dockerfile`](../Dockerfile) (the built frontend served by the same FastAPI
 process) with SQLite and storage in a volume: `docker compose up --build`, then
 `http://localhost:8000`. It runs with `APP_ENV=production`, so the first
-account registered becomes the owner and later ones need
+account registered is permitted without prior approval, receives no administrator role, and later ones need
 `docker compose exec partha python scripts/approve_email.py --email ...`.
 
 ## 1. Clone and start the backend
@@ -61,7 +61,7 @@ npm run dev:frontend
 Open `http://localhost:5173`. There is no seeded account or sample
 repository (and no pre-approved email address) — register a new local account through the UI
 (in the default `APP_ENV=development` any address is accepted; anywhere else the first account
-on an empty instance becomes its owner and every later one must be added with
+on an empty instance is permitted without prior approval and every later email must be added with
 `apps/backend/scripts/approve_email.py`), then add a
 repository (upload an archive or import a public GitHub repository over
 HTTPS) and start analysis.

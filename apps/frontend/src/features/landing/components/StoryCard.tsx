@@ -316,6 +316,7 @@ export function StoryCard({ className }: { className?: string }) {
       onFocusCapture={hold}
       onBlurCapture={release}
     >
+      <p className="absolute bottom-3 left-10 right-10 z-10 text-center text-xs text-muted-foreground">Illustrative architecture; framework labels are not a semantic support claim.</p>
       <div className="absolute inset-0 rounded-[110px] bg-[var(--story-surface)]" />
 
       {VARIANTS.map((variant, i) => (

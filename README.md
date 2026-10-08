@@ -13,7 +13,7 @@
   ·
   <a href="CONTRIBUTING.md">Contributing</a>
   ·
-  <a href="https://discord.gg/qvk9DcxDA">Discord</a>
+  <a href="https://github.com/Second-Origin/PARTHA/issues">Support</a>
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
   <img alt="Apache 2.0 license" src="https://img.shields.io/github/license/Second-Origin/PARTHA">
   <img alt="Python 3.12–3.13" src="https://img.shields.io/badge/Python-3.12--3.13-3776AB?logo=python&logoColor=white">
   <img alt="Node.js 22" src="https://img.shields.io/badge/Node.js-22-5FA04E?logo=nodedotjs&logoColor=white">
-  <a href="https://discord.gg/qvk9DcxDA"><img alt="Discord" src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white"></a>
+  <a href="https://github.com/Second-Origin/PARTHA/issues"><img alt="Support" src="https://img.shields.io/badge/Support-Issues-5865F2?logo=github&logoColor=white"></a>
 </p>
 
 **PARTHA turns one repository revision into a sealed, queryable intelligence model, and serves architecture, dependencies, engineering review, insights, documentation, and AI context from that one model.**
@@ -157,7 +157,7 @@ Supported structural facts retain evidence and provenance back to their reposito
 | Tool | Version | Needed for |
 | --- | --- | --- |
 | Python | 3.12 or 3.13 | Backend |
-| Node.js | 22 | Frontend and workflow scripts |
+| Node.js | 22.22.2+ in the 22.x line | Frontend and workflow scripts |
 | Git | recent | Checkout and public GitHub import |
 
 Development uses SQLite, an in-memory rate limiter, and local filesystem storage. No container runtime or external database is required, and no `.env` file is needed.
@@ -168,14 +168,27 @@ cd PARTHA
 
 # 1. Backend — http://localhost:8000  (OpenAPI at /docs, readiness at /ready)
 cd apps/backend
-python3.13 -m venv .venv && source .venv/bin/activate
+python3.13 -m venv .venv
+source .venv/bin/activate
 pip install -e .
-cd ../.. && npm run dev:backend
+cd ../..
+npm run dev:backend
 
 # 2. Frontend — http://localhost:5173  (second terminal)
 npm ci --prefix apps/frontend
 npm run dev:frontend
 ```
+
+On Windows PowerShell, use the same checkout and frontend commands, with this backend setup in the first terminal:
+
+```powershell
+cd apps/backend
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+```
+
+Python 3.12 is also supported (`python3.12` or `py -3.12`). The Node minimum reflects the locked test tooling, including jsdom.
 
 Open `http://localhost:5173`, register a local account, add a repository, and start analysis.
 
@@ -189,7 +202,7 @@ cd PARTHA
 docker compose up --build
 ```
 
-Open `http://localhost:8000`. The first account you register becomes the owner of the instance; approve anyone else with `docker compose exec partha python scripts/approve_email.py --email them@example.com`. Data and generated secrets live in the `partha-data` volume, and the port is bound to `127.0.0.1` only. See [`docker-compose.yml`](docker-compose.yml) for the details.
+Open `http://localhost:8000`. Initial setup permits the first account without prior approval; this grants no administrator role. Approve later emails with `docker compose exec partha python scripts/approve_email.py --email them@example.com`. Data and generated secrets live in the `partha-data` volume, and the port is bound to `127.0.0.1` only. See [`docker-compose.yml`](docker-compose.yml) for the details.
 
 The [development guide](docs/DEVELOPMENT.md) covers the full test / lint / build / benchmark / Docker / E2E commands and the local database and API-contract failures you are most likely to hit. Review the [AI provider egress policy](docs/security/AI_PROVIDER_EGRESS.md) before configuring any custom or local provider endpoint.
 
@@ -201,7 +214,7 @@ The [development guide](docs/DEVELOPMENT.md) covers the full test / lint / build
 - **Whole-repository analysis.** Every analysis re-reads the whole repository. There is no incremental re-analysis.
 - **No cross-revision comparison.** Lineage preserves revision history; it does not diff two snapshots, detect renames or moves, or compute a historical blast radius. Change-impact analysis is single-snapshot structural traversal only.
 - **Optional AI can be external.** Depending on configuration, AI calls a configured provider; only local providers keep everything on the host. See the [egress policy](docs/security/AI_PROVIDER_EGRESS.md).
-- **In-process worker.** One daemon worker thread inside the API process handles one analysis job at a time; there is no separate worker service or job queue.
+- **In-process worker.** One daemon worker thread inside the API process handles one analysis job at a time; a durable DB-backed `analysis_jobs` queue stores work, leases, retries and cancellation. There is no separate worker service.
 
 Non-auth product routes require authentication, repository access is owner-scoped, provider keys are Fernet-encrypted at rest, and AI egress is validated against a deployment-owned allowlist with DNS pinning — meaningful controls, but not a claim of production hardening. Registration does not verify email ownership, and in the default `development` environment any address may register. See [SECURITY.md](SECURITY.md) and [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) for the details.
 
@@ -221,7 +234,7 @@ Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.
 
 ## Community
 
-- [Discord](https://discord.gg/qvk9DcxDA) — questions, progress, and discussion with maintainers
+- [GitHub support issues](https://github.com/Second-Origin/PARTHA/issues) — questions, progress, and discussion with maintainers
 - [Issues](https://github.com/Second-Origin/PARTHA/issues) — bugs and feature requests
 
 ## Releases

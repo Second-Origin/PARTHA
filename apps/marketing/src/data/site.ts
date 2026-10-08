@@ -5,7 +5,7 @@
 
 export const GITHUB_URL = 'https://github.com/Second-Origin/PARTHA';
 const REPO_BLOB = `${GITHUB_URL}/blob/dev`;
-export const DISCORD_URL = 'https://discord.gg/qvk9DcxDA';
+export const SUPPORT_URL = `${GITHUB_URL}/issues`;
 export const LINKEDIN_URL = 'https://www.linkedin.com/in/parthrohit';
 
 export type FooterLink = {
@@ -43,7 +43,7 @@ export const FOOTER_COLUMNS: { heading: string; links: FooterLink[] }[] = [
     links: [
       { label: 'About', href: `${REPO_BLOB}/README.md`, external: true },
       { label: 'Security', href: `${REPO_BLOB}/SECURITY.md`, external: true },
-      { label: 'Contact', href: DISCORD_URL, external: true },
+      { label: 'Contact', href: SUPPORT_URL, external: true },
       { label: 'Legal', href: `${REPO_BLOB}/LICENSE`, external: true },
     ],
   },
@@ -51,7 +51,7 @@ export const FOOTER_COLUMNS: { heading: string; links: FooterLink[] }[] = [
     heading: 'Connect',
     links: [
       { label: 'LinkedIn', href: LINKEDIN_URL, external: true },
-      { label: 'X', href: DISCORD_URL, external: true },
+      { label: 'Support', href: SUPPORT_URL, external: true },
       { label: 'GitHub', href: GITHUB_URL, external: true },
     ],
   },

@@ -747,7 +747,7 @@ PRODUCT_CAPABILITIES: tuple[Capability, ...] = (
         "repository-lineage",
         SupportStatus.PARTIAL,
         "Durable lineage grouping repeated imports of the same repository (RFC-0002).",
-        "The `repository_lineages` table, owner-scoped grouping, and duplicate-revision detection run on every import; `GET /repositories/{id}/lineage` and the repository detail page expose the ordered history. Refresh and cross-revision comparison on top of a lineage are not built.",
+        "The `repository_lineages` table, owner-scoped grouping, and duplicate-revision detection run on every import; `GET /repositories/{id}/lineage` and the repository detail page expose the ordered history. GitHub branch re-analysis refreshes the remote branch head and retains a new revision in the lineage when it changes. Whole-repository analysis is rerun; cross-revision comparison is not built.",
     ),
     _product_capability(
         "service-interactions",
@@ -873,7 +873,7 @@ PUBLIC_CAPABILITIES: tuple[PublicCapability, ...] = (
         "repository-lineage",
         "Repository lineage",
         PublicStatus.IMPLEMENTED_WITH_DISCLOSED_LIMITS,
-        "Repeated imports of the same repository and branch are grouped into a durable, owner-scoped lineage with duplicate-revision detection (RFC-0002). `GET /repositories/{id}/lineage` returns the ordered history and the repository detail page renders it. Refresh and cross-revision comparison on top of a lineage are not built.",
+        "Repeated imports of the same repository and branch are grouped into a durable, owner-scoped lineage with duplicate-revision detection (RFC-0002). `GET /repositories/{id}/lineage` returns the ordered history and the repository detail page renders it. GitHub branch re-analysis refreshes the remote branch head and retains a new revision in the lineage when it changes. Whole-repository analysis is rerun; cross-revision comparison is not built.",
         ("product.repository-lineage",),
     ),
     PublicCapability(

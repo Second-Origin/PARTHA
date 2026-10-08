@@ -23,8 +23,8 @@ export const faqAnswers = [
   'No. PARTHA is a deterministic extractor. There is no model that hallucinates and no temperature parameter. The same repo at the same revision produces a byte-identical ri.v1 artifact.',
   'They\u2019re flagged, not guessed. Each unresolved call site has a confidence field and provenance. You see exactly what PARTHA could and could not statically resolve.',
   // Not yet exported from the design; PARTHA wording, pending the real copy.
-  'Language support is determined by the extractors available for the selected repository. The sealed snapshot records exactly what was assessed.',
-  'PARTHA analyses a repository at a specific revision and retains a reproducible model for the workspace.',
-  'Connect a repository, select a revision, then use the generated evidence and exports in the engineering workflow that suits your team.',
+  'Python and TypeScript/JavaScript have the strongest semantic extraction. Other languages contribute file inventory; supported manifests and lockfiles contribute dependency declarations. The snapshot reports assessment limits.',
+  'Run PARTHA locally or self-host it in a trusted environment. The public website is a scripted demonstration; repository analysis runs on your installation.',
+  'CI integration is manual: run your installation and use authenticated APIs or exported evidence in your own workflow. PARTHA does not install a hosted CI app or provide automated pull-request review.',
   'ri.v1 is PARTHA\u2019s sealed repository-intelligence snapshot format. It records the exact revision, extracted facts, and available evidence.',
 ] as const;
