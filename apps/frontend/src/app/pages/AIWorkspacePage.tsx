@@ -74,7 +74,7 @@ export function AIWorkspacePage() {
                 </div>
                 <p className="text-sm font-medium text-foreground mb-1">Structural facts for {activeRepository.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  Each answer is generated from the sealed structural facts your last analysis already computed for this repository. No source-file contents are sent to the provider. Your conversation is saved for this repository and restored when you come back, and recent turns are sent along as context.
+                  Each answer is generated from the sealed structural facts your last analysis already computed for this repository. Automatic repository context excludes source-file contents. Each question is answered independently; your transcript is saved for this repository, but prior turns are not sent as context.
                 </p>
               </div>
             </div>
@@ -149,6 +149,7 @@ export function AIWorkspacePage() {
               </span>
             </div>
           )}
+          <p className="mb-2 text-xs text-muted-foreground">Your question is sent verbatim to the configured AI provider, including any source code or secrets you paste. Automatic repository context contains structural facts and paths, not source-file contents. Prior transcript turns are not included.</p>
           <form
             className="flex items-center gap-2"
             onSubmit={(event) => {

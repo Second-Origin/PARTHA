@@ -97,7 +97,6 @@ export function useAIWorkspace() {
       const response = await aiService.query({
         repositoryId: requestedId,
         query: trimmed,
-        context: { conversationHistory: messages.slice(-8) },
       });
       // Discard if a newer ask started (e.g. asking again) or the user switched
       // away from the repository this answer belongs to. A late answer for repo
@@ -113,7 +112,7 @@ export function useAIWorkspace() {
     } finally {
       if (seq === askSeq.current) setLoading(false);
     }
-  }, [messages, query, repositoryFeature.activeRepository]);
+  }, [query, repositoryFeature.activeRepository]);
 
   return {
     ...repositoryFeature,

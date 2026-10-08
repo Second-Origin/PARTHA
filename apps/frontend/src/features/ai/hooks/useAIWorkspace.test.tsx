@@ -73,7 +73,6 @@ describe('useAIWorkspace', () => {
     expect(aiService.query).toHaveBeenCalledWith({
       repositoryId: 'repo-1',
       query: 'Explain this repository.',
-      context: { conversationHistory: [] },
     });
     expect(result.current.messages).toHaveLength(2);
     expect(result.current.messages[1]).toEqual(response.message);
