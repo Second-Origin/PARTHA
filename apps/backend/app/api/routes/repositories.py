@@ -1,6 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Query, Response, UploadFile, status
+from fastapi import APIRouter, Body, Depends, Query, Request, Response, status
+
+from starlette.datastructures import UploadFile
+from starlette.exceptions import HTTPException
+from starlette.formparsers import MultiPartException
+
+from app.core.exceptions import ServiceError, ValidationServiceError
 
 from app.api.deps import get_current_user, get_repository_service
 from app.api.openapi import documented_responses, error_responses, suppress_automatic_validation_error
@@ -13,6 +19,12 @@ from app.schemas.repository import (
     RepositoryResponse,
 )
 from app.services.repository_service import RepositoryService
+
+
+class UploadBodyTooLarge(ServiceError):
+    status_code = 413
+    code = "payload_too_large"
+
 
 # Router-level auth: every repository route requires a valid access token, so a
 # new route added here is protected by default instead of by remembering to add
@@ -100,6 +112,7 @@ _GITHUB_IMPORT_EXAMPLE = {
         "Repository archive accepted and parsed.",
         _REPOSITORY_EXAMPLE,
         401,
+        413,
         409,
         422,
         429,
@@ -109,22 +122,59 @@ _GITHUB_IMPORT_EXAMPLE = {
         "requestBody": {
             "content": {
                 "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["file"],
+                        "properties": {"file": {"type": "string", "format": "binary"}},
+                    },
                     "examples": {
                         "archive": {
                             "summary": "Repository archive",
                             "value": {"file": "example-service.zip"},
                         }
-                    }
+                    },
                 }
             }
         }
     },
 )
 async def upload_repository(
-    file: UploadFile,
+    request: Request,
     service: RepositoryService = Depends(get_repository_service),
 ) -> RepositoryResponse:
-    return await service.import_uploaded_repository(file)
+    # With no declarative File parameter, dependencies authenticate before
+    # the multipart parser reads anything. Bound the complete wire body too:
+    # the file cap alone does not cover multipart fields/headers.
+    limit = service.settings.max_upload_size_bytes + 1024 * 1024
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdecimal() and int(content_length) > limit:
+        raise UploadBodyTooLarge("Upload request exceeds configured maximum size.")
+    consumed = 0
+    exceeded = False
+    original_receive = request.receive
+
+    async def bounded_receive():
+        nonlocal consumed, exceeded
+        message = await original_receive()
+        if message["type"] == "http.request":
+            consumed += len(message.get("body", b""))
+            if consumed > limit:
+                exceeded = True
+                # Starlette closes its spooled files on MultiPartException.
+                raise MultiPartException("Upload request exceeds configured maximum size.")
+        return message
+
+    bounded_request = Request(request.scope, bounded_receive)
+    try:
+        async with bounded_request.form(max_files=1) as form:
+            file = form.get("file")
+            if not isinstance(file, UploadFile):
+                raise ValidationServiceError("A repository archive file is required.")
+            return await service.import_uploaded_repository(file)
+    except HTTPException:
+        if exceeded:
+            raise UploadBodyTooLarge("Upload request exceeds configured maximum size.") from None
+        raise
 
 
 @router.post(

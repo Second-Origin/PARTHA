@@ -15,6 +15,7 @@ _ERROR_DESCRIPTIONS = {
     401: "Authentication is required or the access token is invalid.",
     404: "The requested resource does not exist or is not accessible to this user.",
     409: "The request conflicts with existing state.",
+    413: "The request body exceeds the configured maximum size.",
     422: "The request could not be validated.",
     429: "The request-rate limit has been exceeded.",
     500: "An unexpected server error occurred.",
@@ -39,6 +40,12 @@ _ERROR_EXAMPLES: dict[int, dict[str, Any]] = {
         "code": "conflict_error",
         "message": "Repository has already been imported.",
         "details": {"repositoryId": "11111111-1111-1111-1111-111111111111"},
+        "request_id": "req_01HXYZEXAMPLE",
+    },
+    413: {
+        "code": "payload_too_large",
+        "message": "Upload request exceeds configured maximum size.",
+        "details": None,
         "request_id": "req_01HXYZEXAMPLE",
     },
     422: {

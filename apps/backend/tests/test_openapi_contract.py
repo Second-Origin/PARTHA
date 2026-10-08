@@ -51,7 +51,7 @@ EXPECTED_RESPONSES = {
     ("POST", "/auth/oauth/link/confirm"): {200, 401, 409, 422, 429, 500},
     ("GET", "/auth/oauth/linked"): {200, 401, 429, 500},
     ("DELETE", "/auth/oauth/{provider}"): {204, 401, 404, 422, 429, 500},
-    ("POST", "/repositories/upload"): {201, 401, 409, 422, 429, 500},
+    ("POST", "/repositories/upload"): {201, 401, 409, 413, 422, 429, 500},
     ("POST", "/repositories/github"): {201, 401, 409, 422, 429, 502, 504, 500},
     ("GET", "/repositories"): {200, 401, 429, 500},
     ("GET", "/repositories/{repository_id}"): {200, 401, 404, 429, 500},

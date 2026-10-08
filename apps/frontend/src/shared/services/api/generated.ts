@@ -1396,11 +1396,6 @@ export interface components {
             tokenType: "bearer";
             user: components["schemas"]["UserResponse"];
         };
-        /** Body_upload_repository_repositories_upload_post */
-        Body_upload_repository_repositories_upload_post: {
-            /** File */
-            file: string;
-        };
         /** ChangeOverTimeAssessment */
         ChangeOverTimeAssessment: {
             /**
@@ -8819,9 +8814,12 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_repository_repositories_upload_post"];
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
             };
         };
         responses: {
@@ -8886,6 +8884,22 @@ export interface operations {
                      *       "details": {
                      *         "repositoryId": "11111111-1111-1111-1111-111111111111"
                      *       },
+                     *       "request_id": "req_01HXYZEXAMPLE"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The request body exceeds the configured maximum size. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "payload_too_large",
+                     *       "message": "Upload request exceeds configured maximum size.",
                      *       "request_id": "req_01HXYZEXAMPLE"
                      *     }
                      */
