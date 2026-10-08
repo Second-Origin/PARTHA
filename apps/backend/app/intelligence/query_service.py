@@ -364,6 +364,42 @@ class SnapshotQueryService:
             )
         return snapshot
 
+    def stack_facts(self, repository_id: str) -> ArchitectureSnapshotFacts | None:
+        """Stack-only sealed facts; never materialize graph edges or symbol keys."""
+        try:
+            snapshot = self.require_sealed_snapshot_for_current_revision(repository_id)
+        except NotFoundError:
+            return None
+        nodes = list(
+            self.db.scalars(
+                select(RiNode)
+                .where(RiNode.snapshot_id == snapshot.snapshot_id, RiNode.node_kind.in_(("file", "dependency")))
+                .order_by(RiNode.stable_key, RiNode.id)
+            ).all()
+        )
+        assertions = list(
+            self.db.scalars(
+                select(RiAssertion)
+                .where(
+                    RiAssertion.snapshot_id == snapshot.snapshot_id,
+                    RiAssertion.subject_kind == "file",
+                    RiAssertion.predicate == "classified_as",
+                )
+                .order_by(RiAssertion.subject_key, RiAssertion.predicate, RiAssertion.assertion_id, RiAssertion.id)
+            ).all()
+        )
+        return ArchitectureSnapshotFacts(
+            snapshot=snapshot,
+            nodes=nodes,
+            assertions=assertions,
+            symbol_keys=[],
+            edges=[],
+            node_evidence={},
+            edge_evidence={},
+            diagnostics=[],
+            covered_paths=set(),
+        )
+
     def architecture_facts(self, repository_id: str) -> ArchitectureSnapshotFacts | None:
         """Return the newest sealed snapshot facts for an owner-scoped repository.
 

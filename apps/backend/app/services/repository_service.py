@@ -8,6 +8,8 @@ from uuid import uuid4
 
 from fastapi import UploadFile
 
+from app.analysis.architecture import ArchitectureAnalyzer
+from app.intelligence.query_service import SnapshotQueryService
 from app.core.config import Settings
 from app.core.exceptions import (
     ConflictServiceError,
@@ -410,6 +412,11 @@ class RepositoryService:
         raise ServiceError("Unable to read file preview.", {"path": path}) from exc
 
     def to_response(self, record: RepositoryRecord) -> RepositoryResponse:
+        meta = dict(record.repo_metadata or {})
+        facts = SnapshotQueryService(self.repository.db, self.owner_id).stack_facts(record.id)
+        if facts is not None:
+            stack = ArchitectureAnalyzer().stack_summary(facts)
+            meta.update(language=stack.language, framework=stack.framework, entryPoint=stack.entry_point)
         revision = None
         if record.revision_kind and record.revision_value:
             revision = RepositoryRevision(
@@ -436,7 +443,7 @@ class RepositoryService:
             # Revision identity now comes from the first-class column, not the
             # mutable metadata blob (#87). ``commit_sha`` is a compatibility alias.
             commit_sha=record.revision_value,
-            meta=record.repo_metadata,
+            meta=meta or None,
             file_tree=record.file_tree,
         )
 
