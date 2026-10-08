@@ -20,11 +20,11 @@ export const faqQuestions = [
 
 export const faqAnswers = [
   // Transcribed from the design.
-  'No. PARTHA is a deterministic extractor. There is no model that hallucinates and no temperature parameter. The same repo at the same revision produces a byte-identical ri.v1 artifact.',
-  'They\u2019re flagged, not guessed. Each unresolved call site has a confidence field and provenance. You see exactly what PARTHA could and could not statically resolve.',
+  'Structural extraction does not use an AI model. Equal revision, schema, producer versions, and output configuration produce the same canonical graph hash. Snapshot UUIDs and export timestamps vary; optional AI answers are generated and are not automatically cited.',
+  'Recognized unsupported constructs and unresolved relationships produce diagnostics with available provenance. Detection is incomplete for dynamic dispatch, reflection, and generated code. Unresolved call observations do not each carry a confidence field.',
   // Not yet exported from the design; PARTHA wording, pending the real copy.
   'Language support is determined by the extractors available for the selected repository. The sealed snapshot records exactly what was assessed.',
   'PARTHA analyses a repository at a specific revision and retains a reproducible model for the workspace.',
   'Connect a repository, select a revision, then use the generated evidence and exports in the engineering workflow that suits your team.',
-  'ri.v1 is PARTHA\u2019s sealed repository-intelligence snapshot format. It records the exact revision, extracted facts, and available evidence.',
+  'ri.v1 is the sealed repository-intelligence snapshot format. Supported evidence-backed facts include exact provenance; inventory and heuristic classification have different evidence contracts. The canonical graph hash identifies graph content, independently of snapshot UUIDs and export metadata. Exports are unsigned.',
 ] as const;

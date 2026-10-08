@@ -27,17 +27,17 @@ type Capability = { name: string; quote: string; icon: string };
 const CAPABILITIES: Capability[] = [
   {
     name: 'Deterministic extraction',
-    quote: 'Same repo + same revision \u2192 byte-identical model. No sampling, no temperature, no drift.',
+    quote: 'Canonical graph hashes match for equal revision, schema, producer versions, and output configuration.',
     icon: imgGroup5,
   },
   {
     name: 'Evidence backed',
-    quote: 'Every claim traces to file, line, symbol. No hallucinated APIs, no fabricated call sites.',
+    quote: 'Supported evidence-backed facts trace to exact source spans. Inventory, heuristics, and AI answers have different evidence limits.',
     icon: imgPieceOfEvidence,
   },
   {
     name: 'Sealed models',
-    quote: 'Content-addressed and signed. Reproducible across machines, CI, and time.',
+    quote: 'Sealed snapshots carry a canonical graph hash. Exports are unsigned; snapshot IDs and timestamps can vary.',
     icon: imgSecuredPackage,
   },
   {
@@ -53,7 +53,7 @@ const CAPABILITIES: Capability[] = [
   {
     // The design's copy ends "guessed.s." -- the stray letter is dropped here.
     name: 'Honest about limits',
-    quote: 'Dynamic dispatch, reflection, and generated code are flagged, not guessed.',
+    quote: 'Recognized unsupported constructs produce diagnostics. Dynamic and generated behavior may remain undetected.',
     icon: imgGuarantee,
   },
 ];
