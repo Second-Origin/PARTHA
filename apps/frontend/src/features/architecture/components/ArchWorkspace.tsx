@@ -54,6 +54,8 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
   const reactFlowInstance = useReactFlow();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [relationshipType, setRelationshipType] = useState('all');
+  const relationshipTypes = useMemo(() => [...new Set(model.edges.map(edge => edge.type))].sort(), [model.edges]);
 
   const {
     selectedNodeId,
@@ -101,7 +103,7 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(
-    selectVisibleEdges(layoutEdges, edgesLimited, selectedNodeId),
+    selectVisibleEdges(layoutEdges, edgesLimited, selectedNodeId, relationshipType),
   );
   const nodesInitialized = useNodesInitialized();
 
@@ -112,8 +114,8 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
   // In large-graph mode only the selected module's relationships are drawn;
   // selecting a module changes the edges but never the node layout or camera.
   useEffect(() => {
-    setEdges(selectVisibleEdges(layoutEdges, edgesLimited, selectedNodeId));
-  }, [layoutEdges, edgesLimited, selectedNodeId, setEdges]);
+    setEdges(selectVisibleEdges(layoutEdges, edgesLimited, selectedNodeId, relationshipType));
+  }, [layoutEdges, edgesLimited, selectedNodeId, relationshipType, setEdges]);
 
   useEffect(() => {
     if (!nodesInitialized) return;
@@ -378,6 +380,9 @@ function ArchWorkspaceInner({ model, source }: ArchWorkspaceInnerProps) {
                   onExportSvg={handleExportSvg}
                   onToggleFullscreen={handleToggleFullscreen}
                   isFullscreen={isFullscreen}
+                  relationshipTypes={relationshipTypes}
+                  relationshipType={relationshipType}
+                  onRelationshipTypeChange={setRelationshipType}
                 />
                 {edgesLimited && (
                   <div

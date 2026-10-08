@@ -24,6 +24,9 @@ interface GraphToolbarProps {
   onExportSvg: () => void;
   onToggleFullscreen: () => void;
   isFullscreen: boolean;
+  relationshipTypes: string[];
+  relationshipType: string;
+  onRelationshipTypeChange: (value: string) => void;
 }
 
 export function GraphToolbar({
@@ -35,6 +38,7 @@ export function GraphToolbar({
   onExportSvg,
   onToggleFullscreen,
   isFullscreen,
+  relationshipTypes, relationshipType, onRelationshipTypeChange,
 }: GraphToolbarProps) {
   const {
     searchQuery, setSearchQuery, showGrid, setShowGrid,
@@ -62,6 +66,10 @@ export function GraphToolbar({
       </div>
 
       <div className="pointer-events-auto ml-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-md">
+        <select aria-label="Canvas relationship type" value={relationshipType} onChange={event => onRelationshipTypeChange(event.target.value)} className="rounded-md border border-border bg-card px-2 py-1.5 text-xs">
+          <option value="all">All relationship types</option>
+          {relationshipTypes.map(type => <option key={type} value={type}>{type}</option>)}
+        </select>
         <ToolbarButton icon={ZoomIn} onClick={onZoomIn} title="Zoom In" />
         <ToolbarButton icon={ZoomOut} onClick={onZoomOut} title="Zoom Out" />
         <ToolbarButton icon={Maximize2} onClick={onFitView} title="Fit View" />

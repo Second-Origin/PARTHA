@@ -25,10 +25,11 @@ const NODE_GAP = 35;
 export const LARGE_GRAPH_EDGE_THRESHOLD = 500;
 
 /** Edges to put on the canvas: all of them, or only the focused node's in large-graph mode. */
-export function selectVisibleEdges(edges: Edge[], limited: boolean, focusNodeId: string | null): Edge[] {
-  if (!limited) return edges;
+export function selectVisibleEdges(edges: Edge[], limited: boolean, focusNodeId: string | null, relationshipType = 'all'): Edge[] {
+  const filtered = relationshipType === 'all' ? edges : edges.filter(edge => edge.data?.relationshipType === relationshipType);
+  if (!limited) return filtered;
   if (!focusNodeId) return [];
-  return edges.filter((edge) => edge.source === focusNodeId || edge.target === focusNodeId);
+  return filtered.filter((edge) => edge.source === focusNodeId || edge.target === focusNodeId);
 }
 
 export function getLayoutedElements(
@@ -116,6 +117,7 @@ export function getLayoutedElements(
       source: edge.source,
       target: edge.target,
       type: 'smoothstep',
+      data: { relationshipType: edge.type },
       animated: edge.type === 'data-flow' || edge.type === 'event',
       style: {
         stroke: getEdgeColor(edge.type),

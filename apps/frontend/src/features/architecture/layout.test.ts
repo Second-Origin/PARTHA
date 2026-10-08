@@ -160,3 +160,17 @@ describe('large-graph edge limiting', () => {
     expect(selectVisibleEdges(all, false, 'web')).toBe(all);
   });
 });
+
+
+it('filters canvas relationship types without changing the full evidence edge set', () => {
+  const all = [
+    {id:'a',source:'one',target:'two',data:{relationshipType:'import'}},
+    {id:'b',source:'one',target:'three',data:{relationshipType:'dependency'}},
+    {id:'c',source:'four',target:'three',data:{relationshipType:'import'}},
+  ];
+  expect(selectVisibleEdges(all,false,null,'import').map(edge=>edge.id)).toEqual(['a','c']);
+  expect(selectVisibleEdges(all,true,'one','import').map(edge=>edge.id)).toEqual(['a']);
+  expect(selectVisibleEdges(all,true,null,'import')).toEqual([]);
+  expect(selectVisibleEdges(all,false,null)).toEqual(all);
+  expect(all).toHaveLength(3);
+});
