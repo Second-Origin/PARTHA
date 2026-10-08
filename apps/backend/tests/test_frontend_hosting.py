@@ -166,3 +166,34 @@ def test_page_load_on_a_browser_facing_api_path_is_left_to_the_api(mounted_clien
     response = mounted_client.get(path, headers={"Accept": "text/html"})
 
     assert "spa shell" not in response.text
+
+
+@pytest.mark.parametrize(
+    "accept,status",
+    [
+        ("text/html;q=0,application/json", 401),
+        ("TEXT/HTML;Q=1,application/json;q=0.5", 200),
+        ("text/html;q=0.2,application/json;q=0.8", 401),
+        ("text/*;q=1,text/html;q=0,application/json", 401),
+        ("text/html;q=0,TEXT/HTML;q=0.8,application/json;q=0.5", 200),
+    ],
+)
+def test_spa_navigation_negotiates_quality(mounted_client, accept, status):
+    assert mounted_client.get("/repositories", headers={"Accept": accept}).status_code == status
+
+
+def test_head_navigation_has_shell_headers_and_no_body(mounted_client):
+    response = mounted_client.head("/repositories", headers={"Accept": "text/html"})
+    assert response.status_code == 200
+    assert response.content == b""
+    assert response.headers["content-type"].startswith("text/html")
+
+
+def test_authenticated_api_request_is_not_rewritten(mounted_client):
+    response = mounted_client.get("/repositories", headers={"Accept": "text/html", "Authorization": "Bearer invalid"})
+    assert response.status_code == 401
+    assert response.headers["content-type"].startswith("application/json")
+
+
+def test_unknown_path_rejects_unacceptable_shell(mounted_client):
+    assert mounted_client.get("/unknown", headers={"Accept": "text/html;q=0,application/json"}).status_code == 406

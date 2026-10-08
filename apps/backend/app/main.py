@@ -6,7 +6,7 @@ import logging
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Literal
 
-from fastapi import Depends, FastAPI, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -288,7 +288,36 @@ def create_app() -> FastAPI:
 # API paths a browser legitimately loads as a page: the interactive docs, the
 # OAuth redirects (#288), and the probes. Every other API route needs a bearer
 # token that a page load can't carry, so the browser can only mean the SPA.
-_BROWSER_FACING_API_PREFIXES = ("/docs", "/redoc", "/openapi.json", "/auth/oauth/", "/health", "/ready", "/metrics")
+_BROWSER_FACING_API_PREFIXES = ("/docs", "/redoc", "/openapi.json", "/auth", "/health", "/ready", "/metrics")
+
+
+def _media_quality(accept: str, offered: str) -> float:
+    """Most-specific media range wins; duplicate ranges use highest quality."""
+    major = offered.split("/", 1)[0]
+    candidates: list[tuple[int, float]] = []
+    for raw in accept.lower().split(","):
+        parts = [part.strip() for part in raw.split(";")]
+        media = parts[0]
+        specificity = 2 if media == offered else 1 if media == f"{major}/*" else 0 if media == "*/*" else -1
+        if specificity < 0:
+            continue
+        quality = 1.0
+        for parameter in parts[1:]:
+            key, _, value = parameter.partition("=")
+            if key.strip() == "q":
+                try:
+                    quality = float(value.strip())
+                except ValueError:
+                    quality = 0.0
+        if not 0.0 <= quality <= 1.0:
+            quality = 0.0
+        candidates.append((specificity, quality))
+    return max(candidates, default=(-1, 0.0))[1]
+
+
+def _prefers_html(accept: str) -> bool:
+    html = _media_quality(accept, "text/html")
+    return html > 0 and html >= _media_quality(accept, "application/json")
 
 
 class SpaNavigationMiddleware:
@@ -309,10 +338,13 @@ class SpaNavigationMiddleware:
     async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
         if scope["type"] == "http" and scope["method"] in {"GET", "HEAD"} and scope["path"] != "/":
             path: str = scope["path"]
-            accept = dict(scope["headers"]).get(b"accept", b"")
+            headers = dict(scope["headers"])
+            accept = headers.get(b"accept", b"").decode("latin-1")
             if (
-                b"text/html" in accept
-                and not path.startswith(_BROWSER_FACING_API_PREFIXES)
+                "text/html" in accept.lower()
+                and _prefers_html(accept)
+                and b"authorization" not in headers
+                and not any(path == prefix or path.startswith(prefix + "/") for prefix in _BROWSER_FACING_API_PREFIXES)
                 and not path.startswith("/assets/")
             ):
                 scope = {**scope, "path": "/", "raw_path": b"/"}
@@ -347,8 +379,8 @@ def _mount_frontend(app: FastAPI, dist_path: Path) -> None:
 
     app.add_middleware(SpaNavigationMiddleware)
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_frontend(full_path: str) -> FileResponse:
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+    async def serve_frontend(full_path: str, request: Request) -> FileResponse:
         # Resolve before checking containment -- otherwise a full_path like
         # "../../etc/passwd" would pass a naive prefix check but still land
         # outside dist_path once the OS follows the ".." segments.
@@ -363,6 +395,8 @@ def _mount_frontend(app: FastAPI, dist_path: Path) -> None:
         # Anything else -- a client-side route like /dashboard, or a direct
         # refresh on one -- gets the SPA shell; react-router takes it from
         # there instead of the browser seeing a bare 404.
+        if not _prefers_html(request.headers.get("accept", "*/*")):
+            raise HTTPException(status_code=406, detail="No acceptable SPA representation.")
         return FileResponse(index_path, headers=shell_headers)
 
 
