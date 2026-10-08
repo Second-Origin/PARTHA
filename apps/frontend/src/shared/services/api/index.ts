@@ -12,7 +12,6 @@ export { reviewService } from './review';
 export { dependencyService } from './dependencies';
 export { aiService } from './ai';
 export { documentationService, exportService } from './documentation';
-export { waitlistService } from './waitlist';
 
 export type * from './types';
 export type * from './generated';
