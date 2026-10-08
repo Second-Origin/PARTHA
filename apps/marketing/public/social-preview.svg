@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<rect width="1200" height="630" fill="#f6f1e9"/><rect x="48" y="48" width="1104" height="534" rx="32" fill="#fffaf3" stroke="#ff5b13"/>
+<g fill="none" stroke="#ff5b13" stroke-width="7"><circle cx="110" cy="126" r="34"/><circle cx="110" cy="126" r="23"/><path d="M110 160v-34h12v20M98 145v-31h24"/></g>
+<g font-family="Arial, sans-serif" fill="#25231f"><text x="166" y="145" font-size="52" letter-spacing="8">PARTHA</text><text x="92" y="265" font-size="54" font-weight="700">Repository</text><text x="92" y="330" font-size="54" font-weight="700">intelligence</text><text x="94" y="402" font-size="25">Evidence from sealed snapshots</text><text x="94" y="450" font-size="22" fill="#6a6359">Run on your own installation</text><text x="94" y="529" font-size="23" fill="#ae430c">www.partha.uk</text></g>
+<g stroke="#ff5b13" stroke-width="4" fill="none"><path d="M830 215v80h-120v115M830 295h175v115M710 440h295"/></g>
+<g font-family="Arial, sans-serif" font-size="22" text-anchor="middle" fill="#25231f"><rect x="747" y="155" width="166" height="76" rx="18" fill="#ffe0c8"/><text x="830" y="201">Source</text><rect x="633" y="388" width="166" height="76" rx="18" fill="#eef3df"/><text x="716" y="434">Facts</text><rect x="923" y="388" width="166" height="76" rx="18" fill="#e4eef3"/><text x="1006" y="434">Evidence</text></g>
+</svg>
