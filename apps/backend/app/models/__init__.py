@@ -3,6 +3,7 @@ from app.models.ai_conversation import AiConversationMessageRecord
 from app.models.ai_provider_config import AiProviderConfigRecord
 from app.models.analysis_job import AnalysisJob
 from app.models.approved_email import ApprovedEmail
+from app.models.installation_bootstrap import InstallationBootstrap
 from app.models.invite_token import InviteToken
 from app.models.oauth_flow_state import OAuthFlowState
 from app.models.oauth_identity import OAuthIdentity
@@ -29,6 +30,7 @@ __all__ = [
     "AiProviderConfigRecord",
     "AnalysisJob",
     "ApprovedEmail",
+    "InstallationBootstrap",
     "InviteToken",
     "OAuthFlowState",
     "OAuthIdentity",

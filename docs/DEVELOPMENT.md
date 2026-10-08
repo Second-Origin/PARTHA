@@ -169,3 +169,12 @@ commands run), expected versus actual behaviour, and any relevant log output
 privately through [SECURITY.md](../SECURITY.md) instead. For a question that
 isn't yet a confirmed bug, ask on [Discord](https://discord.gg/qvk9DcxDA)
 first.
+
+### Installation bootstrap permanence
+
+Outside development, the first successful registration can claim a fresh install once.
+The claim is committed atomically with account creation and survives deletion of every account.
+Subsequent addresses require operator approval; no administrator role or bootstrap reset is introduced.
+Migration 0019 backfills claimed installations from surviving users, used approvals, or account-deletion audits.
+A claimed installation cannot downgrade through 0019: restore a pre-upgrade backup for rollback, preserving
+the full database and secrets volume. This deliberately prevents a downgrade from reopening registration.

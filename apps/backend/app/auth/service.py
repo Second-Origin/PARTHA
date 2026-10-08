@@ -3,6 +3,8 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -17,6 +19,7 @@ from app.auth.security import (
 from app.core.config import Settings
 from app.core.exceptions import ConflictServiceError, UnauthorizedError, ValidationServiceError
 from app.models.approved_email import ApprovedEmail
+from app.models.installation_bootstrap import BOOTSTRAP_ID, InstallationBootstrap
 from app.models.refresh_token import RefreshToken
 from app.models.user import SEED_USER_ID, User
 
@@ -118,48 +121,15 @@ class AuthService:
         raise ValidationServiceError(EMAIL_NOT_APPROVED)
 
     def _first_user_bootstrap(self, normalized_email: str) -> ApprovedEmail | None:
-        """#388: the first real account ever registered on a fresh instance
-        becomes its owner. Checked as the fallback for every environment the
-        #384 dev-only bypass above doesn't already cover unconditionally --
-        so in practice this is what makes registration possible at all in
-        `staging`/`production`/any other real deployment.
+        """Claim setup once, atomically, in the registration transaction.
 
-        Without this, a genuine self-hoster running their own copy of PARTHA
-        in production mode has no way to ever register at all: nobody is
-        pre-approved on a fresh database (the #374 migration originally
-        seeded the project owner's own address; that was removed, #465,
-        because a public pre-approved address is claimable by anyone). This
-        is the self-hoster claiming their own instance, the
-        same bootstrap pattern used by most self-hosted software (the first
-        person to reach the setup wizard becomes the admin).
-
-        "First" is measured by the `users` table being otherwise empty,
-        excluding the permanent system placeholder row every database gets
-        from the 0002 migration (SEED_USER_ID) -- that row is not a real
-        account and must never itself count as "already have an owner".
-
-        Every registration after the first real one goes through the normal
-        allowlist exactly as before; this only ever changes what happens
-        once, the very first time.
-
-        Known, accepted limitation: this check and the eventual `User`
-        insert are not atomic with each other (the insert happens later, in
-        _create_approved_user). Two concurrent *first-ever* registrations on
-        the same fresh database could both observe zero real users and both
-        be auto-approved as owner. The window only exists for the single
-        moment between a fresh instance's first boot and its first
-        successful registration, is closed permanently the instant one
-        registration commits, and does not reopen or weaken the allowlist
-        for anyone after that. Closing it completely would need a
-        dedicated, atomically-claimed mutex (e.g. a single-row table claimed
-        via a unique-constraint insert, the same pattern _create_approved_user
-        already uses for email-uniqueness races) -- deliberately not added
-        here; flagged instead of guessed at, since it's a real design
-        tradeoff between full correctness and a new migration/table for a
-        narrow, single-operator bootstrap scenario.
+        The claim has no user foreign key and cannot reopen through deletion.
+        Rollback on failed registration releases an uncommitted claim. Existing
+        installs are backfilled by migration; the count also covers create_all
+        fixtures that prepopulate users directly.
         """
         real_user_count = self.db.scalar(select(func.count()).select_from(User).where(User.id != SEED_USER_ID))
-        if real_user_count:
+        if real_user_count or not self._claim_installation():
             return None
 
         bootstrap_approval = ApprovedEmail(
@@ -171,6 +141,12 @@ class AuthService:
         self.db.add(bootstrap_approval)
         return bootstrap_approval
 
+    def _claim_installation(self) -> bool:
+        dialect = self.db.get_bind().dialect.name
+        insert = sqlite_insert if dialect == "sqlite" else pg_insert
+        statement = insert(InstallationBootstrap).values(id=BOOTSTRAP_ID).on_conflict_do_nothing()
+        return self.db.execute(statement.returning(InstallationBootstrap.id)).scalar_one_or_none() is not None
+
     def _create_approved_user(self, user: User, approval: ApprovedEmail) -> tuple[User, str, str]:
         self.db.add(user)
         try:
@@ -179,6 +155,8 @@ class AuthService:
             # only at commit -- the identical handling is needed at both
             # points, since either can be where the race actually lands.
             self.db.flush()
+            # Approved/dev registrations close setup in the same transaction.
+            self._claim_installation()
         except IntegrityError:
             self.db.rollback()
             if self.db.scalars(select(User).where(User.email == user.email)).first() is not None:

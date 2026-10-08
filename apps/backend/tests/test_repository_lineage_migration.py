@@ -399,7 +399,9 @@ def test_backfill_groups_correctly_and_leaves_ineligible_rows_standalone(lineage
         assert len(attachments) == 7
         assert len(set(attachments)) == 7
 
-    command.downgrade(cfg, "base")
+    # The new permanent setup claim deliberately forbids populated downgrade.
+    with pytest.raises(RuntimeError, match="Cannot remove a claimed"):
+        command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
 
 
@@ -452,7 +454,9 @@ def test_backfill_rerun_is_idempotent(lineage_migration_db):
         assert sequences == [1, 2]
 
     command.upgrade(cfg, "head")
-    command.downgrade(cfg, "base")
+    # The new permanent setup claim deliberately forbids populated downgrade.
+    with pytest.raises(RuntimeError, match="Cannot remove a claimed"):
+        command.downgrade(cfg, "base")
 
 
 def test_cross_owner_lineage_attachment_is_rejected_by_the_database_even_if_forced(lineage_migration_db):
