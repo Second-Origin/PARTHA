@@ -443,6 +443,9 @@ jobs:
       - name: Lint
         run: npm --prefix apps/marketing run lint
 
+      - name: Capability parity
+        run: npm --prefix apps/marketing test
+
       - name: Typecheck
         run: npm --prefix apps/marketing run typecheck
 

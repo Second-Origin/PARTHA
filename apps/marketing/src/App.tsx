@@ -21,7 +21,7 @@ import { useLandingTheme } from '@/hooks/useLandingTheme';
  *
  * The two hero calls to action open full-screen panels over the page rather
  * than navigating away: "See how it works" runs a scripted walkthrough of a
- * real analysis, and "Analyze a Repository" shows how to run PARTHA against
+ * fictional interface and proposed checks, and "Analyze a Repository" shows how to run PARTHA against
  * your own code. Closing either returns the reader exactly where they were.
  */
 export function App() {

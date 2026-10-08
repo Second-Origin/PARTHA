@@ -9,7 +9,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "test": "node --test tests/capability-parity.test.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",
