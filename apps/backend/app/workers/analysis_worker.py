@@ -409,7 +409,7 @@ class AnalysisWorker:
         try:
             deferred_dependencies: list[ProducedExtraction] = []
             for produced in pipeline.iter_run(
-                sources,
+                self._sources_with_progress(ctx, sources),
                 check_cancelled=lambda: self._check_heartbeat(ctx),
             ):
                 if any(node.node_kind == "dependency" for node in produced.result.nodes):
@@ -434,6 +434,24 @@ class AnalysisWorker:
             self._check_heartbeat(ctx)
         finally:
             ctx.release_writes = False
+
+    def _sources_with_progress(
+        self, ctx: _StageContext, sources: RepositorySourceStream
+    ) -> Iterator[tuple[str, bytes]]:
+        """Publish completed-file progress without counting extractor yields as files."""
+        total = max(1, self._require_record(ctx).file_count)
+        published = 35
+        for completed, source in enumerate(sources, start=1):
+            yield source
+            # The pipeline has finished this source before it requests the next one.
+            progress = 35 + min(35, completed * 35 // max(1, total))
+            if progress > published:
+                self._check_heartbeat(ctx)
+                record = self._require_record(ctx)
+                record.analysis_stage = "extracting-modules"
+                record.analysis_progress = progress
+                self._checkpoint(ctx, "extracting-modules", progress)
+                published = progress
 
     def _stage_seal(self, ctx: _StageContext) -> None:
         """Seal the building snapshot (commits internally, see the module note)."""

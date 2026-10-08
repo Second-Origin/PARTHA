@@ -1039,3 +1039,25 @@ def test_exception_from_reclaimed_attempt_does_not_overwrite_replacement(session
         assert job.snapshot_id is not None
         assert session.scalar(select(func.count()).select_from(RiSnapshot)) == 1
         assert session.get(RiSnapshot, job.snapshot_id).state == "completed"
+
+
+def test_extraction_progress_advances_with_completed_files(session_factory, tmp_path, monkeypatch):
+    with session_factory() as session:
+        owner = _owner(session)
+        record = _repository_with_sources(session, owner, tmp_path / "progress-repo")
+        AnalysisJobService(session, owner.id).submit(record.id)
+    worker = AnalysisWorker(session_factory, worker_id="progress", lease_seconds=60)
+    observed = []
+    checkpoint = worker._checkpoint
+
+    def capture(ctx, stage, progress):
+        checkpoint(ctx, stage, progress)
+        observed.append((stage, progress))
+
+    monkeypatch.setattr(worker, "_checkpoint", capture)
+    assert worker.run_once()
+    extraction = [progress for stage, progress in observed if stage == "extracting-modules"]
+    assert extraction[0] == 35
+    assert any(35 < progress <= 70 for progress in extraction)
+    assert extraction == sorted(set(extraction))
+    assert max(extraction) < 100
