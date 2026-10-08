@@ -719,3 +719,24 @@ class TestLinkedIdentities:
         service = _make_service(db, {})
         assert [i.provider for i in service.linked_identities(user_a.id)] == ["google"]
         assert [i.provider for i in service.linked_identities(user_b.id)] == ["github"]
+
+
+@pytest.mark.parametrize("approved", [False, True])
+def test_public_oauth_capability_matches_verified_identity_creation_gate(db, approved):
+    import asyncio
+    from app.extraction.support_matrix import PUBLIC_CAPABILITIES
+
+    capability = next(item for item in PUBLIC_CAPABILITIES if item.id == "authentication-isolation")
+    assert "can create an account for a verified new identity" in capability.statement
+    assert "same email-approval/bootstrap gate" in capability.statement
+    _create_user(db, "existing-contract@example.com")
+    email = "capability-newcomer@example.com"
+    if approved:
+        approve_email(db, email)
+    identity = OAuthIdentityInfo(subject="contract-identity", email=email, email_verified=True, display_name="Contract")
+    service = _make_service(db, {"google": FakeProviderClient(identity=identity)})
+    url = service.start("google", intent="login", frontend_redirect_base="http://localhost:5173")
+    state = url.split("state=")[1].split("&")[0]
+    _, result = asyncio.run(service.complete_callback("google", state=state, code="c", provider_error=None))
+    assert (result.kind == "session") is approved
+    assert db.query(User).filter(User.email == email).count() == int(approved)
