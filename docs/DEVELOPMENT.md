@@ -169,3 +169,9 @@ commands run), expected versus actual behaviour, and any relevant log output
 privately through [SECURITY.md](../SECURITY.md) instead. For a question that
 isn't yet a confirmed bug, ask on [Discord](https://discord.gg/qvk9DcxDA)
 first.
+
+### Archive metadata limits
+
+ZIP central-directory metadata is checked before ZipInfo materialization: at most 16 MiB
+and the configured entry count. TAR entries are processed incrementally under entry/decompressed-size
+limits. PAX/GNU extended header bodies are bounded to 16 MiB cumulatively before buffering, including format detection. These bounds do not isolate parser CPU/RSS into an OS-limited subprocess; deployment-level resource isolation is still needed. No exhaustive DoS guarantee is claimed.
