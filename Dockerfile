@@ -27,6 +27,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends build-essential \
   && rm -rf /var/lib/apt/lists/*
 
+COPY apps/backend/requirements.txt ./
 COPY apps/backend/pyproject.toml ./
 COPY apps/backend/app ./app
 COPY apps/backend/alembic.ini ./
@@ -35,7 +36,12 @@ COPY apps/backend/alembic ./alembic
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip \
-  && pip install --no-cache-dir -e .
+  && pip install --no-cache-dir -r requirements.txt \
+  && pip install --no-cache-dir --no-deps -e .
+COPY apps/backend/scripts/check_runtime_dependencies.py ./scripts/check_runtime_dependencies.py
+RUN python scripts/check_runtime_dependencies.py requirements.txt \
+  && pip check \
+  && python -c "import app.main, uvicorn, sqlalchemy, cryptography"
 
 FROM python:3.13-slim AS backend
 ENV PYTHONDONTWRITEBYTECODE=1 \
