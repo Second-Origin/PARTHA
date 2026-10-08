@@ -169,3 +169,10 @@ commands run), expected versus actual behaviour, and any relevant log output
 privately through [SECURITY.md](../SECURITY.md) instead. For a question that
 isn't yet a confirmed bug, ask on [Discord](https://discord.gg/qvk9DcxDA)
 first.
+
+### Slow GitHub imports
+
+Import and branch re-analysis are synchronous operations. The browser allows three minutes
+by default (the server clone timeout is two minutes) and does not automatically retry either POST.
+A browser timeout/cancel does not guarantee that server cloning stopped. Check the repository
+list for late success before manually importing again; exact revision duplicates are decided by the backend.

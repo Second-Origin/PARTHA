@@ -26,7 +26,7 @@ export const repositoryService = {
   },
 
   reanalyse(id: string, config?: RequestConfig): Promise<RepositoryReanalysisResponse> {
-    return api.post(`/repositories/${id}/reanalyse`, undefined, config);
+    return api.post(`/repositories/${id}/reanalyse`, undefined, { timeout: 180000, ...config, retries: 0 });
   },
 
   getFile(id: string, path: string, config?: RequestConfig): Promise<RepositoryFileResponse> {
@@ -38,7 +38,9 @@ export const repositoryService = {
   },
 
   importFromGithub(request: ImportGithubRequest, config?: RequestConfig): Promise<RepositoryResponse> {
-    return api.post('/repositories/github', request, config);
+    // A timeout does not cancel the server's synchronous clone. Never
+    // automatically overlap another non-idempotent import attempt.
+    return api.post('/repositories/github', request, { timeout: 180000, ...config, retries: 0 });
   },
 };
 

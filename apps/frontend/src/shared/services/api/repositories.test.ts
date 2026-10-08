@@ -50,7 +50,7 @@ describe('repositoryService', () => {
 
     const result = await repositoryService.importFromGithub(request as never);
 
-    expect(api.post).toHaveBeenCalledWith('/repositories/github', request, undefined);
+    expect(api.post).toHaveBeenCalledWith('/repositories/github', request, { timeout: 180000, retries: 0 });
     expect(result).toBe(response);
   });
 
