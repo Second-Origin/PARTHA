@@ -18,6 +18,8 @@ vi.mock('@/shared/services/api/architecture', () => ({
   },
 }));
 
+vi.mock('./localEditor', () => ({}));
+
 vi.mock('@monaco-editor/react', () => ({
   default: ({ value }: { value: string }) => <pre data-testid="editor-stub">{value}</pre>,
 }));

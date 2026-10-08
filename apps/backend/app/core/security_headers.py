@@ -63,9 +63,8 @@ def frontend_content_security_policy(index_html: str) -> str:
     The API's deny-all policy above blocks every script and stylesheet the page
     needs, so the shell gets its own. Inline scripts in index.html are allowed by
     hash, computed from the built file itself so editing that script can never
-    silently break the page. Third-party origins are exactly the ones the
-    frontend loads today: Google Fonts, and the Monaco editor from jsDelivr,
-    which runs its language workers from blob: URLs. Inline styles are allowed
+    silently break the page. Editor scripts and workers are bundled locally. Fonts use local system
+    fallbacks. No third-party font or executable CDN origin is permitted. Inline styles are allowed
     because the graph and editor libraries inject their own.
     """
 
@@ -75,13 +74,12 @@ def frontend_content_security_policy(index_html: str) -> str:
             "'sha256-" + base64.b64encode(hashlib.sha256(body.encode("utf-8")).digest()).decode() + "'"
             for body in _inline_scripts(index_html)
         ),
-        "https://cdn.jsdelivr.net",
     ]
     directives = [
         "default-src 'self'",
         "script-src " + " ".join(script_sources),
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
-        "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
+        "style-src 'self' 'unsafe-inline'",
+        "font-src 'self' data:",
         "img-src 'self' data: blob:",
         "worker-src 'self' blob:",
         "connect-src 'self'",

@@ -75,3 +75,12 @@ def test_frontend_policy_hashes_inline_scripts_however_the_tag_is_written():
     assert source("\n  b();\n") in script_src
     # An external script is allowed by 'self', not by a hash of its empty body.
     assert source("") not in script_src
+
+
+def test_frontend_policy_excludes_executable_and_font_cdns():
+    from app.core.security_headers import frontend_content_security_policy
+
+    policy = frontend_content_security_policy("<html></html>")
+    assert "https://" not in policy
+    assert "worker-src 'self' blob:" in policy
+    assert "style-src 'self' 'unsafe-inline'" in policy

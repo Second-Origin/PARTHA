@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
+import './localEditor';
 import { Copy, Check, FileWarning, Loader2, ShieldAlert, Target } from 'lucide-react';
 import type { FileTreeNode } from '@/shared/types';
 import { repositoryService } from '@/shared/services/api/repositories';
