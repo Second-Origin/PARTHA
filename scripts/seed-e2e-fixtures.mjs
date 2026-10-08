@@ -24,6 +24,13 @@ const moduleSource = (name, imports = []) => [
 
 const FIXTURES = [
   {
+    label: 'scale-over-500',
+    files: Object.fromEntries([
+      ['package.json', JSON.stringify({name:'fixture-scale',dependencies:Object.fromEntries(Array.from({length:8},(_,i)=>[`fixture-package-${i}`,'1.0.0']))})],
+      ...Array.from({length:80},(_,i)=>[`src/feature-${i}/index.ts`,moduleSource(`Module${i}`,Array.from({length:8},(_,j)=>`fixture-package-${j}`))]),
+    ]),
+  },
+  {
     label: 'small',
     files: {
       'package.json': '{"name":"fixture-small","dependencies":{"react":"18.3.1"}}',

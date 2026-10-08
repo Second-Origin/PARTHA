@@ -51,7 +51,7 @@ async function openSurface(page: Page, name: string) {
 
 async function selectRepository(page: Page, fixture: Fixture) {
   const trigger = page.locator('header button').filter({
-    hasText: /^(No repository|small|medium|large-multi|large-single|long-labels|disconnected-unresolved|unanalysed)$/,
+    hasText: /^(No repository|small|medium|large-multi|large-single|long-labels|disconnected-unresolved|scale-over-500|unanalysed)$/,
   }).first();
   await trigger.click();
   await page.locator('button').filter({ hasText: new RegExp(`^${fixture.name}$`) }).last().click();
@@ -328,4 +328,32 @@ test.describe('architecture graph visual acceptance', () => {
     await expect(manifest).toContainText(/not a digital signature/i);
     await capture(manifest, 'revision-manifest', testInfo);
   });
+});
+
+
+test('over-500 relationship fixture remains usable without discarding evidence', async ({page}, testInfo) => {
+  const fixture = byLabel('scale-over-500');
+  expect(fixture.nodes).toBeGreaterThanOrEqual(80);
+  expect(fixture.edges).toBeGreaterThan(500);
+  await login(page);
+  const started = performance.now();
+  await openArchitecture(page, fixture);
+  await waitForGraph(page);
+  const renderedMs = performance.now() - started;
+  await expect(page.getByTestId('large-graph-notice')).toBeVisible();
+  expect(await page.locator('.react-flow__edge').count()).toBe(0);
+  const visibleNodeId = await graphNodes(page).evaluateAll(elements => {
+    const canvas = document.querySelector('.react-flow')!.getBoundingClientRect();
+    return elements.find(element => {
+      const box = element.getBoundingClientRect();
+      return box.x > canvas.x + 60 && box.right < canvas.right - 60 && box.y > canvas.y + 80 && box.bottom < canvas.bottom - 80;
+    })?.getAttribute('data-id');
+  });
+  expect(visibleNodeId).toBeTruthy();
+  await page.locator(`.react-flow__node[data-id="${visibleNodeId}"]`).click();
+  await expect.poll(() => page.locator('.react-flow__edge').count()).toBeGreaterThan(0);
+  await page.getByRole('button', {name:'Zoom In',exact:true}).click();
+  expect(renderedMs).toBeLessThan(20_000);
+  await testInfo.attach('scale-measurement', {body:JSON.stringify({nodes:fixture.nodes,edges:fixture.edges,renderedMs}),contentType:'application/json'});
+  await capture(page,'architecture-over-500',testInfo);
 });
