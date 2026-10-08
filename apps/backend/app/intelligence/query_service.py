@@ -83,7 +83,7 @@ class ArchitectureSnapshotFacts:
 
     snapshot: RiSnapshot
     nodes: list[RiNode]
-    #: Stable keys of every ``symbol`` node in the snapshot, and nothing else.
+    #: Stable keys of top-level ``symbol`` definitions used by module inventory.
     #: The architecture consumer needs to know what each file defines, but
     #: whole symbol rows are what dominate a large snapshot -- see the bound in
     #: ``architecture_facts``. Keys alone are short strings and carry the file
@@ -391,10 +391,16 @@ class SnapshotQueryService:
         # that symbol is an endpoint of a relationship edge. Symbols dominate a
         # large snapshot, so excluding the unreferenced ones is the bound that
         # matters here — while still returning every node the consumer reads.
-        endpoint_keys = {key for edge in edges for key in (edge.subject_key, edge.object_key)}
-        node_filter = RiNode.node_kind.in_(ARCHITECTURE_NODE_KINDS)
-        if endpoint_keys:
-            node_filter = or_(node_filter, RiNode.stable_key.in_(endpoint_keys))
+        # Keep endpoint membership in SQL: a large graph must not become one
+        # bind parameter per endpoint (SQLite/PostgreSQL parameter limits).
+        endpoint_filter = (
+            RiEdge.snapshot_id == snapshot.snapshot_id,
+            RiEdge.predicate.in_(ARCHITECTURE_FACT_PREDICATES),
+        )
+        endpoint_keys = (
+            select(RiEdge.subject_key).where(*endpoint_filter).union(select(RiEdge.object_key).where(*endpoint_filter))
+        )
+        node_filter = or_(RiNode.node_kind.in_(ARCHITECTURE_NODE_KINDS), RiNode.stable_key.in_(endpoint_keys))
         nodes = list(
             self.db.scalars(
                 select(RiNode)
@@ -402,10 +408,25 @@ class SnapshotQueryService:
                 .order_by(RiNode.stable_key, RiNode.id)
             ).all()
         )
+        # Module inventory only counts top-level definitions. Apply the same
+        # qualified-name rule as ArchitectureAnalyzer before materializing keys;
+        # nested methods dominate many real repositories and are never rendered.
+        delimiter = (
+            func.strpos(RiNode.stable_key, "::")
+            if self.db.get_bind().dialect.name == "postgresql"
+            else func.instr(RiNode.stable_key, "::")
+        )
+        qualified_name = func.substr(RiNode.stable_key, delimiter + 2)
         symbol_keys = list(
             self.db.scalars(
                 select(RiNode.stable_key)
-                .where(RiNode.snapshot_id == snapshot.snapshot_id, RiNode.node_kind == "symbol")
+                .where(
+                    RiNode.snapshot_id == snapshot.snapshot_id,
+                    RiNode.node_kind == "symbol",
+                    delimiter > 1,
+                    qualified_name != "",
+                    qualified_name.not_like("%.%"),
+                )
                 .order_by(RiNode.stable_key)
             ).all()
         )

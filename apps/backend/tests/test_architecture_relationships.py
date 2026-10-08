@@ -582,3 +582,55 @@ def test_repository_furniture_does_not_become_an_architecture_module(auth_client
     # And nothing is left describing itself by its own path.
     assert not any("derived from repository intelligence" in node["description"] for node in architecture["nodes"])
     assert not any("Owns unknown concerns" in node["responsibilities"] for node in architecture["nodes"])
+
+
+def test_architecture_endpoint_membership_uses_a_bounded_sql_subquery(auth_client):
+    from sqlalchemy import event
+    from app.core.database import SessionLocal
+
+    sources = {
+        "src/alpha.ts": b"import { beta } from './beta';\nexport const alpha = beta;\n",
+        "src/beta.ts": b"export const beta = 1;\n",
+    }
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(repository["id"], sources)
+    observed = []
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        engine = session.get_bind()
+
+        def capture(connection, cursor, statement, parameters, context, executemany):
+            if "ri_nodes" in statement and "UNION" in statement:
+                observed.append((statement, len(parameters)))
+
+        event.listen(engine, "before_cursor_execute", capture)
+        try:
+            facts = SnapshotQueryService(session, record.owner_id).architecture_facts(record.id)
+        finally:
+            event.remove(engine, "before_cursor_execute", capture)
+    assert facts is not None
+    assert observed
+    assert max(count for _, count in observed) < 50
+    endpoint_keys = {key for edge in facts.edges for key in (edge.subject_key, edge.object_key)}
+    assert endpoint_keys <= {node.stable_key for node in facts.nodes}
+
+
+def test_architecture_inventory_does_not_materialize_nested_method_keys(auth_client):
+    from app.core.database import SessionLocal
+
+    source = (
+        "export class LargeClass {\n"
+        + "".join(f"  method_{index}() {{ return {index}; }}\n" for index in range(500))
+        + "}\n"
+    )
+    sources = {"src/large.ts": source.encode()}
+    repository = _upload(auth_client, sources)
+    _persist_snapshot(repository["id"], sources)
+    with SessionLocal() as session:
+        record = session.get(RepositoryRecord, repository["id"])
+        facts = SnapshotQueryService(session, record.owner_id).architecture_facts(record.id)
+    assert facts is not None
+    assert facts.symbol_keys == ["src/large.ts::LargeClass"]
+    response = auth_client.get(f"/analysis/{repository['id']}/architecture")
+    assert response.status_code == 200
+    assert "Defines 1 symbol: LargeClass" in response.text
