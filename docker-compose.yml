@@ -48,19 +48,7 @@ services:
       - -c
       - |
         set -e
-        if [ ! -f "$$SECRETS_DIR/ai_encryption_key" ]; then
-          mkdir -p -m 700 "$$SECRETS_DIR"
-          umask 077
-          python - <<'PY'
-        import os
-        import secrets
-        from pathlib import Path
-        from cryptography.fernet import Fernet
-        directory = Path(os.environ["SECRETS_DIR"])
-        (directory / "auth_secret_key").write_text(secrets.token_urlsafe(48))
-        (directory / "ai_encryption_key").write_text(Fernet.generate_key().decode())
-        PY
-        fi
+        python scripts/initialize_secrets.py
         alembic upgrade head
         exec uvicorn app.main:app --host 0.0.0.0 --port 8000
     healthcheck:
