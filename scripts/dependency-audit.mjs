@@ -45,7 +45,11 @@ function audit(extraArgs) {
   const args = ['audit', '--json', '--prefix', 'apps/frontend', ...extraArgs];
   let stdout;
   try {
-    stdout = execFileSync('npm', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+    // npm is a .cmd shim on Windows, which execFileSync cannot launch
+    // directly. All arguments here are fixed internal strings.
+    stdout = process.platform === 'win32'
+      ? execFileSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `npm ${args.join(' ')}`], { cwd: repoRoot, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+      : execFileSync('npm', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
   } catch (error) {
     // npm audit exits non-zero when it finds anything; the report is still on
     // stdout. A genuinely broken invocation produces no parseable JSON.
