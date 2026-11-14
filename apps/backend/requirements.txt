@@ -20,7 +20,7 @@ click==8.5.0
 colorama==0.4.6
 cryptography==50.0.1
 cssselect2==0.10.1
-dnspython==2.8.0
+dnspython==2.9.2
 email-validator==2.3.0
 fastapi==0.141.1
 greenlet==3.5.6
