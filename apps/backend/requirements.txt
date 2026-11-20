@@ -57,7 +57,7 @@ requests==2.34.2
 six==1.17.0
 SQLAlchemy==2.0.54
 starlette==1.6.0
-svglib==2.2.0
+svglib==2.3.1
 tinycss2==1.5.1
 tree-sitter==0.26.0
 tree-sitter-typescript==0.23.2
